@@ -4,6 +4,10 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
+Version 0.2.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+in 0.1.0 in ways that *lower* the reported numbers, which is the point: the entries
+say which verdicts used to be fabricated.
+
 ## Why it exists
 
 The usual failure of LLM-driven SEO tooling is that the model picks what to run.
@@ -300,11 +304,16 @@ client's report is the same category of mistake as showing them a stack trace: t
 old report did it in every row of every table.
 
 Explanations live in the translation files rather than the code, per category
-rather than per item — fifteen texts can be kept true, and 214 would drift out of
-step with a generated registry the first time an item changed. `--lang ru` renders
-the whole plain layer in Russian; the registry's own recommendation text falls back
-to English until `item_fixes` is filled in for that language, because a reader who
-gets the wrong language can still act and a reader who gets nothing cannot.
+rather than per item — sixteen texts can be kept true, and 214 would drift out of
+step with a generated registry the first time an item changed.
+
+**Client-facing reports are English-only in 0.2.0.** `--lang ru` translates the
+report's own wording and all sixteen category explanations, but `item_titles` and
+`item_fixes` are still empty, so item titles and recommendations come out in the
+registry's English — a half-Russian document. The report says which layers are
+untranslated on stderr rather than letting the reader work it out. Falling back to
+English is deliberate: a reader who gets the wrong language can still act, and a
+reader who gets a gap cannot.
 
 ## Politeness
 
@@ -411,11 +420,18 @@ python3 -m unittest discover -s tests -v
 
 Everything runs offline — no live site, no API key, no Search Console property.
 The suite guards the parts that fail *silently*: an assert rule using an operator
-the runner never implemented, a script the registry names but nobody shipped, an
-LLM item with no lens, a profile that hides a critical check, and the boundary
-between "failed", "could not be decided" and "out of scope" that every metric
-here depends on. CI runs it on Python 3.11 and 3.13 along with both gates and an
-offline smoke audit.
+the runner never implemented, a pattern that cannot fire, a script the registry
+names but nobody shipped, an LLM item with no lens, a profile that hides a critical
+check, and the boundary between "failed", "could not be decided" and "out of scope"
+that every metric here depends on.
+
+Three of them guard documentation rather than code, because a document that has
+gone stale beside working code is its own kind of silent failure: the manifest
+version must have a `CHANGELOG.md` entry naming the shipped `registry_version`, the
+200 borrowed titles must record their source in the file that holds them, and every
+category in the registry must have a plain-language explanation in every shipped
+language. CI runs the suite on Python 3.11 and 3.13 along with the gates and four
+end-to-end audits.
 
 ## Extending the registry
 

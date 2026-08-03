@@ -816,12 +816,18 @@ EXTRA = [
 
 
 def load_titles() -> dict[int, str]:
-    """Read item titles from the extracted Plerdy checklist titles file."""
+    """Read item titles from the extracted Plerdy checklist titles file.
+
+    Keys that are not item numbers are metadata — `_source` records where the 200
+    titles came from, which the file has to carry itself: it is the basis of the
+    contract, and provenance kept only in CREDITS.md is provenance that walks away
+    the first time the file is copied."""
     path = os.path.join(SKILL_DIR, "resources", "config", "plerdy-titles.json")
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            return {int(k): v for k, v in json.load(f).items()}
-    return {}
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    return {int(k): v for k, v in raw.items() if k.lstrip("-").isdigit()}
 
 
 # Which evidence answers an LLM item, which is not the same question as which

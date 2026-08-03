@@ -6,7 +6,8 @@
     "Add item_titles entries to override individual titles when a translated",
     "checklist is genuinely wanted.",
     "item_fixes: переводы рекомендаций по ID пункта. Пустой блок допустим — отчёт возьмёт текст реестра как есть, чтобы читатель мог действовать даже без перевода.",
-    "categories: пояснение «о чём эта группа проверок и чем грозит» для нетехнического читателя."
+    "categories: пояснение «о чём эта группа проверок и чем грозит» для нетехнического читателя.",
+    "STATUS as of 0.2.0: chrome and the 16 category explanations are complete; item_titles and item_fixes are empty, so --lang ru yields a half-Russian document. The report says so on stderr. Client delivery is English-only until they are filled."
   ],
   "lang": "ru",
   "strings": {

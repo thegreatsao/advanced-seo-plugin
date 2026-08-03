@@ -95,6 +95,20 @@ class Lang:
         failure costs is no explanation for the person who has to pay for it."""
         return self.data.get("categories", {}).get(key, CATEGORY_HELP.get(key, ""))
 
+    def untranslated(self) -> list[str]:
+        """Which layers of a non-English report will still come out in English.
+
+        A half-translated document is worse than an English one, because the reader
+        cannot tell which parts were considered and which were merely left. The
+        report chrome and the category explanations are complete for every shipped
+        language; the per-item titles and fixes are opt-in and currently empty. Say
+        so on stderr rather than letting the reader discover it in the output."""
+        if not self.data:
+            return []
+        return [name for name, key in (("item titles", "item_titles"),
+                                       ("recommendations", "item_fixes"))
+                if not self.data.get(key)]
+
 
 # ---------------------------------------------------------------------------
 # Markdown
@@ -976,6 +990,11 @@ def main() -> int:
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
         return 2
+    gaps = lang.untranslated()
+    if gaps:
+        print(f"--lang {lang.code}: {' and '.join(gaps)} are not translated yet and "
+              f"will appear in English. The report is English-only for client "
+              f"delivery until they are filled in.", file=sys.stderr)
     written = [("Report", write(a.markdown, render_markdown(data, lang)))]
     if not a.no_html:
         written.append(("HTML", write(a.html, render_html(data, lang))))

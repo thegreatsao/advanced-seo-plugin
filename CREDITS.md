@@ -14,7 +14,7 @@ Vitals from a local browser trace) are new here.
 
 ## Evidence scripts
 
-48 of the 58 scripts in `skills/seo-checklist/scripts/` come from
+48 of the 60 scripts in `skills/seo-checklist/scripts/` come from
 [Agentic-SEO-Skill](https://github.com/Bhanunamikaze/Agentic-SEO-Skill) (MIT),
 as do both files in `scripts/lib/`, with three bug fixes applied:
 
@@ -23,11 +23,15 @@ as do both files in `scripts/lib/`, with three bug fixes applied:
 - `validate_skill_inventory.py` had a regex that never matched, so the check it
   performed silently validated nothing
 
-New in this plugin: `checklist_runner.py`, `checklist_report.py`,
+New in this plugin, 12 of the 60: `checklist_runner.py`, `checklist_report.py`,
 `detect_profile.py`, `gsc_cannibalization.py`, `gsc_url_inspection.py`,
 `gsc_links_csv.py`, `html_validator.py`, `domain_safety_check.py`,
-`ga4_tag_checker.py`, `css_minify_check.py`, plus `cwv_metrics.py`, the registry,
-its generator, the four judgement agents and the adversarial reviewer.
+`ga4_tag_checker.py`, `css_minify_check.py`, `cwv_metrics.py` and
+`rendered_audit.py`, plus the registry, its generator, the tools in `tools/`, the
+four judgement agents and the adversarial reviewer.
+
+The registry calls 55 of the 60; the other five are the runner, the report, profile
+detection and two shared helpers.
 
 ## Public Suffix List
 

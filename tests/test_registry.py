@@ -107,6 +107,73 @@ class RegistryShape(unittest.TestCase):
                 self.assertIn(i["effort"], {"medium", "high"}, i["id"])
 
 
+class VersionAndChangelog(unittest.TestCase):
+    """A changelog nobody is forced to update is a changelog that lies. The failure
+    mode is always the same one: the version moves and the entry does not."""
+
+    def setUp(self):
+        with open(os.path.join(ROOT, ".claude-plugin", "plugin.json"),
+                  encoding="utf-8") as f:
+            self.manifest = json.load(f)
+        with open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as f:
+            self.changelog = f.read()
+
+    def test_the_manifest_version_has_a_changelog_entry(self):
+        version = self.manifest["version"]
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        headings = re.findall(r"^## (\d+\.\d+\.\d+)", self.changelog, re.M)
+        self.assertTrue(headings, "CHANGELOG.md has no version headings")
+        self.assertEqual(headings[0], version,
+                         f"plugin.json says {version}, newest CHANGELOG entry is "
+                         f"{headings[0]}")
+
+    def test_the_registry_version_in_the_newest_entry_is_the_shipped_one(self):
+        """The entry states which contract it shipped. If the registry is
+        regenerated without a changelog line, that claim silently goes stale."""
+        newest = self.changelog.split("\n## ")[1]
+        self.assertIn(DATA["registry_version"], newest,
+                      f"registry is {DATA['registry_version']}; the newest "
+                      f"CHANGELOG entry does not mention it")
+
+
+class ChecklistProvenance(unittest.TestCase):
+    """The 200 borrowed titles have to say where they came from, in the file that
+    holds them. CREDITS.md is the licence record; this is the one that survives the
+    file being copied out on its own."""
+
+    def setUp(self):
+        self.path = os.path.join(SKILL, "resources", "config", "plerdy-titles.json")
+        with open(self.path, encoding="utf-8") as f:
+            self.raw = json.load(f)
+
+    def test_the_titles_file_names_its_source(self):
+        src = self.raw.get("_source")
+        self.assertIsInstance(src, dict, "plerdy-titles.json has no _source block")
+        self.assertIn("plerdy.com/seo-checklist", src.get("url", ""))
+        self.assertRegex(src.get("retrieved", ""), r"^\d{4}-\d{2}-\d{2}$")
+
+    def test_metadata_keys_do_not_reach_the_generator(self):
+        """`load_titles` used to call int() on every key, so any note added to this
+        file would have crashed the build rather than documenting it."""
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        import build_checklist
+        titles = build_checklist.load_titles()
+        self.assertEqual(len(titles), 200)
+        self.assertTrue(all(isinstance(k, int) for k in titles))
+        self.assertEqual(titles[1], "Ensure URL Is Indexed")
+
+    def test_every_numbered_title_is_referenced_by_exactly_one_item(self):
+        """plerdy_ref is the trace back to the source line, so the mapping has to be
+        a bijection over 1..200 — and the 14 items this plugin added must not claim
+        a reference they do not have."""
+        numbered = sorted(int(k) for k in self.raw if k.lstrip("-").isdigit())
+        refs = [i["plerdy_ref"] for i in ITEMS if i["plerdy_ref"] is not None]
+        self.assertEqual(numbered, list(range(1, 201)))
+        self.assertEqual(sorted(refs), numbered)
+        added = [i["id"] for i in ITEMS if i["plerdy_ref"] is None]
+        self.assertEqual(len(added), 14, f"unexpected unreferenced items: {added}")
+
+
 class RegistryDocs(unittest.TestCase):
     def test_every_script_the_registry_runs_is_documented(self):
         """Assert rules must be written against observed output, and the shapes

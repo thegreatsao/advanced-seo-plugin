@@ -126,6 +126,36 @@ class Localisation(unittest.TestCase):
         data["scores"] = score(data["items"])
         self.assertIn("SEO Checklist Audit", render_markdown(data))
 
+    def test_a_partly_translated_language_names_what_is_still_english(self):
+        """A reader cannot tell a layer that was left in English from a layer that
+        was considered and kept. The report has to say which."""
+        self.assertEqual(Lang("ru").untranslated(),
+                         ["item titles", "recommendations"])
+
+    def test_english_reports_nothing_untranslated(self):
+        self.assertEqual(Lang("en").untranslated(), [])
+
+    def test_a_filled_block_drops_out_of_the_warning(self):
+        lang = Lang("ru")
+        lang.data["item_titles"] = {"A": "Заголовок"}
+        self.assertEqual(lang.untranslated(), ["recommendations"])
+        lang.data["item_fixes"] = {"A": "Сделать"}
+        self.assertEqual(lang.untranslated(), [])
+
+    def test_every_category_in_the_registry_has_a_translated_explanation(self):
+        """The category explanation is the layer a non-specialist reads. A missing
+        one silently falls back to English in the middle of a translated page,
+        which is exactly the ambiguity `untranslated()` exists to remove."""
+        with open(os.path.join(SKILL, "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            categories = {i["category"] for i in json.load(f)["items"]}
+        for name in os.listdir(I18N):
+            if not name.endswith(".json"):
+                continue
+            translated = set(Lang(name[:-5]).data.get("categories", {}))
+            missing = sorted(categories - translated)
+            self.assertEqual(missing, [], f"{name} is missing: {missing}")
+
 
 class SecondReading(unittest.TestCase):
     """An unopposed judgement reported with the confidence of a measured status is
