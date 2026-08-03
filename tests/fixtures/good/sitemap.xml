@@ -21,6 +21,17 @@
     <loc>http://127.0.0.1:8000/blog/second-post.html</loc>
     <lastmod>2026-07-11</lastmod>
   </url>
+  <!-- Disallowed in robots.txt, and deliberately still listed here. This is the one
+       "defect" the good site keeps, because it is the case the orphan arithmetic gets
+       wrong if nobody watches it: a URL robots.txt forbids can never enter
+       `reachable`, so subtracting it is the only thing standing between our own
+       politeness and a fabricated orphan. Keeping it here means the good site must
+       report zero orphans *and* one robots conflict — the subtraction is asserted
+       rather than assumed, and GO-137 still passes. -->
+  <url>
+    <loc>http://127.0.0.1:8000/private/secret.html</loc>
+    <lastmod>2026-05-30</lastmod>
+  </url>
 </urlset>
 <!--
   Nothing defective is listed here, on purpose. An orphan entry and a

@@ -165,7 +165,7 @@ jobs:
       # what makes this step possible, and this step is most of why it exists.
       - name: The full live path, against a locally served fixture site
         run: |
-          python -m http.server 8000 --directory tests/fixtures/site > server.log 2>&1 &
+          python -m http.server 8000 --directory tests/fixtures/good > server.log 2>&1 &
           SERVER=$!
           trap 'kill $SERVER' EXIT
           for _ in $(seq 1 20); do
@@ -245,16 +245,24 @@ jobs:
           python - <<'PY'
           import json
           d = json.load(open("orphans.json"))
-          # /orphan.html is in the sitemap and linked from nowhere: a real orphan.
-          assert d["orphan_pages"] == ["http://127.0.0.1:8000/orphan.html"], d["orphan_pages"]
-          # /private/secret.html is in the sitemap and disallowed in robots.txt. It
-          # is also linked from nowhere, so the crawl never tried it and never
-          # recorded a refusal — and it was counted as an orphan, which turns our own
-          # politeness into the site's defect. That is the ordinary case, not an edge
-          # one: a page is usually unlinked because it is blocked.
+          # This is the subtraction, asserted rather than assumed.
+          #
+          # /private/secret.html is listed in the sitemap and disallowed in
+          # robots.txt, so the crawl refuses it and it can never enter `reachable`.
+          # Orphans are `sitemap - reachable`, so without subtracting the refusals it
+          # is reported as an orphan — our own politeness rendered as the site's
+          # defect, on a critical-adjacent item that fails on a single orphan. It is
+          # also the ordinary case rather than an edge one: a page is usually
+          # unlinked precisely because it is blocked.
+          #
+          # The good fixture has no real orphans, so both halves are checked at once:
+          # zero orphans, one conflict. The orphan-detection direction is covered on
+          # the broken fixture by tests/test_contract.py.
+          assert d["orphan_pages"] == [], d["orphan_pages"]
           assert d["sitemap_urls_blocked_by_robots"] == [
               "http://127.0.0.1:8000/private/secret.html"], d["sitemap_urls_blocked_by_robots"]
           assert "sitemap_robots_conflict" in [i["type"] for i in d["issues"]]
+          assert d["summary"]["orphan_pages"] == 0, d["summary"]
           print("orphan and robots arithmetic OK")
           PY
 
