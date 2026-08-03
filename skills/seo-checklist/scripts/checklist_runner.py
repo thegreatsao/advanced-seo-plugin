@@ -567,6 +567,108 @@ def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
     return None, f"unknown assert: {list(rule)}"
 
 
+# Which key of a rule holds the threshold, per operator. Used to report *what was
+# compared* as data, so a report can put it in a sentence in any language instead
+# of printing the assertion's internals.
+#
+# The evidence string evaluate() produces still lands in the JSON: it is the audit
+# trail, and a reader who wants to know exactly which JSON path decided an item
+# should be able to find it. It was never meant to be the sentence a client reads.
+# Printing "summary.thin_pages = 6 (want 0)" in a report is the same category of
+# mistake as showing a stack trace to a user.
+THRESHOLD_OPS = ("eq", "ne", "gte", "lte", "gt", "lt", "between", "len_eq",
+                 "len_gte", "len_lte", "len_between", "none_matching",
+                 "count_matching_lte", "contains", "matches")
+
+
+def measurement(rule: dict, data: dict) -> dict:
+    """What an assertion compared, as structured data.
+
+    Deliberately decides nothing — the verdict comes from evaluate() and only from
+    there. This reads the same `rule["path"]` through the same `resolve()` and
+    reports the operator, the threshold and the observed value, so there is no
+    second implementation that could disagree about whether an item passed.
+    """
+    if not rule:
+        return {}
+    value = resolve(data, rule.get("path", ""))
+    out = {"path": rule.get("path", "")}
+
+    for op in THRESHOLD_OPS:
+        if op in rule:
+            out["op"] = op
+            out["want"] = rule[op]
+            break
+    else:
+        for op in ("truthy", "falsy", "none_severity", "value_map"):
+            if op in rule:
+                out["op"] = op
+                break
+        else:
+            return out
+
+    if value is _MISSING:
+        out["missing"] = True
+        return out
+
+    op = out["op"]
+    if op.startswith("len_"):
+        out["got"] = _length(value)
+        out["kind"] = "count"
+        # What was counted, not just how many. "4 URLs are crawlable" is a
+        # statistic; "/search, /cart, /checkout, /login are crawlable" is something
+        # somebody can act on this afternoon.
+        if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
+            out["examples"] = value[:4]
+    elif op == "none_matching":
+        field = rule.get("field")
+        if field:
+            elements = value if isinstance(value, list) else [value]
+            texts = [str(e[field]) for e in elements
+                     if isinstance(e, dict) and field in e]
+        else:
+            texts = _texts(value)
+        rx = re.compile(rule["none_matching"])
+        hits = [t for t in texts if rx.search(t)]
+        out["got"] = len(hits)
+        out["want"] = 0
+        out["kind"] = "matches"
+        if hits:
+            out["sample"] = hits[0][:160]
+    elif op == "none_severity":
+        levels = {str(lvl).lower() for lvl in rule["none_severity"]}
+        hits = [it for it in (value if isinstance(value, list) else [])
+                if isinstance(it, dict)
+                and str(it.get("severity", "")).lower() in levels]
+        out["got"] = len(hits)
+        out["want"] = 0
+        out["kind"] = "issues"
+        out["levels"] = sorted(levels)
+        if hits:
+            out["sample"] = str(hits[0].get("message")
+                                or hits[0].get("finding") or "")[:160]
+    elif op == "value_map":
+        field = rule.get("field")
+        elements = value if isinstance(value, list) else [value]
+        seen = [str(el.get(field)) if field and isinstance(el, dict) else str(el)
+                for el in elements]
+        bad = [v for v in seen if rule["value_map"].get(v) != "pass"]
+        out["kind"] = "values"
+        out["got"] = bad[0] if bad else (seen[0] if seen else None)
+        out["want"] = sorted(k for k, v in rule["value_map"].items() if v == "pass")
+    elif op in ("truthy", "falsy"):
+        out["kind"] = "flag"
+        out["got"] = bool(value)
+        out["want"] = op == "truthy"
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        out["got"] = value
+        out["kind"] = "number"
+    else:
+        out["got"] = str(value)[:160]
+        out["kind"] = "value"
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
@@ -729,6 +831,7 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                                evidence=f"{FAILURE_LABEL.get(kind, FAILURE_LABEL['crash'])}: "
                                         f"{data['__error__'][:160]}")
                 else:
+                    row["measure"] = measurement(it["check"]["assert"], data)
                     ok, ev = evaluate(it["check"]["assert"], data)
                     if ok is None:
                         row.update(status=NO_DATA, evidence=ev)
@@ -1239,8 +1342,14 @@ def aggregate_pages(primary: list[dict], per_page: list[list[dict]]) -> list[dic
             continue
         worst = max(decided, key=lambda r: STATUS_RANK[r["status"]])
         bad = [r for r in decided if r["status"] == worst["status"]]
+        # The measurement has to come from the same page as the verdict. It did
+        # not: the row kept the entry page's numbers while the status came from
+        # the worst sampled page, so a report could say "52 characters, 60 is the
+        # limit" directly under a FAIL — a passing number beside a failing verdict,
+        # which is worse than printing the raw assertion.
         row = dict(row, status=worst["status"],
                    evidence=(f"{len(bad)}/{len(decided)} pages: {worst['evidence']}"),
+                   measure=worst.get("measure", row.get("measure")),
                    pages_checked=len(runs),
                    pages_decided=len(decided),
                    pages_matching=len(bad))

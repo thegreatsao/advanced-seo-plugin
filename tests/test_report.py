@@ -230,10 +230,13 @@ class NoScoreSurvivesEveryRenderer(unittest.TestCase):
         self.assertNotIn("None/100", out)
 
     def test_the_html_prints_no_number_at_all(self):
+        """Asserted on the intent, not on the wording: no number anywhere, and an
+        explanation in its place. The exact sentence has changed once already."""
         from checklist_report import render_html
         out = render_html(self._unread())
         self.assertNotIn(">None<", out)
-        self.assertIn("No SEO Score", out)
+        self.assertNotIn("None/100", out)
+        self.assertIn("could not be read", out)
 
 
 if __name__ == "__main__":

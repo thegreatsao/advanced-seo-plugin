@@ -119,6 +119,27 @@ is dropped at fetch time with the reason printed. This matters more than it
 looks: a stylesheet sampled as a page fails every page-level check, and the worst
 verdict wins — one asset in the sample would condemn the whole site.
 
+## The report
+
+`checklist_report.py` writes four layers into one HTML file, plain language first
+and the machine detail folded underneath. Hand it to whoever owns the site.
+
+```bash
+python3 <SKILL_DIR>/scripts/checklist_report.py checklist-results.json --lang ru
+```
+
+**Do not paste an item's `evidence` string at the user.** It is the audit trail —
+`summary.thin_pages = 6 (want 0)` — and the report already phrases the same
+measurement as a sentence from the structured `measure` field. When you summarise a
+run in chat, summarise it the way the report does: what was found, why it matters,
+what to do.
+
+`--lang` sets the language of everything the report says about itself, including
+the plain-language layer and the per-category explanations. Item titles and the
+registry's recommendations stay in English unless that language file overrides them
+(`item_titles`, `item_fixes`). Ask which language the reader needs before rendering
+a report for somebody else.
+
 ## The second reading
 
 The LLM queue produces 33 verdicts from one model's reading of one page, and the

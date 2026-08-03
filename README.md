@@ -29,7 +29,7 @@ into one number is how audits come to sound more confident than they are.
 
 ## What is in the registry
 
-214 items: the [Plerdy 200-point checklist](https://www.plerdy.com/check/) plus 14
+214 items: the [Plerdy 200-point checklist](https://www.plerdy.com/seo-checklist/) plus 14
 checks it does not cover — GEO/AI search, `llms.txt`, AI-crawler policy, IndexNow,
 schema guards, and lab Core Web Vitals from a local trace.
 
@@ -277,6 +277,34 @@ The merge only overwrites `LLM_PENDING` items; an answer file cannot flip a verd
 a script established. When the page does not support a verdict the answer is `N/A`
 — inventing a `PASS` to lift the score corrupts the one metric this exists to
 protect.
+
+## The report is written for the person paying for it
+
+Four layers, widest audience first, in one file:
+
+1. **What this means** — three plain sentences before any number: how many things
+   were checked, how many need work, how many are quick, and how many could not be
+   settled by measurement at all.
+2. **Where the problems are** — a bar per category, worst first, with one line
+   explaining what that group of checks is about and what it costs when it is wrong.
+3. **What to do first** — one card per failing or borderline check: how bad, how
+   much work, what was measured *in words*, why it matters, what to do. The
+   assertion's own output is folded away under "technical detail", not deleted.
+4. **Every check, with its raw evidence** — collapsed. The audit trail, unchanged.
+
+The measurement is phrased from structured data (`measure` on each item: the
+operator, the threshold, the observed value, and up to four examples), so
+`summary.thin_pages = 6 (want 0)` reads as "Found 6; there should be none" and
+`len(allowed_urls) = 4` names the four URLs. Printing an assertion's internals in a
+client's report is the same category of mistake as showing them a stack trace: the
+old report did it in every row of every table.
+
+Explanations live in the translation files rather than the code, per category
+rather than per item — fifteen texts can be kept true, and 214 would drift out of
+step with a generated registry the first time an item changed. `--lang ru` renders
+the whole plain layer in Russian; the registry's own recommendation text falls back
+to English until `item_fixes` is filled in for that language, because a reader who
+gets the wrong language can still act and a reader who gets nothing cannot.
 
 ## Politeness
 

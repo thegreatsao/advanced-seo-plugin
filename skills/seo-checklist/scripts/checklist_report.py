@@ -77,6 +77,24 @@ class Lang:
     def title(self, item: dict) -> str:
         return self.data.get("item_titles", {}).get(item["id"], item["title"])
 
+    def fix(self, item: dict) -> str:
+        """The recommendation, translated when a translation exists.
+
+        Falls back to the registry's own English text rather than leaving a gap: a
+        reader who gets the wrong language can still act on it, and a reader who
+        gets nothing cannot. `item_fixes` is filled in per language as the need
+        arises — 214 pre-written translations would go stale against a generated
+        registry, which is the same trap the per-item explanations avoid."""
+        return self.data.get("item_fixes", {}).get(item["id"], item.get("fix", ""))
+
+    def category_help(self, key: str) -> str:
+        """The plain-language explanation for a category, translated if available.
+
+        Kept in the translation files rather than the code because it is the layer a
+        non-specialist actually reads — an English-only explanation of what a
+        failure costs is no explanation for the person who has to pay for it."""
+        return self.data.get("categories", {}).get(key, CATEGORY_HELP.get(key, ""))
+
 
 # ---------------------------------------------------------------------------
 # Markdown
@@ -96,6 +114,171 @@ def priority_of(item: dict) -> float:
 
 def esc_md(text: str) -> str:
     return str(text or "").replace("|", "\\|").replace("\n", " ").strip()
+
+
+# ---------------------------------------------------------------------------
+# Saying it in words
+# ---------------------------------------------------------------------------
+
+# One plain sentence per category: what this group of checks is about, and what it
+# costs when it is wrong. Written for somebody who runs the business, not the site.
+#
+# Per category rather than per item, on purpose. Fifteen texts can be kept true;
+# 214 would drift out of step with the registry the first time an item changed, and
+# a stale explanation attached to a live verdict is worse than none. The specifics
+# come from the measurement and the fix, which are generated, so they cannot drift.
+CATEGORY_HELP = {
+    "crawling_indexing":
+        "Whether Google can find, read and store your pages at all. Nothing else on "
+        "this list matters if a page never gets into the index.",
+    "meta_structured":
+        "The title and description Google shows in its results, plus the machine-"
+        "readable markup behind them. This is what a searcher reads before deciding "
+        "whether to click.",
+    "content":
+        "Whether each page says something substantial, once, in a way a reader and a "
+        "search engine can both follow. Thin or duplicated pages compete with your "
+        "own better ones.",
+    "keywords":
+        "Whether each page targets a distinct search intent. When several pages chase "
+        "the same query they split the signal and none of them ranks well.",
+    "backlinks":
+        "Who links to you from elsewhere. Links remain one of the strongest ranking "
+        "signals, and judging their quality needs a link index this audit does not "
+        "have — most of these items are for a human.",
+    "mobile":
+        "How the site behaves on a phone, which is what Google measures and where "
+        "most visitors arrive.",
+    "speed":
+        "How quickly the page becomes usable. Slow pages lose visitors before they "
+        "read anything, and speed is a ranking factor in its own right.",
+    "security":
+        "HTTPS, headers and the basics that keep a browser from warning your "
+        "visitors. A warning screen costs the visit outright.",
+    "international":
+        "Whether Google can tell which language and country each page is for. Wrong "
+        "signals send the wrong version to the wrong visitor.",
+    "google":
+        "What Google's own tools report about the site: indexing state, manual "
+        "actions, the queries you actually rank for.",
+    "architecture":
+        "How pages link to each other. A page buried five clicks deep, or reachable "
+        "by no link at all, is a page nobody finds.",
+    "technical":
+        "Configuration a visitor never sees but a crawler does: redirects, headers, "
+        "sitemaps, structured-data validity.",
+    "media":
+        "Images and video: their weight, their alt text and their markup. Usually the "
+        "heaviest thing on a page and the easiest to fix.",
+    "competition":
+        "How the site stands against the sites it competes with. Judgement work, not "
+        "measurement.",
+    "local":
+        "Everything that makes a business findable in its own town: address, opening "
+        "hours, map, reviews, and the markup that ties them together.",
+    "geo_ai":
+        "Whether AI assistants and AI search can read, quote and attribute your "
+        "content. A newer channel than Google, and it reads pages differently.",
+}
+
+
+def phrase_measure(item: dict, L: "Lang | None" = None) -> str:
+    """The measurement as a sentence.
+
+    The evidence string stays in the JSON as the audit trail; this is what a reader
+    gets. `summary.thin_pages = 6 (want 0)` becomes "Found 6, expected none" — the
+    item title already says what was counted, so no vocabulary of JSON paths is
+    needed and nothing has to be invented.
+    """
+    L = L or Lang()
+    m = item.get("measure") or {}
+    op, kind = m.get("op"), m.get("kind")
+    got, want = m.get("got"), m.get("want")
+
+    if m.get("missing") or (not m and item.get("status") == NO_DATA):
+        text = L.t("m_missing", "The check ran but produced no value for this.")
+    elif kind in ("count", "number") and op in ("eq", "len_eq") and want == 0:
+        text = L.t("m_none_expected", "Found {got}; there should be none.").format(got=got)
+    elif kind in ("count", "number") and op in ("lte", "len_lte",
+                                                "count_matching_lte") and want == 0:
+        # "4, and no more than 0 is acceptable" is technically right and reads like
+        # a machine. Zero is a different sentence from every other threshold.
+        text = L.t("m_none_expected", "Found {got}; there should be none.").format(got=got)
+    elif kind in ("count", "number") and op in ("lte", "len_lte", "count_matching_lte"):
+        text = L.t("m_at_most", "{got}, and no more than {want} is acceptable.").format(
+            got=got, want=want)
+    elif kind in ("count", "number") and op in ("gte", "len_gte"):
+        text = (L.t("m_none_found", "None found; at least {want} is expected.").format(want=want)
+                if not got else
+                L.t("m_at_least", "{got}, where at least {want} is expected.").format(
+                    got=got, want=want))
+    elif kind in ("count", "number") and op == "eq":
+        text = L.t("m_exactly", "{got}, where {want} is expected.").format(got=got, want=want)
+    elif kind == "flag":
+        text = (L.t("m_present", "Present.") if got else L.t("m_absent", "Not found."))
+    elif kind == "matches":
+        text = (L.t("m_no_match", "Nothing matching was found.") if not got else
+                L.t("m_matched", "{got} match(es) found.").format(got=got))
+    elif kind == "issues":
+        levels = "/".join(m.get("levels") or [])
+        text = (L.t("m_no_issues", "No {levels} issues reported.").format(levels=levels)
+                if not got else
+                L.t("m_issues", "{got} {levels} issue(s) reported.").format(
+                    got=got, levels=levels))
+    elif kind == "values":
+        allowed = ", ".join(str(w) for w in (want or []))
+        text = L.t("m_value", "Reported '{got}'; acceptable: {allowed}.").format(
+            got=got, allowed=allowed)
+    elif got is not None:
+        text = L.t("m_reported", "Reported: {got}.").format(got=got)
+    else:
+        return item.get("evidence", "")
+
+    examples = m.get("examples")
+    if examples:
+        text += " " + L.t("m_examples", "Namely: {list}.").format(
+            list=", ".join(str(e)[:60] for e in examples))
+    sample = m.get("sample")
+    if sample:
+        text += " " + L.t("m_example", "For example: {sample}").format(
+            sample=str(sample)[:120])
+
+    decided = item.get("pages_decided")
+    matching = item.get("pages_matching")
+    if decided and decided > 1 and item.get("status") in (FAIL, WARN):
+        text += " " + L.t("m_pages", "Seen on {matching} of {decided} pages checked.").format(
+            matching=matching or decided, decided=decided)
+    return text
+
+
+def plain_summary(data: dict, L: "Lang | None" = None) -> list[str]:
+    """The three or four sentences that answer "so what?" before any number does."""
+    L = L or Lang()
+    s = data["scores"]
+    c = s["status_counts"]
+    broken = c.get(FAIL, 0) + c.get(WARN, 0)
+    out = []
+    if data.get("entry_reachable") is False:
+        return [L.t("p_unreadable",
+                    "The page could not be read, so nothing here was measured. "
+                    "There is no score for the same reason.")]
+    out.append(L.t("p_checked",
+                   "We checked {decided} things on this site and {broken} of them "
+                   "need work.").format(decided=s["decided"], broken=broken))
+    quick = sum(1 for i in data["items"]
+                if i["status"] in (FAIL, WARN) and i.get("effort") == "low")
+    if quick:
+        out.append(L.t("p_quick",
+                       "{quick} of those are quick fixes — a setting or a line of "
+                       "text, not a rebuild.").format(quick=quick))
+    undecided = c.get(LLM_PENDING, 0) + c.get(MANUAL, 0) + c.get(NO_DATA, 0)
+    if undecided:
+        out.append(L.t("p_undecided",
+                       "{undecided} more could not be settled by measurement: they "
+                       "need a person's judgement, an account we do not have, or "
+                       "data that does not exist. They are listed, not hidden.")
+                   .format(undecided=undecided))
+    return out
 
 
 def render_markdown(data: dict, L: Lang | None = None) -> str:
@@ -122,6 +305,9 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                    f"`--only {','.join(data['only'])}` — "
                    + L.t("only_note", "a slice of the registry, not a full audit"))
     out += ["", f"## {L.t('summary', 'Summary')}", ""]
+    # The answer to "so what?" goes above the metrics, not below them. A reader who
+    # stops after three lines should still leave with the truth.
+    out += [line for line in plain_summary(data, L)] + [""]
 
     # An unreachable entry page means no site was read, so there is no score to
     # print. Showing one anyway — even a low one — would present the absence of
@@ -179,28 +365,31 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
         sc = f"{cat['score']}/100" if cat["score"] is not None else "—"
         out.append(f"| {cat['label']} | {sc} | {cat['decided']} | {c.get(FAIL, 0)} |")
 
-    fails = sorted((i for i in data["items"] if i["status"] == FAIL),
+    fails = sorted((i for i in data["items"] if i["status"] in (FAIL, WARN)),
                    key=lambda i: (-priority_of(i), SEVERITY_ORDER.get(i["severity"], 9)))
     if fails:
         quick = [i for i in fails if i.get("effort") == "low"]
-        out += ["", f"## {L.t('priority_actions', 'Priority actions')}", "",
-                L.t("priority_note", "Ranked by severity against effort, not "
-                                     "severity alone.")
-                + f" {len(quick)}/{len(fails)}.", "",
-                f"| {L.t('pri', 'Pri')} | {L.t('sev', 'Sev')} | {L.t('effort', 'Effort')} "
-                f"| ID | {L.t('issue', 'Issue')} | {L.t('evidence', 'Evidence')} "
-                f"| {L.t('fix', 'Fix')} |",
-                "|---|---|---|---|---|---|---|"]
+        out += ["", f"## {L.t('do_first', 'What to do first')}", "",
+                L.t("do_first_note",
+                    "Ordered by how much each matters against how much work it is "
+                    "— {quick} of the {total} are quick.").format(
+                        quick=len(quick), total=len(fails)), ""]
+        # One block per item rather than a row in a seven-column table. The table
+        # led with a computed priority float and three jargon columns before it
+        # reached the problem, and put the raw assertion in the evidence column.
+        current = ""
         for i in fails:
-            out.append(f"| {priority_of(i)} | {L.sev(i['severity'])} | "
-                       f"{L.effort(i.get('effort', '?'))} | {i['id']} | "
-                       f"{esc_md(L.title(i))} | {esc_md(i['evidence'])} | "
-                       f"{esc_md(i['fix'])} |")
-        if quick:
-            out += ["", f"**{L.t('start_here', 'Start here')}**", ""]
-            for i in quick[:8]:
-                out.append(f"- **{i['id']}** ({L.sev(i['severity'])}) "
-                           f"{esc_md(L.title(i))} — {esc_md(i['fix'])}")
+            if i["category_label"] != current:
+                current = i["category_label"]
+                out += [f"### {current}", ""]
+                note = L.category_help(i.get("category", ""))
+                if note:
+                    out += [f"*{note}*", ""]
+            badges = f"{L.sev(i['severity'])} · {L.effort(i.get('effort', 'medium'))}"
+            out += [f"**{L.title(i)}**  ",
+                    f"`{badges}`  ",
+                    f"{phrase_measure(i, L)}  ",
+                    f"{L.t('what_to_do', 'What to do')}: {L.fix(i)}", ""]
 
     out += ["", f"## {L.t('full_checklist', 'Full checklist')}", ""]
     by_cat: dict[str, list] = {}
@@ -223,7 +412,8 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                 L.t("manual_note", "These cannot be scripted. Nothing here "
                                    "counts against the score."), ""]
         for i in sorted(manual, key=lambda x: SEVERITY_ORDER.get(x["severity"], 9)):
-            out.append(f"- [ ] **{i['id']}** ({i['severity']}) {i['title']} — {i['fix']}")
+            out.append(f"- [ ] **{i['id']}** ({L.sev(i['severity'])}) "
+                       f"{L.title(i)} — {L.fix(i)}")
         out.append("")
 
     blocked = [i for i in data["items"] if i["status"] == NO_DATA]
@@ -358,6 +548,59 @@ border-bottom:1px solid var(--line);align-items:start}
 .row.done .ttl{opacity:.45;text-decoration:line-through}
 label.chk{display:inline-flex;gap:.4rem;align-items:center;cursor:pointer}
 .hidden{display:none}
+h3{font-size:.95rem;margin:1.25rem 0 .4rem;color:var(--mut)}
+small{font-size:.55em;font-weight:400;color:var(--mut)}
+
+/* Layer 1 — the plain answer, before any number */
+.hero{margin-bottom:2rem}
+.plain p{font-size:1.15rem;line-height:1.5;margin:.2rem 0 .6rem;max-width:60ch}
+.metric.warnbox b{color:var(--fail)}
+.legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;color:var(--mut);
+margin:-1rem 0 0}
+.legend span{display:inline-flex;align-items:center;gap:.35rem}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+/* Layer 2 — where the problems are */
+.catrow{display:grid;grid-template-columns:minmax(120px,1.4fr) 3fr 68px 1.6fr;
+gap:.75rem;align-items:center;padding:.3rem 0;font-size:.9rem}
+.catname{font-weight:500}
+.cattrack{background:var(--line);border-radius:999px;height:8px;overflow:hidden}
+.cattrack i{display:block;height:100%;border-radius:999px}
+.cattrack .pass{background:var(--pass)}.cattrack .warn{background:var(--warn)}
+.cattrack .fail{background:var(--fail)}
+.catnum{text-align:right;font-variant-numeric:tabular-nums}
+.catmeta{color:var(--mut);font-size:.8rem}
+.cathelp{color:var(--mut);font-size:.83rem;margin:.1rem 0 .9rem;max-width:78ch;
+padding-left:.1rem}
+@media(max-width:640px){.catrow{grid-template-columns:1fr 60px;grid-auto-rows:auto}
+.cattrack{grid-column:1/-1}.catmeta{grid-column:1/-1}}
+
+/* Layer 3 — one card per thing to fix */
+.card{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--fail);
+border-radius:8px;padding:.85rem 1rem;margin:.6rem 0}
+.card.WARN{border-left-color:var(--warn)}
+.cardhead{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.35rem}
+.card h3{margin:.1rem 0 .35rem;font-size:1rem;color:var(--fg)}
+.badge{font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;
+border-radius:999px;padding:.12rem .5rem;border:1px solid var(--line);color:var(--mut)}
+.badge.sev-critical,.badge.sev-high{color:var(--fail);border-color:var(--fail)}
+.badge.sev-medium{color:var(--warn);border-color:var(--warn)}
+.badge.eff{color:var(--mut)}
+.cardhead .cat{font-size:.75rem;color:var(--mut);margin-left:auto}
+.found{margin:.1rem 0 .4rem;font-weight:500}
+.why{color:var(--mut);font-size:.86rem;margin:.1rem 0 .5rem;max-width:78ch}
+.do{margin:.2rem 0 .1rem;font-size:.9rem}
+details.tech{margin-top:.5rem}
+details.tech summary{cursor:pointer;color:var(--mut);font-size:.78rem}
+.techbody{font-size:.78rem;color:var(--mut);padding:.4rem 0 0;word-break:break-word}
+
+/* Layer 4 — folded machine detail */
+details.fold{border-top:1px solid var(--line);padding:.6rem 0}
+details.fold>summary{cursor:pointer;font-weight:500;font-size:.95rem}
+details.fold .count{color:var(--mut);font-weight:400;font-size:.85rem}
+details.fold[open]>summary{margin-bottom:.75rem}
+.foot{color:var(--mut);font-size:.78rem;margin-top:2rem}
+code{font-size:.9em;background:var(--card);padding:.05rem .3rem;border-radius:4px}
 """
 
 JS = """
@@ -385,72 +628,209 @@ document.querySelectorAll('.filters button').forEach(b => {
 """
 
 
-def render_html(data: dict) -> str:
+def _badges(item: dict, L: Lang) -> str:
+    sev = html.escape(L.sev(item["severity"]))
+    eff = html.escape(L.effort(item.get("effort", "medium")))
+    return (f'<span class="badge sev-{item["severity"]}">{sev}</span>'
+            f'<span class="badge eff">{eff}</span>')
+
+
+def _card(item: dict, L: Lang) -> str:
+    """One thing to fix, as a reader needs it: what, how bad, what it costs, what to
+    do — and the machine detail folded away rather than deleted."""
+    why = L.category_help(item.get("category", ""))
+    tech = html.escape(item.get("evidence", ""))
+    script = html.escape(str(item.get("script", "")))
+    detail = (f'<summary>{html.escape(L.t("technical_detail", "Technical detail"))}</summary>'
+              f'<div class="techbody"><code>{item["id"]}</code>'
+              + (f' &middot; <code>{script}</code>' if script else "")
+              + f'<div>{tech}</div></div>')
+    return (f'<article class="card {item["status"]}" data-st="{item["status"]}">'
+            f'<div class="cardhead">{_badges(item, L)}'
+            f'<span class="cat">{html.escape(item["category_label"])}</span></div>'
+            f'<h3>{html.escape(L.title(item))}</h3>'
+            f'<p class="found">{html.escape(phrase_measure(item, L))}</p>'
+            + (f'<p class="why">{html.escape(why)}</p>' if why else "")
+            + (f'<p class="do"><b>{html.escape(L.t("what_to_do", "What to do"))}:</b> '
+               f'{html.escape(L.fix(item))}</p>' if item.get("fix") else "")
+            + f'<details class="tech">{detail}</details></article>')
+
+
+def render_html(data: dict, L: Lang | None = None) -> str:
+    """Four layers, widest audience first.
+
+    The old report was one flat run of 214 equal-weight table rows whose evidence
+    column printed the assertion's internals — `summary.thin_pages = 6 (want 0)`.
+    Informative to whoever wrote the registry, opaque to whoever owns the site.
+    Nothing is removed here: the plain layer comes first, the machine layer is
+    folded underneath it, and the full checklist stays as the audit trail.
+    """
+    L = L or Lang()
     s = data["scores"]
     mode = data.get("mode", "live")
     counts = s["status_counts"]
-    seg = [(PASS, "var(--pass)"), (WARN, "var(--warn)"), (FAIL, "var(--fail)"),
+    unreadable = data.get("entry_reachable") is False
+
+    seg = [(FAIL, "var(--fail)"), (WARN, "var(--warn)"), (PASS, "var(--pass)"),
            (NO_DATA, "var(--none)"), (LLM_PENDING, "var(--none)"),
            (MANUAL, "var(--line)"), (NA, "var(--na)")]
     total = sum(counts.values()) or 1
-    bar = "".join(f'<i style="width:{100 * counts.get(k, 0) / total:.2f}%;background:{c}"></i>'
+    bar = "".join(f'<i style="width:{100 * counts.get(k, 0) / total:.2f}%;background:{c}" '
+                  f'title="{STATUS_ICON[k]}: {counts.get(k, 0)}"></i>'
                   for k, c in seg if counts.get(k))
 
-    parts = [
-        '<div class="wrap"><h1>SEO Checklist Audit</h1>',
-        f'<p class="sub">{html.escape(data["url"])} &middot; mode <code>{mode}</code> '
-        f'&middot; {html.escape(str(data.get("started_at", ""))[:19])}</p>',
-        '<div class="metrics">',
-        # Never a number when nothing was read. `seo_score` is None in that case
-        # and printing it renders "None", which reads as a broken tool in the one
-        # document that gets handed to a client.
-        (f'<div class="metric"><b>{s["seo_score"]}</b><span>SEO Score — passed checks, '
-         f'severity-weighted</span></div>'
-         if s.get("seo_score") is not None else
-         '<div class="metric"><b>—</b><span>No SEO Score: the entry page could not '
-         'be read, so nothing was measured</span></div>'),
-        f'<div class="metric"><b>{s["coverage_pct"]}%</b><span>Coverage — {s["decided"]} of '
-        f'{s["applicable"]} items applicable in {mode} mode</span></div>',
-        f'<div class="metric"><b>{counts.get(FAIL, 0)}</b><span>failing checks</span></div>',
-        '</div>',
-        '<p class="note">The two metrics stay separate on purpose: a high score over thin '
-        'coverage means little, and an item nobody could check is not evidence that the site '
-        'failed it.</p>',
-        f'<div class="bar">{bar}</div>',
-        '<div class="filters"><button data-f="ALL" aria-pressed="true">All</button>',
-    ]
-    for st in (FAIL, WARN, PASS, NO_DATA, LLM_PENDING, MANUAL, NA):
-        if counts.get(st):
-            parts.append(f'<button data-f="{st}">{STATUS_ICON[st]} ({counts[st]})</button>')
-    parts.append("</div>")
+    parts = [f'<div class="wrap"><h1>{html.escape(L.t("report_title", "SEO Checklist Audit"))}'
+             f' &mdash; {html.escape(data.get("domain", ""))}</h1>',
+             f'<p class="sub">{html.escape(data["url"])} &middot; <code>{mode}</code>'
+             f' &middot; {html.escape(str(data.get("profile", "default")))}'
+             f' &middot; {html.escape(str(data.get("started_at", ""))[:16])}</p>']
+
+    # -- Layer 1: what this means, in sentences, before any number ---------------
+    parts.append('<section class="hero"><div class="plain">'
+                 + "".join(f"<p>{html.escape(line)}</p>" for line in plain_summary(data, L))
+                 + "</div>")
+    if unreadable:
+        parts.append(f'<div class="metrics"><div class="metric"><b>&mdash;</b><span>'
+                     f'{html.escape(L.t("no_score", "No score: the entry page could not be read"))}'
+                     f'</span></div></div>')
+    else:
+        parts += [
+            '<div class="metrics">',
+            f'<div class="metric"><b>{s["seo_score"]}<small>/100</small></b>'
+            f'<span>{html.escape(L.t("m_score_help", "Of the checks that could be decided, how many passed — weighted by how much each matters"))}</span></div>',
+            f'<div class="metric"><b>{s["coverage_pct"]}<small>%</small></b>'
+            f'<span>{html.escape(L.t("m_cov_help", "How much of the checklist could be decided at all: {decided} of {applicable}").format(decided=s["decided"], applicable=s["applicable"]))}</span></div>',
+            f'<div class="metric warnbox"><b>{counts.get(FAIL, 0) + counts.get(WARN, 0)}</b>'
+            f'<span>{html.escape(L.t("m_broken_help", "Checks that need work"))}</span></div>',
+            "</div>",
+            f'<p class="note">{html.escape(L.t("coverage_note", "The two numbers are deliberately separate: a high score over thin coverage means little, and an item nobody could check is not evidence that the site failed it."))}</p>',
+        ]
+    parts.append(f'<div class="bar">{bar}</div><div class="legend">'
+                 + "".join(f'<span><i style="background:{c}"></i>'
+                           f'{STATUS_ICON[k]} {counts.get(k, 0)}</span>'
+                           for k, c in seg if counts.get(k))
+                 + "</div></section>")
+
+    # -- Layer 2: where the problems are, as bars ------------------------------
+    cats = [(key, cat) for key, cat in s["by_category"].items() if cat["decided"]]
+    cats.sort(key=lambda kv: kv[1]["score"] if kv[1]["score"] is not None else 101)
+    if cats:
+        parts.append(f'<section><h2>{html.escape(L.t("where", "Where the problems are"))}</h2>')
+        for key, cat in cats:
+            score = cat["score"]
+            tone = "fail" if score < 60 else ("warn" if score < 85 else "pass")
+            failed = cat["counts"].get(FAIL, 0) + cat["counts"].get(WARN, 0)
+            parts.append(
+                f'<div class="catrow"><div class="catname">{html.escape(cat["label"])}</div>'
+                f'<div class="cattrack"><i class="{tone}" style="width:{score}%"></i></div>'
+                f'<div class="catnum">{score}<small>/100</small></div>'
+                f'<div class="catmeta">'
+                + html.escape(L.t("cat_meta", "{decided} checked, {failed} need work")
+                              .format(decided=cat["decided"], failed=failed))
+                + "</div></div>")
+            help_text = L.category_help(key)
+            if help_text and failed:
+                parts.append(f'<p class="cathelp">{html.escape(help_text)}</p>')
+        parts.append("</section>")
+
+    # -- Layer 3: what to do, as cards ------------------------------------------
+    todo = sorted((i for i in data["items"] if i["status"] in (FAIL, WARN)),
+                  key=lambda i: (-priority_of(i), SEVERITY_ORDER.get(i["severity"], 9)))
+    if todo:
+        quick = [i for i in todo if i.get("effort") == "low"]
+        parts.append(f'<section><h2>{html.escape(L.t("do_first", "What to do first"))}</h2>'
+                     f'<p class="note">'
+                     + html.escape(L.t("do_first_note",
+                                       "Ordered by how much each matters against how much "
+                                       "work it is — {quick} of the {total} are quick.")
+                                   .format(quick=len(quick), total=len(todo)))
+                     + "</p>" + "".join(_card(i, L) for i in todo) + "</section>")
+
+    # -- Layer 4: the machine layer, folded --------------------------------------
+    def fold(title: str, body: str, count: int) -> str:
+        return (f'<details class="fold"><summary>{html.escape(title)} '
+                f'<span class="count">{count}</span></summary>{body}</details>')
+
+    manual = [i for i in data["items"] if i["status"] == MANUAL]
+    if manual:
+        rows = "".join(
+            f'<div class="row" data-st="MANUAL"><div class="st MANUAL">{STATUS_ICON[MANUAL]}</div>'
+            f'<div class="sev">{html.escape(L.sev(i["severity"]))}<br>{i["id"]}</div>'
+            f'<div><div class="ttl"><label class="chk">'
+            f'<input type="checkbox" data-id="{i["id"]}">'
+            f'<span>{html.escape(L.title(i))}</span></label></div>'
+            f'<div class="fix">{html.escape(L.fix(i))}</div></div></div>'
+            for i in sorted(manual, key=lambda x: SEVERITY_ORDER.get(x["severity"], 9)))
+        parts.append(fold(L.t("requires_human", "Needs a person"),
+                          f'<p class="note">'
+                          + html.escape(L.t("manual_note",
+                                            "These cannot be scripted. Nothing here counts "
+                                            "against the score. Tick them off as you go — "
+                                            "the ticks are remembered in this browser."))
+                          + f"</p>{rows}", len(manual)))
+
+    pending = [i for i in data["items"] if i["status"] == LLM_PENDING]
+    if pending:
+        rows = "".join(
+            f'<div class="row" data-st="LLM_PENDING">'
+            f'<div class="st LLM_PENDING">{STATUS_ICON[LLM_PENDING]}</div>'
+            f'<div class="sev">{html.escape(L.sev(i["severity"]))}<br>{i["id"]}</div>'
+            f'<div class="ttl">{html.escape(L.title(i))}</div></div>' for i in pending)
+        parts.append(fold(L.t("awaiting_judgement", "Awaiting a reading of the page"),
+                          f'<p class="note">'
+                          + html.escape(L.t("pending_note",
+                                            "Questions no script can settle — wording, "
+                                            "layout, intent. They lower coverage until "
+                                            "someone answers them."))
+                          + f"</p>{rows}", len(pending)))
+
+    blocked = [i for i in data["items"] if i["status"] == NO_DATA]
+    if blocked:
+        rows = "".join(
+            f'<div class="row" data-st="NO_DATA"><div class="st NO_DATA">{STATUS_ICON[NO_DATA]}</div>'
+            f'<div class="sev">{html.escape(L.sev(i["severity"]))}<br>{i["id"]}</div>'
+            f'<div><div class="ttl">{html.escape(L.title(i))}</div>'
+            f'<div class="ev">{html.escape(i.get("evidence", ""))}</div></div></div>'
+            for i in blocked)
+        parts.append(fold(L.t("undetermined", "Could not be determined"),
+                          f'<p class="note">'
+                          + html.escape(L.t("undetermined_note",
+                                            "Checks that ran and could not reach a verdict. "
+                                            "Each lowers coverage; none lowers the score. "
+                                            "This list is the honest part of the audit."))
+                          + f"</p>{rows}", len(blocked)))
 
     by_cat: dict[str, list] = {}
     for i in data["items"]:
         by_cat.setdefault(i["category_label"], []).append(i)
-
+    full = ['<div class="filters"><button data-f="ALL" aria-pressed="true">'
+            + html.escape(L.t("all", "All")) + "</button>"]
+    for st in (FAIL, WARN, PASS, NO_DATA, LLM_PENDING, MANUAL, NA):
+        if counts.get(st):
+            full.append(f'<button data-f="{st}">{STATUS_ICON[st]} ({counts[st]})</button>')
+    full.append("</div>")
     for label, items in by_cat.items():
-        parts.append(f"<section><h2>{html.escape(label)}</h2>")
+        full.append(f"<h3>{html.escape(label)}</h3>")
         for i in sorted(items, key=lambda x: (x["status"] != FAIL,
                                               SEVERITY_ORDER.get(x["severity"], 9))):
             cls = i["status"].replace("/", "").replace(" ", "_")
-            title = html.escape(i["title"])
-            if i["status"] == MANUAL:
-                title = (f'<label class="chk"><input type="checkbox" data-id="{i["id"]}">'
-                         f'<span>{title}</span></label>')
-            fix = (f'<div class="fix">{html.escape(i["fix"])}</div>'
-                   if i["status"] in (FAIL, MANUAL, WARN) and i["fix"] else "")
-            parts.append(
+            full.append(
                 f'<div class="row" data-st="{i["status"]}">'
                 f'<div class="st {cls}">{STATUS_ICON[i["status"]]}</div>'
-                f'<div class="sev">{i["severity"]}<br>{i["id"]}</div>'
-                f'<div><div class="ttl">{title}</div>'
-                f'<div class="ev">{html.escape(i["evidence"])}</div>{fix}</div></div>')
-        parts.append("</section>")
-    parts.append("</div>")
+                f'<div class="sev">{html.escape(L.sev(i["severity"]))}<br>{i["id"]}</div>'
+                f'<div><div class="ttl">{html.escape(L.title(i))}</div>'
+                f'<div class="ev">{html.escape(i.get("evidence", ""))}</div></div></div>')
+    parts.append(fold(L.t("full_checklist", "Every check, with its raw evidence"),
+                      "".join(full), s["total_items"]))
 
-    return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    parts.append(f'<p class="foot">{html.escape(L.t("foot", "Registry"))} '
+                 f'<code>{html.escape(str(data.get("registry_version", "")))}</code>'
+                 f' &middot; {s["total_items"]} '
+                 + html.escape(L.t("items_word", "items")) + "</p></div>")
+
+    return ('<!doctype html><html lang="' + html.escape(L.code or "en") + '"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>SEO Checklist — {html.escape(data.get("domain", ""))}</title>'
+            f'<title>SEO &mdash; {html.escape(data.get("domain", ""))}</title>'
             f"<style>{CSS}</style></head>"
             f'<body data-domain="{html.escape(data.get("domain", ""))}">'
             + "".join(parts) + f"<script>{JS}</script></body></html>")
@@ -598,7 +978,7 @@ def main() -> int:
         return 2
     written = [("Report", write(a.markdown, render_markdown(data, lang)))]
     if not a.no_html:
-        written.append(("HTML", write(a.html, render_html(data))))
+        written.append(("HTML", write(a.html, render_html(data, lang))))
 
     pending_items = [i for i in data["items"] if i["status"] == LLM_PENDING]
     pending = len(pending_items)

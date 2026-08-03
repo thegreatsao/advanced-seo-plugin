@@ -268,6 +268,34 @@ class RateLimiting(unittest.TestCase):
                            self.sh.MAX_RETRY_AFTER_WAIT)
 
 
+class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
+    """The worst sampled page decides the verdict, so it has to supply the numbers
+    too. It did not: a live report printed "52 characters, no more than 60 is
+    acceptable" underneath a FAIL, because the verdict came from a page with 61 and
+    the measurement from the entry page. A passing number beside a failing verdict
+    is worse than the raw assertion it replaced."""
+
+    def _row(self, status, got, ident="MS-020"):
+        return {"id": ident, "title": "t", "category": "meta_structured",
+                "category_label": "M", "severity": "high", "status": status,
+                "effort": "low", "evidence": f"len(title) = {got}",
+                "check": {"requires": "fetch"},
+                "measure": {"op": "len_lte", "kind": "count", "got": got, "want": 60}}
+
+    def test_the_measure_follows_the_worst_page(self):
+        primary = [self._row(PASS, 52)]
+        pages = [[self._row(PASS, 52)], [self._row(FAIL, 61)]]
+        out = aggregate_pages(primary, pages)[0]
+        self.assertEqual(out["status"], FAIL)
+        self.assertEqual(out["measure"]["got"], 61,
+                         "the report would show a passing number under a failure")
+
+    def test_a_single_page_run_is_untouched(self):
+        primary = [self._row(PASS, 52)]
+        out = aggregate_pages(primary, [[self._row(PASS, 52)]])[0]
+        self.assertEqual(out["measure"]["got"], 52)
+
+
 class ValueMap(unittest.TestCase):
     """The structured replacement for matching prose. Its whole point is the
     failure mode: an unlisted value is undecided, where a pattern that matched
