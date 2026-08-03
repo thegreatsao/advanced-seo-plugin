@@ -55,12 +55,20 @@ Note what fixing 1 also fixes: robots.txt is honoured once in the shared crawler
 instead of five times, and the request volume stops being a property of how many
 scripts happen to want a crawl.
 
-## 2. 40 of the 55 evidence scripts have no unit test
+## 2. 44 of the 55 evidence scripts have no unit test
 
-Down from 45 in 0.5.0: the seven scripts that decide the nineteen `critical` items
-now have 34 tests, each asserting the field the registry actually reads. Writing
-them found five critical items whose rule could not produce the verdict it claimed —
-see the 0.5.0 list below — which is the argument for doing the other forty.
+Counted as "no test imports this module", read from the test files' AST. The looser
+count — "the script's name appears somewhere in tests/" — says 40, and it is wrong in
+the flattering direction: four scripts are named only inside a registry audit or a
+docstring, which exercises nothing. The number in this file before 0.5.0 was arrived
+at the loose way too.
+
+11 are covered: the seven that decide the nineteen `critical` items, plus
+`cwv_metrics.py`, `rendered_audit.py`, `orphan_pages_from_sitemap.py` and part of
+`local_seo_checker.py`. The seven `critical` ones got 34 tests in 0.5.0, each
+asserting the field the registry actually reads, and writing them found five critical
+items whose rule could not produce the verdict it claimed — see the 0.5.0 list below.
+That yield is the argument for doing the other 44.
 
 They are also *executed* end to end as of 0.4.0: CI serves `tests/fixtures/site/`
 and fails if any of them crashes. That is a smoke test, not coverage — it proves a
@@ -68,8 +76,22 @@ script runs and returns usable output against one small site, and says nothing a
 whether its verdict is right.
 
 The rest of the tests defend the *frame* — registry, runner, report. Every verdict
-from those forty is the output of an untested script read by a well-tested
-interpreter.
+from those 44 is the output of an untested script read by a well-tested interpreter.
+Between them they decide 31 `high` and 51 `medium` items.
+
+**What makes the next batch expensive is missing scaffolding, not the scripts.** Each
+of the seven needed its own hand-rolled HTTP stub, at a different seam:
+`seo_common.fetch_url` for some, `lib.safe_http.safe_get` for others,
+`requests.post` for the Safe Browsing call, `fetch_robots` for the robots tests. 33
+of the 44 are single-fetch scripts that would each need the same ten lines again. One
+shared harness — serve this HTML with these headers and this robots.txt, whichever
+seam the script reaches for — turns the remaining work from 44 setups into 44
+assertions. Build that first.
+
+Seven of the 44 are the crawlers item 1 will rewrite into readers of a shared
+inventory. Their internals are about to be replaced, so test their **output
+contract** rather than their crawling: that is what the rewrite has to preserve, and
+those tests are the ones that survive it.
 
 Three bugs in the borrowed scripts have been found so far, all by accident rather
 than by a test (`article_seo.py` crashing on `@graph` JSON-LD, `safe_http.py`
