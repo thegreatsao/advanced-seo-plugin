@@ -299,6 +299,13 @@ def render_llm_queue(data: dict, lens: str = "") -> str:
         "python3 checklist_report.py checklist-results.json --llm-answers answers.json",
         "```",
         "",
+        "Then have a second reader go through the same items independently and "
+        "merge that with `--llm-review review.json`. Where the two agree the "
+        "verdict says so; where they disagree the item returns to `NO_DATA` "
+        "carrying both readings, because two careful readings that conflict mean "
+        "the page did not settle it. The reviewer cannot overwrite a verdict — "
+        "see `resources/agents/seo-llm-adversary.md`.",
+        "",
         "---",
         "",
     ]
@@ -474,6 +481,64 @@ def merge_llm_answers(data: dict, answers: dict) -> int:
     return applied
 
 
+def apply_llm_review(data: dict, review: dict) -> dict:
+    """Fold a second, independent judgement into answers the first pass produced.
+
+    Thirty items rest on one language model's reading of one page, unopposed. A
+    second reader cannot make those verdicts more accurate on its own — but it can
+    say when they are not reliable, and that is the part the score has no way to
+    express otherwise.
+
+    Agreement corroborates: the verdict stands and says it was checked twice.
+    Disagreement does **not** pick a winner and does not average them. Two
+    competent readings that conflict mean the page did not settle the question, so
+    the item goes back to NO_DATA carrying both opinions. The reviewer therefore
+    has a veto over confidence and no vote on the answer — which is deliberate: a
+    reviewer that could overwrite a verdict is just a second first pass, and one
+    that could only agree is decoration.
+
+    Returns counts, so the caller can report what the second pass actually did.
+    """
+    valid = {PASS, FAIL, WARN, NA}
+    stats = {"corroborated": 0, "contested": 0, "skipped": 0}
+    for item in data["items"]:
+        second = review.get(item["id"])
+        if not second:
+            continue
+        verdict = str(second.get("status", "")).upper()
+        if verdict not in valid:
+            print(f"  review of {item['id']}: invalid status "
+                  f"{second.get('status')!r}", file=sys.stderr)
+            stats["skipped"] += 1
+            continue
+        # Only an answered LLM item can be reviewed. A script's verdict is not up
+        # for discussion, and an item the first pass never answered would make the
+        # reviewer the primary judge without anyone deciding that.
+        if item.get("source") != "llm(answered)":
+            print(f"  review of {item['id']}: not an answered LLM item "
+                  f"({item.get('source')}, {item['status']}) — ignored",
+                  file=sys.stderr)
+            stats["skipped"] += 1
+            continue
+
+        note = str(second.get("evidence", "")).strip() or "no rationale given"
+        if verdict == item["status"]:
+            item["corroborated"] = True
+            item["evidence"] = f"{item['evidence']} | second reading agrees: {note}"
+            stats["corroborated"] += 1
+        else:
+            item["contested"] = {"first": item["status"], "second": verdict}
+            item["evidence"] = (f"contested: first reading said {item['status']} "
+                                f"({item['evidence']}); second said {verdict} "
+                                f"({note})")
+            item["status"] = NO_DATA
+            item["source"] = "llm(contested)"
+            stats["contested"] += 1
+    if stats["contested"]:
+        data["scores"] = load_scoring()(data["items"])
+    return stats
+
+
 def write(path: str, text: str) -> str:
     d = os.path.dirname(path)
     if d:
@@ -490,6 +555,12 @@ def main() -> int:
     ap.add_argument("--html", default="CHECKLIST.html")
     ap.add_argument("--llm-queue", default="LLM-QUEUE.md")
     ap.add_argument("--llm-answers", default="", help="JSON of LLM verdicts to merge back")
+    ap.add_argument("--llm-review", default="",
+                    help="JSON of a second, independent judgement over the same "
+                         "items. Agreement corroborates the verdict; disagreement "
+                         "returns the item to NO_DATA carrying both readings. The "
+                         "reviewer cannot overwrite a verdict or answer an "
+                         "unanswered item.")
     ap.add_argument("--no-html", action="store_true")
     ap.add_argument("--lang", default="en",
                     help="language for the report chrome (en, ru); item titles "
@@ -506,6 +577,19 @@ def main() -> int:
         with open(a.results, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"Merged {n} LLM verdict(s) into {a.results}")
+
+    if a.llm_review:
+        with open(a.llm_review, encoding="utf-8") as f:
+            review = json.load(f)
+        stats = apply_llm_review(data, review)
+        with open(a.results, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"Second reading: {stats['corroborated']} corroborated, "
+              f"{stats['contested']} contested (back to NO_DATA), "
+              f"{stats['skipped']} ignored")
+        if stats["contested"]:
+            print("  Coverage drops by the contested items, and it should: two "
+                  "readings that disagree did not settle the question.")
 
     try:
         lang = Lang(a.lang)

@@ -1,7 +1,7 @@
 ---
 name: seo-checklist
 description: >
-  Deterministic SEO audit against a fixed 211-item registry. Every item gets a
+  Deterministic SEO audit against a fixed 214-item registry. Every item gets a
   status and nothing is silently skipped, so two audits of the same site check
   the same things. Use when the user asks for a checklist audit, a full SEO
   checklist, reproducible coverage, a comparison against a previous run, or an
@@ -10,9 +10,9 @@ description: >
 
 # Checklist Audit
 
-`resources/config/checklist.json` holds **211 items** — the Plerdy 200-point
-checklist plus 11 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
-policy, IndexNow, schema guards). Each item names what answers it: a script and an
+`resources/config/checklist.json` holds **214 items** — the Plerdy 200-point
+checklist plus 14 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
+policy, IndexNow, schema guards, lab Core Web Vitals). Each item names what answers it: a script and an
 assertion over that script's output, a Search Console call, a language-model
 judgement, or a human.
 
@@ -117,6 +117,70 @@ extensions are rejected by path, and anything whose `Content-Type` is not a page
 is dropped at fetch time with the reason printed. This matters more than it
 looks: a stylesheet sampled as a page fails every page-level check, and the worst
 verdict wins — one asset in the sample would condemn the whole site.
+
+## The second reading
+
+The LLM queue produces 38 verdicts from one model's reading of one page, and the
+report presents them beside measured HTTP statuses with the same confidence. Have
+them reviewed before the report goes to anyone:
+
+```bash
+python3 <SKILL_DIR>/scripts/checklist_report.py checklist-results.json \
+    --llm-review review.json
+```
+
+Dispatch `seo-llm-adversary` for it. The reviewer reads the page itself **before**
+looking at the verdicts it is reviewing, rules independently, and writes the same
+JSON shape as the first pass.
+
+The asymmetry is the design: **it cannot change a verdict, only withdraw
+confidence.** Agreement marks the item as checked twice. Disagreement returns it to
+`NO_DATA` carrying both readings, and coverage drops — which is what the audit not
+knowing looks like. A reviewer that could overwrite a verdict would just be a
+second first pass; one that could only agree would be decoration.
+
+It cannot touch script or Search Console verdicts, and it cannot answer an item
+the first pass left unanswered. Both are ignored with a message rather than
+silently applied.
+
+## Core Web Vitals from a local trace
+
+`pagespeed.py` reports **field** data — what real visitors experienced, from CrUX.
+That is the better evidence and it answers SP-108 and SP-113 whenever it exists.
+It does not exist for low-traffic URLs, and then those items are `NO_DATA` no
+matter how slow the page is.
+
+For that case, measure the page yourself with the **chrome-devtools MCP** and hand
+the numbers to the run:
+
+1. `performance_start_trace` with a reload, then `performance_stop_trace`.
+2. Read LCP, CLS and TBT out of the trace insights.
+3. Write them to a file, units in the key names:
+
+```json
+{
+  "url": "https://example.com/",
+  "lcp_ms": 2100,
+  "cls": 0.04,
+  "tbt_ms": 150,
+  "source": "chrome-devtools MCP trace, desktop, 2026-08-03"
+}
+```
+
+4. Pass it: `--cwv-json /path/to/cwv.json`
+
+SP-214, SP-215 and SP-216 then decide from it; without the file they are
+`NO_DATA` naming the missing input. Say which mode and viewport you traced in
+`source`, because a desktop trace on a fast connection is not what a phone sees.
+
+**Do not report these as field data and do not merge them with SP-108 or SP-113.**
+They are separate items because they are separate claims: one controlled run on
+your machine versus what visitors actually got. TBT is named as a lab stand-in for
+INP because INP needs a real interaction and cannot be measured from a page load
+at all — reporting it as INP would be a fabrication.
+
+If the MCP is unavailable, skip it. Three `NO_DATA` items with a stated reason are
+a smaller lie than three numbers from somewhere else.
 
 ## Incoming links
 

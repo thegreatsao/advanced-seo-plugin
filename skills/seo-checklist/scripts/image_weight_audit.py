@@ -87,9 +87,16 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         images.append(row)
 
     known_bytes = sum(row["content_length"] or 0 for row in images)
-    return {
+    # A structured count for "Fix Broken Images", emitted only when statuses were
+    # actually collected. Reporting 0 broken because nothing was fetched is the
+    # difference between "no broken images" and "we did not look": the key is
+    # absent instead, which the checklist runner reads as NO_DATA.
+    checked = [row for row in images if isinstance(row.get("status"), int)]
+    broken = [row for row in checked if row["status"] >= 400]
+    out = {
         "url": url or source,
         "image_count": len(images),
+        "images_status_checked": len(checked),
         "known_image_bytes": known_bytes if fetch_images or any(row["content_length"] for row in images) else None,
         "modern_format_count": sum(1 for row in images if row["format"] in MODERN_FORMATS),
         "responsive_count": sum(1 for row in images if row["srcset"]),
@@ -97,6 +104,13 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         "images": images,
         "fetch_error": fetched.get("error"),
     }
+    # Present only when statuses exist. Emitting 0 — or None, which an equality
+    # assertion reads as a failure rather than as silence — would turn "we did not
+    # look" into a verdict either way. An absent key is NO_DATA by design.
+    if checked:
+        out["broken_image_count"] = len(broken)
+        out["broken_images"] = [row["url"] for row in broken]
+    return out
 
 
 def main() -> None:

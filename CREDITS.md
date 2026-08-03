@@ -8,8 +8,9 @@ what, from where, and under which licence.
 ## Checklist
 
 The 200-point checklist the registry is built on is
-[Plerdy's](https://www.plerdy.com/check/). The 11 additional items (GEO/AI
-search, `llms.txt`, AI-crawler policy, IndexNow, schema guards) are new here.
+[Plerdy's](https://www.plerdy.com/check/). The 14 additional items (GEO/AI
+search, `llms.txt`, AI-crawler policy, IndexNow, schema guards, and Core Web
+Vitals from a local browser trace) are new here.
 
 ## Evidence scripts
 
@@ -25,8 +26,8 @@ as do both files in `scripts/lib/`, with three bug fixes applied:
 New in this plugin: `checklist_runner.py`, `checklist_report.py`,
 `detect_profile.py`, `gsc_cannibalization.py`, `gsc_url_inspection.py`,
 `gsc_links_csv.py`, `html_validator.py`, `domain_safety_check.py`,
-`ga4_tag_checker.py`, `css_minify_check.py`, plus the registry, its generator and
-the four judgement agents.
+`ga4_tag_checker.py`, `css_minify_check.py`, plus `cwv_metrics.py`, the registry,
+its generator, the four judgement agents and the adversarial reviewer.
 
 ## Public Suffix List
 

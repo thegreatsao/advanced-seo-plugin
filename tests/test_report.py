@@ -14,8 +14,8 @@ SKILL = os.path.join(ROOT, "skills", "seo-checklist")
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
 
 from checklist_report import (  # noqa: E402
-    FAIL, LLM_PENDING, NA, PASS, WARN, Lang, merge_llm_answers, priority_of,
-    render_llm_queue, render_markdown,
+    FAIL, LLM_PENDING, NA, NO_DATA, PASS, WARN, Lang, apply_llm_review,
+    merge_llm_answers, priority_of, render_llm_queue, render_markdown,
 )
 
 I18N = os.path.join(SKILL, "resources", "i18n")
@@ -125,6 +125,87 @@ class Localisation(unittest.TestCase):
         from checklist_runner import score
         data["scores"] = score(data["items"])
         self.assertIn("SEO Checklist Audit", render_markdown(data))
+
+
+class SecondReading(unittest.TestCase):
+    """An unopposed judgement reported with the confidence of a measured status is
+    the LLM queue's weak point. The reviewer's power is deliberately asymmetric:
+    it can withdraw confidence, never substitute a verdict."""
+
+    def answered(self, status=PASS, evidence="looked fine"):
+        row = item("CN-047", status, source="llm(answered)",
+                   evidence=f"LLM: {evidence}")
+        data = results(row)
+        from checklist_runner import score
+        data["scores"] = score(data["items"])
+        return data
+
+    def test_agreement_corroborates_and_keeps_the_verdict(self):
+        data = self.answered(PASS)
+        stats = apply_llm_review(data, {"CN-047": {"status": "PASS",
+                                                   "evidence": "read it too"}})
+        row = data["items"][0]
+        self.assertEqual(stats["corroborated"], 1)
+        self.assertEqual(row["status"], PASS)
+        self.assertTrue(row["corroborated"])
+        self.assertIn("second reading agrees", row["evidence"])
+
+    def test_disagreement_returns_the_item_to_undecided(self):
+        """Not a winner, not an average. Two careful readings that conflict mean
+        the page did not settle the question."""
+        data = self.answered(PASS)
+        stats = apply_llm_review(data, {"CN-047": {"status": "FAIL",
+                                                   "evidence": "the H1 lies"}})
+        row = data["items"][0]
+        self.assertEqual(stats["contested"], 1)
+        self.assertEqual(row["status"], NO_DATA)
+        self.assertEqual(row["contested"], {"first": PASS, "second": FAIL})
+        self.assertIn("PASS", row["evidence"])
+        self.assertIn("FAIL", row["evidence"])
+
+    def test_a_contested_item_costs_coverage(self):
+        data = self.answered(PASS)
+        before = data["scores"]["coverage_pct"]
+        apply_llm_review(data, {"CN-047": {"status": "FAIL", "evidence": "no"}})
+        self.assertLess(data["scores"]["coverage_pct"], before)
+
+    def test_it_cannot_touch_a_script_verdict(self):
+        """A measurement is not an opinion. Letting a reviewer contest one would
+        make every script result negotiable."""
+        data = results(item("CI-001", PASS, source="script"))
+        from checklist_runner import score
+        data["scores"] = score(data["items"])
+        stats = apply_llm_review(data, {"CI-001": {"status": "FAIL", "evidence": "x"}})
+        self.assertEqual(stats["skipped"], 1)
+        self.assertEqual(data["items"][0]["status"], PASS)
+
+    def test_it_cannot_answer_an_unanswered_item(self):
+        """That would make the reviewer the primary judge, with nobody deciding to
+        promote it."""
+        data = results(item("CN-047", LLM_PENDING))
+        from checklist_runner import score
+        data["scores"] = score(data["items"])
+        stats = apply_llm_review(data, {"CN-047": {"status": "PASS", "evidence": "x"}})
+        self.assertEqual(stats["skipped"], 1)
+        self.assertEqual(data["items"][0]["status"], LLM_PENDING)
+
+    def test_an_invalid_status_is_ignored_not_applied(self):
+        data = self.answered(PASS)
+        stats = apply_llm_review(data, {"CN-047": {"status": "PROBABLY", "evidence": "x"}})
+        self.assertEqual(stats["skipped"], 1)
+        self.assertEqual(data["items"][0]["status"], PASS)
+
+    def test_items_the_reviewer_says_nothing_about_are_untouched(self):
+        data = self.answered(PASS)
+        apply_llm_review(data, {})
+        self.assertEqual(data["items"][0]["status"], PASS)
+        self.assertNotIn("corroborated", data["items"][0])
+
+    def test_the_queue_tells_the_reader_a_second_pass_exists(self):
+        data = results(item("CN-047", LLM_PENDING, lens="copy"))
+        out = render_llm_queue(data, "copy")
+        self.assertIn("--llm-review", out)
+        self.assertIn("seo-llm-adversary", out)
 
 
 class NoScoreSurvivesEveryRenderer(unittest.TestCase):

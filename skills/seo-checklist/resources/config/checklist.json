@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "registry_version": "7b8c8a3295fd",
-  "item_count": 211,
+  "registry_version": "3047434dc981",
+  "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
     {
@@ -320,8 +320,14 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "rows.0.verdict",
-          "none_matching": "(?i)mismatch|conflict"
+          "path": "rows",
+          "field": "verdict",
+          "value_map": {
+            "self_canonical": "pass",
+            "missing": "pass",
+            "canonicalized": "pass",
+            "cross_host": "fail"
+          }
         }
       },
       "effort": "low",
@@ -358,14 +364,19 @@
       "severity": "critical",
       "source": "script",
       "check": {
-        "script": "robots_checker.py",
+        "script": "robots_path_tester.py",
         "args": [
-          "{url}"
+          "{url}",
+          "/assets/app.css",
+          "/static/app.js",
+          "/images/hero.jpg",
+          "--agent",
+          "Googlebot"
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_matching": "(?i)css|js|javascript|image"
+          "path": "allowed_urls",
+          "len_gte": 3
         }
       },
       "effort": "low",
@@ -493,8 +504,8 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "rows",
-          "none_matching": "(?i)allowed.*true"
+          "path": "allowed_urls",
+          "len_lte": 0
         }
       },
       "effort": "low",
@@ -823,18 +834,8 @@
       "category_label": "Content",
       "title": "Ensure Readable Font Sizes",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "a11y_seo_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)font.?size"
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "high",
       "fix": "Readable font size across all breakpoints"
     },
@@ -845,18 +846,8 @@
       "category_label": "Content",
       "title": "Make Hyperlinks Clear and Distinct",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "a11y_seo_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)link.*(distinct|underline)"
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "high",
       "fix": "Links must be visually distinct from body text"
     },
@@ -1122,18 +1113,8 @@
       "category_label": "Content",
       "title": "Avoid Intrusive Interstitials (Especially on Mobile)",
       "severity": "high",
-      "source": "script",
-      "check": {
-        "script": "mobile_render_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)interstitial|popup"
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "high",
       "fix": "Remove intrusive interstitials, especially on mobile"
     },
@@ -1186,8 +1167,8 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_matching": "(?i)lazy.*(above|lcp)"
+          "path": "summary.lazy_lcp_candidates",
+          "eq": 0
         }
       },
       "effort": "high",
@@ -1537,18 +1518,8 @@
       "category_label": "Keyword Analysis",
       "title": "Include the Primary Keyword (or Close Variant) in an H2",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "article_seo.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "seo_issues",
-          "none_matching": "(?i)h2.*keyword"
-        }
-      },
+      "source": "llm",
+      "lens": "copy",
       "effort": "medium",
       "fix": "Include the primary keyword or a close variant in an H2"
     },
@@ -1559,18 +1530,8 @@
       "category_label": "Keyword Analysis",
       "title": "Include the Primary Keyword in the Meta Description (for CTR)",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "article_seo.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "seo_issues",
-          "none_matching": "(?i)description.*keyword"
-        }
-      },
+      "source": "llm",
+      "lens": "copy",
       "effort": "medium",
       "fix": "Include the primary keyword in the meta description - it affects CTR"
     },
@@ -1873,18 +1834,8 @@
       "category_label": "Mobile",
       "title": "Avoid Intrusive Interstitials on Mobile",
       "severity": "high",
-      "source": "script",
-      "check": {
-        "script": "mobile_render_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)interstitial"
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "medium",
       "fix": "Remove intrusive interstitials on mobile"
     },
@@ -2062,18 +2013,8 @@
       "category_label": "Mobile",
       "title": "Make Tap Targets Easy to Click",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "a11y_seo_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)tap|touch target"
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "medium",
       "fix": "Increase tap targets to 48x48 CSS pixels"
     },
@@ -2544,18 +2485,7 @@
       "category_label": "International & Multilingual",
       "title": "Avoid Forced Geo/Language Redirects",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "redirect_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)geo|language"
-        }
-      },
+      "source": "manual",
       "effort": "high",
       "fix": "Do not force geo or language redirects"
     },
@@ -3782,12 +3712,13 @@
       "check": {
         "script": "image_weight_audit.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--fetch-images"
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_matching": "(?i)404|broken|missing src"
+          "path": "broken_image_count",
+          "eq": 0
         }
       },
       "effort": "medium",
@@ -3927,18 +3858,8 @@
       "category_label": "Local SEO",
       "title": "Use Localized Title Tags",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "local_seo_checker.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "issues",
-          "none_matching": "(?i)title"
-        }
-      },
+      "source": "llm",
+      "lens": "market",
       "effort": "high",
       "fix": "Localized title tags"
     },
@@ -4060,7 +3981,12 @@
         "requires": "fetch",
         "assert": {
           "path": "rows",
-          "none_matching": "not managed"
+          "field": "alignment",
+          "value_map": {
+            "documented": "pass",
+            "robots_only": "pass",
+            "allowed_without_llms_txt": "fail"
+          }
         }
       },
       "effort": "medium",
@@ -4235,6 +4161,72 @@
       "source": "manual",
       "effort": "high",
       "fix": "Track pages losing traffic (requires a GSC export)"
+    },
+    {
+      "id": "SP-214",
+      "plerdy_ref": null,
+      "category": "speed",
+      "category_label": "Speed",
+      "title": "LCP within budget in a local trace (lab)",
+      "severity": "medium",
+      "source": "script",
+      "check": {
+        "script": "cwv_metrics.py",
+        "args": [
+          "{cwv_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "lcp_ms",
+          "lte": 2500
+        }
+      },
+      "effort": "medium",
+      "fix": "Reduce the largest contentful paint below 2.5s: server response, render-blocking resources, image weight"
+    },
+    {
+      "id": "SP-215",
+      "plerdy_ref": null,
+      "category": "speed",
+      "category_label": "Speed",
+      "title": "CLS within budget in a local trace (lab)",
+      "severity": "medium",
+      "source": "script",
+      "check": {
+        "script": "cwv_metrics.py",
+        "args": [
+          "{cwv_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "cls",
+          "lte": 0.1
+        }
+      },
+      "effort": "medium",
+      "fix": "Reserve space for images, ads and embeds; avoid inserting content above existing content"
+    },
+    {
+      "id": "SP-216",
+      "plerdy_ref": null,
+      "category": "speed",
+      "category_label": "Speed",
+      "title": "Main thread not blocked in a local trace (TBT, lab proxy for INP)",
+      "severity": "medium",
+      "source": "script",
+      "check": {
+        "script": "cwv_metrics.py",
+        "args": [
+          "{cwv_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "tbt_ms",
+          "lte": 200
+        }
+      },
+      "effort": "medium",
+      "fix": "Break up long tasks and defer third-party JavaScript. INP needs a real interaction and cannot be measured from a page load, so TBT stands in for it"
     }
   ]
 }

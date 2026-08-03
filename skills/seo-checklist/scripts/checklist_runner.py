@@ -246,6 +246,16 @@ def audit_target(requested: str, final_url: str) -> str:
     return requested
 
 
+# Below this many words the entry page carries no content worth auditing. It is
+# deliberately *not* treated as unreadable: an interstitial from a vendor the
+# guard does not know and a client-rendered shell look identical from here, and
+# the second is a real page with a real finding — javascript_render_audit.py and
+# the JS-rendering items exist to report it. Refusing to score would hide that
+# finding behind a guess. So this warns, names the number, and lets the registry
+# do its job.
+THIN_ENTRY_WORDS = 40
+
+
 class Fetch(NamedTuple):
     """What one page request produced.
 
@@ -441,6 +451,46 @@ def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
         if hits:
             return False, f"matched {rule['none_matching']!r}: {hits[0][:120]}"
         return True, f"no match for {rule['none_matching']!r}"
+
+    if "value_map" in rule:
+        # The structured alternative to matching prose. The registry enumerates
+        # the script's own vocabulary for a field and says what each value means;
+        # a value nobody mapped is NO_DATA, never a pass.
+        #
+        # This is what regex-over-messages could not do. `none_matching` returns
+        # PASS when nothing matches, so a pattern aimed at wording a script never
+        # emits — or emits in a different word order — passed every site in
+        # silence. Fifteen of this registry's twenty-one such assertions were in
+        # that state. Here the failure mode is inverted: an unlisted value is
+        # undecided, and the evidence says which value it was.
+        if value is _MISSING:
+            return None, f"{rule['path']} missing"
+        field = rule.get("field")
+        elements = value if isinstance(value, list) else [value]
+        mapping = {str(k): str(v) for k, v in rule["value_map"].items()}
+        fails, unmapped, checked = [], [], 0
+        for el in elements:
+            if field:
+                if not isinstance(el, dict) or field not in el:
+                    unmapped.append(f"no {field} in element")
+                    continue
+                raw = el[field]
+            else:
+                raw = el
+            checked += 1
+            verdict = mapping.get(str(raw))
+            if verdict == "fail":
+                fails.append(str(raw))
+            elif verdict != "pass":
+                unmapped.append(str(raw))
+        label = field or rule["path"]
+        if fails:
+            return False, f"{len(fails)} of {checked} {label} = {fails[0]!r}"
+        if unmapped:
+            return None, f"unmapped {label} = {unmapped[0]!r}"
+        if not checked:
+            return None, f"{rule['path']} produced nothing to judge"
+        return True, f"all {checked} {label} value(s) acceptable"
 
     if "count_matching_lte" in rule:
         pattern, limit = rule["count_matching_lte"]
@@ -1204,6 +1254,40 @@ def load_public_suffixes(path: str = ""):
     return frozenset(exact), frozenset(wildcard), frozenset(exception)
 
 
+PSL_STALE_DAYS = 365
+
+
+def psl_snapshot_date(path: str = "") -> str:
+    """The date recorded in the bundled list's header, "" when there is none."""
+    try:
+        with open(path or PSL_PATH, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("// snapshot taken "):
+                    return line.split("taken", 1)[1].strip()
+                if not line.startswith("//"):
+                    break
+    except OSError:
+        return ""
+    return ""
+
+
+def psl_staleness(path: str = "") -> tuple[str, int]:
+    """(snapshot date, age in days). Age is -1 when the date cannot be read.
+
+    Worth saying during an audit and not only when somebody thinks to run
+    --check: a stale list is missing the platform suffixes registered since it was
+    taken, and the only symptom is a Search Console property that answers nothing.
+    """
+    taken = psl_snapshot_date(path)
+    if not taken:
+        return "", -1
+    try:
+        when = datetime.fromisoformat(taken).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return taken, -1
+    return taken, (datetime.now(timezone.utc) - when).days
+
+
 def public_suffixes():
     """The parsed list, or None when it is not on disk. Loaded once per process."""
     global _PSL_CACHE
@@ -1317,6 +1401,11 @@ def main() -> int:
     ap.add_argument("--gsc-credentials", default="",
                     help="service account JSON; falls back to GSC_CREDENTIALS_PATH, "
                          "GV_SA_KEY, then ~/.config/gcloud/gsc-service-account.json")
+    ap.add_argument("--cwv-json", default="",
+                    help="JSON file of Core Web Vitals from a local browser trace "
+                         "(chrome-devtools MCP). Lab data, reported separately from "
+                         "the CrUX field data PageSpeed provides. Without it the "
+                         "three lab items report NO_DATA.")
     ap.add_argument("--links-csv", default="",
                     help="Search Console Links report export (ZIP or CSV). The "
                          "Links report has no API, so incoming-link items stay "
@@ -1384,6 +1473,7 @@ def main() -> int:
     temp_html = ""
     entry_error = ""
     entry_guard = ""
+    entry_words = -1
     audit_url = a.url
     if mode == "archive":
         html_path = archive_entry(a.archive, a.entry)
@@ -1395,7 +1485,9 @@ def main() -> int:
         # A saved copy can be a challenge page too — somebody archives a site
         # they were blocked from and the audit grades the interstitial.
         with open(html_path, encoding="utf-8", errors="replace") as f:
-            entry_guard, guard_detail = page_guard(f.read())
+            entry_html = f.read()
+        entry_guard, guard_detail = page_guard(entry_html)
+        entry_words = visible_words(entry_html)
         if entry_guard and not a.no_page_guard:
             entry_error = guard_detail
     else:
@@ -1413,6 +1505,9 @@ def main() -> int:
             print(f"  redirected to another host: {a.url} -> {audit_url}\n"
                   f"  auditing the destination; Search Console property and the "
                   f"URL sample follow it", file=sys.stderr)
+        if html_path:
+            with open(html_path, encoding="utf-8", errors="replace") as f:
+                entry_words = visible_words(f.read())
         if entry_error:
             print(f"\n  ENTRY PAGE UNREACHABLE: {entry_error}\n"
                   f"  Every check that reads the live site reports NO_DATA. "
@@ -1423,11 +1518,31 @@ def main() -> int:
                   f"(--no-page-guard). Every verdict below describes that page.",
                   file=sys.stderr)
 
+    # A page with no prose is audited, not refused — but the reader has to know,
+    # because every page-level verdict below then describes an empty shell.
+    if not entry_error and 0 <= entry_words < THIN_ENTRY_WORDS:
+        print(f"\n  WARNING: the entry page carries {entry_words} visible "
+              f"word(s). If the site is client-rendered or behind bot protection this "
+              f"guard does not recognise, the page-level verdicts describe the "
+              f"shell, not the content. The JS-rendering items report on it.",
+              file=sys.stderr)
+
     domain = urlparse(audit_url).netloc or "unknown"
     gsc_property = a.gsc_property or (
         f"sc-domain:{registrable_domain(urlparse(audit_url).netloc)}")
     if gsc_path and not a.quiet:
         print(f"  GSC property: {gsc_property}", file=sys.stderr)
+        # Only when a property was actually derived from the list: a stale snapshot
+        # is missing suffixes registered since it was taken, and the only symptom
+        # is a property that answers nothing.
+        if not a.gsc_property:
+            taken, age = psl_staleness()
+            if age > PSL_STALE_DAYS:
+                print(f"  public suffix list snapshot is {age} days old "
+                      f"({taken}); refresh it with "
+                      f"tools/refresh_public_suffix_list.py, or pass "
+                      f"--gsc-property if that property looks wrong",
+                      file=sys.stderr)
 
     # Only worth parsing while the answer is still open: an explicit --profile
     # other than `auto` has already decided.
@@ -1464,6 +1579,8 @@ def main() -> int:
         ctx["gsc_property"] = gsc_property
     if a.links_csv:
         ctx["links_csv"] = os.path.expanduser(a.links_csv)
+    if a.cwv_json:
+        ctx["cwv_json"] = os.path.expanduser(a.cwv_json)
     for k, env in (("indexnow_key", "INDEXNOW_KEY"), ("pagespeed_key", "PAGESPEED_API_KEY")):
         if os.environ.get(env):
             ctx[k] = os.environ[env]
@@ -1547,6 +1664,12 @@ def main() -> int:
         "entry_guard_enforced": bool(entry_guard) and not a.no_page_guard,
         # The URL as asked for, when it is not the URL that was audited.
         "requested_url": a.url if audit_url != a.url else None,
+        # Visible-word count of the entry page, and how old the suffix list that
+        # picked the Search Console property is. Both are the kind of thing a
+        # reader can only judge if the artifact says it.
+        "entry_visible_words": entry_words if entry_words >= 0 else None,
+        "entry_thin": 0 <= entry_words < THIN_ENTRY_WORDS,
+        "public_suffix_snapshot": psl_snapshot_date() or None,
         "sample": a.sample,
         "sampled_urls": sampled_urls,
         "scores": score(graded),

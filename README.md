@@ -1,6 +1,6 @@
 # seo-checklist
 
-A deterministic SEO audit for Claude Code. One fixed registry of 211 checks, run
+A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
@@ -13,7 +13,7 @@ whatever the model remembered.
 
 This plugin separates the two halves of that problem.
 
-`resources/config/checklist.json` is the contract: 211 items, each naming what
+`resources/config/checklist.json` is the contract: 214 items, each naming what
 answers it — a script plus an assertion over that script's output, a Search
 Console call, a language-model judgement, or a human. Nothing in the registry is
 executable; assertions are declarative and interpreted by the runner. Coverage is
@@ -29,19 +29,24 @@ into one number is how audits come to sound more confident than they are.
 
 ## What is in the registry
 
-211 items: the [Plerdy 200-point checklist](https://www.plerdy.com/check/) plus 11
+214 items: the [Plerdy 200-point checklist](https://www.plerdy.com/check/) plus 14
 checks it does not cover — GEO/AI search, `llms.txt`, AI-crawler policy, IndexNow,
-schema guards.
+schema guards, and lab Core Web Vitals from a local trace.
 
 | Answered by | Items |
 |---|---|
-| a script, asserted against its real output | 147 |
-| a language model reading the page | 30 |
-| a human | 31 |
-| Search Console, with no API to answer it | 3 |
+| a script, asserted against its real output | 141 |
+| a language model reading the page | 38 |
+| a human | 32 |
+| Search Console, with no API to answer it, so a person opens the UI | 3 |
 
-147 script-backed items collapse to **53 unique process launches** — the runner
+141 script-backed items collapse to **54 unique process launches** — the runner
 deduplicates, so `pagespeed.py` runs once, not seven times.
+
+Nine items moved from script to judgement in August 2026, and the move was a
+correction rather than a design change: each one asked a script about wording it
+never emits, so it had been reporting PASS on every site. See "Assertions that
+cannot fire".
 
 Every item also carries an `effort` estimate, so the fix list is ranked by
 severity **against** effort rather than by severity alone: ranking by severity
@@ -269,6 +274,52 @@ The merge only overwrites `LLM_PENDING` items; an answer file cannot flip a verd
 a script established. When the page does not support a verdict the answer is `N/A`
 — inventing a `PASS` to lift the score corrupts the one metric this exists to
 protect.
+
+## Assertions that cannot fire
+
+`none_matching` passes when nothing matches. So an assertion aimed at wording its
+script does not emit — or emits in a different word order — reports **PASS for
+every site, silently, forever**. Fifteen of the registry's twenty-one pattern
+assertions were in that state, including a `critical` one about blocking CSS and
+JS in robots.txt whose pattern was matching its own script's docstring.
+
+Prefer a counted field, or a `value_map` that enumerates the script's own
+vocabulary — where a value nobody mapped is `NO_DATA` rather than a pass:
+
+```python
+{"path": "rows", "field": "verdict",
+ "value_map": {"self_canonical": "pass", "cross_host": "fail"}}
+```
+
+`tools/audit_assertions.py` reports any pattern that cannot match anything its
+script emits, a test runs it, and CI fails on it.
+
+## Core Web Vitals: field and lab, never merged
+
+`pagespeed.py` reports CrUX **field** data — what real visitors experienced. That
+is the better evidence and it answers SP-108 and SP-113 whenever it exists. It does
+not exist for low-traffic URLs.
+
+For those, measure the page locally with the chrome-devtools MCP, write the
+numbers to a file and pass `--cwv-json`. SP-214/215/216 decide from it and are
+`NO_DATA` without it. They are **separate items on purpose**: one controlled run on
+your machine is a different claim from what visitors got, and one number standing
+for both is the conflation this tool exists to avoid. TBT is reported as a lab
+stand-in for INP, named as such, because INP needs a real interaction.
+
+Units live in the key names (`lcp_ms`, `tbt_ms`, unitless `cls`) — a bare `lcp` of
+2.1 could be seconds or milliseconds, and guessing wrong turns a failing page into
+a passing one, so the file is refused instead.
+
+## A second reading of the LLM verdicts
+
+`--llm-review` folds in an independent second judgement of the same items.
+Agreement corroborates. Disagreement returns the item to `NO_DATA` with both
+readings recorded, and coverage drops accordingly.
+
+The reviewer cannot change a verdict, cannot touch a script's result, and cannot
+answer an item the first pass left unanswered. It withdraws confidence, which is
+the one thing 38 unopposed judgements had no way to express.
 
 ## Bundled playbooks
 

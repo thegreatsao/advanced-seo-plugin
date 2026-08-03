@@ -24,10 +24,12 @@ from checklist_runner import (  # noqa: E402
     NO_DATA, PASS, WARN, aggregate_pages, audit_target, build_plan,
     choose_profile, diff_runs, evaluate, grade, is_page_level,
     looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
-    history_path, load_public_suffixes, previous_run, resolve, run_script,
+    THIN_ENTRY_WORDS, history_path, load_public_suffixes, previous_run,
+    psl_snapshot_date, psl_staleness, resolve, run_script,
     run_stamp, run_time, score, suffix_label_count, unreachable_skips,
     visible_words,
 )
+from cwv_metrics import read as cwv_read  # noqa: E402
 from detect_profile import detect  # noqa: E402
 
 
@@ -74,6 +76,58 @@ class Evaluate(unittest.TestCase):
         data = {"meta_robots": "index, follow"}
         self.assertEqual(
             evaluate({"path": "meta_robots", "none_matching": "noindex"}, data)[0], True)
+
+
+class ValueMap(unittest.TestCase):
+    """The structured replacement for matching prose. Its whole point is the
+    failure mode: an unlisted value is undecided, where a pattern that matched
+    nothing was a pass."""
+
+    RULE = {"path": "rows", "field": "verdict",
+            "value_map": {"self_canonical": "pass", "cross_host": "fail"}}
+
+    def test_all_mapped_to_pass(self):
+        ok, why = evaluate(self.RULE, {"rows": [{"verdict": "self_canonical"}] * 3})
+        self.assertTrue(ok)
+        self.assertIn("3", why)
+
+    def test_one_mapped_to_fail_decides_the_item(self):
+        ok, why = evaluate(self.RULE, {"rows": [{"verdict": "self_canonical"},
+                                                {"verdict": "cross_host"}]})
+        self.assertFalse(ok)
+        self.assertIn("cross_host", why)
+
+    def test_an_unmapped_value_is_undecided_not_a_pass(self):
+        """`unknown` is what canonical_checker emits when it could not tell. A
+        pattern would have skipped over it and passed."""
+        ok, why = evaluate(self.RULE, {"rows": [{"verdict": "unknown"}]})
+        self.assertIsNone(ok)
+        self.assertIn("unknown", why)
+
+    def test_a_new_vocabulary_word_is_undecided(self):
+        """The reason to enumerate: a value the script starts emitting later, that
+        nobody mapped, must not be read as clean."""
+        self.assertIsNone(evaluate(self.RULE, {"rows": [{"verdict": "brand_new"}]})[0])
+
+    def test_a_failure_outranks_an_undecided_row(self):
+        ok, _ = evaluate(self.RULE, {"rows": [{"verdict": "unknown"},
+                                              {"verdict": "cross_host"}]})
+        self.assertFalse(ok, "a decided failure must not be softened into NO_DATA")
+
+    def test_a_missing_field_is_undecided(self):
+        self.assertIsNone(evaluate(self.RULE, {"rows": [{"url": "x"}]})[0])
+
+    def test_nothing_to_judge_is_undecided(self):
+        self.assertIsNone(evaluate(self.RULE, {"rows": []})[0])
+
+    def test_the_path_itself_missing_is_undecided(self):
+        self.assertIsNone(evaluate(self.RULE, {})[0])
+
+    def test_it_works_on_a_scalar_too(self):
+        rule = {"path": "state", "value_map": {"ok": "pass", "bad": "fail"}}
+        self.assertTrue(evaluate(rule, {"state": "ok"})[0])
+        self.assertFalse(evaluate(rule, {"state": "bad"})[0])
+        self.assertIsNone(evaluate(rule, {"state": "other"})[0])
 
 
 class Scoring(unittest.TestCase):
@@ -791,6 +845,149 @@ class History(unittest.TestCase):
             with open(os.path.join(".seo-runs", "e.com", name), "w", encoding="utf-8") as f:
                 json.dump({"name": name}, f)
         self.assertEqual(previous_run("e.com", "")["name"], "20260803T094000Z.json")
+
+
+class LabCoreWebVitals(unittest.TestCase):
+    """Lab metrics from a browser trace. The risks are units and silence: a
+    misread unit turns a failing page into a passing one, and a metric nobody
+    measured must not read as a perfect score."""
+
+    def _file(self, payload):
+        path = os.path.join(tempfile.mkdtemp(), "cwv.json")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(payload if isinstance(payload, str) else json.dumps(payload))
+        return path
+
+    def test_good_metrics_are_rated(self):
+        out = cwv_read(self._file({"url": "https://e.com/", "lcp_ms": 2100,
+                                   "cls": 0.04, "tbt_ms": 150}))
+        self.assertEqual(out["lcp_ms_rating"], "good")
+        self.assertTrue(out["all_good"])
+
+    def test_the_thresholds_are_googles(self):
+        out = cwv_read(self._file({"lcp_ms": 2600, "cls": 0.2, "tbt_ms": 700}))
+        self.assertEqual(out["lcp_ms_rating"], "needs_improvement")
+        self.assertEqual(out["cls_rating"], "needs_improvement")
+        self.assertEqual(out["tbt_ms_rating"], "poor")
+
+    def test_an_unmeasured_metric_is_absent_not_zero(self):
+        """Absent is NO_DATA to the runner. Zero would be a perfect score for a
+        measurement nobody took."""
+        out = cwv_read(self._file({"lcp_ms": 2100}))
+        self.assertNotIn("cls", out)
+        self.assertEqual(out["missing"], ["cls", "tbt_ms"])
+        self.assertIsNone(evaluate({"path": "cls", "lte": 0.1}, out)[0])
+
+    def test_all_good_covers_only_what_was_measured(self):
+        out = cwv_read(self._file({"lcp_ms": 2100}))
+        self.assertTrue(out["all_good"], "one good metric, and only one was taken")
+        self.assertEqual(out["measured"], ["lcp_ms"])
+
+    def test_a_value_with_units_in_it_is_refused(self):
+        """"2.1s" cannot be compared with anything, and coercing it would invent a
+        number. The file is rejected with the key naming convention explained."""
+        with self.assertRaises(ValueError) as caught:
+            cwv_read(self._file({"lcp_ms": "2.1s"}))
+        self.assertIn("must be a number", str(caught.exception))
+
+    def test_a_file_with_no_metrics_at_all_is_refused(self):
+        with self.assertRaises(ValueError):
+            cwv_read(self._file({"lcp": 2.1}))
+
+    def test_a_negative_value_is_refused(self):
+        with self.assertRaises(ValueError):
+            cwv_read(self._file({"lcp_ms": -5}))
+
+    def test_a_missing_file_says_so(self):
+        with self.assertRaises(ValueError) as caught:
+            cwv_read("/nowhere/cwv.json")
+        self.assertIn("no such file", str(caught.exception))
+
+    def test_broken_json_says_so(self):
+        with self.assertRaises(ValueError) as caught:
+            cwv_read(self._file("{not json"))
+        self.assertIn("not JSON", str(caught.exception))
+
+    def test_one_level_of_nesting_is_tolerated(self):
+        out = cwv_read(self._file({"url": "https://e.com/",
+                                   "metrics": {"lcp_ms": 900, "cls": 0.01,
+                                               "tbt_ms": 20}}))
+        self.assertEqual(out["measured"], ["lcp_ms", "cls", "tbt_ms"])
+
+    def test_the_registry_keeps_lab_and_field_apart(self):
+        """Separate items because they are separate claims. If a lab item ever
+        started answering SP-108 or SP-113, one number would stand for both a
+        controlled run and what real visitors got."""
+        with open(os.path.join(SCRIPTS, "..", "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            items = json.load(f)["items"]
+        by_id = {i["id"]: i for i in items}
+        for lab in ("SP-214", "SP-215", "SP-216"):
+            self.assertEqual(by_id[lab]["check"]["script"], "cwv_metrics.py")
+        for field in ("SP-108", "SP-113"):
+            self.assertEqual(by_id[field]["check"]["script"], "pagespeed.py")
+
+
+class ThinEntryPage(unittest.TestCase):
+    """A page with no prose is flagged, not refused.
+
+    An interstitial from a vendor the guard does not recognise and a
+    client-rendered shell are indistinguishable from here — and the second is a
+    real page with a real finding that the JS-rendering items exist to report.
+    Refusing to score would hide that finding behind a guess; scoring silently
+    would present a shell's verdicts as the site's. So: audit, and say the number.
+    """
+
+    def test_the_threshold_is_lower_than_the_challenge_one(self):
+        """Two different questions. The challenge guard asks "is this page an
+        interstitial", and needs room for a challenge's own prose; this asks "is
+        there anything here to audit at all"."""
+        from checklist_runner import CHALLENGE_MAX_WORDS
+        self.assertLess(THIN_ENTRY_WORDS, CHALLENGE_MAX_WORDS)
+
+    def test_a_shell_is_thin_and_an_article_is_not(self):
+        shell = ('<!doctype html><html><head><title>App</title></head>'
+                 '<body><div id="root"></div><script>var a=1;</script></body></html>')
+        self.assertLess(visible_words(shell), THIN_ENTRY_WORDS)
+        article = _page("Real", "Words that make this a page. " * 20)
+        self.assertGreaterEqual(visible_words(article), THIN_ENTRY_WORDS)
+
+    def test_a_shell_is_not_treated_as_an_interstitial(self):
+        """It carries no vendor fingerprint and no challenge title, so the guard
+        must leave it alone — otherwise the audit refuses every SPA."""
+        shell = ('<!doctype html><html><head><title>App</title></head>'
+                 '<body><div id="root"></div></body></html>')
+        self.assertEqual(page_guard(shell)[0], "")
+
+
+class PublicSuffixStaleness(unittest.TestCase):
+    """The snapshot is a dated artifact, and its age only mattered when somebody
+    thought to ask. A stale list is missing suffixes registered since it was taken,
+    and the only symptom is a Search Console property that answers nothing."""
+
+    def _snapshot(self, header):
+        path = os.path.join(tempfile.mkdtemp(), "psl.dat")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(header + "com\nco.uk\n")
+        return path
+
+    def test_the_bundled_snapshot_declares_its_date(self):
+        taken, age = psl_staleness()
+        self.assertRegex(taken, r"^\d{4}-\d{2}-\d{2}$")
+        self.assertGreaterEqual(age, 0)
+
+    def test_the_date_is_read_from_the_header(self):
+        path = self._snapshot("// snapshot taken 2020-01-01\n")
+        self.assertEqual(psl_snapshot_date(path), "2020-01-01")
+        self.assertGreater(psl_staleness(path)[1], 365)
+
+    def test_a_snapshot_without_a_date_reports_unknown_age(self):
+        """-1, not 0: "we cannot tell how old this is" must not read as "fresh"."""
+        self.assertEqual(psl_staleness(self._snapshot("// no stamp here\n")), ("", -1))
+
+    def test_an_unparseable_date_keeps_the_text_and_drops_the_age(self):
+        taken, age = psl_staleness(self._snapshot("// snapshot taken last Tuesday\n"))
+        self.assertEqual((taken, age), ("last Tuesday", -1))
 
 
 class WrongPageWidensTheGate(unittest.TestCase):

@@ -61,6 +61,13 @@ CATEGORIES = [
 #   none_severity: ["critical","high"] no issues[] entry at those severities
 #   none_matching: "regex"             no issues[] entry whose message matches
 #   count_matching_lte: ["regex", n]   at most n matching issues
+#   value_map: {value: pass|fail}      enumerate the script's own vocabulary for
+#                                      a field; an unlisted value is NO_DATA.
+#                                      Optional "field" projects a list of dicts.
+# Prefer a counted field or value_map over a pattern. `none_matching` passes when
+# nothing matches, so a pattern aimed at wording a script does not emit passes
+# every site in silence — fifteen assertions here were doing exactly that. Run
+# tools/audit_assertions.py after touching one; a test runs it too.
 # `path` uses dots; `[]` is not needed — lists are handled by len_*/none_*.
 # Optional "warn" block uses the same vocabulary; it is evaluated only when
 # the main assert fails, turning FAIL into WARN.
@@ -95,6 +102,10 @@ INSPECTARG = ["{url}", "--property", "{gsc_property}",
 #   gsc       needs Google Search Console credentials
 REQUIRES = {
     "parse_html.py": "offline",
+    # Reads a file a trace already produced, so it needs no network of its own —
+    # the measurement happened before the run, and the run must not pretend to be
+    # taking it.
+    "cwv_metrics.py": "offline",
     "readability.py": "offline",
     "pagespeed.py": "api",
     "html_validator.py": "api",
@@ -197,13 +208,27 @@ item(10, "high", S, "gsc_url_inspection.py", INSPECTARG,
      "Align the declared canonical with the one Google selected, or work out why "
      "Google prefers a different URL")
 item(11, "high", S, "canonical_checker.py", PAGE,
-     {"path": "rows.0.verdict", "none_matching": "(?i)mismatch|conflict"},
+     # canonical_checker emits one of five verdicts and never the words
+     # "mismatch" or "conflict", so the old pattern passed every page. Mapping
+     # its actual vocabulary also fixes the other half: "unknown" means the
+     # script could not tell, which is NO_DATA, not a pass.
+     {"path": "rows", "field": "verdict",
+      "value_map": {"self_canonical": "pass", "missing": "pass",
+                    "canonicalized": "pass", "cross_host": "fail"}},
      "Do not combine noindex with a canonical pointing elsewhere")
 item(12, "medium", S, "url_quality.py", PAGE,
      {"path": "rows.0.score", "gte": 70},
      "Keep URLs short, readable, lowercase, words separated by hyphens")
-item(13, "critical", S, "robots_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)css|js|javascript|image"},
+# robots_checker.py reports sitemaps and syntax; it never says anything about
+# CSS, JS or images, so this critical item passed on every site ever audited —
+# the pattern was matching the script's own module docstring, which mentions
+# both. robots_path_tester answers it properly: ask whether Googlebot may fetch
+# representative asset paths. The rules are matched, nothing is downloaded, so
+# the paths need not exist. ASSET_PROBES and the len_gte below must agree.
+ASSET_PROBES = ["/assets/app.css", "/static/app.js", "/images/hero.jpg"]
+item(13, "critical", S, "robots_path_tester.py",
+     ["{url}"] + ASSET_PROBES + ["--agent", "Googlebot"],
+     {"path": "allowed_urls", "len_gte": len(ASSET_PROBES)},
      "Do not block critical CSS/JS/images in robots.txt - Google must be able to render the page")
 item(14, "high", S, "redirect_checker.py", PAGE,
      {"path": "has_loop", "falsy": True},
@@ -220,7 +245,11 @@ item(17, "medium", S, "html_validator.py", PAGE,
      "Fix W3C validation errors - they affect rendering and parsing")
 item(18, "medium", M, fix="Analyze server logs for Googlebot UA: crawl frequency, 404s, parameterized URLs, crawl budget")
 item(19, "high", S, "robots_path_tester.py", ["{url}", "/search", "/cart", "/checkout", "/login"],
-     {"path": "rows", "none_matching": "(?i)allowed.*true"},
+     # `allowed` and `true` sit in different fields of a nested dict, so they
+     # never appeared in one string and the pattern never fired. The script now
+     # flattens the answer into `allowed_urls`, absent when robots.txt could not
+     # be read at all.
+     {"path": "allowed_urls", "len_lte": 0},
      "Set noindex,follow on internal search and system pages, exclude them from sitemaps")
 
 # --- 2. Meta & Structured Data ---------------------------------------------
@@ -266,12 +295,13 @@ item(33, "medium", S, "social_meta.py", PAGE,
      "Fill in Open Graph and Twitter Card tags")
 
 # --- 3. Content -------------------------------------------------------------
-item(34, "medium", S, "a11y_seo_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)font.?size"},
-     "Readable font size across all breakpoints")
-item(35, "medium", S, "a11y_seo_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)link.*(distinct|underline)"},
-     "Links must be visually distinct from body text")
+# a11y_seo_checker.py checks H1 count, lang, viewport, alt text, labels,
+# landmarks and generic link text — it has never looked at font size, link
+# styling or tap targets. The three items that asked it to were matching wording
+# it cannot emit, so they passed on every site. Rendered type size and hit areas
+# need the layout lens, which reads the CSS and the markup together.
+item(34, "medium", L, fix="Readable font size across all breakpoints")
+item(35, "medium", L, fix="Links must be visually distinct from body text")
 item(36, "medium", S, "a11y_seo_checker.py", PAGE,
      {"path": "checks.inline_contrast_candidates", "eq": 0},
      "Text contrast at WCAG AA or better (4.5:1)")
@@ -302,15 +332,20 @@ item(48, "high", S, "parse_html.py", HTMLARG,
      "Use hierarchical headings and semantic HTML")
 item(49, "medium", L, fix="Target topics and queries, not isolated keywords")
 item(50, "high", L, fix="Follow Google Search Essentials - quality and spam policies")
-item(51, "high", S, "mobile_render_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)interstitial|popup"},
-     "Remove intrusive interstitials, especially on mobile")
+# mobile_render_checker.py reports viewport, fixed widths and sticky
+# positioning. It says nothing about interstitials, and the two items asking it
+# for them matched nothing. Whether a dialog is *intrusive* is a judgement about
+# what covers the content, which is the layout lens.
+item(51, "high", L, fix="Remove intrusive interstitials, especially on mobile")
 item(52, "medium", L, fix="Limit heavy advertising above the fold")
 item(53, "medium", S, "javascript_render_audit.py", PAGE,
      {"path": "raw.word_count", "gte": 300},
      "Do not hide critical content inside iframes")
 item(54, "high", S, "image_inventory.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)lazy.*(above|lcp)"},
+     # The script does detect this, and says "Likely LCP image is lazy-loaded" —
+     # LCP before lazy, so a pattern requiring lazy first never matched. Counting
+     # the flag the script already computes needs no wording at all.
+     {"path": "summary.lazy_lcp_candidates", "eq": 0},
      "Lazy-loaded content must remain discoverable by crawlers")
 item(55, "medium", S, "parse_html.py", HTMLARG,
      {"path": "pagination.next", "truthy": True},
@@ -353,12 +388,13 @@ item(72, "high", S, "article_seo.py", PAGE,
 item(73, "high", S, "article_seo.py", PAGE,
      {"path": "seo_issues", "none_matching": "(?i)h1.*keyword"},
      "Include the primary keyword in the H1")
-item(74, "medium", S, "article_seo.py", PAGE,
-     {"path": "seo_issues", "none_matching": "(?i)h2.*keyword"},
-     "Include the primary keyword or a close variant in an H2")
-item(75, "medium", S, "article_seo.py", PAGE,
-     {"path": "seo_issues", "none_matching": "(?i)description.*keyword"},
-     "Include the primary keyword in the meta description - it affects CTR")
+# article_seo.py advises on title and H1 keywords but emits nothing about
+# keywords in an H2 or in the meta description, so both items passed unread.
+# Judging a "close variant" is a copy question anyway — a regex cannot see that
+# "running shoes" and "shoes for runners" are the same intent.
+item(74, "medium", L, fix="Include the primary keyword or a close variant in an H2")
+item(75, "medium", L,
+     fix="Include the primary keyword in the meta description - it affects CTR")
 item(76, "medium", S, "article_seo.py", PAGE,
      {"path": "target_keyword", "truthy": True},
      "The primary keyword should appear naturally in body copy")
@@ -400,9 +436,7 @@ item(92, "low", M, fix="Pitch and appear on relevant podcasts")
 item(93, "critical", S, "parse_html.py", HTMLARG,
      {"path": "viewport", "truthy": True},
      "Responsive, mobile-first layout")
-item(94, "high", S, "mobile_render_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)interstitial"},
-     "Remove intrusive interstitials on mobile")
+item(94, "high", L, fix="Remove intrusive interstitials on mobile")
 item(95, "medium", S, "image_weight_audit.py", PAGE,
      {"path": "issues", "count_matching_lte": ["(?i)large|oversize|weight", 5]},
      "Reduce mobile page weight")
@@ -423,9 +457,7 @@ item(101, "low", L, fix="Keep mobile navigation within thumb reach")
 item(102, "low", S, "video_schema_checker.py", PAGE,
      {"path": "issues", "none_severity": ["critical", "high"]},
      "Optimize video for mobile")
-item(103, "medium", S, "a11y_seo_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)tap|touch target"},
-     "Increase tap targets to 48x48 CSS pixels")
+item(103, "medium", L, fix="Increase tap targets to 48x48 CSS pixels")
 item(104, "low", S, "parse_html.py", HTMLARG,
      {"path": "favicon", "truthy": True},
      "Add a favicon - it shows in mobile SERPs")
@@ -493,9 +525,11 @@ item(122, "high", S, "hreflang_checker.py", PAGE,
 item(123, "medium", S, "parse_html.py", HTMLARG,
      {"path": "lang", "truthy": True},
      "Declare the page language in html lang")
-item(124, "medium", S, "redirect_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)geo|language"},
-     "Do not force geo or language redirects")
+# redirect_checker.py reports loops, chains and missing Location headers. A
+# forced geo redirect only shows itself to a request from another country, which
+# no single fetch from one machine can produce — so this is a human with a VPN,
+# not a script and not a language model reading one page.
+item(124, "medium", M, fix="Do not force geo or language redirects")
 item(125, "low", M, fix="Define target international markets and audiences")
 item(126, "medium", L, fix="Translations must be high quality and human-reviewed")
 item(127, "medium", S, "hreflang_checker.py", PAGE,
@@ -655,8 +689,12 @@ item(185, "medium", S, "image_weight_audit.py", PAGE,
 item(186, "high", S, "image_inventory.py", PAGE,
      {"path": "missing_alt", "eq": 0},
      "Meaningful alt text on informative images")
-item(187, "high", S, "image_weight_audit.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)404|broken|missing src"},
+item(187, "high", S, "image_weight_audit.py",
+     # Broken images cannot be found without asking for each one, so this item
+     # pays for the HEAD requests. `broken_image_count` is absent when no status
+     # was collected, which the runner reads as NO_DATA rather than "none broken".
+     ["{url}", "--fetch-images"],
+     {"path": "broken_image_count", "eq": 0},
      "Fix broken images")
 item(188, "low", L, fix="Use original contextual images, limit stock photography")
 item(189, "medium", S, "image_weight_audit.py", PAGE,
@@ -675,9 +713,10 @@ item(195, "medium", M, fix="List top-ranking keywords across all players")
 
 # --- 15. Local SEO ----------------------------------------------------------
 item(196, "medium", L, fix="Determine whether the site needs local traffic")
-item(197, "medium", S, "local_seo_checker.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)title"},
-     "Localized title tags")
+# local_seo_checker.py reports LocalBusiness schema, map embeds, review links
+# and phone consistency — never the title tag. Whether a title is localised for
+# its city and service is a market judgement.
+item(197, "medium", L, fix="Localized title tags")
 item(198, "high", S, "local_seo_checker.py", PAGE,
      {"path": "local_business_nodes", "gte": 1},
      "Implement LocalBusiness structured data")
@@ -698,7 +737,13 @@ EXTRA = [
      "llms_txt_checker.py", PAGE, {"path": "quality.score", "gte": 60},
      "Flesh out llms.txt: title, description, sections, links"),
     ("GEO-003", "geo_ai", "AI crawler policy is explicit", "medium", S,
-     "ai_crawler_policy_matrix.py", PAGE, {"path": "rows", "none_matching": "not managed"},
+     "ai_crawler_policy_matrix.py", PAGE,
+     # The matrix reports an `alignment` per crawler and never the words "not
+     # managed". Allowing everything while publishing no llms.txt is precisely
+     # the policy this item calls inexplicit.
+     {"path": "rows", "field": "alignment",
+      "value_map": {"documented": "pass", "robots_only": "pass",
+                    "allowed_without_llms_txt": "fail"}},
      "Declare explicit rules for GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"),
     ("GEO-004", "geo_ai", "Answer blocks present for AEO", "medium", S,
      "answer_block_scanner.py", PAGE, {"path": "score", "gte": 70},
@@ -725,6 +770,25 @@ EXTRA = [
     ("CONT-001", "content", "No content decay on key pages", "medium", M,
      None, None, None,
      "Track pages losing traffic (requires a GSC export)"),
+    # Lab Core Web Vitals from a local browser trace, kept apart from the CrUX
+    # field data pagespeed.py reports (SP-108, SP-113). Field data is the better
+    # evidence and wins whenever it exists — it just does not exist for
+    # low-traffic URLs, which is when a controlled run is the only measurement
+    # available. One number made out of both claims is the conflation this
+    # registry refuses. Without --cwv-json the file placeholder is unresolved and
+    # all three report NO_DATA with that as the reason.
+    ("SP-214", "speed", "LCP within budget in a local trace (lab)", "medium", S,
+     "cwv_metrics.py", ["{cwv_json}"], {"path": "lcp_ms", "lte": 2500},
+     "Reduce the largest contentful paint below 2.5s: server response, render-blocking "
+     "resources, image weight"),
+    ("SP-215", "speed", "CLS within budget in a local trace (lab)", "medium", S,
+     "cwv_metrics.py", ["{cwv_json}"], {"path": "cls", "lte": 0.1},
+     "Reserve space for images, ads and embeds; avoid inserting content above existing "
+     "content"),
+    ("SP-216", "speed", "Main thread not blocked in a local trace (TBT, lab proxy for INP)",
+     "medium", S, "cwv_metrics.py", ["{cwv_json}"], {"path": "tbt_ms", "lte": 200},
+     "Break up long tasks and defer third-party JavaScript. INP needs a real "
+     "interaction and cannot be measured from a page load, so TBT stands in for it"),
 ]
 
 
@@ -745,13 +809,14 @@ def load_titles() -> dict[int, str]:
 LENS = {
     "copy": ["MS-024", "MS-025", "CN-037", "CN-042", "CN-043", "CN-046",
              "CN-047", "CN-049", "CN-050", "CN-058", "CN-064", "CN-067",
-             "KW-077", "MD-188"],
-    "layout": ["CN-052", "CN-059", "CN-060", "CN-061", "CN-062", "CN-063",
-               "MB-101", "AR-157", "AR-159", "AR-160", "AR-161"],
+             "KW-074", "KW-075", "KW-077", "MD-188"],
+    "layout": ["CN-034", "CN-035", "CN-051", "CN-052", "CN-059", "CN-060",
+               "CN-061", "CN-062", "CN-063", "MB-094", "MB-101", "MB-103",
+               "AR-157", "AR-159", "AR-160", "AR-161"],
     # TE-165 (subdomain vs subdirectory) is filed under technical, but the
     # decision is almost always driven by language/region targeting.
     "locale": ["IN-126", "IN-130", "TE-165"],
-    "market": ["CO-191", "LO-196"],
+    "market": ["CO-191", "LO-196", "LO-197"],
 }
 LENS_OF = {eid: lens for lens, ids in LENS.items() for eid in ids}
 

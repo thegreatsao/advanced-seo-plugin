@@ -21,8 +21,21 @@ def test_paths(site: str, paths: list[str], agents: list[str], timeout: int = 15
         for agent in agents:
             allowed, rule = robots_allowed(robots.get("parsed"), url, agent)
             decisions[agent] = {"allowed": allowed, "rule": rule}
-        rows.append({"url": url, "decisions": decisions})
-    return {"site": normalize_url(site), "robots_url": robots["url"], "robots_status": robots["fetch"].get("status"), "rows": rows}
+        rows.append({"url": url, "decisions": decisions,
+                     "allowed_for": sorted(a for a, d in decisions.items() if d["allowed"])})
+    # The paths these tests exist to keep out of the index, flattened into one
+    # list. A checklist assertion can then say "this must be empty" instead of
+    # matching text across a nested structure — where "allowed" and "true" never
+    # land in the same string, so the pattern never fired and every site passed.
+    reachable = sorted({row["url"] for row in rows if row["allowed_for"]})
+    unreachable_robots = robots["fetch"].get("status") not in (200, 404)
+    out = {"site": normalize_url(site), "robots_url": robots["url"],
+           "robots_status": robots["fetch"].get("status"), "rows": rows}
+    # No robots.txt answer means no verdict: a 500 or a timeout says nothing about
+    # what is allowed, and an empty list would read as "nothing is exposed".
+    if not unreachable_robots:
+        out["allowed_urls"] = reachable
+    return out
 
 
 def main() -> None:

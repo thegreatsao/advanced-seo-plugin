@@ -224,5 +224,54 @@ class GeneratorIsInStep(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+class NoAssertionThatCanNeverFire(unittest.TestCase):
+    """`none_matching` passes when nothing matches, so a pattern aimed at wording
+    its script cannot emit reports PASS for every site, silently, forever.
+
+    Fifteen of the registry's twenty-one pattern assertions were in that state:
+    three asked an accessibility checker about font sizes it never measures, two
+    asked a mobile checker about interstitials it never looks for, one wanted
+    "lazy" before "LCP" in a message that says "LCP image is lazy-loaded", and one
+    — a `critical` item about blocking CSS and JS in robots.txt — was matching its
+    own script's module docstring.
+    """
+
+    def test_every_pattern_assertion_can_match_its_script(self):
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        from audit_assertions import audit
+        dead = audit(REGISTRY)
+        detail = "; ".join(f"{d['id']} {d['script']} {d['op']}={d['pattern']!r}"
+                           for d in dead)
+        self.assertEqual(dead, [], f"assertions that always pass: {detail}")
+
+    def test_the_audit_notices_a_pattern_nobody_can_emit(self):
+        """The guard has to be able to fail, or it is decoration. A registry whose
+        assertion looks for a string no script contains must be reported."""
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        from audit_assertions import audit
+        import tempfile
+        fake = dict(DATA, items=[{
+            "id": "ZZ-001", "category": "content", "category_label": "C",
+            "title": "t", "severity": "low", "source": "script", "effort": "low",
+            "fix": "", "check": {"script": "parse_html.py", "args": [],
+                                 "requires": "offline",
+                                 "assert": {"path": "issues",
+                                            "none_matching": "quantum entanglement"}}}])
+        path = os.path.join(tempfile.mkdtemp(), "fake.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(fake, f)
+        self.assertEqual([d["id"] for d in audit(path)], ["ZZ-001"])
+
+    def test_page_derived_paths_are_exempt_and_few(self):
+        """A pattern over a value that comes from the page is checking the site,
+        not the script's wording — but the exemption list is a way to silence the
+        guard, so it stays short and explicit."""
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        from audit_assertions import PAGE_DERIVED
+        self.assertLessEqual(len(PAGE_DERIVED), 5)
+        for script, path in PAGE_DERIVED:
+            self.assertTrue(os.path.exists(os.path.join(SCRIPTS, script)), script)
+
+
 if __name__ == "__main__":
     unittest.main()

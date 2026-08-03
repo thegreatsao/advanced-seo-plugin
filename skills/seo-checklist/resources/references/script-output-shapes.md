@@ -564,11 +564,35 @@ Observed on plerdy: 484 errors, 0 warnings, 517 info. Counts in the hundreds are
 normal for a WordPress theme, so rules should target `summary.errors` thresholds
 rather than demanding zero.
 
+### cwv_metrics.py
+
+Reads a JSON file written from a browser performance trace (chrome-devtools MCP);
+takes no URL and makes no request. Registry args: `["{cwv_json}"]`, so without
+`--cwv-json` the placeholder is unresolved and SP-214/215/216 report NO_DATA.
+
+`url` — str or null (whatever the trace file recorded)
+`source` — str — free text describing the trace; `"unspecified"` when absent
+`measured[]` — array of str — which metrics the file carried
+`missing[]` — array of str — which it did not
+`lcp_ms` — int/float — **absent** when not measured
+`cls` — float — absent when not measured
+`tbt_ms` — int/float — absent when not measured
+`<metric>_rating` — str — `good` | `needs_improvement` | `poor`
+`all_good` — bool — over the measured metrics only
+
+Absent rather than zero, deliberately: a metric nobody measured must not read as a
+perfect score. Units live in the key names because a bare `lcp` of 2.1 could be
+seconds or milliseconds, and guessing wrong turns a failing page into a passing
+one — the script refuses the file instead.
+
 ### image_inventory.py
 
 `url` — str
 `count` — int
 `missing_alt` — int
+`summary.images` — int
+`summary.lazy_lcp_candidates` — int — added for CN-054, which used to look for
+  this by matching the issue text. Counted, so it cannot be reworded.
 `issues[]` — array
   - item keys: severity, message, url
 `images[]` — array
@@ -579,6 +603,12 @@ rather than demanding zero.
 
 `url` — str
 `image_count` — int
+`images_status_checked` — int — 0 unless `--fetch-images` was passed
+`broken_image_count` — int — **absent** when `images_status_checked` is 0. MD-187
+  asserts `eq: 0` on it, and an absent key is NO_DATA: reporting 0 because nothing
+  was fetched would turn "we did not look" into "nothing is broken". `None` would
+  be worse still — an equality assertion reads it as a failure.
+`broken_images[]` — array of str — absent under the same condition
 `known_image_bytes` — NoneType
 `modern_format_count` — int
 `responsive_count` — int
@@ -977,16 +1007,26 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 
 ### robots_path_tester.py
 
-Takes positional paths after the URL; the registry passes
-`/search /cart /checkout /login`.
+Takes positional paths after the URL. The registry uses it twice: CI-019 passes
+`/search /cart /checkout /login`, and CI-013 passes representative asset paths
+with `--agent Googlebot` to ask whether rendering resources are reachable. Rules
+are matched, nothing is fetched, so the paths need not exist.
 
 `site` — str
 `robots_url` — str
 `robots_status` — int
+`allowed_urls[]` — array of str — every tested URL at least one agent may fetch.
+  **Absent** when `robots_status` is neither 200 nor 404: a 500 or a timeout says
+  nothing about what is allowed, and an empty list would read as "nothing is
+  exposed". CI-019 asserts it is empty, CI-013 that it holds every asset path.
+  Added because the previous assertion matched `allowed.*true` as text, and
+  `allowed` and `true` never land in the same string of a nested dict — so it
+  matched nothing and passed every site.
 `rows[]` — array, one per path
-  - item keys: url, decisions
+  - item keys: url, decisions, allowed_for
   - `decisions.<agent>.allowed` — bool
   - `decisions.<agent>.rule` — str (`"no matching rule"` when nothing matched)
+  - `allowed_for[]` — the agents allowed to fetch this URL
   - agents: Googlebot, Bingbot, GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, …
 
 **No `issues[]` and no `summary`** — unlike almost every other script. Rules have

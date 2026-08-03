@@ -44,7 +44,12 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
             row["content_length"] = head.get("headers", {}).get("content-length")
             row["content_type"] = head.get("headers", {}).get("content-type")
         rows.append(row)
-    return {"url": url or source, "count": len(rows), "missing_alt": sum(1 for r in rows if not r["has_alt"]), "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
+    # Counted rather than described. The checklist used to look for this by
+    # matching the issue text, and the pattern wanted "lazy" before "LCP" while
+    # the message says it the other way round — so it matched nothing and the
+    # item passed on every page. A number cannot be reworded.
+    lazy_lcp = sum(1 for r in rows if r["likely_lcp_candidate"] and r["loading"] == "lazy")
+    return {"url": url or source, "count": len(rows), "missing_alt": sum(1 for r in rows if not r["has_alt"]), "summary": {"images": len(rows), "lazy_lcp_candidates": lazy_lcp}, "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
 
 
 def main() -> None:

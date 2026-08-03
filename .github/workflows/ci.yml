@@ -36,6 +36,12 @@ jobs:
         run: |
           python -m compileall -q skills/seo-checklist/scripts skills/seo-checklist/tools
 
+      # An assertion whose pattern cannot match anything its script emits reports
+      # PASS for every site, silently. Fifteen were in that state, one of them a
+      # critical item. A test covers this; the step makes the failure legible.
+      - name: No assertion can never fire
+        run: python skills/seo-checklist/tools/audit_assertions.py
+
       # The Public Suffix List is a dated artifact. Its absence is not a crash,
       # it is a quiet downgrade to the heuristic it replaced, so the shipped
       # snapshot is checked rather than assumed. --check downloads nothing.
