@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.3.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.4.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -91,6 +91,7 @@ python3 $S/scripts/checklist_runner.py https://example.com --diff        # vs pr
 python3 $S/scripts/checklist_runner.py https://example.com --profile ecommerce
 python3 $S/scripts/checklist_runner.py https://example.com --sample 10   # several pages
 python3 $S/scripts/checklist_runner.py https://example.com --links-csv ~/Links.zip
+python3 $S/scripts/checklist_runner.py http://localhost:8000/ --allow-private
 python3 $S/scripts/checklist_report.py checklist-results.json            # render output
 python3 $S/scripts/checklist_report.py checklist-results.json --lang ru  # Russian report
 ```
@@ -367,6 +368,46 @@ One gap remains, recorded in [KNOWN-ISSUES.md](KNOWN-ISSUES.md): five scripts cr
 independently, so a single audit still fetches the same pages around 275 times.
 Pacing limits the rate, not the volume.
 
+## Auditing something that is not public yet
+
+Every outbound request passes an SSRF guard that refuses hosts resolving to private
+or internal addresses. `--allow-private` narrows that refusal for one run:
+
+```bash
+python3 -m http.server 8000 --directory ./site &
+python3 $S/scripts/checklist_runner.py http://127.0.0.1:8000/ --allow-private --sample 5
+```
+
+Off by default, and deliberately not "anything that is not public". The permitted
+set is loopback, RFC 1918, ULA and CGNAT — a staging box, a container, a Tailscale
+host, a fixture server. **Link-local stays blocked with the flag on**, because
+`169.254.169.254` is where cloud instance metadata answers and the URLs a crawl
+follows come from the site being audited: a site that can talk this tool into
+reading credentials off a metadata endpoint is a worse outcome than a staging audit
+nobody can run. Reserved, multicast and unspecified ranges are blocked for the same
+reason — nothing legitimate is served there.
+
+The run says so on stderr, in the console summary even under `--quiet`, in
+`checklist-results.json` as `allow_private`, and in the report above the summary. An
+audit of a staging copy that reads like an audit of the live site is the same kind of
+lie as a fabricated score.
+
+Two consequences worth expecting:
+
+- **Checks that need an outside service report `NO_DATA`, with the reason.**
+  PageSpeed measures the page from Google's network, Safe Browsing looks the URL up
+  in an index, a Search Console property cannot exist for an address on your LAN.
+  `NO_DATA` and not `N/A`: those items apply to this site, so they stay in the
+  coverage denominator and a pre-launch audit honestly reports thinner coverage.
+  `--gsc-property` still works if you want the live site's history alongside a
+  staging copy — passing it is you deciding that the two belong together.
+- **An address has no registrable domain**, so there is no default `sc-domain:`
+  property. The run says that rather than deriving one; `127.0.0.1` used to yield
+  `sc-domain:0.1`.
+
+For a single evidence script run by hand, `SEO_ALLOW_PRIVATE=1` does the same thing
+and announces itself once.
+
 ## Measuring the rendered page
 
 Font size, link distinctness, overlays and tap targets are **computed** values:
@@ -468,7 +509,19 @@ version must have a `CHANGELOG.md` entry naming the shipped `registry_version`, 
 200 borrowed titles must record their source in the file that holds them, and every
 category in the registry must have a plain-language explanation in every shipped
 language. CI runs the suite on Python 3.11 and 3.13 along with the gates and four
-end-to-end audits.
+offline end-to-end audits.
+
+**And one live one.** CI serves `tests/fixtures/site/` — six pages, a sitemap, a
+robots.txt and planted defects — and audits it over real HTTP with `--allow-private`:
+crawl, sample, pace, aggregate, render. The job fails if *any* evidence script
+crashes, and separately asserts the fixture's planted orphan and its
+robots-disallowed sitemap URL come out as the two different findings they are.
+
+That job exists because of what its absence cost. The 0.2.0 rate limiter crashed 36
+of 56 scripts on its first live run while every offline test passed: a single process
+writing to a fresh pacing file never appends twice, so only contention between real
+processes could show it. Within an hour of the fixture existing it had found three
+more bugs — see the 0.4.0 section of [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
 
 ## Extending the registry
 

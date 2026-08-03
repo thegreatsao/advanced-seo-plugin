@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -976,6 +977,41 @@ def unreachable_skips(items: list[dict], reason: str,
     return out
 
 
+# What a host only we can reach makes undecidable. Every one of these needs a
+# third party to fetch the URL or to have a history for it: PageSpeed Insights
+# measures the page from Google's own network, Safe Browsing looks the URL up in
+# an index, IndexNow submits it, and a Search Console property cannot exist for an
+# address on somebody's LAN. None of that is a defect in the site or in the tool,
+# and none of it becomes possible by trying harder.
+NEEDS_THE_OUTSIDE_WORLD = {"api", "gsc"}
+
+
+def private_host_skips(items: list[dict], host: str,
+                       gate: set | None = None) -> dict[str, tuple[str, str]]:
+    """Mark the external-API checks undecided when the site is not public.
+
+    `NO_DATA`, not `N/A`, and the distinction is the usual one: these items apply
+    perfectly well to this site, they simply cannot be answered while it is only
+    reachable from here. Leaving the coverage denominator would lift coverage on a
+    staging audit — the one kind of audit that genuinely knows least — and a
+    pre-launch report claiming the same coverage as a live one would be the exact
+    overstatement this tool exists not to make.
+
+    Found by running it: pointed at a fixture server, `pagespeed.py` crashed twice
+    with `HTTP 400` and the two Search Console scripts crashed on a property
+    derived from an IP. "Script failed" sends the reader to open a working script.
+    """
+    gate = NEEDS_THE_OUTSIDE_WORLD if gate is None else gate
+    out = {}
+    for it in items:
+        need = (it.get("check") or {}).get("requires", "fetch")
+        if need in gate:
+            out[it["id"]] = (NO_DATA, f"{host} is only reachable from here, so no "
+                                      f"external service can measure it or hold "
+                                      f"history for it")
+    return out
+
+
 def run_stamp() -> str:
     """A history filename that two runs cannot share.
 
@@ -1538,7 +1574,26 @@ def registrable_domain(host: str) -> str:
     nobody owns, and every Search Console item came back empty — which reads as a
     site with no search traffic rather than as a property that does not exist.
     """
-    labels = [l for l in host.split(":")[0].strip(".").lower().split(".") if l]
+    host = (host or "").strip().lower().rstrip(".")
+    # A bracketed IPv6 literal is full of colons, so the port cannot be split off
+    # before the brackets are.
+    if host.startswith("["):
+        bare = host[1:host.index("]")] if "]" in host else host[1:]
+    else:
+        bare = host.split(":")[0]
+    # An address has no registrable domain, and the label arithmetic below is happy
+    # to invent one: 127.0.0.1 came out as "0.1", which built the property
+    # `sc-domain:0.1` and crashed the two Search Console scripts handed it. On a
+    # public IP it would have been quieter and worse — a syntactically valid
+    # property nobody owns answers with nothing, and nothing reads as a site with
+    # no search traffic. Found the first time the live path was pointed at a
+    # fixture server, which is what --allow-private exists to make possible.
+    try:
+        ipaddress.ip_address(bare)
+        return ""
+    except ValueError:
+        pass
+    labels = [l for l in bare.split(".") if l]
     if len(labels) <= 2:
         return ".".join(labels)
 
@@ -1616,6 +1671,13 @@ def main() -> int:
                          "scripts (default 4). 0 removes the pacing. An audit is a "
                          "burst by construction — the scripts run concurrently and "
                          "several walk a sitemap inside their own process.")
+    ap.add_argument("--allow-private", action="store_true",
+                    help="permit hosts on loopback, RFC 1918, ULA or CGNAT "
+                         "addresses — a staging site before launch, or a fixture "
+                         "served locally. Off by default. Link-local stays "
+                         "blocked either way (cloud instance metadata). Recorded "
+                         "in the results and printed in the report: an audit of a "
+                         "private copy is not an audit of the public site.")
     ap.add_argument("--cwv-json", default="",
                     help="JSON file of Core Web Vitals from a local browser trace "
                          "(chrome-devtools MCP). Lab data, reported separately from "
@@ -1655,6 +1717,13 @@ def main() -> int:
     # separate processes and the pacing they share is keyed on it.
     if a.max_rps is not None:
         os.environ["SEO_MAX_RPS"] = str(a.max_rps)
+    # Same reason: 55 scripts in 55 processes each call assert_safe_url for
+    # themselves, so the allowance has to travel with them. Deliberately one
+    # switch for the whole run rather than a per-script flag — a run that reaches
+    # a private address in one script and not another would be impossible to
+    # describe honestly in the artifact.
+    if a.allow_private:
+        os.environ["SEO_ALLOW_PRIVATE"] = "1"
 
     mode = a.mode or ("archive" if a.archive else "live")
     if a.archive and mode != "archive":
@@ -1698,6 +1767,10 @@ def main() -> int:
             print(f"  rate limit: {rps} request(s)/second per host"
                   if rps else "  rate limit: OFF — every script goes as fast as it can",
                   file=sys.stderr)
+            if a.allow_private:
+                print("  private addresses: ALLOWED (--allow-private) — loopback, "
+                      "RFC 1918, ULA and CGNAT; link-local stays blocked",
+                      file=sys.stderr)
 
     # The entry page is fetched before the profile is settled so detection can
     # read it — one request, not two, and archive mode gets the same treatment.
@@ -1759,8 +1832,31 @@ def main() -> int:
               file=sys.stderr)
 
     domain = urlparse(audit_url).netloc or "unknown"
-    gsc_property = a.gsc_property or (
-        f"sc-domain:{registrable_domain(urlparse(audit_url).netloc)}")
+    # Whether the audited host is one only this machine can reach. Keyed on where
+    # it resolves, not on whether --allow-private was passed: the flag permits a
+    # private address, it does not make a public site private, and treating the two
+    # as the same thing would drop the external-API checks on an ordinary audit.
+    entry_private = False
+    if mode != "archive" and not entry_error:
+        from lib.safe_http import is_private_host
+        entry_private = is_private_host(audit_url)
+
+    derived = registrable_domain(urlparse(audit_url).netloc)
+    gsc_property = a.gsc_property or (f"sc-domain:{derived}" if derived else "")
+    # Two ways there is no property to ask about, both of which used to produce one
+    # anyway. Neither is a missing credential, so neither may report itself as one.
+    if gsc_path and not gsc_property:
+        if not a.quiet:
+            print(f"  Search Console skipped: {domain} is an address, and an address "
+                  f"has no registrable domain to build a property from. Pass "
+                  f"--gsc-property if a property covers this host.", file=sys.stderr)
+        gsc_path = ""
+    elif gsc_path and entry_private and not a.gsc_property:
+        if not a.quiet:
+            print(f"  Search Console skipped: {domain} is only reachable from here, "
+                  f"so no property can cover it. Pass --gsc-property to query the "
+                  f"live site's history against this copy.", file=sys.stderr)
+        gsc_path = ""
     if gsc_path and not a.quiet:
         print(f"  GSC property: {gsc_property}", file=sys.stderr)
         # Only when a property was actually derived from the list: a stale snapshot
@@ -1797,6 +1893,16 @@ def main() -> int:
         # stop them from grading an interstitial's 12 words as a site.
         for item_id, skip in unreachable_skips(
                 items, entry_error, wrong_page=bool(entry_guard)).items():
+            preskip.setdefault(item_id, skip)
+    elif entry_private:
+        gate = set(NEEDS_THE_OUTSIDE_WORLD)
+        if a.gsc_property:
+            # An explicit property is a decision, the way `--profile auto` is: the
+            # operator is saying this history belongs to this audit — a staging copy
+            # of a live site is the obvious case — so the Search Console items are
+            # left to answer for themselves rather than pre-empted here.
+            gate.discard("gsc")
+        for item_id, skip in private_host_skips(items, domain, gate).items():
             preskip.setdefault(item_id, skip)
     if not a.quiet and excluded:
         print(f"  profile: {a.profile} — {profile['label']}; "
@@ -1902,6 +2008,15 @@ def main() -> int:
         # reader can only judge if the artifact says it.
         "entry_visible_words": entry_words if entry_words >= 0 else None,
         "entry_thin": 0 <= entry_words < THIN_ENTRY_WORDS,
+        # Whether this run was allowed off the public internet. It belongs in the
+        # artifact for the same reason `entry_guard` does: a pre-launch audit of a
+        # staging box and an audit of the live site produce the same-shaped file,
+        # and only one of them describes what a visitor or a crawler gets.
+        "allow_private": bool(a.allow_private),
+        # Whether the host actually turned out to be one only we can reach. The
+        # flag says what was permitted; this says what happened, and it is the one
+        # that decides whether "no external service could measure this" is true.
+        "entry_private": entry_private,
         "public_suffix_snapshot": psl_snapshot_date() or None,
         "sample": a.sample,
         "sampled_urls": sampled_urls,
@@ -1957,6 +2072,14 @@ def main() -> int:
     if payload["requested_url"]:
         print(f"Redirected: {payload['requested_url']} -> {audit_url} "
               f"(another host; the destination was audited)")
+    if a.allow_private and mode != "archive":
+        # Printed even under --quiet, which suppresses the header: the one line a
+        # reader needs to know this is not the public site must not be optional.
+        # Archive mode is excluded because it makes no requests at all, and a
+        # caveat about a network the run never touched is noise dressed as candour.
+        print("Private addresses allowed (--allow-private): this run could reach a "
+              "host that is not on the public internet. If it did, these verdicts "
+              "describe a local or staging copy, not what a visitor sees.")
     if entry_guard and not entry_error:
         print(f"WARNING: the entry page looks like {entry_guard.replace('_', ' ')} "
               f"and was audited anyway (--no-page-guard). Every verdict above "

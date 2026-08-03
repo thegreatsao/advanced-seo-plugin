@@ -152,6 +152,112 @@ jobs:
           assert d["scores"]["decided"] > 0, "decided nothing on a readable page"
           PY
 
+      # The live path, against a site this job serves itself.
+      #
+      # Everything above is offline, and offline is where the worst bug in this
+      # plugin's history hid: a slot file opened "a+" appended instead of replacing,
+      # float() raised out of the rate limiter, and 36 of 56 evidence scripts
+      # crashed in a live run while every test passed. Nothing offline could have
+      # caught it — a single process writing to a fresh file never appends twice.
+      #
+      # It could not be tested because the SSRF guard had no way through, so the
+      # only live target available was somebody else's website. --allow-private is
+      # what makes this step possible, and this step is most of why it exists.
+      - name: The full live path, against a locally served fixture site
+        run: |
+          python -m http.server 8000 --directory tests/fixtures/site > server.log 2>&1 &
+          SERVER=$!
+          trap 'kill $SERVER' EXIT
+          for _ in $(seq 1 20); do
+            curl -sf -o /dev/null http://127.0.0.1:8000/ && break || sleep 0.5
+          done
+          curl -sf -o /dev/null http://127.0.0.1:8000/ || { echo "fixture server never came up"; exit 1; }
+
+          # The guard first: the default must still refuse. If this ever passes,
+          # every audit is one DNS answer away from reaching a private network.
+          python skills/seo-checklist/scripts/checklist_runner.py http://127.0.0.1:8000/ \
+              --no-history --no-prompt --quiet --timeout 60 --json blocked.json \
+              > blocked.log 2>&1 || true
+          grep -q "private/internal IP" blocked.log || {
+            echo "the SSRF guard did not refuse a loopback host by default"
+            cat blocked.log; exit 1; }
+          if grep -q "SEO Score" blocked.log; then
+            echo "scored a host it was not allowed to read"; exit 1; fi
+
+          # Then the real thing: crawl, sample, pace, aggregate, report.
+          # SEO_MAX_RPS is raised rather than switched off, deliberately — the
+          # pacing must run, with several processes contending for the same slot
+          # file, because that contention is the bug this step exists to catch.
+          python skills/seo-checklist/scripts/checklist_runner.py http://127.0.0.1:8000/ \
+              --allow-private --sample 3 --max-rps 50 --no-history --no-prompt \
+              --timeout 90 --json live.json > live.log 2>&1
+          grep -q "SEO Score" live.log || {
+            echo "no score"; cat live.log; tail -40 server.log; exit 1; }
+          # Not decoration: this is the size of the request fan-out, and the number
+          # the shared-crawl work exists to bring down. Five crawlers walk the same
+          # pages independently and 36 scripts each re-fetch the entry URL, with no
+          # HTTP cache anywhere. Printing it means a change that makes it worse is
+          # visible in the build log rather than only on somebody else's server.
+          echo "one audit of a 6-page site made $(grep -c '"GET' server.log) requests"
+          python skills/seo-checklist/scripts/checklist_report.py live.json \
+              --markdown live.md --html live.html --llm-queue live-queue.md > report.log 2>&1
+          python - <<'PY'
+          import json
+          d = json.load(open("live.json"))
+
+          # The assertion this whole step is for. Every one of these is a script
+          # that failed against a site that was serving perfectly.
+          assert not d["script_failures"], (
+              f"scripts failed against the fixture site: {d['script_failures']}\n"
+              + "\n".join(f"  {k}: {v['error']}" for k, v in d["runs"].items()
+                          if v.get("error")))
+
+          assert d["allow_private"] is True, "the flag is not in the artifact"
+          assert d["entry_private"] is True, "a loopback host was not recognised as private"
+          assert d["entry_reachable"] is True and not d["entry_guard"], d.get("entry_error")
+          assert d["scores"]["decided"] > 50, (
+              f"only {d['scores']['decided']} items decided — the evidence layer "
+              f"did not really run")
+          assert len(d["sampled_urls"]) > 1, "sampling found nothing to sample"
+
+          # An external service cannot reach a host on this runner, so those items
+          # are NO_DATA with that reason — not crashes, and not N/A: they apply to
+          # this site, they just cannot be answered here.
+          outside = [i for i in d["items"] if "only reachable from here" in (i.get("evidence") or "")]
+          assert outside, "the external-API items were not gated"
+          assert all(i["status"] == "NO_DATA" for i in outside), \
+              [i["id"] for i in outside if i["status"] != "NO_DATA"]
+
+          # And the deliverable says which kind of audit produced it.
+          html, md = open("live.html").read(), open("live.md").read()
+          for name, text in (("html", html), ("markdown", md)):
+              assert "--allow-private" in text, f"{name} does not say the host was private"
+          print(f"live path OK: {d['scores']['seo_score']}/100 at "
+                f"{d['scores']['coverage_pct']}% over {len(d['runs'])} script runs")
+          PY
+
+          # The fixture's planted defects, checked against the evidence layer
+          # directly. A run that finds nothing wrong with a site built to be wrong
+          # has stopped measuring and nobody would notice from the score alone.
+          SEO_ALLOW_PRIVATE=1 SEO_MAX_RPS=50 python \
+              skills/seo-checklist/scripts/orphan_pages_from_sitemap.py \
+              http://127.0.0.1:8000/ --json > orphans.json
+          python - <<'PY'
+          import json
+          d = json.load(open("orphans.json"))
+          # /orphan.html is in the sitemap and linked from nowhere: a real orphan.
+          assert d["orphan_pages"] == ["http://127.0.0.1:8000/orphan.html"], d["orphan_pages"]
+          # /private/secret.html is in the sitemap and disallowed in robots.txt. It
+          # is also linked from nowhere, so the crawl never tried it and never
+          # recorded a refusal — and it was counted as an orphan, which turns our own
+          # politeness into the site's defect. That is the ordinary case, not an edge
+          # one: a page is usually unlinked because it is blocked.
+          assert d["sitemap_urls_blocked_by_robots"] == [
+              "http://127.0.0.1:8000/private/secret.html"], d["sitemap_urls_blocked_by_robots"]
+          assert "sitemap_robots_conflict" in [i["type"] for i in d["issues"]]
+          print("orphan and robots arithmetic OK")
+          PY
+
       # robots.txt governs what the tool discovers, never what it was handed. Both
       # halves fail silently if reversed: a blanket check would refuse the 40-odd
       # scripts that fetch {url} and collapse the audit to NO_DATA, while no check

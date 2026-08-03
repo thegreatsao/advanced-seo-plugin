@@ -41,6 +41,9 @@ python3 <SKILL_DIR>/scripts/checklist_runner.py <url> --profile ecommerce
 # judge page-level checks across several pages instead of one
 python3 <SKILL_DIR>/scripts/checklist_runner.py <url> --sample 10
 
+# audit a staging site or a locally served copy — off by default, see below
+python3 <SKILL_DIR>/scripts/checklist_runner.py http://127.0.0.1:8000/ --allow-private
+
 # answer the incoming-link items from a Search Console Links export
 python3 <SKILL_DIR>/scripts/checklist_runner.py <url> --links-csv ~/Downloads/Links.zip
 
@@ -315,6 +318,33 @@ network at all — its items are **`N/A`**, genuinely out of scope. In `live` or
 `page` **without a key** they are **`NO_DATA`**: the run could have asked and did
 not manage to decide. Calling the second one `N/A` would drop seven items out of
 the coverage denominator and raise coverage exactly where the audit is thinnest.
+
+## A host that is not on the public internet
+
+Every request passes an SSRF guard that refuses private and internal addresses.
+`--allow-private` narrows that for one run — a staging site before launch, a
+container, a fixture served locally. Off by default, and narrower than "not
+public": loopback, RFC 1918, ULA and CGNAT only. **Link-local stays blocked**
+(`169.254.169.254` is cloud instance metadata, and the URLs a crawl follows come
+from the site), as do reserved, multicast and unspecified ranges.
+
+Report it as a staging audit, never as an audit of the site. The run says so on
+stderr, in the summary even under `--quiet`, in `checklist-results.json`
+(`allow_private`, and `entry_private` for what actually happened), and above the
+report's summary.
+
+Two things follow, and both are correct rather than broken:
+
+- **Checks needing an outside service are `NO_DATA` with the reason** — PageSpeed
+  measures from Google's network, Safe Browsing looks the URL up, a Search Console
+  property cannot exist for an address on a LAN. Not `N/A`: they apply to this
+  site, so coverage drops, which is the honest number for a pre-launch audit.
+  `--gsc-property` overrides this if the live site's history belongs in the
+  comparison.
+- **No default `sc-domain:` property**, because an address has no registrable
+  domain. Do not invent one; `127.0.0.1` used to become `sc-domain:0.1`.
+
+`SEO_ALLOW_PRIVATE=1` does the same for a single script run by hand.
 
 ## When the site cannot be read
 

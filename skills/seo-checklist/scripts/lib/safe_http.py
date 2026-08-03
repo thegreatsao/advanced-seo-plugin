@@ -8,6 +8,7 @@ import hashlib
 import ipaddress
 import os
 import socket
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -338,17 +339,136 @@ def _is_blocked_ip(ip_text: str) -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# The escape hatch, and why it is this narrow
+# ---------------------------------------------------------------------------
+
+# The SSRF guard had no way out, and that cost two different things.
+#
+# The one a client notices: a site cannot be audited before it is public, which is
+# the moment an audit is worth most. The one this plugin paid itself: no fixture
+# site can be served locally, so the live path — 55 evidence scripts, the shared
+# pacing, five crawlers — could only ever be exercised against a real third party.
+# That is how a slot-file bug crashed 36 scripts in a live run while every test in
+# the suite passed.
+#
+# So the allowance exists, off by default, and it is deliberately *not* "anything
+# that is not public". The set is enumerated rather than derived from
+# `ipaddress`'s flags, because `is_private` is True for 169.254.0.0/16 — where
+# cloud instance metadata answers (169.254.169.254) — and the URLs a crawler
+# follows come from the site being audited. A site that can talk this tool into
+# reading credentials off a metadata endpoint is a worse outcome than a staging
+# audit nobody can run. Reserved, multicast and unspecified ranges are absent for
+# the same reason: nothing legitimate is served there, so allowing them buys
+# nothing and widens the hole.
+PRIVATE_ALLOWED_NETWORKS = (
+    "127.0.0.0/8", "::1/128",                          # loopback — a fixture server
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",   # RFC 1918 — a staging box
+    "fc00::/7",                                        # RFC 4193 — its IPv6 form
+    "100.64.0.0/10",                                   # RFC 6598 — CGNAT, Tailscale
+)
+_PRIVATE_ALLOWED = tuple(ipaddress.ip_network(n) for n in PRIVATE_ALLOWED_NETWORKS)
+
+_TRUE = ("1", "true", "yes", "on")
+_announced_private = False
+
+
+def allow_private() -> bool:
+    """Whether this process may reach a private address. Off unless asked.
+
+    An unrecognised value is off, like a nonsense `SEO_MAX_RPS` falls back to the
+    default rather than to no limit: a typo must not be able to remove a guard.
+    """
+    return os.environ.get("SEO_ALLOW_PRIVATE", "").strip().lower() in _TRUE
+
+
+def _is_allowed_private(ip_text: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_text)
+    except ValueError:
+        return False
+    return any(ip in net for net in _PRIVATE_ALLOWED)
+
+
+def _announce_private(ip_text: str) -> None:
+    """Say it once per process, on stderr.
+
+    The runner announces the flag and records it in the artifact, but a single
+    evidence script run by hand has no other surface to say it on — and an audit
+    of a staging copy that reads like an audit of the live site is the same class
+    of lie as a fabricated score.
+    """
+    global _announced_private
+    if _announced_private:
+        return
+    _announced_private = True
+    print(f"  private address allowed: {ip_text} (SEO_ALLOW_PRIVATE) — "
+          f"this host is not on the public internet", file=sys.stderr)
+
+
+def _guard_ip(ip_text: str) -> None:
+    """Raise `SafeHTTPError` unless this address may be reached.
+
+    Propagates `ValueError` when `ip_text` is not an address at all; the caller
+    decides what that means (a hostname resolves, a resolved IP does not).
+    """
+    if not _is_blocked_ip(ip_text):
+        return
+    if allow_private() and _is_allowed_private(ip_text):
+        _announce_private(ip_text)
+        return
+    if allow_private():
+        why = (" — link-local, reserved and multicast ranges stay blocked even "
+               "with --allow-private: cloud instance metadata answers at "
+               "169.254.169.254 and the URLs a crawl follows come from the site")
+    else:
+        why = (" — pass --allow-private (or SEO_ALLOW_PRIVATE=1) to audit a local "
+               "or staging site")
+    raise SafeHTTPError(
+        f"Blocked: URL resolves to private/internal IP ({ip_text}){why}")
+
+
+def is_private_host(url: str) -> bool:
+    """Whether this URL's host is one only we can reach.
+
+    Keyed on where the host actually resolves, never on whether the allowance was
+    passed: `--allow-private` on a public site changes nothing about that site, and
+    a caller that confused the two would misreport an ordinary audit. False when
+    the name does not resolve — that is "unreachable", a question the reachability
+    gate already answers, and answering it twice with different words would put two
+    reasons on one item.
+    """
+    try:
+        parsed = urlparse(normalize_url(url))
+    except SafeHTTPError:
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    if _is_allowed_private(host):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, _port_for(parsed), type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return False
+    return any(_is_allowed_private(info[4][0]) for info in infos)
+
+
 def assert_safe_url(url: str) -> str:
-    """Validate URL scheme and reject hosts resolving to private/internal IPs."""
+    """Validate URL scheme and reject hosts resolving to private/internal IPs.
+
+    `SEO_ALLOW_PRIVATE=1` — the runner's `--allow-private` — permits the narrow
+    set in `PRIVATE_ALLOWED_NETWORKS` and nothing else. See the comment there for
+    what stays blocked with the allowance on, and why.
+    """
     normalized = normalize_url(url)
     parsed = urlparse(normalized)
     hostname = parsed.hostname
 
     try:
-        if _is_blocked_ip(hostname):
-            raise SafeHTTPError(f"Blocked: URL resolves to private/internal IP ({hostname})")
+        _guard_ip(hostname)
     except ValueError:
-        pass
+        pass          # a name, not an address — resolution below decides
 
     try:
         infos = socket.getaddrinfo(hostname, _port_for(parsed), type=socket.SOCK_STREAM)
@@ -358,8 +478,7 @@ def assert_safe_url(url: str) -> str:
     resolved_ips = sorted({info[4][0] for info in infos})
     for ip_text in resolved_ips:
         try:
-            if _is_blocked_ip(ip_text):
-                raise SafeHTTPError(f"Blocked: URL resolves to private/internal IP ({ip_text})")
+            _guard_ip(ip_text)
         except ValueError as exc:
             raise SafeHTTPError(f"Blocked: could not validate resolved IP ({ip_text})") from exc
 

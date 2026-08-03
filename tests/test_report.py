@@ -269,5 +269,73 @@ class NoScoreSurvivesEveryRenderer(unittest.TestCase):
         self.assertIn("could not be read", out)
 
 
+class WhatWasAudited(unittest.TestCase):
+    """Three facts the runner records and prints, and the report never mentioned.
+
+    Each one says the numbers may not describe the page a visitor gets: the run was
+    allowed off the public internet, the entry page looked like an interstitial and
+    was scored anyway, or the page carried almost no text. The report is the file
+    that gets handed to somebody, so an omission here is the same failure as
+    printing a score for a site that was never read — one surface further along.
+    """
+
+    def _scored(self, **extra):
+        from checklist_runner import score
+        data = results(item("A", PASS), item("B", FAIL))
+        data["scores"] = score(data["items"])
+        data["entry_reachable"] = True
+        data.update(extra)
+        return data
+
+    def test_a_private_run_is_named_on_every_surface(self):
+        from checklist_report import provenance_warnings, render_html
+        data = self._scored(allow_private=True, entry_private=True)
+        self.assertTrue(any("only reachable" in w for w in provenance_warnings(data)))
+        for out in (render_markdown(data), render_html(data)):
+            self.assertIn("--allow-private", out)
+            self.assertIn("staging", out)
+
+    def test_the_flag_and_a_private_host_are_different_claims(self):
+        """`--allow-private` says what was permitted; `entry_private` says what
+        happened. Only the second means the external-API items were undecidable, and
+        saying so about a public site would be a caveat on nothing."""
+        from checklist_report import provenance_warnings
+        permitted = provenance_warnings(self._scored(allow_private=True,
+                                                    entry_private=False))
+        self.assertEqual(len(permitted), 1)
+        self.assertNotIn("could not be decided", permitted[0])
+        happened = provenance_warnings(self._scored(allow_private=True,
+                                                   entry_private=True))
+        self.assertIn("could not be decided", happened[0])
+
+    def test_a_scored_interstitial_says_so(self):
+        """A --no-page-guard run produced a clean-looking deliverable that never
+        mentioned it had graded a Cloudflare challenge."""
+        from checklist_report import provenance_warnings, render_html
+        data = self._scored(entry_guard="bot_challenge", entry_guard_enforced=False)
+        self.assertTrue(any("bot challenge" in w for w in provenance_warnings(data)))
+        self.assertIn("bot challenge", render_html(data))
+        self.assertIn("bot challenge", render_markdown(data))
+
+    def test_an_enforced_guard_is_not_a_caveat(self):
+        """When the guard stopped the run there is no score to qualify, and the
+        unreachable banner already explains itself."""
+        from checklist_report import provenance_warnings
+        data = self._scored(entry_guard="soft_404", entry_guard_enforced=True)
+        self.assertEqual(provenance_warnings(data), [])
+
+    def test_a_thin_page_is_named_but_an_unread_one_is_not(self):
+        from checklist_report import provenance_warnings
+        thin = self._scored(entry_thin=True, entry_visible_words=12)
+        self.assertTrue(any("12" in w for w in provenance_warnings(thin)))
+        unread = self._scored(entry_thin=True, entry_visible_words=0,
+                             entry_reachable=False)
+        self.assertEqual(provenance_warnings(unread), [])
+
+    def test_a_clean_public_run_carries_no_caveat(self):
+        from checklist_report import provenance_warnings
+        self.assertEqual(provenance_warnings(self._scored()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

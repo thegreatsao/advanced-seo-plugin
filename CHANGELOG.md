@@ -10,6 +10,74 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.4.0 — 3 August 2026
+
+Registry unchanged (`5bf1e36d657f`, 214 items). Tests 248 → 269, and CI runs the
+full live path for the first time.
+
+One feature, three bugs it immediately found, and one gap in the report it made
+visible. The feature is small; what it unlocks is not — until now the only way to
+exercise fetching, crawling, pacing and aggregation was to point the audit at
+somebody else's website, and the worst bug in this plugin's history (0.2.0's rate
+limiter crashing 36 of 56 scripts) was invisible to every offline test.
+
+### Added
+
+- **`--allow-private`** permits a host on loopback, RFC 1918, ULA or CGNAT
+  addresses — a staging site before launch, or a fixture served locally. Off by
+  default; the SSRF guard is unchanged for every run that does not pass it. The
+  allowed set is enumerated rather than "anything not public": **link-local stays
+  blocked even with the flag**, because cloud instance metadata answers at
+  169.254.169.254 and the URLs a crawl follows come from the site being audited.
+  Reserved, multicast and unspecified ranges stay blocked for the same reason.
+  Announced on stderr, in the console summary (even under `--quiet`), in
+  `checklist-results.json` as `allow_private`, and in the report.
+- **A fixture site and a CI job that audits it.** `tests/fixtures/site/` is six
+  pages with a sitemap, a robots.txt and planted defects — an orphan, a sitemap URL
+  that robots.txt disallows, a broken link, a duplicated meta description. CI serves
+  it and runs the whole path: guard, crawl, sample, pace, aggregate, render. The job
+  fails if **any** evidence script crashes, which is the check 0.2.0 did not have.
+  It also prints the request count for one audit of a six-page site (167), so the
+  fan-out that [KNOWN-ISSUES.md](KNOWN-ISSUES.md) item 1 is about is visible in the
+  build log rather than only on somebody else's server.
+
+### Fixed — numbers move
+
+- **An address is no longer given a registrable domain.** `127.0.0.1` came out as
+  `0.1`, the run built `sc-domain:0.1`, and both Search Console scripts crashed on
+  it. On a public IP it would have been quieter and worse: a valid-looking property
+  nobody owns answers with nothing, and nothing reads as a site with no search
+  traffic. There is now no default property for an address, and the run says so
+  instead of inventing one.
+- **Checks that need an outside service are `NO_DATA` on a private host**, with the
+  reason, rather than crashing. PageSpeed measures the page from Google's network,
+  Safe Browsing looks the URL up, a Search Console property cannot exist for an
+  address on a LAN — none of that is a defect in the site or the tool, and "script
+  failed" sent the reader to open a script that was working correctly. `NO_DATA` and
+  not `N/A`: the items apply to this site, so they stay in the coverage denominator
+  and a pre-launch audit honestly reports thinner coverage. An explicit
+  `--gsc-property` is still honoured — auditing a staging copy against the live
+  site's history is a decision the operator is allowed to make.
+- **A sitemap URL that `robots.txt` disallows is no longer counted as an orphan.**
+  0.3.0 subtracted refusals the *crawl* recorded, and a crawl only tries what the
+  site links to — so a disallowed URL that nothing links to arrived with no refusal
+  attached and became an orphan, turning our own politeness into the site's defect.
+  That is the ordinary case, not an edge one: a page is usually unlinked *because*
+  it is blocked. The sitemap side is now checked against `robots.txt` directly, at
+  no extra request cost (the answer is cached per origin). **Expect `GO-137` and
+  `AR-162` to move on any site with a `Disallow:` rule and a sitemap.**
+
+### Changed
+
+- **The report says what was audited, above the summary.** Three facts the runner
+  has always recorded and printed never reached the file that gets handed to
+  somebody: a run allowed off the public internet, an entry page that looked like a
+  bot challenge and was scored anyway (`--no-page-guard`), and an entry page with
+  almost no visible text. A `--no-page-guard` run therefore produced a clean-looking
+  deliverable that never mentioned it had graded a Cloudflare interstitial — the same
+  failure as printing a score for a site that was never read, one surface further
+  along.
+
 ## 0.3.0 — 3 August 2026
 
 Registry unchanged (`5bf1e36d657f`, 214 items). Tests 229 → 248.

@@ -1,0 +1,6 @@
+# The fixture site's robots.txt. Small on purpose, but not empty: an empty one
+# would leave the robots handling untested by the live path.
+User-agent: *
+Disallow: /private/
+
+Sitemap: http://127.0.0.1:8000/sitemap.xml

@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.3.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.4.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -8,9 +8,15 @@ This file exists because the audit's one promise — that "we could not check th
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
 
-**Fixed in 0.3.0** and kept below the line for the record: `--sample` taking the
-first N sitemap URLs, the report's two incompatible scales, the crawlers ignoring
-`robots.txt`, and `broken_links.py` having no cap.
+**Fixed in 0.4.0**, below the line: the SSRF guard having no escape hatch (and with
+it, the absence of any live-path test), an address being given a registrable domain,
+external-API checks crashing instead of reporting `NO_DATA` on a private host, a
+robots-disallowed sitemap URL counted as an orphan, and the report never saying when
+it was describing something other than the public site.
+
+**Fixed in 0.3.0**: `--sample` taking the first N sitemap URLs, the report's two
+incompatible scales, the crawlers ignoring `robots.txt`, and `broken_links.py`
+having no cap.
 
 ---
 
@@ -47,6 +53,11 @@ scripts happen to want a crawl.
 
 ## 2. 45 of the 55 evidence scripts have no unit test
 
+As of 0.4.0 they are at least *executed* end to end: CI serves
+`tests/fixtures/site/` and fails if any of them crashes. That is a smoke test, not
+coverage — it proves each script runs and returns usable output against one small
+site, and says nothing about whether its verdict is right.
+
 The tests defend the *frame* — registry, runner, report — and barely touch the
 *evidence*. Every verdict is the output of an untested script interpreted by a
 well-tested interpreter.
@@ -63,23 +74,16 @@ Seven of the untested scripts were written here: `gsc_links_csv.py`,
 Start with the scripts whose output decides a `critical` item. HTML fixtures, no
 network.
 
-## 3. There is no integration layer, and the SSRF guard prevents building one
+## 3. The live path is exercised against one shape of site
 
-`assert_safe_url()` rejects loopback and private addresses with no escape hatch, so
-you cannot point an audit at a fixture site on `127.0.0.1`. The live path —
-fetching, crawling, pacing, redirect handling — can therefore only be exercised
-against a real third-party site.
+Fixed in 0.4.0 in the sense that it can now be exercised at all — but CI audits a
+static six-page fixture served by `http.server`. Four things that only happen in the
+wild are still tested with fixtures and never live: a cross-host redirect, a real
+bot-protection challenge, a site large enough for `--sample` to matter, and a Search
+Console property with enough history for the cannibalization items.
 
-That is not theoretical. In 0.2.0 the new rate limiter crashed 36 of 56 scripts,
-and every test passed, because a single process writing to a fresh slot file never
-appends twice. Only a live run against somebody else's site could show it.
-
-It also blocks a legitimate use: **auditing a staging site before launch**, which
-is when an audit is worth most.
-
-Suggested shape: `--allow-private`, off by default, announced in the output when
-used, and a CI job that serves a fixture site and runs the full live path against
-it.
+The fixture is also HTTP, so nothing exercises TLS, HSTS, or a certificate problem —
+`security_headers.py` and the HTTPS items get their verdicts from offline tests only.
 
 ## 4. The deliverable has no history
 
@@ -116,6 +120,41 @@ be a few lines.
 
 ---
 
+## Fixed in 0.4.0
+
+Every one of these except the first was found *by* the first, within an hour of it
+existing. That is the argument for the feature, and it is the fourth session running
+in which looking at output beat reading code.
+
+- **The SSRF guard had no escape hatch**, so no fixture site could be served locally
+  and the live path could only ever be exercised against a real third-party site.
+  That is how 0.2.0's rate limiter crashed 36 of 56 scripts with every test passing.
+  `--allow-private` is off by default and deliberately narrower than "not public":
+  loopback, RFC 1918, ULA and CGNAT only, with **link-local still blocked** because
+  cloud instance metadata answers at 169.254.169.254 and the URLs a crawl follows
+  come from the site. CI now serves `tests/fixtures/site/` and fails if any evidence
+  script crashes.
+- **An address was given a registrable domain.** `127.0.0.1` became `0.1`, the run
+  built `sc-domain:0.1`, and both Search Console scripts crashed. On a public IP it
+  would have been quieter and worse: a valid-looking property nobody owns answers
+  with nothing, and nothing reads as a site with no search traffic — the same failure
+  as the pre-0.2.0 `something.github.io` → `github.io` bug, through a new door.
+- **External-API checks crashed on a private host** instead of reporting `NO_DATA`.
+  PageSpeed measures from Google's network and a Search Console property cannot exist
+  for an address on a LAN; neither is a defect in the site or the tool, and "script
+  failed" sends the reader to open a script that works. `NO_DATA`, not `N/A`: the
+  items apply, so coverage drops — which is the honest thing for a staging audit.
+- **A robots-disallowed sitemap URL was counted as an orphan.** 0.3.0 subtracted the
+  refusals the crawl recorded, and a crawl only tries what the site links to, so a
+  disallowed URL that nothing links to arrived with no refusal attached. That is the
+  ordinary case: a page is usually unlinked *because* it is blocked. The claim in the
+  0.3.0 notes below was therefore true only for linked URLs.
+- **The report never said when it was not describing the public site.** A
+  `--no-page-guard` run produced a clean-looking deliverable that never mentioned it
+  had scored a Cloudflare interstitial. The runner recorded and printed it; the file
+  handed to a client did not. Now three facts — private host, scored interstitial,
+  content-free entry page — appear above the summary on every surface.
+
 ## Fixed in 0.3.0
 
 Kept because the reasoning is the useful part, and because a reader who saw the old
@@ -144,6 +183,9 @@ orphans as `sitemap − reachable`, so a URL we declined to fetch would have dro
 out of `reachable` and been reported as an orphan — GO-137 fails on one. Refusals
 are tracked separately and subtracted, and a sitemap listing robots-blocked URLs is
 now its own finding, which is the sharper one anyway.
+
+That held only for URLs the crawl actually tried, which is the half of the problem
+0.3.0 could see. See the 0.4.0 list above for the other half.
 
 ## Not defects
 

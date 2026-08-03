@@ -17,6 +17,11 @@ from seo_common import (
     same_host,
 )
 
+try:
+    from lib.safe_http import robots_allows
+except ImportError:
+    from scripts.lib.safe_http import robots_allows
+
 
 def _page_key(url: str) -> str:
     parsed = urlparse(normalize_url(url))
@@ -116,6 +121,22 @@ def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, dept
     robots_set = set(crawl.get("robots_skipped") or ())
     for page in crawl["pages"].values():
         page["in_sitemap"] = page["url"] in sitemap_set
+
+    # The crawl can only record a refusal for a URL it actually tried, and it tries
+    # what the site links to. A sitemap URL that nothing links to is never attempted,
+    # so a disallowed one arrived here with no refusal attached and was reported as
+    # an orphan — the very failure the subtraction below exists to prevent, reaching
+    # the same place by a different road. And it is the ordinary case, not an edge
+    # one: a page is usually unlinked *because* it is blocked.
+    #
+    # So the sitemap side is checked against robots.txt directly. The answers are
+    # cached per origin, so this costs one fetch of /robots.txt, not one per URL.
+    for url in sorted(sitemap_set - reachable_set - robots_set):
+        try:
+            if not robots_allows(url)[0]:
+                robots_set.add(url)
+        except Exception:  # noqa: BLE001 — an unreadable robots.txt allows
+            pass
 
     # Subtracting `robots_set` is the whole point: a page robots.txt told us not to
     # fetch is not unreachable, we just did not look. Counting it as an orphan would

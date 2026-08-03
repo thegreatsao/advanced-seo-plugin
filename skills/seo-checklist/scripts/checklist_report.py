@@ -295,6 +295,52 @@ def plain_summary(data: dict, L: "Lang | None" = None) -> list[str]:
     return out
 
 
+def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
+    """What the reader has to know about *what was audited*, before the verdicts.
+
+    Every one of these says the same kind of thing: the page these numbers describe
+    may not be the page a visitor gets. The runner records all three and prints
+    them; until now none of them reached the report, which is the file that
+    actually gets handed to somebody — so a `--no-page-guard` run that scored a
+    Cloudflare interstitial produced a clean-looking deliverable that never
+    mentioned it. Same failure as printing a score for an unreadable site, one
+    surface further along.
+    """
+    L = L or Lang()
+    out = []
+    if data.get("entry_private"):
+        # The stronger statement, and the only one that is a fact rather than a
+        # permission: the host resolved to an address only the auditing machine can
+        # reach, so the external-API items could not be decided at all.
+        out.append(L.t("w_private_host",
+                       "The audited host is only reachable from the machine that ran "
+                       "this audit (--allow-private), so this describes a local or "
+                       "staging copy, not the site a visitor or a search engine "
+                       "sees. Anything that needs an outside service — PageSpeed, "
+                       "Search Console, index checks — could not be decided."))
+    elif data.get("allow_private") and data.get("mode") != "archive":
+        # Not in archive mode: nothing was requested, so there was nothing to permit
+        # and nowhere a crawl could have wandered.
+        out.append(L.t("w_private",
+                       "This audit was allowed to reach a private address "
+                       "(--allow-private). The host it audited was public, so the "
+                       "verdicts stand — but a staging or local copy may have been "
+                       "reached while crawling."))
+    guard = data.get("entry_guard")
+    if guard and not data.get("entry_guard_enforced"):
+        out.append(L.t("w_guard",
+                       "The entry page looked like {guard} and was audited anyway "
+                       "(--no-page-guard). Every page-level verdict below describes "
+                       "that page, not the site.").format(guard=guard.replace("_", " ")))
+    if data.get("entry_thin") and data.get("entry_reachable") is not False:
+        out.append(L.t("w_thin",
+                       "The entry page carried {words} visible words. If the site is "
+                       "client-rendered, or behind bot protection this tool does not "
+                       "recognise, the page-level verdicts describe an empty shell.")
+                   .format(words=data.get("entry_visible_words")))
+    return out
+
+
 def render_markdown(data: dict, L: Lang | None = None) -> str:
     s = data["scores"]
     mode = data.get("mode", "live")
@@ -319,6 +365,10 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                    f"`--only {','.join(data['only'])}` — "
                    + L.t("only_note", "a slice of the registry, not a full audit"))
     out += ["", f"## {L.t('summary', 'Summary')}", ""]
+    # Above the plain summary, not below it: "this is not the public site" changes
+    # what every sentence after it means.
+    for line in provenance_warnings(data, L):
+        out += [f"> **{L.t('what_was_audited', 'What was audited')}** — {line}", ""]
     # The answer to "so what?" goes above the metrics, not below them. A reader who
     # stops after three lines should still leave with the truth.
     out += [line for line in plain_summary(data, L)] + [""]
@@ -567,6 +617,11 @@ small{font-size:.55em;font-weight:400;color:var(--mut)}
 
 /* Layer 1 — the plain answer, before any number */
 .hero{margin-bottom:2rem}
+/* What was audited, when it may not be the public site. Above the summary
+   because it changes what every sentence after it means. */
+.caveat{border-left:3px solid var(--warn);background:var(--card);padding:.7rem .9rem;
+margin:0 0 1rem;font-size:.9rem;max-width:70ch;border-radius:0 6px 6px 0}
+.caveat b{color:var(--warn)}
 .plain p{font-size:1.15rem;line-height:1.5;margin:.2rem 0 .6rem;max-width:60ch}
 .metric.warnbox b{color:var(--fail)}
 .legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;color:var(--mut);
@@ -700,7 +755,11 @@ def render_html(data: dict, L: Lang | None = None) -> str:
              f' &middot; {html.escape(str(data.get("started_at", ""))[:16])}</p>']
 
     # -- Layer 1: what this means, in sentences, before any number ---------------
-    parts.append('<section class="hero"><div class="plain">'
+    parts.append('<section class="hero">')
+    parts += [f'<p class="caveat"><b>{html.escape(L.t("what_was_audited", "What was audited"))}'
+              f'</b> — {html.escape(line)}</p>'
+              for line in provenance_warnings(data, L)]
+    parts.append('<div class="plain">'
                  + "".join(f"<p>{html.escape(line)}</p>" for line in plain_summary(data, L))
                  + "</div>")
     if unreadable:
@@ -1030,6 +1089,8 @@ def main() -> int:
     else:
         print(f"\nSEO Score {s['seo_score']}/100   Coverage {s['coverage_pct']}% "
               f"({s['decided']}/{s['applicable']})")
+    for line in provenance_warnings(data, lang):
+        print(f"  ! {line}")
     for label, path in written:
         print(f"  {label}: {path}")
     if pending:

@@ -22,8 +22,9 @@ sys.path.insert(0, SCRIPTS)
 
 from checklist_runner import (  # noqa: E402
     ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
-    NO_DATA, PASS, WARN, aggregate_pages, audit_target, build_plan,
-    choose_profile, diff_runs, evaluate, grade, is_page_level,
+    NEEDS_THE_OUTSIDE_WORLD, NO_DATA, PASS, WARN, aggregate_pages, audit_target,
+    build_plan, choose_profile, diff_runs, evaluate, grade, is_page_level,
+    private_host_skips,
     looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
     THIN_ENTRY_WORDS, history_path, load_public_suffixes, previous_run,
     psl_snapshot_date, psl_staleness, resolve, run_script,
@@ -268,6 +269,222 @@ class RateLimiting(unittest.TestCase):
                            self.sh.MAX_RETRY_AFTER_WAIT)
 
 
+class PrivateAddresses(unittest.TestCase):
+    """The escape hatch in the SSRF guard, and the parts of it that must not open.
+
+    Two things depend on this being right in both directions. With no way through,
+    the live path — 55 scripts, the shared pacing, five crawlers — can only ever be
+    exercised against a real third-party site, which is how a slot-file bug crashed
+    36 scripts in production while every test here passed. Opened too far, a crawl
+    following links a site controls can be talked into reading cloud instance
+    metadata off 169.254.169.254 and putting it in an artifact.
+    """
+
+    METADATA = "169.254.169.254"       # AWS/GCP/Azure instance metadata
+
+    def setUp(self):
+        import lib.safe_http as sh
+        self.sh = sh
+        self.saved = os.environ.get("SEO_ALLOW_PRIVATE")
+        os.environ.pop("SEO_ALLOW_PRIVATE", None)
+        sh._announced_private = False
+
+    def tearDown(self):
+        if self.saved is None:
+            os.environ.pop("SEO_ALLOW_PRIVATE", None)
+        else:
+            os.environ["SEO_ALLOW_PRIVATE"] = self.saved
+        self.sh._announced_private = False
+
+    def allow(self, value="1"):
+        os.environ["SEO_ALLOW_PRIVATE"] = value
+
+    def test_private_addresses_are_blocked_by_default(self):
+        """The default is the guarantee: nothing about this change may make an
+        unflagged run reach an address it could not reach before."""
+        for host in ("127.0.0.1", "10.0.0.5", "192.168.1.10", "[::1]", self.METADATA):
+            with self.assertRaises(self.sh.SafeHTTPError, msg=host):
+                self.sh.assert_safe_url(f"http://{host}/")
+
+    def test_the_refusal_names_the_way_through(self):
+        """A guard with an escape hatch nobody can find is a guard with none. The
+        cost of not knowing is real: auditing a site before it launches is the
+        moment an audit is worth most."""
+        with self.assertRaises(self.sh.SafeHTTPError) as caught:
+            self.sh.assert_safe_url("http://127.0.0.1:8000/")
+        self.assertIn("--allow-private", str(caught.exception))
+
+    def test_the_allowance_permits_a_fixture_and_a_staging_box(self):
+        self.allow()
+        for host in ("127.0.0.1:8000", "10.0.0.5", "172.16.4.4", "192.168.1.10",
+                     "[::1]:8000", "[fd00::1]", "100.64.1.1"):
+            self.sh.assert_safe_url(f"http://{host}/")   # must not raise
+
+    def test_link_local_stays_blocked_with_the_allowance_on(self):
+        """The whole reason the allowed set is enumerated rather than derived from
+        `ipaddress.is_private`, which is True for 169.254.0.0/16."""
+        self.allow()
+        for host in (self.METADATA, "169.254.1.1", "[fe80::1]"):
+            with self.assertRaises(self.sh.SafeHTTPError, msg=host):
+                self.sh.assert_safe_url(f"http://{host}/")
+
+    def test_reserved_multicast_and_unspecified_stay_blocked(self):
+        """Nothing legitimate is served there, so allowing them buys nothing."""
+        self.allow()
+        for host in ("240.0.0.1", "224.0.0.1", "0.0.0.0"):
+            with self.assertRaises(self.sh.SafeHTTPError, msg=host):
+                self.sh.assert_safe_url(f"http://{host}/")
+
+    def test_the_blocked_message_says_the_flag_will_not_help(self):
+        """Pointing at --allow-private when it is already on would send the reader
+        to set a flag that cannot change the answer."""
+        self.allow()
+        with self.assertRaises(self.sh.SafeHTTPError) as caught:
+            self.sh.assert_safe_url(f"http://{self.METADATA}/")
+        detail = str(caught.exception)
+        self.assertIn("stay blocked", detail)
+        self.assertIn(self.METADATA, detail)
+
+    def test_an_unrecognised_value_does_not_open_the_guard(self):
+        """Same rule as a nonsense SEO_MAX_RPS falling back to the default rather
+        than to no limit: a typo must never remove a guard."""
+        for value in ("", "0", "no", "false", "please", "1 ", "TRUE"):
+            os.environ["SEO_ALLOW_PRIVATE"] = value
+            expected = value.strip().lower() in ("1", "true", "yes", "on")
+            self.assertEqual(self.sh.allow_private(), expected, repr(value))
+
+    def test_a_public_address_needs_no_flag(self):
+        self.sh.assert_safe_url("https://93.184.216.34/")
+        self.allow()
+        self.sh.assert_safe_url("https://93.184.216.34/")
+
+    def test_the_allowance_announces_itself_once(self):
+        """A single evidence script run by hand has no other surface to say it on,
+        and an audit of a staging copy that reads like an audit of the live site is
+        the same class of lie as a fabricated score."""
+        self.allow()
+        err = io.StringIO()
+        saved, sys.stderr = sys.stderr, err
+        try:
+            for _ in range(3):
+                self.sh.assert_safe_url("http://127.0.0.1:8000/")
+        finally:
+            sys.stderr = saved
+        self.assertEqual(err.getvalue().count("SEO_ALLOW_PRIVATE"), 1,
+                         "the allowance must be stated, and stated once")
+
+    def test_an_address_has_no_registrable_domain(self):
+        """It invented one. `127.0.0.1` came out as `0.1`, the run built
+        `sc-domain:0.1`, and both Search Console scripts crashed on it. A public IP
+        would have been quieter and worse: a valid-looking property nobody owns
+        answers with nothing, and nothing reads as a site with no search traffic."""
+        for host in ("127.0.0.1", "127.0.0.1:8000", "8.8.8.8", "[::1]", "[::1]:8000",
+                     "[2001:4860:4860::8888]"):
+            self.assertEqual(registrable_domain(host), "", host)
+        # And a real host with a port is still a real host — a staging box on :8443
+        # is the common case now that one can be audited at all.
+        self.assertEqual(registrable_domain("staging.example.co.uk:8443"),
+                         "example.co.uk")
+
+    def test_a_private_host_leaves_the_external_apis_undecided(self):
+        """PageSpeed measures the page from Google's network, Safe Browsing looks it
+        up, Search Console holds history for a property: none of that exists for a
+        host on this machine. They crashed instead — and "script failed" sends the
+        reader to open a script that is working correctly."""
+        items = [{"id": "SP-108", "check": {"script": "pagespeed.py", "requires": "api"}},
+                 {"id": "GO-140", "check": {"script": "gsc_checker.py", "requires": "gsc"}},
+                 {"id": "CN-001", "check": {"script": "parse_html.py", "requires": "fetch"}}]
+        skips = private_host_skips(items, "127.0.0.1:8000")
+        self.assertEqual(sorted(skips), ["GO-140", "SP-108"])
+        for status, reason in skips.values():
+            # NO_DATA, never N/A: the item applies to this site, it just cannot be
+            # answered here. N/A would lift coverage on the one kind of audit that
+            # genuinely knows least.
+            self.assertEqual(status, NO_DATA)
+            self.assertIn("only reachable from here", reason)
+
+    def test_an_explicit_property_can_keep_the_search_console_items(self):
+        """Auditing a staging copy against the live site's history is a legitimate
+        thing to want, and passing the flag is the operator deciding it."""
+        items = [{"id": "GO-140", "check": {"script": "gsc_checker.py", "requires": "gsc"}},
+                 {"id": "SP-108", "check": {"script": "pagespeed.py", "requires": "api"}}]
+        gate = set(NEEDS_THE_OUTSIDE_WORLD) - {"gsc"}
+        self.assertEqual(sorted(private_host_skips(items, "10.0.0.5", gate)), ["SP-108"])
+
+    def test_the_flag_alone_does_not_make_a_host_private(self):
+        """`is_private_host` answers where the host resolves, not what was permitted.
+        Confusing the two would drop PageSpeed and Search Console from an ordinary
+        public audit run with the flag on."""
+        self.allow()
+        self.assertFalse(self.sh.is_private_host("https://93.184.216.34/"))
+        self.assertTrue(self.sh.is_private_host("http://127.0.0.1:8000/"))
+        self.assertFalse(self.sh.is_private_host("http://nothing.invalid/"),
+                         "an unresolvable host is unreachable, not private")
+
+    def test_a_run_records_and_announces_the_allowance(self):
+        """An artifact that does not record it cannot be told apart from an audit of
+        the public site, and `--quiet` must not be able to suppress the one line that
+        says so. Offline: the host does not resolve, which is enough — the question is
+        what the run reports about itself, not what it measured.
+
+        That the allowance also reaches the 55 evidence scripts is proved by the CI
+        job that audits a fixture server on loopback: those scripts could not fetch a
+        single page without it.
+        """
+        import subprocess
+        work = tempfile.mkdtemp()
+        out = os.path.join(work, "results.json")
+        try:
+            proc = subprocess.run(
+                [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"),
+                 "https://nothing-resolves-here.invalid/", "--mode", "page",
+                 "--allow-private", "--no-history", "--no-prompt", "--quiet",
+                 "--timeout", "20", "--json", out],
+                capture_output=True, text=True, timeout=300)
+            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+            with open(out, encoding="utf-8") as f:
+                payload = json.load(f)
+            self.assertIs(payload["allow_private"], True)
+            self.assertIs(payload["entry_private"], False,
+                          "a host that does not resolve is unreachable, not private")
+            self.assertIn("--allow-private", proc.stdout,
+                          "the run must say so even under --quiet")
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_archive_mode_claims_nothing_about_a_network_it_never_touched(self):
+        """The flag is inert with no requests to permit, so the caveat would be noise
+        dressed as candour. The artifact still records what was asked for."""
+        import subprocess
+        from checklist_report import provenance_warnings
+        site = tempfile.mkdtemp()
+        out = os.path.join(site, "results.json")
+        with open(os.path.join(site, "index.html"), "w", encoding="utf-8") as f:
+            f.write('<!doctype html><html lang="en"><head><title>Fixture page</title>'
+                    '<meta name="description" content="Enough of a page to audit.">'
+                    '</head><body><h1>Fixture page</h1><p>Body copy, and enough of '
+                    'it that the thin-entry warning stays quiet: this assertion is '
+                    'about the private-address caveat alone, so any other caveat '
+                    'appearing here would pass the test for the wrong reason. Forty '
+                    'visible words is the threshold, so this paragraph carries a few '
+                    'more than that and says something while it does.</p>'
+                    '</body></html>')
+        try:
+            proc = subprocess.run(
+                [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"),
+                 "https://example.com/", "--archive", site, "--allow-private",
+                 "--no-history", "--no-prompt", "--quiet", "--json", out],
+                capture_output=True, text=True, timeout=300)
+            self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+            with open(out, encoding="utf-8") as f:
+                payload = json.load(f)
+            self.assertIs(payload["allow_private"], True)
+            self.assertNotIn("--allow-private", proc.stdout)
+            self.assertEqual(provenance_warnings(payload), [])
+        finally:
+            shutil.rmtree(site, ignore_errors=True)
+
+
 class Robots(unittest.TestCase):
     """robots.txt applies to what the tool discovers, never to what it was given.
 
@@ -387,6 +604,34 @@ class Robots(unittest.TestCase):
                          ["https://e.com/blocked"])
         self.assertIn("sitemap_robots_conflict",
                       [i["type"] for i in out["issues"]])
+
+    def test_an_unlinked_disallowed_sitemap_url_is_not_an_orphan_either(self):
+        """The same failure by a different road, and the road that gets travelled.
+
+        The crawl can only record a refusal for a URL it tried, and it tries what the
+        site links to — so a disallowed sitemap URL that nothing links to arrived with
+        no refusal attached and was counted as an orphan. That is the ordinary case,
+        not an edge one: a page is usually unlinked *because* it is blocked. Caught
+        against the fixture site the first time the live path could be run at all.
+        """
+        import orphan_pages_from_sitemap as ops
+        crawl = {"pages": {"https://e.com/a": {"url": "https://e.com/a"}},
+                 "errors": [], "robots_skipped": []}     # nothing linked to it
+        saved = (ops.crawl_reachable_pages, ops.load_sitemap_urls, ops.robots_allows)
+        ops.crawl_reachable_pages = lambda *a, **k: crawl
+        ops.load_sitemap_urls = lambda *a, **k: {
+            "urls": ["https://e.com/a", "https://e.com/private/x",
+                     "https://e.com/real-orphan"],
+            "sitemaps_checked": ["https://e.com/sitemap.xml"], "errors": []}
+        ops.robots_allows = lambda url: ("/private/" not in url, 0.0)
+        try:
+            out = ops.find_orphan_pages("https://e.com")
+        finally:
+            (ops.crawl_reachable_pages, ops.load_sitemap_urls,
+             ops.robots_allows) = saved
+        self.assertEqual(out["orphan_pages"], ["https://e.com/real-orphan"])
+        self.assertEqual(out["sitemap_urls_blocked_by_robots"],
+                         ["https://e.com/private/x"])
 
 
 class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):

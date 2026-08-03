@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>http://127.0.0.1:8000/</loc>
+    <lastmod>2026-07-20</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/about.html</loc>
+    <lastmod>2026-07-18</lastmod>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/blog/first-post.html</loc>
+    <lastmod>2026-07-01</lastmod>
+  </url>
+  <!-- Linked from nowhere: a real orphan. -->
+  <url>
+    <loc>http://127.0.0.1:8000/orphan.html</loc>
+    <lastmod>2026-06-02</lastmod>
+  </url>
+  <!-- Disallowed in robots.txt: a conflict, not an orphan. -->
+  <url>
+    <loc>http://127.0.0.1:8000/private/secret.html</loc>
+  </url>
+</urlset>
