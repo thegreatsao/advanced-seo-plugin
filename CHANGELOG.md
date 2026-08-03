@@ -10,6 +10,84 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.6.0 — 3 August 2026
+
+**Registry `8a66be60b820` → `6e3cca477308`** (214 items, unchanged in number).
+Tests 304 → 325, and the new ones are a different kind: the whole registry is now
+run against two served fixture sites — one satisfying as much of it as a static site
+can, one engineered to fail — and **every script-backed item has to answer them
+differently or say in writing why it cannot.**
+
+That test is the point of this release. A check can only be verified by disagreeing
+with something, and thirty-three assertions in this tool's history reported the same
+verdict on every site ever audited. Each was found by accident, one family at a
+time. Comparing a good site with a bad one catches the next family without anybody
+having to name it first — and it caught four immediately.
+
+### Fixed — two items that failed on every clean site
+
+- **GO-136 "Provide clean XML sitemaps" and GO-138 "Remove invalid URLs from
+  sitemaps" could not pass.** Sitemap discovery always probes `/sitemap.xml`,
+  `/sitemap_index.xml` and `/sitemap-index.xml`, and every probe that came back 404
+  was reported as an `error`. Those three names are alternatives, not a set, so a
+  site with exactly one sitemap collected two errors — which failed GO-136 on
+  severity and GO-138 on the literal "404" in the message. **Every audit this tool
+  has produced carried both.** A probed name that is absent is now not an issue at
+  all; a sitemap that robots.txt *declares* and that fails to load still is, and "no
+  sitemap found anywhere" is its own error so the fix cannot swallow the real case.
+- **The non-HTTPS sitemap warning is skipped for private hosts.** A staging site on
+  `http://` is not making an SEO mistake. For anything publicly routable it stands.
+
+### Fixed — three checks that could not fail
+
+- **GO-138, again, underneath the first bug.** With the phantom 404 gone the item
+  passed everything: the 404/redirect/noindex issues its pattern looks for are only
+  emitted when `sitemap_checker` actually requests the URLs it found, and the
+  registry never passed `--fetch-urls`. So "remove invalid URLs from sitemaps"
+  reported PASS for a sitemap made entirely of dead links. It now fetches up to 25
+  of them. One fabricated FAIL was hiding one impossible PASS.
+- **CN-040 "Publish an up-to-date privacy policy" asserted the wrong field.** It read
+  `signals.policy_links`, which `eeat_signal_checker` populates from *editorial*
+  policy — fact-checking, corrections, ethics. A site with a proper privacy policy
+  failed unless it also published editorial standards; a site with an ethics page and
+  no privacy policy passed. There is a `signals.privacy_links` now, and the item
+  reads it.
+- **`duplicate_content` reported the home page as its own duplicate.**
+  `extract_internal_links` stripped the trailing slash unconditionally, so
+  `http://example.com/` became `http://example.com` — a second URL for the same
+  document. The seed kept its slash, both were crawled, both returned identical
+  bytes, and the exact-hash comparison called it **Critical** duplicate content. Any
+  site with a `href="/"` link in its navigation, which is every site, got that
+  finding. The root keeps its slash now; everything deeper loses it.
+
+### Fixed — a crash
+
+- **`image_weight_audit.py --fetch-images` died with `KeyError: 'url'`** on any page
+  with a broken image. The row key is `src`. It could only fire on a page MD-187
+  ("fix broken images") exists for, so a site with no broken images ran fine and
+  reported 0 — the crash was invisible until a fixture was built with a 404 image in
+  it.
+
+### Changed
+
+- The fixture pair is served by `tests/harness.py` on two origins, because
+  `robots.txt`, the sitemap and `llms.txt` live at the root of an origin: one
+  document root cannot be both present and absent. Each site's outbound links point
+  at the other origin, which is external by host and still on loopback — a real
+  `https://` link in a fixture would make `broken_links.py` take the suite online,
+  and the previous fixture's links to `example.com` did exactly that.
+- The good fixture stopped carrying deliberate defects. An orphan page and a
+  robots-disallowed sitemap entry lived in it, which meant CI-008, AR-162, GO-137 and
+  GO-138 were never observed passing anything. A fixture cannot demonstrate the
+  defect and the agreement in the same place.
+
+### Known, and now written down
+
+`image_weight_audit` reads only `<img>` attributes, so a site serving webp through
+`<picture><source type="image/webp">` with a png fallback — the recommended pattern —
+counts as having no modern format at all. Recorded in `KNOWN-ISSUES.md` rather than
+worked around.
+
 ## 0.5.0 — 3 August 2026
 
 **Registry `5bf1e36d657f` → `8a66be60b820`** (214 items, unchanged in number).

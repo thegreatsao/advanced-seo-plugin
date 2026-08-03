@@ -1,0 +1,2 @@
+There is deliberately no robots.txt in this tree: robots_checker.py reports
+status 404, which is what AR-151 ("provide a correct robots.txt") must fail on.

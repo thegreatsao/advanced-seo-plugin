@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="keywords" content="bakery, bakery vilnius, cheap bakery, bakery near me, bread">
+<link rel="canonical" href="https://not-this-site.example.net/elsewhere">
+<link rel="stylesheet" href="/assets/blocking.css">
+<script src="/assets/blocking.js"></script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"HowTo","name":"Deprecated schema type",
+</script>
+<!-- Parseable this time, and wrong: a Product with no offers, no price and no
+     availability. The truncated block above cannot be parsed at all, so a validator
+     skips it and reports nothing — which is why it left TE-172 and TECH-001 agreeing
+     with every site they had ever seen. A schema has to be readable before it can be
+     judged invalid. -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Product","name":"A loaf",
+ "image":"/assets/huge.png"}
+</script>
+<!-- The *same* measurement ID configured twice, which is what double-counts a
+     pageview and what GO-132 is about. Two different IDs are a legitimate setup, not
+     a duplicate, and the check is right not to flag them — the first version of this
+     fixture used two IDs and so proved nothing. -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-FIXTURE01"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('config','G-FIXTURE01');
+gtag('config','G-FIXTURE01');
+</script>
+</head>
+<body>
+<h1>First of two headings</h1>
+<h1>Second of two headings</h1>
+<p>This page exists to fail things. It has no title element, no meta description, no
+viewport, no lang attribute, two h1 elements, a canonical pointing at a domain it does
+not own, a keywords tag from 2004, invalid JSON-LD naming a schema type Google
+retired, a render-blocking stylesheet and a synchronous script in the head.</p>
+<p>It also carries enough visible prose to stay above the thin-page threshold, because
+the point is to exercise the checks rather than to trip the entry guard and stop the
+audit before any of them run. Every sentence here is filler with a purpose.</p>
+<!-- Grey on grey, inline, so the contrast scan has a candidate. -->
+<p style="color:#bbb;background:#ccc">Text nobody can read, styled inline so the
+check does not have to resolve a stylesheet to find it.</p>
+<!-- Hosts under .invalid (RFC 2606) never resolve, so these exercise the
+     external-link and mixed-content paths without the suite reaching the internet.
+     They used to point at example.com, which is routable: broken_links.py requests
+     every link it finds, so the "offline" claim in harness.py was not quite true. -->
+<p><a href="http://insecure.invalid/mixed">An http link on an http page</a>,
+<a href="/gone.html">a link to a page that is not there</a>,
+<a href="/blog/thin.html">thin content</a>,
+<a href="https://dead.invalid/">click here</a>.</p>
+<!-- The duplicate pair has to be reachable from here or the crawl never sees it:
+     duplicate_content walks links from the entry page, so two identical files
+     nothing points at are two files nobody compares. CN-041, MS-022 and MS-029 all
+     agreed with every site they had seen for that reason alone. -->
+<p>Read the same post twice:
+<a href="/blog/duplicate-a.html">first copy</a> and
+<a href="/blog/duplicate-b.html">second copy</a>.</p>
+<img src="/assets/huge.png">
+<img src="/assets/huge.png" alt="">
+<!-- No width/height, so the layout-shift and dimension checks have something; and a
+     src that 404s, so the broken-image count is not zero. -->
+<img src="/assets/huge.png" alt="A loaf, undeclared dimensions">
+<img src="/assets/no-such-image.png" alt="An image that is not there">
+<form><input type="text" name="q"><button>Go</button></form>
+</body>
+</html>

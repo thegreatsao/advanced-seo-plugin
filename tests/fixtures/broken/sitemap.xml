@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://insecure.example.com/not-even-this-host</loc></url>
+  <url><loc>http://127.0.0.1:8000/gone.html</loc></url>
+  <url><loc>http://127.0.0.1:8000/blog/thin.html</loc><lastmod>not-a-date</lastmod></url>
+  <url><loc>http://127.0.0.1:8000/orphan-only-in-sitemap.html</loc></url>
+  <!-- Exists, is listed, and nothing links to it: a real orphan rather than a 404.
+       Worth keeping the two apart — a page that is missing and a page that is
+       unreachable are different defects, and only this one is what the orphan
+       check is for. -->
+  <url><loc>http://127.0.0.1:8000/orphan.html</loc><lastmod>2026-06-02</lastmod></url>
+</urlset>

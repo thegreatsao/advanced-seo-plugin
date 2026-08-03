@@ -380,8 +380,15 @@ item(39, "high", S, "duplicate_content.py", PAGE,
      {"path": "summary.thin_pages", "eq": 0},
      "Consolidate or expand thin pages",
      {"path": "summary.thin_pages", "lte": 5})
+     # `signals.privacy_links`, not `policy_links`: the latter means editorial
+     # standards (fact-checking, corrections, ethics), so this item — "Publish an
+     # Up-to-Date Privacy Policy" — was answering a different question in both
+     # directions. A site with a proper privacy policy failed unless it also
+     # published editorial standards; a site with an ethics page and no privacy
+     # policy passed. Found by the good/broken fixture audit, which is what a check
+     # that agrees with every site it has ever seen looks like from outside.
 item(40, "medium", S, "eeat_signal_checker.py", PAGE,
-     {"path": "signals.policy_links", "len_gte": 1},
+     {"path": "signals.privacy_links", "len_gte": 1},
      "Publish an up-to-date privacy policy and link to it")
 item(41, "high", S, "duplicate_content.py", PAGE,
      {"path": "summary.exact_duplicate_groups", "eq": 0},
@@ -646,7 +653,16 @@ item(137, "medium", S, "orphan_pages_from_sitemap.py", PAGE,
      {"path": "summary.orphan_pages", "eq": 0},
      "Reconcile indexed pages against sitemap contents",
      {"path": "summary.orphan_pages", "lte": 50})
-item(138, "medium", S, "sitemap_checker.py", PAGE,
+# `--fetch-urls`, without which this item could only ever pass. The 404, redirect and
+# noindex issues its pattern looks for are emitted only when sitemap_checker actually
+# requests the URLs it found, and nothing asked it to — so "remove invalid URLs from
+# sitemaps" reported PASS for a sitemap made entirely of dead links. It was hidden
+# behind a second bug: the phantom "Sitemap returned HTTP 404" from probing
+# conventional filenames matched the same pattern, so the item read FAIL everywhere
+# for a reason that had nothing to do with the sitemap's contents. Fixing that
+# revealed this. Capped at 25 URLs: enough to find dead entries, not a second crawl.
+item(138, "medium", S, "sitemap_checker.py",
+     ["{url}", "--fetch-urls", "--max-urls", "25"],
      {"path": "issues", "none_matching": "(?i)404|redirect|noindex"},
      "Remove invalid URLs from sitemaps")
 item(139, "low", S, "gsc_cannibalization.py", GSCARG,

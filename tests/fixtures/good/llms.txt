@@ -1,0 +1,12 @@
+# Fixture Bakery
+
+> A small fixture site used to exercise the SEO checklist end to end.
+
+## Pages
+- [Home](http://127.0.0.1:8000/): what we bake and where to find us
+- [About](http://127.0.0.1:8000/about.html): who runs the place
+- [How we bake](http://127.0.0.1:8000/blog/first-post.html): the sourdough process
+- [Opening hours](http://127.0.0.1:8000/blog/second-post.html): when we are open
+
+## Contact
+hello@example.invalid

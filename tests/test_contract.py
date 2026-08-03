@@ -1,0 +1,429 @@
+"""Every script-backed item, run against a good site and a broken one.
+
+The gap this closes is not "some scripts have no test". It is that a check can be
+verified only by *disagreeing with something*. Thirty-three assertions in this
+registry's history reported the same verdict on every site ever audited, and each was
+found by accident, one family at a time — a regex that matched nothing (§4.12), a
+severity vocabulary that could not intersect (0.5.0), a field never emitted (0.5.0), a
+rating word only one of two sources uses (0.5.0). Static audits catch each family
+*after* somebody names it.
+
+This catches the next family without naming it. Two fixture sites are served on
+loopback, one satisfying as much of the registry as a static site can and one
+engineered to fail as much as possible, and the whole registry is run against both. A
+check that returns the same verdict on both is either measuring something the fixtures
+do not differ on — recorded below, per item, with the reason — or it cannot tell the
+difference between a good site and a bad one, which is the defect.
+
+Slow by construction: two full audits, ~10s each. Worth it, and it runs in CI.
+
+Offline: loopback only, no egress, no credentials. External-API scripts (PageSpeed,
+Safe Browsing, W3C, Search Console) cannot reach a loopback host, so their items
+report NO_DATA on both sites by design — those are covered by the stubbed unit tests
+in test_evidence.py, and this file asserts that the reason is the honest one.
+"""
+import json
+import os
+import subprocess
+import sys
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SKILL = os.path.join(ROOT, "skills", "seo-checklist")
+SCRIPTS = os.path.join(SKILL, "scripts")
+REGISTRY = os.path.join(SKILL, "resources", "config", "checklist.json")
+sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from harness import FixtureSite, offline_env  # noqa: E402
+
+FAIL, PASS, WARN = "FAIL", "PASS", "WARN"
+NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
+DECIDED = (PASS, FAIL, WARN)
+
+SITE = None
+RESULTS = {}
+
+
+def setUpModule():
+    """Serve both fixtures and audit each one once. Two runs, not two per test."""
+    global SITE
+    SITE = FixtureSite().start()
+    for name, url in (("good", SITE.good), ("broken", SITE.broken)):
+        RESULTS[name] = audit(url, name)
+
+
+def tearDownModule():
+    if SITE:
+        SITE.stop()
+
+
+def audit(url: str, label: str) -> dict:
+    """One full audit, through the runner, as an operator would get it."""
+    out = os.path.join(SITE.dir, f"{label}.json")
+    proc = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
+         "--allow-private", "--max-rps", "0", "--no-history", "--no-prompt",
+         "--quiet", "--timeout", "120", "--json", out],
+        capture_output=True, text=True, timeout=900, env=offline_env(), cwd=SITE.dir)
+    if proc.returncode != 0:
+        raise AssertionError(f"the {label} audit exited {proc.returncode}\n"
+                             f"{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
+    with open(out, encoding="utf-8") as f:
+        payload = json.load(f)
+    payload["_stdout"] = proc.stdout
+    return payload
+
+
+def items(label: str) -> dict:
+    return {i["id"]: i for i in RESULTS[label]["items"]}
+
+
+def registry() -> dict:
+    """The registry, indexed by id.
+
+    The runner's graded rows carry the verdict, not the rule that produced it, so
+    `requires` and `script` have to come from here. Reading them off the result rows
+    silently yielded None for every item — and a filter keyed on None excludes
+    nothing, which made a passing test out of an empty comparison.
+    """
+    with open(REGISTRY, encoding="utf-8") as f:
+        return {i["id"]: i for i in json.load(f)["items"]}
+
+
+REG = registry()
+
+
+def script_of(item_id: str) -> str:
+    return (REG[item_id].get("check") or {}).get("script", "")
+
+
+def requires_of(item_id: str) -> str:
+    return (REG[item_id].get("check") or {}).get("requires", "")
+
+
+# ---------------------------------------------------------------------------
+# Why an item can legitimately answer the same way on both sites.
+#
+# Every entry is a claim that has to stay true, not a way to quieten the test: the
+# reason is checked against the item's own `requires` where that is possible, and a
+# stale entry shows up as a test failure of its own below.
+# ---------------------------------------------------------------------------
+
+# Whole capabilities no loopback fixture can exercise. A third party cannot reach
+# 127.0.0.1, so these are NO_DATA on both sites — verified, not assumed.
+UNREACHABLE_REQUIRES = {"api", "gsc"}
+
+# Items whose evidence is identical on both fixtures on purpose, with why. Anything
+# not listed here has to differ, or the check cannot tell a good site from a bad one.
+SAME_ON_BOTH = {
+    # The two sites are the same shape by design: both are small, static, and
+    # hand-written, so what they share is not something a fixture can vary.
+    "CN-034": "both fixtures are short-form static pages; depth is a judgement",
+    "AR-146": "neither fixture paginates",
+    "CN-055": "neither fixture paginates",
+    "IN-121": "neither fixture is multilingual",
+    "IN-122": "neither fixture is multilingual",
+    "IN-124": "neither fixture is multilingual",
+    "IN-125": "neither fixture is multilingual",
+    "IN-126": "neither fixture is multilingual",
+    "IN-127": "neither fixture is multilingual",
+    "IN-128": "neither fixture is multilingual",
+    "IN-129": "neither fixture is multilingual",
+    "IN-130": "neither fixture is multilingual",
+    "MD-188": "neither fixture embeds video",
+    "MD-190": "neither fixture embeds video",
+    "MB-102": "neither fixture embeds video",
+    "AR-153": "neither fixture is an ecommerce catalogue",
+    "AR-156": "neither fixture is an ecommerce catalogue",
+    "AR-163": "neither fixture has faceted navigation",
+    "LO-196": "neither fixture claims a physical location beyond the same address",
+    "LO-197": "neither fixture claims a physical location beyond the same address",
+    "LO-199": "neither fixture claims a physical location beyond the same address",
+    "SE-115": "both fixtures are served over plain HTTP by the same server",
+    "SE-117": "both fixtures are served over plain HTTP by the same server",
+    "SE-118": "both fixtures are served over plain HTTP by the same server",
+    "SE-120": "both fixtures are served by the same header-free http.server",
+    "TE-175": "both fixtures are served by the same header-free http.server",
+    "TE-170": "both fixtures are served by the same http.server: no cache headers, no gzip",
+    "TE-167": "both fixtures are up; downtime is not something a fixture can show",
+    "TE-179": "the same server answers both, so response time does not differ",
+    "SP-109": "neither fixture loads a third-party script",
+    "SP-110": "both fixtures block rendering on a stylesheet in the head",
+    "TECH-002": "neither fixture loads a web font",
+    "TECH-003": "the same server answers both, so TTFB does not differ",
+    "CO-191": "competitor comparison has no data path at all yet",
+    "CO-192": "competitor comparison has no data path at all yet",
+    "CO-193": "competitor comparison has no data path at all yet",
+    "CO-194": "competitor comparison has no data path at all yet",
+    "CO-195": "competitor comparison has no data path at all yet",
+    "BL-078": "backlink items need a link index this tool does not have",
+    "BL-079": "backlink items need a link index this tool does not have",
+    "BL-080": "backlink items need a link index this tool does not have",
+    "BL-082": "backlink items need a link index this tool does not have",
+    "BL-083": "backlink items need a link index this tool does not have",
+    "BL-084": "backlink items need a link index this tool does not have",
+    "BL-085": "backlink items need a link index this tool does not have",
+
+    # --- The entry page has to stay readable on both sites -------------------
+    # A broken entry page is already covered: the runner refuses to score a site it
+    # cannot read, and `UnreachableSite` in test_runner.py tests that directly. Making
+    # the broken fixture's entry 500 or robots-disallowed would gate the other 140
+    # items and this whole file would measure nothing.
+    "CI-003": "the entry page must return 200 on both, or the run is gated and no "
+              "other item is exercised at all",
+    "CI-015": "same: a 5xx entry page stops the audit instead of failing one item",
+    "CI-005": "the broken site's own defect is having no robots.txt, and a missing "
+              "robots.txt allows everything; one origin cannot both lack robots.txt "
+              "and disallow its own entry page",
+    "CI-013": "needs a robots.txt to test paths against, which the broken site "
+              "deliberately does not have",
+    "CI-002": "the broken sitemap is defective but not empty — an empty one would "
+              "leave GO-136 and GO-138 with nothing to find",
+
+    # --- Both audits enter at the origin root --------------------------------
+    # url_quality judges the URL it was given. Both runs are handed `http://host/`,
+    # which is a clean URL by construction. Exercising a bad URL means auditing one,
+    # which is a different test — test_evidence.py covers url_quality on ugly input.
+    "CI-012": "both audits enter at the origin root, which is a clean URL",
+    "AR-147": "both audits enter at the origin root: no query parameters either way",
+    "AR-155": "both audits enter at the origin root: no URL flags either way",
+
+    # --- A static file server cannot do this --------------------------------
+    "CI-014": "http.server cannot be made to serve a redirect loop",
+    "AR-150": "http.server issues no redirects, so the hop count is 0 on both",
+    "AR-149": "no internal redirects to find without a server that redirects",
+    "MB-105": "both fixtures are static HTML: nothing changes after JavaScript runs, "
+              "so the rendered/raw diff is empty on both",
+    "TE-169": "both fixtures serve their links in the HTML, so the raw link count is "
+              "non-zero on both — the check only fails a JS-rendered site",
+
+    # --- One site cannot hold a defect and its opposite ---------------------
+    "GO-131": "the broken site needs two GA4 tags for GO-132, so it necessarily has "
+              "at least one and passes this",
+    "MD-184": "the broken site needs images to fail the image checks, so both have "
+              "at least one image",
+    "MB-095": "image_weight_audit reports oversize by weight, and neither fixture "
+              "ships an image big enough to trip it without bloating the repository",
+    "MB-098": "the dimension warning needs a real intrinsic size to compare against; "
+              "both fixture images are 64px placeholders",
+
+    # --- Needs an artifact this audit does not produce -----------------------
+    # cwv_metrics and rendered_audit read numbers a browser measured; gsc_links_csv
+    # reads a Search Console export. The runner has flags for all three and the
+    # contract audit passes none, so they are NO_DATA on both — correctly, and
+    # test_evidence.py covers each reader directly.
+    "SP-214": "needs --cwv-json, which no fixture audit supplies",
+    "SP-215": "needs --cwv-json, which no fixture audit supplies",
+    "SP-216": "needs --cwv-json, which no fixture audit supplies",
+    "CN-035": "needs --rendered-json, which no fixture audit supplies",
+    "CN-051": "needs --rendered-json, which no fixture audit supplies",
+    "MB-094": "needs --rendered-json, which no fixture audit supplies",
+    "MB-103": "needs --rendered-json, which no fixture audit supplies",
+    "BL-086": "needs --links-csv, a Search Console UI export",
+    "BL-087": "needs --links-csv, a Search Console UI export",
+    "GEO-007": "needs an IndexNow key, which is a secret and not a fixture",
+
+    # --- Would take the suite online ----------------------------------------
+    # The one exemption worth arguing with. entity_checker verifies sameAs targets by
+    # fetching them, so a fixture with a real Wikidata link would make this suite
+    # reach the internet — see PLACEHOLDER_EXTERNAL in harness.py for what the
+    # fixtures do instead where a link only has to be counted.
+    "GEO-006": "sameAs targets are verified by fetching wikipedia/wikidata; an "
+               "offline fixture cannot demonstrate them without egress",
+    "KW-076": "article_seo infers the target keyword from the page's own prose, so "
+              "it finds one on any page with prose",
+    "TECH-001": "rich_results_guard emits warnings only for schema types it has "
+                "required-property rules for; neither fixture carries one",
+    "GO-143": "schema_required_props reports on schemas that are present, so a site "
+              "with no WebSite/SearchAction block produces no issue to match — the "
+              "item cannot fail on absence, only on a malformed block",
+}
+
+
+class BothAuditsRan(unittest.TestCase):
+    """If either audit did not really happen, every assertion below is vacuous."""
+
+    def test_neither_audit_crashed_a_script(self):
+        for label in ("good", "broken"):
+            failures = RESULTS[label]["script_failures"]
+            detail = "\n".join(f"  {k}: {v['error']}"
+                               for k, v in RESULTS[label]["runs"].items()
+                               if v.get("error"))
+            self.assertEqual(failures, {}, f"{label}:\n{detail}")
+
+    def test_both_entry_pages_were_read(self):
+        for label in ("good", "broken"):
+            self.assertTrue(RESULTS[label]["entry_reachable"],
+                            f"{label}: {RESULTS[label]['entry_error']}")
+            self.assertIsNone(RESULTS[label]["entry_guard"],
+                              f"{label} tripped the page guard; the fixture is wrong, "
+                              f"not the site")
+
+    def test_both_audits_decided_a_meaningful_share_of_the_registry(self):
+        for label in ("good", "broken"):
+            decided = RESULTS[label]["scores"]["decided"]
+            self.assertGreater(decided, 60, f"{label} decided only {decided} items")
+
+    def test_the_broken_site_scores_worse_than_the_good_one(self):
+        """The coarsest possible sanity check, and it would have caught a whole class
+        of nonsense: if the score cannot tell these two apart, nothing below matters."""
+        good = RESULTS["good"]["scores"]["seo_score"]
+        broken = RESULTS["broken"]["scores"]["seo_score"]
+        self.assertLess(broken, good, f"good {good}, broken {broken}")
+
+
+class EveryCheckCanTellTheSitesApart(unittest.TestCase):
+    """The point of the file.
+
+    An item that answers identically on a good site and a deliberately broken one is
+    either measuring something the fixtures do not differ on — which has to be said
+    out loud, per item, in SAME_ON_BOTH — or it cannot distinguish a good site from a
+    bad one. There is no third possibility, and for thirty-three items in this
+    registry's history the answer was the second one.
+    """
+
+    def setUp(self):
+        self.good, self.broken = items("good"), items("broken")
+        self.script_backed = [i for i in RESULTS["good"]["items"]
+                              if REG[i["id"]].get("source") == "script"]
+
+    def differing(self):
+        return {i["id"] for i in self.script_backed
+                if self.good[i["id"]]["status"] != self.broken[i["id"]]["status"]}
+
+    def test_most_script_items_differ_between_the_two_sites(self):
+        differ = self.differing()
+        self.assertGreater(len(differ), 30,
+                           f"only {len(differ)} of {len(self.script_backed)} items "
+                           f"noticed the difference between the fixtures")
+
+    def test_every_item_that_answers_the_same_has_a_stated_reason(self):
+        same = []
+        for item in self.script_backed:
+            item_id = item["id"]
+            if item_id in self.differing() or item_id in SAME_ON_BOTH:
+                continue
+            if requires_of(item_id) in UNREACHABLE_REQUIRES:
+                continue          # covered by its own test below
+            same.append(f"{item_id} ({item['severity']}, {script_of(item_id)}) "
+                        f"{self.good[item_id]['status']} on both — "
+                        f"{(self.good[item_id].get('evidence') or '')[:70]}")
+        self.assertEqual(same, [], "these items cannot tell the fixtures apart:\n"
+                                   + "\n".join(f"  {s}" for s in same))
+
+    def test_no_exemption_outlives_the_reason_for_it(self):
+        """A stale exemption is a check nobody is verifying any more, which is the
+        same failure as a stale caveat in the docs."""
+        stale = sorted(item_id for item_id in SAME_ON_BOTH
+                       if item_id in self.differing())
+        self.assertEqual(stale, [], "these are listed as indistinguishable and now "
+                                    "differ; drop them from SAME_ON_BOTH")
+
+    def test_every_exemption_names_an_item_that_exists(self):
+        known = {i["id"] for i in RESULTS["good"]["items"]}
+        self.assertEqual(sorted(set(SAME_ON_BOTH) - known), [])
+
+
+class TheBrokenSiteFailsWhatItWasBuiltToFail(unittest.TestCase):
+    """Direction, not just difference.
+
+    `test_every_item_that_answers_the_same` proves a check *moved*; these name what it
+    should have moved to. Each line is a defect written into the fixture on purpose,
+    so a check that reports it backwards — which is how the CrUX rating bug read a
+    fast page as failing — shows up here rather than in a client's report.
+    """
+
+    def setUp(self):
+        self.good, self.broken = items("good"), items("broken")
+
+    def assertMoved(self, item_id, expect_good, expect_broken):
+        self.assertEqual(self.good[item_id]["status"], expect_good,
+                         f"{item_id} on the good site: "
+                         f"{self.good[item_id].get('evidence')}")
+        self.assertIn(self.broken[item_id]["status"], expect_broken,
+                      f"{item_id} on the broken site: "
+                      f"{self.broken[item_id].get('evidence')}")
+
+    def test_the_page_level_basics(self):
+        # title, one h1, viewport, lang, meta description, meta keywords
+        for item_id in ("MS-026", "CN-065", "MB-093", "IN-123", "MS-027", "MS-031"):
+            self.assertMoved(item_id, PASS, (FAIL, WARN))
+
+    def test_noindex_is_reported_as_not_indexable(self):
+        for item_id in ("CI-001", "CI-004"):
+            self.assertMoved(item_id, PASS, (FAIL,))
+
+    def test_a_canonical_pointing_at_another_domain_fails(self):
+        self.assertMoved("CI-009", PASS, (FAIL,))
+
+    def test_a_missing_robots_txt_fails_and_a_present_one_passes(self):
+        """Two origins is what makes this testable: robots.txt is per-origin, so one
+        document root cannot be both present and absent."""
+        self.assertMoved("AR-151", PASS, (FAIL,))
+
+    def test_an_absent_llms_txt_fails(self):
+        self.assertMoved("GEO-001", PASS, (FAIL,))
+
+    def test_images_without_alt_text_are_found(self):
+        self.assertMoved("MD-186", PASS, (FAIL, WARN))
+
+    def test_a_broken_internal_link_is_found(self):
+        self.assertMoved("TE-168", PASS, (FAIL, WARN))
+
+    def test_duplicate_pages_are_found(self):
+        self.assertMoved("CN-041", PASS, (FAIL, WARN))
+
+    def test_a_sitemap_full_of_problems_is_reported(self):
+        self.assertMoved("GO-136", PASS, (FAIL, WARN))
+
+
+class UnreachableCapabilitiesSayWhy(unittest.TestCase):
+    """PageSpeed, Safe Browsing, the W3C validator and Search Console cannot reach a
+    loopback host. That has to arrive as NO_DATA carrying the reason — not as a
+    failure of the site, and not as a crash. It is also the one thing 0.4.0 fixed
+    that a fixture audit can confirm end to end."""
+
+    def test_external_api_items_are_undecided_with_the_private_host_reason(self):
+        for label in ("good", "broken"):
+            for item in RESULTS[label]["items"]:
+                if requires_of(item["id"]) not in UNREACHABLE_REQUIRES:
+                    continue
+                self.assertIn(item["status"], (NO_DATA, MANUAL, NA),
+                              f"{label} {item['id']}: {item.get('evidence')}")
+                if item["status"] == NO_DATA:
+                    self.assertIn("only reachable from here",
+                                  item.get("evidence") or "",
+                                  f"{label} {item['id']} is undecided for the wrong "
+                                  f"stated reason")
+
+
+class NothingIsDecidedWithoutEvidence(unittest.TestCase):
+    """Every decided item must carry the evidence it was decided on, and every
+    undecided one must say why. A status with an empty evidence string is a verdict
+    nobody can check — the shape of every bug in this tool's history."""
+
+    def test_every_decided_item_shows_its_evidence(self):
+        empty = [f"{label} {i['id']} {i['status']}"
+                 for label in ("good", "broken")
+                 for i in RESULTS[label]["items"]
+                 if i["status"] in DECIDED and not (i.get("evidence") or "").strip()]
+        self.assertEqual(empty, [])
+
+    def test_every_undecided_item_states_a_reason(self):
+        empty = [f"{label} {i['id']}"
+                 for label in ("good", "broken")
+                 for i in RESULTS[label]["items"]
+                 if i["status"] == NO_DATA and not (i.get("evidence") or "").strip()]
+        self.assertEqual(empty, [])
+
+    def test_no_item_is_missing_from_either_run(self):
+        with open(REGISTRY, encoding="utf-8") as f:
+            expected = {i["id"] for i in json.load(f)["items"]}
+        for label in ("good", "broken"):
+            self.assertEqual({i["id"] for i in RESULTS[label]["items"]}, expected,
+                             f"{label} did not report on every registry item")
+
+
+if __name__ == "__main__":
+    unittest.main()

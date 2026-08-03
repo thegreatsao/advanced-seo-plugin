@@ -1,0 +1,825 @@
+/* An unminified stylesheet, large enough to be worth minifying.
+   The broken fixture used to ship this file already minified — one line per rule,
+   no comments, no indentation — which meant TE-174 could only ever report
+   `unminified_count = 0` and agreed with every site it had seen. The real defect is
+   a large source stylesheet shipped as-is, so that is what this is now. */
+
+
+/* Section 1: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-1 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-1 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 2: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-2 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-2 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 3: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-3 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-3 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 4: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-4 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-4 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 5: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-5 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-5 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 6: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-6 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-6 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 7: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-7 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-7 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 8: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-8 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-8 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 9: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-9 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-9 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 10: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-10 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-10 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 11: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-11 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-11 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 12: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-12 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-12 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 13: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-13 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-13 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 14: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-14 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-14 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 15: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-15 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-15 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 16: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-16 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-16 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 17: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-17 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-17 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 18: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-18 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-18 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 19: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-19 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-19 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 20: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-20 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-20 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 21: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-21 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-21 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 22: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-22 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-22 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 23: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-23 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-23 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 24: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-24 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-24 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 25: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-25 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-25 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 26: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-26 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-26 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 27: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-27 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-27 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 28: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-28 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-28 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 29: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-29 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-29 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 30: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-30 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-30 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 31: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-31 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-31 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 32: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-32 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-32 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 33: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-33 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-33 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 34: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-34 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-34 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 35: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-35 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-35 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 36: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-36 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-36 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 37: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-37 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-37 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 38: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-38 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-38 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}
+
+/* Section 39: padding so the file clears the size floor below which
+   css_minify_check declines to judge, since a tiny stylesheet is neither
+   measurable nor worth measuring. */
+.section-39 {
+    display: block;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    color: #333333;
+    background-color: #ffffff;
+    border-left: 3px solid #cccccc;
+}
+
+.section-39 > p {
+    margin: 0 0 1rem 0;
+    max-width: 40rem;
+}

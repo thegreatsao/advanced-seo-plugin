@@ -109,7 +109,12 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     # look" into a verdict either way. An absent key is NO_DATA by design.
     if checked:
         out["broken_image_count"] = len(broken)
-        out["broken_images"] = [row["url"] for row in broken]
+        # `row["src"]`, not `row["url"]` — the row has no "url" key, so this raised
+        # KeyError and killed the whole script. It could only fire on a page that
+        # actually had a broken image, which is the one page MD-187 exists for: any
+        # site with no broken images ran fine and reported 0, so the crash stayed
+        # invisible until a fixture was built with a 404 image in it.
+        out["broken_images"] = [row["src"] for row in broken]
     return out
 
 

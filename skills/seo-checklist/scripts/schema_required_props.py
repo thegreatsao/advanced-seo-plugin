@@ -100,10 +100,21 @@ def extract_schema_documents(source: str, timeout: int = 15) -> tuple[list[Any],
             documents.append(json.loads(text))
         except json.JSONDecodeError:
             pass
+    invalid = []
     if not documents and html_or_json:
         parsed = parse_html(html_or_json, final_url or source)
-        documents.extend(item for item in parsed.get("schema", []) if not (isinstance(item, dict) and item.get("error")))
-    return documents, {"source": source, "final_url": final_url or source, "fetch": fetch}
+        for item in parsed.get("schema", []):
+            if isinstance(item, dict) and item.get("error"):
+                # Dropped silently before. A block of JSON-LD that does not parse is
+                # not an absence of structured data, and reporting it as one made
+                # `summary.errors = 0` — a PASS for MS-032 — on a page whose schema
+                # Google cannot read at all. The §4.1 shape: an empty result
+                # satisfying a rule that counts problems.
+                invalid.append(item)
+            else:
+                documents.append(item)
+    return documents, {"source": source, "final_url": final_url or source,
+                       "fetch": fetch, "invalid_blocks": invalid}
 
 
 def find_schema_nodes(documents: list[Any], schema_type: str | None = None) -> list[dict[str, Any]]:
@@ -138,9 +149,17 @@ def contains_placeholder(value: Any) -> bool:
     return any(marker.upper() in upper for marker in PLACEHOLDER_MARKERS)
 
 
-def validate_schema_required_props(documents: list[Any], schema_type: str | None = None) -> dict[str, Any]:
+def validate_schema_required_props(documents: list[Any], schema_type: str | None = None,
+                                   invalid_blocks: list | None = None) -> dict[str, Any]:
     rows = []
     issues = []
+    for block in (invalid_blocks or []):
+        issues.append({
+            "severity": "error",
+            "path": "$",
+            "message": "JSON-LD block does not parse; Google reads none of it",
+            "evidence": (block.get("snippet") or block.get("raw_snippet") or "")[:160],
+        })
     nodes = find_schema_nodes(documents, schema_type)
     for row in nodes:
         node = row["node"]
@@ -170,6 +189,7 @@ def validate_schema_required_props(documents: list[Any], schema_type: str | None
         )
     return {
         "schema_nodes": len(nodes),
+        "invalid_blocks": len(invalid_blocks or []),
         "checked_type": schema_type,
         "rows": rows,
         "issues": issues,
@@ -189,7 +209,8 @@ def main() -> None:
     args = parser.parse_args()
 
     documents, meta = extract_schema_documents(args.source, timeout=args.timeout)
-    result = validate_schema_required_props(documents, args.schema_type)
+    result = validate_schema_required_props(documents, args.schema_type,
+                                            meta.get("invalid_blocks"))
     result.update({"source": args.source, "final_url": meta["final_url"]})
     lines = [
         f"Schema required properties for {args.source}",

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>http://127.0.0.1:8000/</loc>
+    <lastmod>2026-07-20</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/about.html</loc>
+    <lastmod>2026-07-18</lastmod>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/blog/first-post.html</loc>
+    <lastmod>2026-07-01</lastmod>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/privacy.html</loc>
+    <lastmod>2026-08-01</lastmod>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/blog/second-post.html</loc>
+    <lastmod>2026-07-11</lastmod>
+  </url>
+</urlset>
+<!--
+  Nothing defective is listed here, on purpose. An orphan entry and a
+  robots-disallowed entry used to live in this file, and they made the *good* site
+  fail CI-008, AR-162, GO-137 and GO-138 — so those four checks were never once
+  observed passing anything. A fixture cannot demonstrate the defect and the
+  agreement in the same place.
+
+  The orphan moved to the broken site, where a check that finds it is doing its job.
+  The sitemap/robots conflict is covered by a unit test instead
+  (Robots.test_a_robots_skipped_sitemap_url_is_not_an_orphan): it needs a robots.txt
+  that disallows a listed URL, and the broken site's own defect is having no
+  robots.txt at all. One origin cannot be both.
+-->

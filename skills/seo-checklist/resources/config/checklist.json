@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "8a66be60b820",
+  "registry_version": "6e3cca477308",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -975,7 +975,7 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "signals.policy_links",
+          "path": "signals.privacy_links",
           "len_gte": 1
         }
       },
@@ -2852,7 +2852,10 @@
       "check": {
         "script": "sitemap_checker.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--fetch-urls",
+          "--max-urls",
+          "25"
         ],
         "requires": "crawl",
         "assert": {

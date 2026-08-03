@@ -73,8 +73,30 @@ def extract_text(html: str) -> str:
     return body.get_text(separator=" ", strip=True)
 
 
+def canonical_form(url: str) -> str:
+    """One spelling per page, so the same page cannot be its own duplicate.
+
+    The trailing slash used to be stripped unconditionally, which turned
+    `http://example.com/` into `http://example.com` — a second URL for the same
+    document. The seed URL kept its slash, both were crawled, both returned identical
+    bytes, and the exact-hash comparison reported the home page as **Critical**
+    duplicate content. Every site with a `href="/"` link in its navigation, which is
+    every site, got that finding.
+
+    The root keeps its slash because an empty path is not a path; everything deeper
+    loses it, so `/about` and `/about/` are one page.
+    """
+    if url.endswith("/"):
+        stripped = url[:-1]
+        # Deeper than the origin? Then the slash was decoration. `://` is still
+        # present in a bare origin, so its absence after stripping means the path was
+        # exactly "/".
+        return stripped if urlparse(stripped).path else url
+    return url
+
+
 def extract_internal_links(html: str, base_url: str) -> list:
-    """Extract internal links from a page."""
+    """Extract internal links from a page, one canonical spelling each."""
     soup = BeautifulSoup(html, "html.parser")
     base_domain = urlparse(base_url).netloc
     links = []
@@ -85,10 +107,8 @@ def extract_internal_links(html: str, base_url: str) -> list:
         full = urljoin(base_url, href)
         parsed = urlparse(full)
         if parsed.netloc == base_domain and parsed.scheme in ("http", "https"):
-            clean = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-            if clean.endswith("/"):
-                clean = clean[:-1]
-            links.append(clean)
+            links.append(canonical_form(
+                f"{parsed.scheme}://{parsed.netloc}{parsed.path}"))
     return list(set(links))
 
 
@@ -183,6 +203,9 @@ def crawl_site(start_url: str, max_pages: int = 50, depth: int = 2) -> dict:
     Crawl a site starting from start_url.
     Returns {url: {"text": str, "word_count": int, "html": str}}.
     """
+    # The seed goes through the same spelling rule as every discovered link, or the
+    # entry page is crawled twice under two names and duplicates itself.
+    start_url = canonical_form(start_url)
     visited = {}
     queue = [(start_url, 0)]
     seen = {start_url}

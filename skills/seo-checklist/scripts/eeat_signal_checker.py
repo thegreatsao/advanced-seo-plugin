@@ -88,6 +88,20 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
         if re.search(r"\b(about|contact|privacy|terms|team|authors?)\b", link.get("text", ""), re.I)
         or re.search(r"/(about|contact|privacy|terms|team|author)", link.get("href", ""), re.I)
     ]
+    # Privacy specifically, kept apart from both of the above. `policy_links` means
+    # editorial standards — fact-checking, corrections, ethics — while `trust_links`
+    # is anything vaguely institutional, an "About" page included. CN-040 asks only
+    # whether there is an up-to-date privacy policy, and it was asserting on
+    # `policy_links`, which answered a different question in both directions: a site
+    # with a proper privacy policy failed unless it also published editorial
+    # standards, and a site with an ethics page and no privacy policy passed.
+    privacy_links = [
+        link for link in links
+        if re.search(r"\b(privacy|data protection|gdpr|cookie policy|cookie notice)\b",
+                     link.get("text", ""), re.I)
+        or re.search(r"/(privacy|datenschutz|gdpr|cookie-policy)",
+                     link.get("href", ""), re.I)
+    ]
     page_host = urlparse(url).netloc if url else ""
     external_citations = [
         link for link in links
@@ -111,6 +125,8 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
         issues.append({"severity": "info", "message": "No editorial, review, corrections, or fact-check policy link detected."})
     if not trust_links:
         issues.append({"severity": "warning", "message": "No obvious about/contact/privacy/team trust links detected."})
+    if not privacy_links:
+        issues.append({"severity": "warning", "message": "No privacy policy link detected."})
 
     return {
         "url": url or source,
@@ -120,6 +136,7 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
             "credential_markers": credential_hits[:20],
             "first_hand_experience_markers": experience_hits[:20],
             "policy_links": policy_links[:20],
+            "privacy_links": privacy_links[:20],
             "trust_links": trust_links[:20],
             "external_citations": len(external_citations),
         },

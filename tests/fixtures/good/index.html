@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture Bakery — fresh bread in Vilnius</title>
+<meta name="description" content="A small fixture site used to exercise the SEO checklist end to end: six pages, a sitemap, a robots.txt with something in it, and structured data.">
+<link rel="canonical" href="http://127.0.0.1:8000/">
+<link rel="icon" href="/assets/logo.png" type="image/png">
+<link rel="stylesheet" href="/assets/site.css">
+<meta property="og:title" content="Fixture Bakery — fresh bread in Vilnius">
+<meta property="og:description" content="A small fixture site used to exercise the SEO checklist end to end.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="http://127.0.0.1:8000/">
+<meta property="og:image" content="http://127.0.0.1:8000/assets/logo.png">
+<meta property="og:site_name" content="Fixture Bakery">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fixture Bakery — fresh bread in Vilnius">
+<meta name="twitter:description" content="A small fixture site used to exercise the SEO checklist end to end.">
+<meta name="twitter:image" content="http://127.0.0.1:8000/assets/logo.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"Fixture Bakery",
+ "url":"http://127.0.0.1:8000/","logo":"http://127.0.0.1:8000/assets/logo.png",
+ "email":"hello@example.invalid",
+ "address":{"@type":"PostalAddress","streetAddress":"1 Fixture Street",
+            "addressLocality":"Vilnius","postalCode":"01100","addressCountry":"LT"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","name":"Fixture Bakery",
+ "url":"http://127.0.0.1:8000/",
+ "potentialAction":{"@type":"SearchAction",
+   "target":"http://127.0.0.1:8000/search?q={search_term_string}",
+   "query-input":"required name=search_term_string"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+ {"@type":"ListItem","position":1,"name":"Home","item":"http://127.0.0.1:8000/"}]}
+</script>
+<!-- A LocalBusiness subtype, so LO-200 has NAP + hours to find. Deliberately
+     `Bakery` and not `LocalBusiness`: matching @type as a string against
+     "LocalBusiness" is what made local_seo_checker report a high-severity FAIL
+     against a real restaurant site (FINDINGS §4.12). -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Bakery","name":"Fixture Bakery",
+ "url":"http://127.0.0.1:8000/","image":"http://127.0.0.1:8000/assets/logo.png",
+ "telephone":"+370 5 000 0000","priceRange":"€€",
+ "address":{"@type":"PostalAddress","streetAddress":"1 Fixture Street",
+            "addressLocality":"Vilnius","postalCode":"01100","addressCountry":"LT"},
+ "geo":{"@type":"GeoCoordinates","latitude":54.6872,"longitude":25.2797},
+ "openingHoursSpecification":[
+  {"@type":"OpeningHoursSpecification",
+   "dayOfWeek":["Tuesday","Wednesday","Thursday","Friday","Saturday"],
+   "opens":"07:00","closes":"14:00"}]}
+</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-FIXTURE01"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js',new Date());gtag('config','G-FIXTURE01');
+</script>
+</head>
+<body>
+<header><nav aria-label="Main">
+  <a href="/">Home</a>
+  <a href="/about.html">About</a>
+  <a href="/blog/first-post.html">How we bake sourdough</a>
+  <a href="/blog/second-post.html">Opening hours</a>
+  <a href="/privacy.html">Privacy</a>
+</nav></header>
+<main>
+<h1>Fixture Bakery</h1>
+<p>This page exists so the audit has a real HTTP server to talk to. It carries
+enough prose that the thin-entry guard stays quiet, a canonical that points at
+itself, three structured-data blocks, and a handful of internal links for the
+crawl to follow. Published <time datetime="2026-07-20">20 July 2026</time> and
+last reviewed <time datetime="2026-08-01">1 August 2026</time>.</p>
+<h2>What we bake</h2>
+<p>Rye, sourdough, and a rotating loaf that depends entirely on what the miller
+sent us that week. Everything is made the same morning it is sold, which is the
+only interesting operational constraint in the whole business and the reason the
+opening hours are as strange as they are.</p>
+<h2>Where to find us</h2>
+<p>1 Fixture Street, Vilnius, behind a fixture door. Telephone
+<a href="tel:+37050000000">+370 5 000 0000</a>, or write to
+<a href="mailto:hello@example.invalid">hello@example.invalid</a>.
+See <a href="/about.html">about the bakery</a> for the version with a map in it.</p>
+<h2>How long does a loaf keep?</h2>
+<p>Three days in paper, a week in the freezer. Sourdough keeps longer than yeasted
+bread because the acidity slows staling — which is the short answer to the
+question people actually ask when they pick up a loaf on a Friday.</p>
+<h2>How we know</h2>
+<!-- Outbound citations point at the *other* fixture origin, which is external by
+     host and still on loopback. A real off-site URL here would make broken_links.py
+     — which requests every link it finds — quietly take this suite online. -->
+<p>Our baker is a <strong>certified</strong> miller with eleven
+<strong>years of experience</strong>, and the loaf below is the one we settled on
+after <strong>we measured</strong> crumb structure across nine flours —
+<strong>original research</strong>, run in this kitchen rather than read about.
+Every claim on this page is <strong>reviewed by</strong> the baker before it goes
+up.</p>
+<blockquote cite="http://127.0.0.1:8001/">
+<p>Acidity slows starch retrogradation, which is why a sour loaf stales more
+slowly than a sweet one.</p>
+<footer>— <cite><a href="http://127.0.0.1:8001/">The neighbouring fixture
+site</a></cite>, our standing reference on staling</footer>
+</blockquote>
+<p>Further reading: <a href="http://127.0.0.1:8001/blog/thin.html">a note on
+crumb</a> and <a href="http://127.0.0.1:8001/orphan.html">the milling
+tables</a>.</p>
+<figure>
+<!-- webp as the `img` src, with a srcset, because image_weight_audit reads only
+     `<img>` attributes: it never looks inside `<picture>`, so a site serving webp
+     through `<source type="image/webp">` with a png fallback — the recommended
+     pattern — counts as having no modern format at all. Recorded in
+     KNOWN-ISSUES.md; the fixture uses the form the check can actually see rather
+     than pretending the blind spot is not there. -->
+<img src="/assets/logo@2x.webp" alt="The Fixture Bakery loaf mark"
+     width="64" height="64" loading="lazy" decoding="async"
+     srcset="/assets/logo.png 64w, /assets/logo@2x.webp 128w"
+     sizes="(max-width: 600px) 64px, 128px">
+<figcaption>The loaf mark, in two sizes and a modern format.</figcaption>
+</figure>
+</main>
+<footer>
+<p>Fixture Bakery, 1 Fixture Street, Vilnius. Not a real bakery.</p>
+<p>Written by <a rel="author" href="/about.html">A Fixture Baker</a>.
+<a href="/privacy.html">Privacy policy</a> ·
+<a href="/about.html#contact">Contact</a></p>
+</footer>
+</body>
+</html>

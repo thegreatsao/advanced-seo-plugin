@@ -1,6 +1,6 @@
 {
   "name": "seo-checklist",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Deterministic SEO audit against a fixed 214-item registry (Plerdy 200 + 14 GEO/AI, schema and lab-vitals checks). Every item gets a status, nothing is silently skipped, and coverage is reported separately from the score. 55 evidence scripts, 4 judgement agents plus an adversarial reviewer, three run modes including a fully offline one.",
   "author": { "name": "Anton Stovba" },
   "license": "MIT",

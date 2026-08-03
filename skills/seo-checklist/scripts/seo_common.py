@@ -346,21 +346,42 @@ def fetch_robots(site_url: str, timeout: int = 15) -> dict:
     return {"url": robots_url, "fetch": fetched, "parsed": parsed}
 
 
-def discover_sitemap_urls(site_url: str, timeout: int = 15) -> list[str]:
+# Conventional filenames worth trying when nothing declares a sitemap. They are
+# guesses, and a guess that misses says nothing about the site — see
+# `discover_sitemap_urls`.
+CONVENTIONAL_SITEMAP_PATHS = ("/sitemap.xml", "/sitemap_index.xml",
+                              "/sitemap-index.xml")
+
+
+def discover_sitemap_urls(site_url: str, timeout: int = 15,
+                          with_source: bool = False):
+    """Sitemap URLs to try, declared ones first.
+
+    With `with_source=True`, yields `(url, source)` where source is `"declared"`
+    (named in robots.txt, or passed in by the caller) or `"probed"` (a conventional
+    filename we guessed at).
+
+    **The distinction decides whether a 404 is a finding.** A declared sitemap that
+    does not load is a real defect: the site says it is there. A probed filename
+    that 404s means only that this site does not use that name — which is true of
+    almost every site, since these three names are alternatives, not a set. Treating
+    the miss as an error made `sitemap_checker` report two errors against every site
+    that has exactly one sitemap, and those errors failed GO-136 (`none_severity`)
+    and GO-138 (whose pattern matches the literal "404" in the message). A clean
+    sitemap could not pass either item.
+    """
     base = origin(site_url)
-    candidates = []
     robots = fetch_robots(site_url, timeout=timeout)
-    if robots.get("parsed"):
-        candidates.extend(robots["parsed"].get("sitemaps", []))
-    candidates.extend([base + "/sitemap.xml", base + "/sitemap_index.xml", base + "/sitemap-index.xml"])
-    seen = set()
-    output = []
-    for candidate in candidates:
+    declared = list((robots.get("parsed") or {}).get("sitemaps", []))
+    pairs, seen = [], set()
+    for candidate, source in ([(c, "declared") for c in declared]
+                              + [(base + p, "probed")
+                                 for p in CONVENTIONAL_SITEMAP_PATHS]):
         url = normalize_url(candidate, base)
         if url not in seen:
             seen.add(url)
-            output.append(url)
-    return output
+            pairs.append((url, source))
+    return pairs if with_source else [url for url, _ in pairs]
 
 
 def parse_sitemap_xml(xml_text: str, sitemap_url: str = "") -> dict:

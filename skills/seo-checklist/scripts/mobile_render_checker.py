@@ -23,7 +23,12 @@ except ImportError:  # pragma: no cover - optional dependency
 def _static_checks(source: str, timeout: int = 15) -> dict:
     html, final_url, fetched = load_html(source, timeout=timeout)
     parsed = parse_html(html, final_url)
-    viewport = (parsed.get("meta") or {}).get("viewport", "")
+    # `seo_common.parse_html` returns `viewport` at the top level; there is no
+    # `meta` dict and never was, so this read `""` on every page ever audited and
+    # reported a missing viewport at `critical` severity for all of them. A
+    # fabricated FAIL rather than a fabricated PASS, which is why nobody noticed:
+    # the item looked strict, not broken.
+    viewport = parsed.get("viewport") or ""
     text = re.sub(r"\s+", " ", html or "")
 
     issues = []

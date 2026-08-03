@@ -318,8 +318,13 @@ reverse-IP service. Both report `checked: false` with a reason instead.
 `signals.credential_markers[]` — array
 `signals.first_hand_experience_markers[]` — array
 `signals.policy_links[]` — array
+  - editorial standards only: fact-checking, corrections, ethics. Not privacy.
+`signals.privacy_links[]` — array
+  - privacy, data protection, GDPR, cookie policy. CN-040 reads this; it used to
+    read `policy_links`, which answered a different question in both directions.
 `signals.trust_links[]` — array
-  - item keys: href, text, rel
+  - the loosest of the three: anything institutional, an "About" page included.
+  - item keys (all three arrays): href, text, rel
 `signals.external_citations` — int
 `issues[]` — array
   - item keys: severity, message

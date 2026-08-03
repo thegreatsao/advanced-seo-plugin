@@ -31,9 +31,9 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from lib.safe_http import safe_get
+    from lib.safe_http import RobotsDisallowed, safe_get
 except ImportError:
-    from scripts.lib.safe_http import safe_get
+    from scripts.lib.safe_http import RobotsDisallowed, safe_get
 
 
 # ---------------------------------------------------------------------------
@@ -41,24 +41,30 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def fetch_page(url: str, timeout: int = 10, respect_robots: bool = False) -> tuple:
-    """Return (final_url, html) or (url, '').
+    """Return (final_url, html, refused) — `refused` is True for a robots.txt block.
 
-    A robots refusal yields ('', url) like any other failure, and that is safe
-    here: an uncrawled page never enters the link graph, so it cannot be reported
-    as an orphan. It only means the graph is smaller than the site.
+    The comment that used to sit here claimed a refusal "cannot be reported as an
+    orphan" because an uncrawled page never enters the link graph. It was wrong, and
+    wrong in the direction that costs a client: the caller adds the URL to `crawled`
+    *before* fetching it, and orphans are computed over `crawled`. So a page we
+    politely declined to fetch was reported as a page the site failed to link — the
+    third time this exact mistake has been found in this tree (see the 0.4.0 and
+    0.5.0 notes), and the first time in a script whose comment asserted it was safe.
     """
     try:
         resp = safe_get(url, timeout=timeout, respect_robots=respect_robots)
-        return resp.url, resp.text
+        return resp.url, resp.text, False
+    except RobotsDisallowed:
+        return url, "", True
     except Exception:
-        return url, ""
+        return url, "", False
 
 
 def get_sitemap_urls(site_url: str, limit: int = 200) -> list:
     """Extract URLs from sitemap.xml."""
     parsed = urlparse(site_url)
     sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
-    _, body = fetch_page(sitemap_url)
+    _, body, _ = fetch_page(sitemap_url)
     if not body:
         return []
     urls = re.findall(r"<loc>([^<]+)</loc>", body)
@@ -67,7 +73,7 @@ def get_sitemap_urls(site_url: str, limit: int = 200) -> list:
         expanded = []
         for sub in urls[:10]:
             time.sleep(0.3)
-            _, sub_body = fetch_page(sub)
+            _, sub_body, _ = fetch_page(sub)
             if sub_body:
                 expanded.extend(re.findall(r"<loc>([^<]+)</loc>", sub_body))
         urls = expanded
@@ -132,6 +138,7 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
     }
 
     crawled = set()
+    robots_refused = set()
     for url in seed_urls:
         if url in crawled:
             continue
@@ -140,7 +147,11 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
         time.sleep(0.3)
         # Only `site_url` was supplied by the operator; the rest of the seed list
         # came out of the sitemap, which makes it discovered.
-        final_url, html = fetch_page(url, respect_robots=url != site_url)
+        final_url, html, refused = fetch_page(url, respect_robots=url != site_url)
+        if refused:
+            # Tracked apart from `crawled`, because an orphan is a page the site
+            # forgot to link and this is a page we chose not to open.
+            robots_refused.add(url)
         if not html:
             continue
 
@@ -160,22 +171,36 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
         for link in links["external"]:
             graph["all_external_targets"][link["url"]] += 1
 
-    return graph, crawled, base_domain
+    return graph, crawled, base_domain, robots_refused
 
 
 # ---------------------------------------------------------------------------
 # Analysis
 # ---------------------------------------------------------------------------
 
-def analyze_link_profile(graph: dict, crawled: set, base_domain: str) -> dict:
+def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
+                         robots_refused: set | None = None,
+                         entry_url: str = "") -> dict:
     """Produce analysis from the crawled link graph."""
     pages = graph["pages"]
     internal_targets = graph["all_internal_targets"]
+    refused = robots_refused or set()
 
-    # Orphan pages (in sitemap/crawled but zero inbound internal links)
+    # Orphan pages: crawled, and nothing internal points at them.
+    #
+    # Two exclusions, and both were wrong before. A URL robots.txt told us not to
+    # fetch is not a page the site failed to link — it is a page we chose not to
+    # open, and counting it made our own politeness into the site's defect. And the
+    # home page has no inbound internal links by nature, which the old code handled
+    # by exempting `min(crawled)` — the lexicographically smallest URL, which is the
+    # home page only by luck. On a site where it is not, the home page was reported
+    # as an orphan and some arbitrary other page was excused.
+    entry = {u for u in (entry_url, entry_url.rstrip("/"), entry_url + "/") if u}
     orphan_pages = []
-    for url in crawled:
-        if internal_targets.get(url, 0) == 0 and url != min(crawled):
+    for url in sorted(crawled):
+        if url in refused or url in entry:
+            continue
+        if internal_targets.get(url, 0) == 0:
             orphan_pages.append(url)
 
     # Top linked pages (highest inbound internal links)
@@ -244,6 +269,9 @@ def analyze_link_profile(graph: dict, crawled: set, base_domain: str) -> dict:
         "unique_internal_targets": len(internal_targets),
         "unique_external_domains": len(external_domains),
         "avg_internal_links_per_page": round(avg_internal_links, 1),
+        # What robots.txt kept out of the graph, so a reader can tell a smaller
+        # crawl from a worse site.
+        "robots_refused": sorted(refused),
         "orphan_pages": {
             "count": len(orphan_pages),
             "urls": orphan_pages[:15],
@@ -312,10 +340,12 @@ def main():
     gsc_credentials = args.gsc_credentials or get_env("GSC_CREDENTIALS_PATH")
 
     print(f"Crawling {args.url}...", file=sys.stderr)
-    graph, crawled, base_domain = crawl_site(args.url, max_pages=args.max_pages)
+    graph, crawled, base_domain, robots_refused = crawl_site(
+        args.url, max_pages=args.max_pages)
 
     print("Analyzing link profile...", file=sys.stderr)
-    report = analyze_link_profile(graph, crawled, base_domain)
+    report = analyze_link_profile(graph, crawled, base_domain, robots_refused,
+                                  entry_url=args.url)
     report["site_url"] = args.url
 
     # Optional GSC backlinks

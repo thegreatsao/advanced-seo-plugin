@@ -2,5 +2,11 @@
 # would leave the robots handling untested by the live path.
 User-agent: *
 Disallow: /private/
+# The paths CI-019 exists to keep out of an index. A search-results page, a cart
+# and a login form are infinite, duplicated or private by nature.
+Disallow: /search
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
 
 Sitemap: http://127.0.0.1:8000/sitemap.xml

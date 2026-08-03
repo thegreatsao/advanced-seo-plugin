@@ -19,14 +19,31 @@ from seo_common import (
     same_host,
 )
 
+try:
+    from lib.safe_http import is_private_host
+except ImportError:
+    from scripts.lib.safe_http import is_private_host
+
 
 def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_urls: bool = False, timeout: int = 15, max_urls: int = 100) -> dict:
-    sitemap_urls = sitemap_urls or discover_sitemap_urls(site_url, timeout=timeout)
+    # A URL the caller supplied, or one robots.txt declares, is one the site claims
+    # exists — failing to load it is a defect. A conventional filename we merely
+    # guessed at is not: `/sitemap_index.xml` is an alternative to `/sitemap.xml`,
+    # not a companion, so its absence is the normal case. `probed` keeps the two
+    # apart; before it, every site with exactly one sitemap collected two "Sitemap
+    # returned HTTP 404" errors and could not pass GO-136 or GO-138.
+    if sitemap_urls:
+        probed = set()
+    else:
+        pairs = discover_sitemap_urls(site_url, timeout=timeout, with_source=True)
+        sitemap_urls = [url for url, _ in pairs]
+        probed = {url for url, source in pairs if source == "probed"}
     result = {
         "site": normalize_url(site_url),
         "sitemaps_checked": [],
         "urls": [],
-        "summary": {"sitemaps": 0, "urls": 0, "indexes": 0, "issues": 0},
+        "summary": {"sitemaps": 0, "urls": 0, "indexes": 0, "issues": 0,
+                    "probed_absent": 0},
         "issues": [],
     }
     queue = list(dict.fromkeys(sitemap_urls))
@@ -50,7 +67,13 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
             "error": fetched.get("error"),
         }
         if fetched.get("status") != 200:
-            result["issues"].append(issue("error", f"Sitemap returned HTTP {fetched.get('status')}", sm_url, fetched.get("error")))
+            if sm_url in probed:
+                # Not there, and nothing said it would be. Recorded so the run is
+                # inspectable, but it is not an issue and must not read as one.
+                entry["absent"] = True
+                result["summary"]["probed_absent"] += 1
+            else:
+                result["issues"].append(issue("error", f"Sitemap returned HTTP {fetched.get('status')}", sm_url, fetched.get("error")))
             result["sitemaps_checked"].append(entry)
             continue
         parsed = parse_sitemap_xml(fetched.get("text") or "", sm_url)
@@ -73,7 +96,11 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
                 continue
             seen_urls.add(loc)
             url_entry = {"url": loc, **{k: v for k, v in row.items() if k != "loc"}, "checks": {}}
-            if not loc.startswith("https://"):
+            if not loc.startswith("https://") and not is_private_host(loc):
+                # Skipped for private hosts: a staging site or a local fixture on
+                # http:// is not making an SEO mistake, and warning about it would
+                # be the only reason a clean sitemap could not pass GO-136 there.
+                # For anything publicly routable the warning stands.
                 result["issues"].append(issue("warning", "Sitemap URL is not HTTPS", loc))
             if not same_host(site_url, loc):
                 result["issues"].append(issue("warning", "Sitemap URL is cross-host", loc))
@@ -106,7 +133,18 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
         result["sitemaps_checked"].append(entry)
 
     result["summary"]["sitemaps"] = len(result["sitemaps_checked"])
+    result["summary"]["loaded"] = sum(1 for e in result["sitemaps_checked"]
+                                      if e.get("status") == 200)
     result["summary"]["urls"] = len(result["urls"])
+    # No sitemap anywhere *is* a finding, and downgrading the probe misses must not
+    # swallow it. This is the one case where absence is the site's problem: nothing
+    # declared a sitemap and none of the conventional names answered.
+    if not result["summary"]["loaded"]:
+        result["issues"].append(issue(
+            "error", "No sitemap found",
+            result["site"],
+            f"tried {len(result['sitemaps_checked'])} location(s): "
+            + ", ".join(e["url"] for e in result["sitemaps_checked"][:5])))
     result["summary"]["issues"] = len(result["issues"])
     return result
 

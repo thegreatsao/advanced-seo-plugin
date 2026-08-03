@@ -135,6 +135,14 @@ be a few lines.
 
 ## 6. Smaller, but they will bite
 
+- **`image_weight_audit.py` reads only `<img>` attributes.** A site serving webp
+  through `<picture><source type="image/webp">` with a png fallback in the `<img>` —
+  which is the recommended pattern — counts as having **no modern format at all**, so
+  MB-097 fails a site that is already doing it right. Same for `srcset` declared on a
+  `<source>` rather than the `<img>` (MB-096). Found while building the fixture pair
+  in 0.6.0 and deliberately not worked around: the fixture uses the form the check
+  can see, and the gap is written here instead of hidden behind a fixture that
+  flatters it.
 - **`tools/probe_shapes.py` holds its job list by hand.** The tool used to verify
   script output shapes is not itself tied to the registry, so it can drift from the
   thing it verifies and nothing notices.
