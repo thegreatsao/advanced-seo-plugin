@@ -68,7 +68,11 @@ def crawl_internal_anchors(start_url: str, depth: int = 1, max_pages: int = 25, 
         if page_key in seen or current_depth > depth:
             continue
         seen.add(page_key)
-        fetched = fetch_url(url, timeout=timeout, max_bytes=2_000_000)
+        # Depth 0 is the operator's own URL; deeper pages we discovered ourselves,
+        # so robots.txt governs them. A refusal here only means fewer anchors were
+        # read — it cannot invent an overused-anchor finding.
+        fetched = fetch_url(url, timeout=timeout, max_bytes=2_000_000,
+                            respect_robots=current_depth > 0)
         pages[page_key] = {
             "url": page_key,
             "status": fetched.get("status"),

@@ -867,19 +867,27 @@ def score(graded: list[dict]) -> dict:
     for g in graded:
         c = by_cat.setdefault(g["category"], {"label": g["category_label"], "counts": {}})
         c["counts"][g["status"]] = c["counts"].get(g["status"], 0) + 1
-    # NOTE: the per-category score is an *unweighted* pass rate, while seo_score
-    # above is weighted by severity. The two numbers therefore sit on different
-    # scales in the same report — a category can show 25 where its weighted score
-    # is 42, because one failing `low` costs as much here as one failing
-    # `critical`. The report also orders its category bars by this number, so
-    # "look here first" and the severity-ranked fix list below it can disagree.
-    # Known issue, deliberately left visible rather than silently reconciled:
-    # see KNOWN-ISSUES.md.
-    for c in by_cat.values():
+    # Weighted by severity, exactly like seo_score above, and for the reason the
+    # report needs: these numbers sit next to the headline score and get read
+    # against it. An unweighted pass rate put them on a second scale — one category
+    # showed 25 where its weighted score was 42 — and the report orders its bars by
+    # this number, so the unweighted version could point a reader at five failing
+    # `low` items while a failing `critical` sat further down the page.
+    for key, c in by_cat.items():
         cs = c["counts"]
         dec = cs.get(PASS, 0) + cs.get(FAIL, 0) + cs.get(WARN, 0)
         c["decided"] = dec
-        c["score"] = round(100 * (cs.get(PASS, 0) + 0.5 * cs.get(WARN, 0)) / dec) if dec else None
+        earned_c = sum(SEVERITY_WEIGHT[g["severity"]] * (1.0 if g["status"] == PASS else
+                                                         0.5 if g["status"] == WARN else 0.0)
+                       for g in scored if g["category"] == key)
+        total_c = sum(SEVERITY_WEIGHT[g["severity"]]
+                      for g in scored if g["category"] == key)
+        c["score"] = round(100 * earned_c / total_c) if total_c else None
+        # What the bar cannot show: a single failing critical in an otherwise clean
+        # category still scores well, so the count travels with the score.
+        c["worst_open"] = next((s for s in ("critical", "high", "medium", "low")
+                               if any(g["severity"] == s and g["status"] in (FAIL, WARN)
+                                      for g in scored if g["category"] == key)), None)
 
     counts: dict[str, int] = {}
     for g in graded:
@@ -1254,23 +1262,58 @@ def looks_like_a_page(url: str) -> bool:
     return path[dot:].lower() not in ASSET_EXTENSIONS
 
 
+def stride(urls: list[str], limit: int) -> list[str]:
+    """Spread `limit` picks evenly across `urls`, keeping the first.
+
+    Sitemaps are ordered — by section, or by date — so taking the first N gathers
+    one corner of the site and calls it a sample. An even stride over the whole
+    list crosses every section a sitemap happens to be grouped by, and because the
+    step is arithmetic rather than random, two runs over an unchanged sitemap still
+    pick the same pages. Reproducibility is the constraint here, which is why this
+    is not `random.sample` with a seed: no state, nothing to store, nothing to
+    explain in the report.
+
+    The first URL is always kept — for a sitemap that leads with the home page,
+    dropping it would be perverse.
+    """
+    if limit <= 0:
+        return []
+    if len(urls) <= limit:
+        return list(urls)
+    if limit == 1:
+        return [urls[0]]
+    # Spread across the closed interval, so the first and the **last** URL are both
+    # picked. A plain `i * len/limit` step starts at 0 and stops a whole step short
+    # of the end, which leaves the tail of a large sitemap unreachable at any sample
+    # size — the same blind spot as taking the first N, moved to the other end.
+    last = len(urls) - 1
+    picked, seen = [], set()
+    for i in range(limit):
+        u = urls[round(i * last / (limit - 1))]
+        if u not in seen:
+            seen.add(u)
+            picked.append(u)
+    return picked
+
+
 def discover_urls(base_url: str, limit: int) -> list[str]:
     """Pick up to `limit` same-host URLs, sitemap first, on-page links second.
 
-    **These are the first N URLs in document order, not a sample.** Sitemaps are
-    usually ordered by section or by date, so the first N are systematically one
-    corner of the site — often the newest posts, or a single category — and two
-    sites with the same page count can yield sets of very different
-    representativeness. The report says "on 5 of 5 pages checked", which reads as
-    a sample and is not one. Known issue: see KNOWN-ISSUES.md. A deterministic
-    stride over the full list would keep reproducibility and drop the bias.
+    The picks are spread across the whole list by `stride()` rather than taken from
+    the top, so the set spans the site instead of its newest corner, and stays the
+    same across runs. On-page links are used only when no sitemap answers.
+
+    URLs that `robots.txt` disallows are dropped: these are pages *we* chose to
+    look at, not the URL the operator asked about, so the site's own instruction to
+    crawlers applies. The entry URL is always kept — a robots block on it is a
+    finding to report, not a reason to audit nothing.
 
     Returns [] when neither source yields anything — the caller then audits the
     single entry URL and says so, rather than claiming to have looked wider."""
     try:
-        from lib.safe_http import safe_get
+        from lib.safe_http import robots_allows, safe_get
     except ImportError:
-        from scripts.lib.safe_http import safe_get
+        from scripts.lib.safe_http import robots_allows, safe_get
     host = urlparse(base_url).netloc
     found: list[str] = []
 
@@ -1278,7 +1321,7 @@ def discover_urls(base_url: str, limit: int) -> list[str]:
         return urlparse(u).netloc == host
 
     for path in SITEMAP_PATHS:
-        if len(found) >= limit:
+        if found:
             break
         try:
             xml = safe_get(f"{urlparse(base_url).scheme}://{host}{path}", timeout=15).text
@@ -1312,8 +1355,24 @@ def discover_urls(base_url: str, limit: int) -> list[str]:
         except Exception:
             pass
 
+    # Deduplicate before striding, or the step lands repeatedly on the same page in
+    # a sitemap that lists a URL under several paths.
+    unique, seen_raw = [], set()
+    for u in found:
+        norm = u.rstrip("/") or u
+        if norm != (base_url.rstrip("/") or base_url) and norm not in seen_raw:
+            seen_raw.add(norm)
+            unique.append(norm)
+
+    # `limit - 1` because the entry URL takes one of the slots below.
+    candidates = stride(unique, max(limit - 1, 0))
+    allowed = [u for u in candidates if robots_allows(u)[0]]
+    if len(allowed) < len(candidates):
+        print(f"  {len(candidates) - len(allowed)} sampled URL(s) skipped: "
+              f"robots.txt disallows them", file=sys.stderr)
+
     seen, out = set(), []
-    for u in [base_url] + found:
+    for u in [base_url] + allowed:
         u = u.rstrip("/") or u
         if u not in seen:
             seen.add(u)

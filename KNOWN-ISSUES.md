@@ -1,15 +1,16 @@
 # Known issues
 
-What is wrong with this plugin as of **0.2.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.3.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
-the tree on 3 August 2026.
+the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
 
-Two ways to read the list. **Users:** items 1–4 change how you should read a
-report. **Contributors:** items 5–9 are where the work is.
+**Fixed in 0.3.0** and kept below the line for the record: `--sample` taking the
+first N sitemap URLs, the report's two incompatible scales, the crawlers ignoring
+`robots.txt`, and `broken_links.py` having no cap.
 
 ---
 
@@ -40,55 +41,13 @@ site.
 
 Not a small change: one new crawler plus five scripts rewritten to read a table.
 
-## 2. `--sample N` is not a sample
+Note what fixing 1 also fixes: robots.txt is honoured once in the shared crawler
+instead of five times, and the request volume stops being a property of how many
+scripts happen to want a crawl.
 
-`discover_urls()` takes the **first N URLs in sitemap document order**. Sitemaps
-are typically ordered by section or by date, so the first N are systematically one
-corner of the site — the newest posts, or a single category.
+## 2. 45 of the 55 evidence scripts have no unit test
 
-The report then says *"on 5 of 5 pages checked"*, which reads as a sample and is
-not one. Two sites with identical page counts can produce sets of completely
-different representativeness, and nothing in the output distinguishes them.
-
-A deterministic stride over the full sitemap (or a seed derived from the domain)
-would keep the reproducibility the whole tool is built on and remove the bias. One
-function.
-
-**Until then:** read `--sample` as "N pages from the top of the sitemap", not as
-evidence about the site as a whole.
-
-## 3. The report shows two different scales without saying so
-
-`seo_score` is weighted by severity. The per-category score is an unweighted pass
-rate, `(pass + 0.5 · warn) / decided`. Measured on one run:
-
-| Category | Shown in the bars | Weighted |
-|---|---|---|
-| Content | 25 | **42** |
-| Meta & Structured Data | 71 | **82** |
-
-So a reader comparing "Content: 25" against "SEO Score: 65" is comparing two
-formulas. Worse, the report **orders the category bars by the unweighted number**,
-so the "look here first" layer and the severity-ranked fix list below it can
-disagree about what matters most.
-
-## 4. The plugin's own crawlers ignore `robots.txt`
-
-No script consults `robots.txt` before crawling — nothing imports
-`urllib.robotparser` or calls `can_fetch`. The plugin *checks whether* a site's
-`robots.txt` blocks Google (`robots_checker.py`, `robots_path_tester.py`) while not
-consulting it for its own requests.
-
-Request pacing was added in 0.2.0 as the one safeguard that protects a third party
-rather than the audit's own honesty. This is the other half of that concern, and
-`urllib.robotparser` is in the standard library.
-
-Related: **`broken_links.py` has no upper bound.** It checks every link it finds,
-10 workers, no cap. A page with 300 links means 300 requests.
-
-## 5. 45 of the 55 evidence scripts have no unit test
-
-229 tests defend the *frame* — registry, runner, report — and do not touch the
+The tests defend the *frame* — registry, runner, report — and barely touch the
 *evidence*. Every verdict is the output of an untested script interpreted by a
 well-tested interpreter.
 
@@ -104,7 +63,7 @@ Seven of the untested scripts were written here: `gsc_links_csv.py`,
 Start with the scripts whose output decides a `critical` item. HTML fixtures, no
 network.
 
-## 6. There is no integration layer, and the SSRF guard prevents building one
+## 3. There is no integration layer, and the SSRF guard prevents building one
 
 `assert_safe_url()` rejects loopback and private addresses with no escape hatch, so
 you cannot point an audit at a fixture site on `127.0.0.1`. The live path —
@@ -122,21 +81,21 @@ Suggested shape: `--allow-private`, off by default, announced in the output when
 used, and a CI job that serves a fixture site and runs the full live path against
 it.
 
-## 7. The deliverable has no history
+## 4. The deliverable has no history
 
 `.seo-runs/` stores every run, and the runner prints a diff against the previous
 one — to the terminal, for one previous run, gone when the terminal closes. The
 report a client receives cannot say whether anything improved. A checklist is a
 thing people re-run; the data exists and does not reach the file.
 
-## 8. There is no machine-readable fix list
+## 5. There is no machine-readable fix list
 
 `checklist-results.json` is the full audit log, not a task list. Getting the
 actionable items into a tracker means parsing the report or filtering the log by
 hand. A CSV or JSON of just the fixes (id, severity, effort, URL, what to do) would
 be a few lines.
 
-## 9. Smaller, but they will bite
+## 6. Smaller, but they will bite
 
 - **`tools/probe_shapes.py` holds its job list by hand.** The tool used to verify
   script output shapes is not itself tied to the registry, so it can drift from the
@@ -156,6 +115,35 @@ be a few lines.
   report says which layers are untranslated on stderr.
 
 ---
+
+## Fixed in 0.3.0
+
+Kept because the reasoning is the useful part, and because a reader who saw the old
+warning deserves to find out what happened to it.
+
+- **`--sample N` took the first N sitemap URLs in document order.** Sitemaps are
+  ordered by section or by date, so that gathered one corner of the site while the
+  report said "5 of 5 pages checked". Now spread by an arithmetic stride across the
+  whole list — still reproducible, since the step is not random.
+- **The report showed two scales.** The per-category score was an unweighted pass
+  rate next to a severity-weighted headline: one category read 25 where its weighted
+  score was 42, and the bars were *ordered* by the unweighted number. Both now use
+  the same weighting, and each bar carries the worst open severity, because no single
+  number can show "one failing critical in an otherwise clean category".
+- **The crawlers ignored `robots.txt`.** Now honoured for pages the tool discovers
+  itself — followed links, sampled sitemap entries, and any redirect they land on —
+  and deliberately *not* for the URL the operator supplies, since a blanket check
+  would refuse the 40-odd scripts that fetch it and bury a `critical` finding under a
+  collapsed audit. `Crawl-delay` is obeyed when it asks for more patience than
+  `--max-rps`, ignored when it would ask for less.
+- **`broken_links.py` had no cap.** Now 200 links, internal first, and it reports
+  when it truncated.
+
+The subtle part of the robots change: `orphan_pages_from_sitemap.py` computes
+orphans as `sitemap − reachable`, so a URL we declined to fetch would have dropped
+out of `reachable` and been reported as an orphan — GO-137 fails on one. Refusals
+are tracked separately and subtracted, and a sitemap listing robots-blocked URLs is
+now its own finding, which is the sharper one anyway.
 
 ## Not defects
 

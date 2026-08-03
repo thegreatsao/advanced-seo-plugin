@@ -40,10 +40,15 @@ except ImportError:
 # Fetch helpers
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, timeout: int = 10) -> tuple:
-    """Return (final_url, html) or (url, '')."""
+def fetch_page(url: str, timeout: int = 10, respect_robots: bool = False) -> tuple:
+    """Return (final_url, html) or (url, '').
+
+    A robots refusal yields ('', url) like any other failure, and that is safe
+    here: an uncrawled page never enters the link graph, so it cannot be reported
+    as an orphan. It only means the graph is smaller than the site.
+    """
     try:
-        resp = safe_get(url, timeout=timeout)
+        resp = safe_get(url, timeout=timeout, respect_robots=respect_robots)
         return resp.url, resp.text
     except Exception:
         return url, ""
@@ -133,7 +138,9 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
         crawled.add(url)
 
         time.sleep(0.3)
-        final_url, html = fetch_page(url)
+        # Only `site_url` was supplied by the operator; the rest of the seed list
+        # came out of the sitemap, which makes it discovered.
+        final_url, html = fetch_page(url, respect_robots=url != site_url)
         if not html:
             continue
 

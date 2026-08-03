@@ -727,7 +727,12 @@ def render_html(data: dict, L: Lang | None = None) -> str:
 
     # -- Layer 2: where the problems are, as bars ------------------------------
     cats = [(key, cat) for key, cat in s["by_category"].items() if cat["decided"]]
-    cats.sort(key=lambda kv: kv[1]["score"] if kv[1]["score"] is not None else 101)
+    # Severity-weighted score, then the worst open severity as the tie-break: two
+    # categories on 80 are not equally urgent if one of them is holding a failing
+    # critical. Same ordering the fix list below uses, so the two layers agree
+    # about what to look at first.
+    cats.sort(key=lambda kv: (kv[1]["score"] if kv[1]["score"] is not None else 101,
+                              SEVERITY_ORDER.get(kv[1].get("worst_open"), 9)))
     if cats:
         parts.append(f'<section><h2>{html.escape(L.t("where", "Where the problems are"))}</h2>')
         for key, cat in cats:
@@ -741,6 +746,8 @@ def render_html(data: dict, L: Lang | None = None) -> str:
                 f'<div class="catmeta">'
                 + html.escape(L.t("cat_meta", "{decided} checked, {failed} need work")
                               .format(decided=cat["decided"], failed=failed))
+                + (f' · <b>{html.escape(L.sev(cat["worst_open"]))}</b>'
+                   if cat.get("worst_open") in ("critical", "high") else "")
                 + "</div></div>")
             help_text = L.category_help(key)
             if help_text and failed:

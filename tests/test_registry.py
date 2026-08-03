@@ -140,21 +140,14 @@ class DocsPointAtThingsThatExist(unittest.TestCase):
             self.assertIn("KNOWN-ISSUES.md", self._read(rel),
                           f"{rel} raises caveats but does not point at the list")
 
-    def test_the_sample_caveat_is_stated_wherever_sampling_is_described(self):
-        """--sample takes the first N sitemap URLs in document order. Every document
-        that describes it has to say so, or the one that does not is the one a reader
-        believes."""
-        for rel in ("README.md", os.path.join("skills", "seo-checklist", "SKILL.md")):
+    def test_no_document_still_carries_the_retracted_sample_caveat(self):
+        """`--sample` spreads its picks across the sitemap as of 0.3.0. The caveat
+        that said otherwise was correct when written and is now the wrong thing to
+        tell a reader — a stale warning costs the same trust as a missing one."""
+        for rel in self.DOCS + ("skills/seo-checklist/scripts/checklist_runner.py",):
             text = self._read(rel)
-            self.assertIn("document order", text,
-                          f"{rel} describes --sample without saying it is not a sample")
-
-    def test_the_runner_docstring_does_not_claim_to_sample(self):
-        with open(os.path.join(SCRIPTS, "checklist_runner.py"), encoding="utf-8") as f:
-            src = f.read()
-        start = src.index("def discover_urls(")
-        doc = src[start:start + 1200]
-        self.assertIn("not a sample", doc)
+            self.assertNotIn("document order, not a", text, f"{rel} is out of date")
+            self.assertNotIn("is not a sample", text, f"{rel} is out of date")
 
 
 class VersionAndChangelog(unittest.TestCase):

@@ -177,6 +177,122 @@ def pace(host: str, rps: float | None = None) -> float:
                 pass
 
 
+# ---------------------------------------------------------------------------
+# robots.txt
+# ---------------------------------------------------------------------------
+
+# The bare product token, never the full User-Agent string. `RobotFileParser`
+# matches by splitting the agent at the first "/" and lowercasing it, so passing
+# our full UA — "Mozilla/5.0 (compatible; AgenticSEOSkill/1.0; ...)" — yields
+# "mozilla", and a site that names AgenticSEOSkill explicitly would be silently
+# ignored while `*` rules applied instead. Verified against CPython's
+# Entry.applies_to; there is a test.
+ROBOTS_TOKEN = "AgenticSEOSkill"
+
+# Cached on disk rather than per process. Every evidence script is its own
+# process, so an in-process cache would fetch /robots.txt 45 times per audit —
+# the same fan-out the pacing slots exist to avoid.
+ROBOTS_CACHE_TTL = 1800.0
+ROBOTS_MAX_BYTES = 512 * 1024
+
+
+class RobotsDisallowed(SafeHTTPError):
+    """Raised when robots.txt forbids a URL we discovered ourselves."""
+
+
+def _robots_cache_path(origin: str) -> str:
+    digest = hashlib.sha256(origin.encode("utf-8", "replace")).hexdigest()[:32]
+    return os.path.join(RATE_LIMIT_DIR, f"{digest}.robots")
+
+
+def _read_robots_cache(path: str) -> str | None:
+    try:
+        if time.time() - os.path.getmtime(path) > ROBOTS_CACHE_TTL:
+            return None
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _write_robots_cache(path: str, text: str) -> None:
+    try:
+        os.makedirs(RATE_LIMIT_DIR, exist_ok=True)
+        tmp = f"{path}.{os.getpid()}"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def _fetch_robots(origin: str) -> str:
+    """The robots.txt body, or "" when there is nothing to obey.
+
+    Fail-open on every error, including 5xx. RFC 9309 lets a crawler treat a
+    server error as a full disallow, and for an unattended crawler discovering
+    content that is the right default — but this is an audit the site's own
+    operator asked for, against a URL they supplied. Refusing to look because
+    robots.txt returned 503 would turn a transient hiccup into an audit of
+    nothing, which is a worse answer than a slightly impolite one. Deliberate,
+    and the reason is here so it can be argued with.
+    """
+    try:
+        response = requests.get(  # not safe_get: that would recurse into this
+            urljoin(origin, "/robots.txt"),
+            headers=default_headers(),
+            timeout=10,
+            allow_redirects=True,
+            verify=True,
+        )
+        if response.status_code != 200:
+            return ""
+        return response.content[:ROBOTS_MAX_BYTES].decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def robots_policy(url: str):
+    """`(RobotFileParser, crawl_delay)` for a URL's origin. Never raises."""
+    from urllib.robotparser import RobotFileParser
+
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        return None, 0.0
+    origin = f"{parsed.scheme or 'https'}://{parsed.netloc}"
+    path = _robots_cache_path(origin)
+    text = _read_robots_cache(path)
+    if text is None:
+        _require_requests()
+        pace(parsed.hostname)
+        text = _fetch_robots(origin)
+        _write_robots_cache(path, text)
+    if not text.strip():
+        return None, 0.0
+    parser = RobotFileParser()
+    try:
+        parser.parse(text.splitlines())
+        delay = parser.crawl_delay(ROBOTS_TOKEN)
+    except Exception:  # noqa: BLE001
+        # A robots.txt we cannot parse is not a disallow.
+        return None, 0.0
+    return parser, float(delay or 0.0)
+
+
+def robots_allows(url: str) -> tuple[bool, float]:
+    """`(allowed, crawl_delay)`. Unreadable or absent robots.txt allows."""
+    try:
+        parser, delay = robots_policy(url)
+    except Exception:  # noqa: BLE001
+        return True, 0.0
+    if parser is None:
+        return True, 0.0
+    try:
+        return bool(parser.can_fetch(ROBOTS_TOKEN, url)), delay
+    except Exception:  # noqa: BLE001
+        return True, delay
+
+
 def retry_after_seconds(response) -> float:
     """How long a 429/503 asked us to wait, 0 when it did not ask.
 
@@ -281,11 +397,28 @@ def safe_request(
     max_response_bytes: int | None = DEFAULT_MAX_RESPONSE_BYTES,
     stream: bool = False,
     session=None,
+    respect_robots: bool = False,
     **kwargs,
 ):
     """
     Execute an HTTP request with SSRF guards, redirect checks, TLS verification,
     timeouts, and a response-size cap.
+
+    `respect_robots` is opt-in, and the asymmetry is the design: **robots.txt
+    governs URLs we discovered ourselves, not the URL the operator handed us.**
+
+    Pass it when following links, walking a sitemap or expanding a crawl. Leave it
+    off for the audit target. A blanket check here would be worse than none: if the
+    requested page is disallowed, every one of the 40-odd scripts that fetches
+    `{url}` would be refused, the audit would collapse to NO_DATA everywhere, and
+    the finding that actually matters — "this page is blocked from crawling", a
+    `critical` checklist item — would be buried under the wreckage instead of
+    reported. The operator asked for this URL; the block is a result, not a
+    prohibition.
+
+    A `Crawl-delay` in robots.txt is honoured when it is *slower* than the
+    configured rate. Faster is ignored — the site cannot talk us into being less
+    polite than we chose to be.
     """
     _require_requests()
     current = assert_safe_url(url)
@@ -294,10 +427,15 @@ def safe_request(
     history = []
     method = method.upper()
     kwargs["verify"] = True
+    robots_delay = 0.0
+    if respect_robots:
+        allowed, robots_delay = robots_allows(current)
+        if not allowed:
+            raise RobotsDisallowed(f"robots.txt disallows {current} for {ROBOTS_TOKEN}")
 
     for _ in range(max_redirects + 1):
         response = _paced_request(requester, method, current, request_headers,
-                                  timeout, kwargs)
+                                  timeout, kwargs, robots_delay)
 
         if not (allow_redirects and response.is_redirect):
             response.history = history
@@ -324,6 +462,14 @@ def safe_request(
             raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
 
         next_url = assert_safe_url(urljoin(current, location))
+        if respect_robots:
+            # A redirect can land on a path robots.txt forbids, and following it
+            # because the first hop was allowed would make the rule trivially
+            # avoidable by any site that redirects.
+            allowed, robots_delay = robots_allows(next_url)
+            if not allowed:
+                raise RobotsDisallowed(
+                    f"robots.txt disallows {next_url} (redirected from {current})")
         if response.status_code == 303 and method not in ("GET", "HEAD"):
             method = "GET"
             kwargs.pop("data", None)
@@ -333,7 +479,24 @@ def safe_request(
     raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
 
 
-def _paced_request(requester, method, url, headers, timeout, kwargs):
+def _rate_for(crawl_delay: float) -> float | None:
+    """Requests/second for a host, respecting a slower `Crawl-delay` if asked.
+
+    Returns None to mean "use the configured default". A delay that would make us
+    *faster* than the configured rate is ignored: robots.txt can ask for more
+    patience, never for less.
+    """
+    if crawl_delay <= 0:
+        return None
+    asked = 1.0 / crawl_delay
+    configured = max_rps()
+    if configured <= 0:
+        return None          # pacing switched off deliberately; leave it off
+    return min(asked, configured)
+
+
+def _paced_request(requester, method, url, headers, timeout, kwargs,
+                   crawl_delay: float = 0.0):
     """One request, paced before it goes out and retried once if asked to back off.
 
     The retry is deliberately single and bounded. A server that answers 429 has
@@ -341,14 +504,15 @@ def _paced_request(requester, method, url, headers, timeout, kwargs):
     hour-long Retry-After inside an audit — are both worse than letting the item
     report NO_DATA with the reason attached.
     """
-    pace(urlparse(url).hostname or "")
+    rate = _rate_for(crawl_delay)
+    pace(urlparse(url).hostname or "", rate)
     response = requester.request(method, url, headers=headers, timeout=timeout,
                                  allow_redirects=False, stream=True, **kwargs)
     wait = retry_after_seconds(response)
     if 0 < wait <= MAX_RETRY_AFTER_WAIT:
         response.close()
         time.sleep(wait)
-        pace(urlparse(url).hostname or "")
+        pace(urlparse(url).hostname or "", rate)
         response = requester.request(method, url, headers=headers, timeout=timeout,
                                      allow_redirects=False, stream=True, **kwargs)
     return response
@@ -360,6 +524,16 @@ def safe_get(url: str, **kwargs):
 
 def safe_head(url: str, **kwargs):
     return safe_request("HEAD", url, **kwargs)
+
+
+def crawl_get(url: str, **kwargs):
+    """`safe_get` for a URL we discovered ourselves — robots.txt applies.
+
+    Named separately so a call site reads as what it is. Every crawl loop should
+    use this; a fetch of the operator's own target should not.
+    """
+    kwargs.setdefault("respect_robots", True)
+    return safe_request("GET", url, **kwargs)
 
 
 def safe_post(url: str, **kwargs):

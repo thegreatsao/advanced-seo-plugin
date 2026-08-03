@@ -151,3 +151,39 @@ jobs:
           assert d["entry_guard"] is None, f"guard fired on a real page: {d['entry_guard']}"
           assert d["scores"]["decided"] > 0, "decided nothing on a readable page"
           PY
+
+      # robots.txt governs what the tool discovers, never what it was handed. Both
+      # halves fail silently if reversed: a blanket check would refuse the 40-odd
+      # scripts that fetch {url} and collapse the audit to NO_DATA, while no check
+      # at all crawls somebody's site against their stated wishes. The signature
+      # default is the whole guarantee, so it is asserted here as well as in the
+      # test suite — this one runs even if the suite is skipped.
+      - name: robots.txt applies to discovered URLs, not to the audit target
+        run: |
+          cd skills/seo-checklist/scripts
+          python - <<'PY'
+          import inspect, sys
+          sys.path.insert(0, ".")
+          from lib import safe_http as sh
+          import seo_common
+
+          for fn in (sh.safe_request, seo_common.fetch_url):
+              d = inspect.signature(fn).parameters["respect_robots"].default
+              assert d is False, f"{fn.__qualname__} opts in by default ({d!r})"
+
+          assert "/" not in sh.ROBOTS_TOKEN, (
+              "the token must be bare: RobotFileParser splits the agent at '/', so a "
+              "full User-Agent makes rules naming us silently inapplicable")
+
+          sh._fetch_robots = lambda origin: (_ for _ in ()).throw(RuntimeError("down"))
+          assert sh.robots_allows("https://example.com/x") == (True, 0.0), (
+              "an unreachable robots.txt must allow, not fail the audit")
+
+          sh._fetch_robots = lambda origin: f"User-agent: {sh.ROBOTS_TOKEN}\nDisallow: /no\n"
+          import shutil, tempfile
+          sh.RATE_LIMIT_DIR = tempfile.mkdtemp()
+          assert sh.robots_allows("https://example.com/no/x")[0] is False
+          assert sh.robots_allows("https://example.com/yes")[0] is True
+          shutil.rmtree(sh.RATE_LIMIT_DIR, ignore_errors=True)
+          print("robots policy holds")
+          PY

@@ -63,13 +63,26 @@ def crawl_reachable_pages(start_url: str, depth: int = 2, max_pages: int = 100, 
     queue = deque([(start_url, 0)])
     reachable = {}
     errors = []
+    robots_skipped: set[str] = set()
 
     while queue and len(reachable) < max_pages:
         url, current_depth = queue.popleft()
         key = _page_key(url)
-        if key in reachable or current_depth > depth:
+        if key in reachable or key in robots_skipped or current_depth > depth:
             continue
-        fetched = fetch_url(url, timeout=timeout, max_bytes=2_000_000)
+        # Depth 0 is the URL the operator asked about and is always fetched.
+        # Anything deeper we discovered ourselves, so robots.txt governs it.
+        fetched = fetch_url(url, timeout=timeout, max_bytes=2_000_000,
+                            respect_robots=current_depth > 0)
+        if fetched.get("robots_blocked"):
+            # Kept out of `reachable` **and** out of the orphan arithmetic below.
+            # Orphans are `sitemap - reachable`, so letting a page we chose not to
+            # fetch drop out of `reachable` would manufacture a site defect from
+            # our own politeness — and GO-137 fails on a single orphan. Reported
+            # separately: a sitemap listing a robots-blocked URL is a real finding,
+            # just not this one.
+            robots_skipped.add(key)
+            continue
         reachable[key] = {
             "url": key,
             "status": fetched.get("status"),
@@ -90,7 +103,8 @@ def crawl_reachable_pages(start_url: str, depth: int = 2, max_pages: int = 100, 
                 if target not in reachable and len(reachable) + len(queue) < max_pages:
                     queue.append((target, current_depth + 1))
 
-    return {"pages": reachable, "errors": errors}
+    return {"pages": reachable, "errors": errors,
+            "robots_skipped": sorted(robots_skipped)}
 
 
 def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, depth: int = 2, max_pages: int = 100, timeout: int = 15) -> dict:
@@ -99,16 +113,27 @@ def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, dept
     crawl = crawl_reachable_pages(site_url, depth=depth, max_pages=max_pages, timeout=timeout)
     sitemap_set = set(sitemap["urls"])
     reachable_set = set(crawl["pages"])
+    robots_set = set(crawl.get("robots_skipped") or ())
     for page in crawl["pages"].values():
         page["in_sitemap"] = page["url"] in sitemap_set
 
-    orphan_urls = sorted(sitemap_set - reachable_set)
+    # Subtracting `robots_set` is the whole point: a page robots.txt told us not to
+    # fetch is not unreachable, we just did not look. Counting it as an orphan would
+    # turn our own restraint into the site's failure.
+    orphan_urls = sorted(sitemap_set - reachable_set - robots_set)
     discovered_not_in_sitemap = sorted(reachable_set - sitemap_set)
+    sitemap_blocked_by_robots = sorted(sitemap_set & robots_set)
     issues = []
     if orphan_urls:
         issues.append({"severity": "warning", "type": "sitemap_orphans", "count": len(orphan_urls), "message": "Sitemap URLs were not reached by crawl"})
     if discovered_not_in_sitemap:
         issues.append({"severity": "info", "type": "crawl_only_pages", "count": len(discovered_not_in_sitemap), "message": "Crawled URLs are not present in sitemap"})
+    if sitemap_blocked_by_robots:
+        # A finding in its own right, and a sharper one than "orphan": the site is
+        # asking search engines to index URLs it also forbids them to fetch.
+        issues.append({"severity": "warning", "type": "sitemap_robots_conflict",
+                       "count": len(sitemap_blocked_by_robots),
+                       "message": "Sitemap lists URLs that robots.txt disallows"})
 
     return {
         "site": site_url,
@@ -118,10 +143,14 @@ def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, dept
             "reachable_pages": len(reachable_set),
             "orphan_pages": len(orphan_urls),
             "discovered_not_in_sitemap": len(discovered_not_in_sitemap),
+            "robots_skipped": len(robots_set),
+            "sitemap_urls_blocked_by_robots": len(sitemap_blocked_by_robots),
         },
         "sitemaps_checked": sitemap["sitemaps_checked"],
         "orphan_pages": orphan_urls,
         "discovered_not_in_sitemap": discovered_not_in_sitemap,
+        "robots_skipped": sorted(robots_set),
+        "sitemap_urls_blocked_by_robots": sitemap_blocked_by_robots,
         "reachable_pages": list(crawl["pages"].values()),
         "issues": issues,
         "errors": {"sitemap": sitemap["errors"], "crawl": crawl["errors"]},

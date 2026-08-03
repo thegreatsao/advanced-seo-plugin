@@ -103,24 +103,37 @@ def check_link(link: dict, timeout: int = 10) -> dict:
     return result
 
 
+# A page with 300 links used to mean 300 requests, with nothing bounding it. The
+# cap exists so the request budget is a property of the tool rather than of
+# whatever page it was pointed at — and it is reported, because a truncated check
+# that says "300 links, 200 checked" is honest where a silent one is not.
+DEFAULT_MAX_LINKS = 200
+
+
 def check_broken_links(url: str, internal_only: bool = False,
-                       max_workers: int = 10, timeout: int = 10) -> dict:
+                       max_workers: int = 10, timeout: int = 10,
+                       max_links: int = DEFAULT_MAX_LINKS) -> dict:
     """
-    Check all links on a page for broken links.
+    Check the links on a page, up to `max_links` of them.
 
     Args:
         url: Page URL to check
         internal_only: Only check internal links
         max_workers: Concurrent request threads
         timeout: Per-request timeout in seconds
+        max_links: Upper bound on links checked; 0 means no bound
 
     Returns:
-        Dictionary with all link check results
+        Dictionary with all link check results. `total_links` is what the page has,
+        `checked` is what was actually requested, and `truncated` says whether the
+        two differ — `summary.broken` counts only what was checked, so a capped run
+        can understate and never overstate.
     """
     result = {
         "page_url": url,
         "total_links": 0,
         "checked": 0,
+        "truncated": False,
         "broken": [],
         "redirected": [],
         "timeout": [],
@@ -151,6 +164,15 @@ def check_broken_links(url: str, internal_only: bool = False,
     if not links:
         result["issues"].append("⚠️ No links found on page")
         return result
+
+    if max_links and len(links) > max_links:
+        # Internal links first: they are the ones this site can actually fix, and a
+        # truncated check should spend its budget where the findings are actionable.
+        links = sorted(links, key=lambda l: not l["is_internal"])[:max_links]
+        result["truncated"] = True
+        result["issues"].append(
+            f"⚠️ Page has {result['total_links']} links; checked the first "
+            f"{max_links} (internal first). Raise --max-links to check them all")
 
     # Check all links concurrently
     checked = []
@@ -215,10 +237,14 @@ def main():
                         help="Concurrent workers (default: 10)")
     parser.add_argument("--timeout", "-t", type=int, default=10,
                         help="Per-link timeout in seconds (default: 10)")
+    parser.add_argument("--max-links", type=int, default=DEFAULT_MAX_LINKS,
+                        help=f"Maximum links to check, internal first; 0 for no "
+                             f"limit (default: {DEFAULT_MAX_LINKS})")
 
     args = parser.parse_args()
     result = check_broken_links(args.url, internal_only=args.internal_only,
-                                max_workers=args.workers, timeout=args.timeout)
+                                max_workers=args.workers, timeout=args.timeout,
+                                max_links=args.max_links)
 
     if args.json:
         print(json.dumps(result, indent=2))

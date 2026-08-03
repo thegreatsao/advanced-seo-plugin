@@ -120,9 +120,13 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
     pages_linking_to = defaultdict(set)  # url -> set of pages linking to it
     pages_found_at_depth = defaultdict(list)
 
-    def fetch_page(url):
+    def fetch_page(url, respect_robots=False):
+        # Depth 0 is the operator's own URL; deeper pages we discovered by following
+        # links, so robots.txt governs them. A refusal shrinks the crawl and cannot
+        # invent a finding: this script reports on links it actually saw.
         try:
-            resp = safe_get(url, timeout=timeout, headers=HEADERS, allow_redirects=True)
+            resp = safe_get(url, timeout=timeout, headers=HEADERS,
+                            allow_redirects=True, respect_robots=respect_robots)
             if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
                 return resp.text, resp.url
         except requests.exceptions.RequestException:
@@ -144,7 +148,8 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
 
         # Fetch pages concurrently
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(fetch_page, url): (url, depth) for url, depth in batch}
+            futures = {executor.submit(fetch_page, url, depth > 0): (url, depth)
+                       for url, depth in batch}
             for future in as_completed(futures):
                 url, depth = futures[future]
                 html, final_url = future.result()

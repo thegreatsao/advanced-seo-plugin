@@ -10,6 +10,64 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.3.0 — 3 August 2026
+
+Registry unchanged (`5bf1e36d657f`, 214 items). Tests 229 → 248.
+
+Three fixes from the post-0.2.0 review, all of which change numbers a run prints.
+None of them was a fabricated verdict; each overstated **how much of a site was
+looked at, or how comparable two numbers were.**
+
+### Changed — numbers move
+
+- **`--sample N` now spans the site.** It took the first N URLs in sitemap document
+  order, and sitemaps are ordered by section or by date, so it collected one corner
+  and the report said "on 5 of 5 pages checked". Picks are now spread by an
+  arithmetic stride across the whole list, covering both ends. Still reproducible —
+  the step is arithmetic, not random, so an unchanged sitemap yields the same pages
+  next month. **Expect different sampled pages, and therefore different verdicts,
+  than 0.2.0 reported on the same site.**
+- **The per-category scores are weighted by severity**, like the headline SEO Score
+  they sit next to. They were an unweighted pass rate: one category read 25 where
+  its weighted score was 42, and the report *ordered* its bars by the unweighted
+  number, so "look here first" could point past a failing `critical` at five failing
+  `low`s. Each bar now also carries the worst open severity, because no single
+  number can express "one failing critical in an otherwise clean category".
+- **`robots.txt` is honoured for pages the tool discovers itself** — followed links,
+  sampled sitemap entries, and any redirect those land on. It is deliberately **not**
+  consulted for the URL the operator supplies. A blanket check would refuse the
+  40-odd scripts that fetch `{url}`, collapse the audit to `NO_DATA`, and bury the
+  finding that matters: "this page is blocked from crawling" is a `critical`
+  checklist item, a result rather than a prohibition. `Crawl-delay` is obeyed when it
+  asks for more patience than `--max-rps` allows and ignored when it would ask for
+  less — a site can tell us to slow down, not to be less careful than we chose.
+- **`broken_links.py` checks at most 200 links**, internal first, and reports
+  `truncated` when it did. It previously checked every link on the page with no
+  bound: 300 links meant 300 requests.
+
+### Fixed
+
+- **A robots refusal could have invented a FAIL.** `orphan_pages_from_sitemap.py`
+  computes orphans as `sitemap − reachable`, and GO-137 fails on one, so a URL we
+  declined to fetch would have left `reachable` and been reported as an orphan —
+  our own politeness rendered as the site's defect. Refusals are tracked separately
+  and subtracted, and a sitemap listing robots-blocked URLs is now its own finding,
+  which is the sharper one anyway.
+- **The robots check uses the bare product token, not the full User-Agent.**
+  `RobotFileParser` splits the agent at the first `/` and lowercases it, so passing
+  `Mozilla/5.0 (compatible; AgenticSEOSkill/1.0; …)` yields `mozilla` — a site whose
+  `robots.txt` names `AgenticSEOSkill` would have been silently ignored while `*`
+  rules applied instead. Verified against CPython's `Entry.applies_to`; there is a
+  test.
+- **robots.txt is cached on disk**, not per process, so 45 evidence scripts in 45
+  processes fetch it once between them rather than 45 times.
+
+Every robots failure path is fail-open: an absent, unreachable, unparseable or
+5xx `robots.txt` allows the request. RFC 9309 permits treating a server error as a
+full disallow, and for an unattended crawler that is right, but this is an audit
+the site's own operator asked for. Refusing to look because `robots.txt` returned
+503 turns a transient hiccup into an audit of nothing.
+
 ## 0.2.0 — 3 August 2026
 
 Registry `7b8c8a3295fd` (211 items) → `5bf1e36d657f` (214 items).
@@ -119,25 +177,16 @@ somewhere specific.
 - Three script counts in `plugin.json`, `CREDITS.md` and the research record
   disagreed with each other and with the tree.
 
-### Known issues in this release
+### Known issues found after this release
 
-A full review after the release measured nine defects and gaps, ranked with their
-evidence in [KNOWN-ISSUES.md](KNOWN-ISSUES.md). The four that change how a 0.2.0
-report should be read:
+A full review measured nine defects and gaps, ranked with their evidence in
+[KNOWN-ISSUES.md](KNOWN-ISSUES.md). None of them fabricates a verdict — that class
+of bug is what this release fixed. They overstate how much of a site was looked at
+and how comparable two numbers are, which is the next class down.
 
-- **`--sample N` is the first N sitemap URLs in document order, not a sample.** The
-  report's "on 5 of 5 pages checked" reads as representative and is not.
-- **The per-category scores are unweighted**, while the headline SEO Score is
-  weighted by severity — two scales in one document, and the category bars are
-  ordered by the unweighted one.
-- **A single audit fetches the same pages ~275 times**, because five scripts crawl
-  independently and nothing is cached. Pacing limits the rate, not the volume.
-- **The crawlers do not consult `robots.txt`**, and `broken_links.py` has no cap on
-  how many links it checks.
-
-None of these fabricate a verdict — that class of bug is what the release fixed.
-They overstate how much of a site was looked at and how comparable two numbers are,
-which is the next class down and is now written where a reader will find it.
+Four were fixed in 0.3.0; see that entry. The largest is still open: a single audit
+fetches the same pages ~275 times, because five scripts crawl independently and
+nothing is cached.
 
 ## 0.1.0 — 3 August 2026
 

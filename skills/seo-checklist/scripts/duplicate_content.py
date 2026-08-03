@@ -44,9 +44,16 @@ THIN_CONTENT_THRESHOLDS = {
 # Fetch & extract
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, timeout: int = 12) -> str:
+def fetch_page(url: str, timeout: int = 12, respect_robots: bool = False) -> str:
+    """The page HTML, or "" for anything that is not fetchable HTML.
+
+    `respect_robots` belongs on pages found by following links, not on the URL the
+    operator handed us. Returning "" for a robots refusal is safe here: fewer pages
+    crawled means fewer duplicate pairs found, which understates and cannot
+    fabricate.
+    """
     try:
-        resp = safe_get(url, timeout=timeout)
+        resp = safe_get(url, timeout=timeout, respect_robots=respect_robots)
         ct = resp.headers.get("Content-Type", "")
         if "text/html" not in ct:
             return ""
@@ -184,7 +191,7 @@ def crawl_site(start_url: str, max_pages: int = 50, depth: int = 2) -> dict:
         url, d = queue.pop(0)
         time.sleep(0.5)  # polite delay
 
-        html = fetch_page(url)
+        html = fetch_page(url, respect_robots=d > 0)
         if not html:
             continue
 

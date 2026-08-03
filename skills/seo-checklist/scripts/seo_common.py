@@ -24,9 +24,11 @@ except ImportError:  # pragma: no cover - exercised by users without deps
     BeautifulSoup = None
 
 try:
-    from lib.safe_http import AGENTIC_SEO_USER_AGENT, safe_request
+    from lib.safe_http import (AGENTIC_SEO_USER_AGENT, RobotsDisallowed,
+                               safe_request)
 except ImportError:
-    from scripts.lib.safe_http import AGENTIC_SEO_USER_AGENT, safe_request
+    from scripts.lib.safe_http import (AGENTIC_SEO_USER_AGENT, RobotsDisallowed,
+                                       safe_request)
 
 
 USER_AGENT = AGENTIC_SEO_USER_AGENT
@@ -94,7 +96,17 @@ def fetch_url(
     allow_redirects: bool = True,
     max_bytes: int = 2_000_000,
     extra_headers: dict | None = None,
+    respect_robots: bool = False,
 ) -> dict:
+    """Fetch a URL through the shared safe, paced HTTP path.
+
+    Pass `respect_robots=True` for a URL found by crawling, never for the one the
+    operator asked about — see `lib.safe_http.safe_request` for why the asymmetry
+    matters. A refusal arrives as `result["error"]` naming robots.txt, and
+    `result["robots_blocked"]` is True. A caller that counts errors as site defects
+    **must** separate those out: a page we politely declined to fetch is not a page
+    the site got wrong.
+    """
     require_requests()
     url = normalize_url(url)
     parsed = urlparse(url)
@@ -107,6 +119,7 @@ def fetch_url(
         "bytes": 0,
         "redirect_chain": [],
         "error": None,
+        "robots_blocked": False,
     }
     if parsed.scheme not in ("http", "https"):
         result["error"] = f"Unsupported URL scheme: {parsed.scheme}"
@@ -124,6 +137,7 @@ def fetch_url(
             timeout=timeout,
             allow_redirects=allow_redirects,
             max_response_bytes=max_bytes,
+            respect_robots=respect_robots,
         )
         result["url"] = response.url
         result["status"] = response.status_code
@@ -133,6 +147,11 @@ def fetch_url(
         if method.upper() != "HEAD":
             result["bytes"] = len(response.content)
             result["text"] = response.text
+    except RobotsDisallowed as exc:
+        # Flagged, not merely errored. Callers that turn "not fetched" into a site
+        # defect have to be able to tell our restraint from the site's problem.
+        result["error"] = str(exc)
+        result["robots_blocked"] = True
     except requests.exceptions.RequestException as exc:
         result["error"] = str(exc)
     return result

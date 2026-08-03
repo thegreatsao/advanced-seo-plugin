@@ -4,13 +4,13 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.2.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
-in 0.1.0 in ways that *lower* the reported numbers, which is the point: the entries
-say which verdicts used to be fabricated.
+Version 0.3.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+in earlier versions in ways that *lower* the reported numbers, which is the point:
+the entries say which verdicts used to be fabricated.
 
-Read [KNOWN-ISSUES.md](KNOWN-ISSUES.md) before you rely on a report. Nine defects
-and gaps are measured and ranked there; four of them change how the numbers should
-be read, starting with the fact that `--sample` is not a sample.
+[KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
+measured rather than suspected. The largest is that five scripts crawl
+independently, so one audit fetches the same pages around 275 times.
 
 ## Why it exists
 
@@ -124,16 +124,22 @@ a test enforces it. An unknown name is an error, not a silent fallback.
 
 ### Several pages at once
 
-`--sample N` collects up to N same-host URLs (sitemap first, on-page links
-second) and runs the page-level checks against each; site-level checks still run
-once. The worst verdict wins, but the evidence carries the count — `1/5 pages:
-title is 61 characters` is exactly what a single-page audit would have missed.
+`--sample N` picks N same-host URLs (sitemap first, on-page links second) and runs
+the page-level checks against each; site-level checks still run once. The worst
+verdict wins, but the evidence carries the count — `1/5 pages: title is 61
+characters` is exactly what a single-page audit would have missed.
 
-> **These are the first N URLs in document order, not a statistical sample.**
-> Sitemaps are usually ordered by section or by date, so the first N tend to be one
-> corner of the site. The report says "on 5 of 5 pages checked", which reads as a
-> sample and is not one — read it as "N pages from the top of the sitemap". Known
-> issue, see [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
+The picks are spread evenly across the sitemap rather than taken from the top.
+Sitemaps are ordered — by section, or by date — so the first N gathers the newest
+corner of one category and calls it a sample; an even stride crosses whatever the
+sitemap is grouped by. The step is arithmetic, not random, so an unchanged sitemap
+yields the same pages next month, which is the constraint the whole tool is built
+on. Until 0.3.0 this took the first N and the report still said "5 of 5 pages
+checked"; it now spans the site.
+
+The entry URL is always included. Sampled URLs that `robots.txt` disallows are
+dropped and the count is printed — those are pages *we* chose to look at, so the
+site's instruction to crawlers applies, which is not true of the URL you handed in.
 
 Candidates come from `<a href>` only, asset extensions are rejected by path, and
 anything served as a non-page is dropped at fetch time. Because the worst verdict
@@ -340,11 +346,26 @@ more useful than an audit that appears to hang. A `Retry-After` on any other sta
 is ignored — some CDNs send it on a 200, and sleeping on that would pace the audit
 to somebody else's cache policy.
 
-Two gaps in this, both recorded in [KNOWN-ISSUES.md](KNOWN-ISSUES.md) and both
-about the audited site rather than the audit: **the crawlers do not consult
-`robots.txt`** before requesting a page, and five of them crawl independently, so a
-single audit fetches the same pages around 275 times. Pacing limits the rate, not
-the volume.
+**`robots.txt` is obeyed for pages the tool finds itself** — links it follows,
+sitemap entries it samples, and any redirect those land on. It is *not* consulted
+for the URL you hand the tool. That asymmetry is deliberate and it is the only
+defensible reading: a blanket check would mean that auditing a disallowed page
+refuses every one of the 40-odd checks that fetch it, collapsing the audit to
+`NO_DATA` and burying the finding that matters — "this page is blocked from
+crawling" is a `critical` checklist item, a result rather than a prohibition. You
+asked for that URL; robots.txt governs what a crawler discovers on its own.
+
+A `Crawl-delay` is honoured when it asks for more patience than `--max-rps`
+allows. A `Crawl-delay` that would make us faster is ignored: a site can ask us to
+slow down, not to be less careful than we chose to be. Refusals are visible —
+`orphan_pages_from_sitemap.py` reports them as `robots_skipped` rather than letting
+them count as unreachable pages, because that would turn our own restraint into the
+site's defect. `broken_links.py` checks at most 200 links (internal first) and says
+when it truncated.
+
+One gap remains, recorded in [KNOWN-ISSUES.md](KNOWN-ISSUES.md): five scripts crawl
+independently, so a single audit still fetches the same pages around 275 times.
+Pacing limits the rate, not the volume.
 
 ## Measuring the rendered page
 

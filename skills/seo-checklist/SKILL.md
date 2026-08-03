@@ -113,11 +113,11 @@ fails for the site, but the evidence always carries the count: `3/8 pages: ...`
 never reads the same as every page. When no second URL can be found the run says
 so and audits the single page rather than pretending to have sampled.
 
-**Say what the sample is when you report it.** These are the first N URLs in
-sitemap document order, not a statistical sample — sitemaps are usually ordered by
-section or by date, so they tend to be one corner of the site. Describe it as "N
-pages from the top of the sitemap", never as "the site". Known issue, recorded in
-`KNOWN-ISSUES.md`.
+The picks are spread evenly across the sitemap, not taken from the top, so they
+cross whatever the sitemap is grouped by. The step is arithmetic, so an unchanged
+sitemap gives the same pages on the next run. **Still say how many pages were
+looked at** — "5 of 214 pages" is the honest phrasing, never "the site" — and note
+that sampled URLs `robots.txt` disallows are dropped, with the count printed.
 
 Only real pages enter the sample. Candidates come from `<a href>` alone, asset
 extensions are rejected by path, and anything whose `Content-Type` is not a page
@@ -368,6 +368,22 @@ Absence of a field is `NO_DATA`, not `PASS`. An item only passes on absence when
 its rule sets `missing_is: pass` — a parser that never emits a key must not be
 read as the site being clean.
 
+## Politeness, and what it does not cover
+
+Requests are paced to 4/second/host by default, shared across the concurrently
+running scripts through a lock file (`--max-rps`, `SEO_MAX_RPS`). `robots.txt` is
+honoured for pages the tool **discovers** — followed links, sampled sitemap
+entries, redirects those land on — and deliberately not for the URL you were given
+to audit: a block on that URL is a `critical` finding to report, not a reason to
+audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
+configured rate.
+
+What this does not fix: five scripts still crawl independently, so one audit can
+fetch the same pages around 275 times. Pacing bounds the rate, not the volume. If
+a site owner asks about load, that is the honest answer. `KNOWN-ISSUES.md` in the
+plugin root ranks this and the rest of what is still wrong — read it before
+defending a number.
+
 ## Secrets
 
 `checklist-results.json` and everything under `.seo-runs/` is what gets shared —
@@ -385,12 +401,10 @@ secrets and stay readable.
 Always report both. A 96/100 over 19% coverage (typical for `archive` mode) is not
 a good site, it is a thin audit.
 
-The **per-category** scores in the report are a third number on a different scale:
-an unweighted pass rate, where one failing `low` costs what one failing `critical`
-does. Do not compare a category score with the headline SEO Score as if they were
-the same measure, and do not treat the order of the category bars as a severity
-ranking — the fix list below them is the severity-ranked one. Known issue, see
-`KNOWN-ISSUES.md`.
+The **per-category** scores use the same severity weighting as the headline score,
+so they are comparable with it and with each other. A category still cannot show
+"one failing critical" in a number, so each bar also carries the worst open
+severity — quote that, not just the score, when a category looks fine at 85.
 
 ## Search Console
 

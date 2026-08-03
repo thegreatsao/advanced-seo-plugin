@@ -27,7 +27,7 @@ from checklist_runner import (  # noqa: E402
     looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
     THIN_ENTRY_WORDS, history_path, load_public_suffixes, previous_run,
     psl_snapshot_date, psl_staleness, resolve, run_script,
-    run_stamp, run_time, score, suffix_label_count, unreachable_skips,
+    run_stamp, run_time, score, stride, suffix_label_count, unreachable_skips,
     visible_words,
 )
 from cwv_metrics import read as cwv_read  # noqa: E402
@@ -266,6 +266,127 @@ class RateLimiting(unittest.TestCase):
         self.assertLess(self.sh.MAX_RETRY_AFTER_WAIT, 120)
         self.assertGreater(self.sh.retry_after_seconds(_Resp(429, {"Retry-After": "3600"})),
                            self.sh.MAX_RETRY_AFTER_WAIT)
+
+
+class Robots(unittest.TestCase):
+    """robots.txt applies to what the tool discovers, never to what it was given.
+
+    Both halves of that are load-bearing. Ignoring it while crawling somebody's site
+    is impolite; applying it to the operator's own URL would refuse the 40-odd checks
+    that fetch it and bury a `critical` finding under a collapsed audit."""
+
+    def setUp(self):
+        import lib.safe_http as sh
+        self.sh = sh
+        self.dir = tempfile.mkdtemp()
+        self.saved_dir = sh.RATE_LIMIT_DIR
+        sh.RATE_LIMIT_DIR = self.dir
+        self.fetched = []
+        self.saved_fetch = sh._fetch_robots
+
+    def tearDown(self):
+        self.sh.RATE_LIMIT_DIR = self.saved_dir
+        self.sh._fetch_robots = self.saved_fetch
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def serve(self, body):
+        def fake(origin):
+            self.fetched.append(origin)
+            return body
+        self.sh._fetch_robots = fake
+
+    def test_a_disallowed_path_is_refused(self):
+        self.serve("User-agent: *\nDisallow: /private\n")
+        self.assertFalse(self.sh.robots_allows("https://example.com/private/x")[0])
+        self.assertTrue(self.sh.robots_allows("https://example.com/public")[0])
+
+    def test_rules_naming_our_token_are_obeyed(self):
+        """The trap this guards: RobotFileParser splits the agent at the first "/"
+        and lowercases it, so passing our full User-Agent —
+        "Mozilla/5.0 (compatible; AgenticSEOSkill/1.0; ...)" — yields "mozilla" and
+        a site's rules for us are silently ignored while `*` applies instead."""
+        self.serve(f"User-agent: {self.sh.ROBOTS_TOKEN}\nDisallow: /ours\n\n"
+                   f"User-agent: *\nDisallow: /theirs\n")
+        self.assertFalse(self.sh.robots_allows("https://example.com/ours")[0])
+        self.assertTrue(self.sh.robots_allows("https://example.com/theirs")[0])
+        self.assertNotIn("/", self.sh.ROBOTS_TOKEN)
+
+    def test_an_absent_or_unreadable_robots_txt_allows(self):
+        for body in ("", "   \n", "\x00\xff not robots at all"):
+            self.serve(body)
+            shutil.rmtree(self.dir, ignore_errors=True)
+            self.assertTrue(self.sh.robots_allows("https://example.com/x")[0], body)
+
+    def test_a_fetch_that_raises_allows_rather_than_failing_the_audit(self):
+        def boom(origin):
+            raise RuntimeError("network gone")
+        self.sh._fetch_robots = boom
+        self.assertEqual(self.sh.robots_allows("https://example.com/x"), (True, 0.0))
+
+    def test_robots_txt_is_fetched_once_per_origin_and_cached(self):
+        """45 evidence scripts in 45 processes would otherwise fetch it 45 times,
+        which is the fan-out the pacing slots already exist to avoid."""
+        self.serve("User-agent: *\nDisallow: /no\n")
+        for _ in range(4):
+            self.sh.robots_allows("https://example.com/a")
+        self.assertEqual(len(self.fetched), 1)
+
+    def test_a_slower_crawl_delay_is_honoured_and_a_faster_one_ignored(self):
+        self.serve(f"User-agent: {self.sh.ROBOTS_TOKEN}\nCrawl-delay: 10\n")
+        allowed, delay = self.sh.robots_allows("https://example.com/a")
+        self.assertTrue(allowed)
+        self.assertEqual(delay, 10.0)
+        # 10s between requests is 0.1 rps: slower than the 4 rps default, so it wins.
+        self.assertAlmostEqual(self.sh._rate_for(10.0), 0.1)
+        # 0.01s would be 100 rps. A site cannot talk us into going faster.
+        self.assertEqual(self.sh._rate_for(0.01), self.sh.max_rps())
+        self.assertIsNone(self.sh._rate_for(0.0))
+
+    def test_respect_robots_is_off_by_default(self):
+        """The signature is the guarantee: a script that fetches the audit target
+        cannot be refused by robots.txt unless it deliberately opts in."""
+        import inspect
+        sig = inspect.signature(self.sh.safe_request)
+        self.assertIs(sig.parameters["respect_robots"].default, False)
+        self.assertIs(inspect.signature(
+            __import__("seo_common").fetch_url).parameters["respect_robots"].default,
+            False)
+
+    def test_a_refusal_is_flagged_apart_from_a_failure(self):
+        """`orphan_pages_from_sitemap` counts unreachable sitemap URLs as orphans and
+        GO-137 fails on one. A robots refusal arriving as a plain error would have
+        manufactured that failure out of our own politeness."""
+        import seo_common
+        saved = seo_common.safe_request
+
+        def refuse(*a, **kw):
+            raise self.sh.RobotsDisallowed("robots.txt disallows it")
+        seo_common.safe_request = refuse
+        try:
+            out = seo_common.fetch_url("https://example.com/x", respect_robots=True)
+        finally:
+            seo_common.safe_request = saved
+        self.assertTrue(out["robots_blocked"])
+        self.assertIn("robots.txt", out["error"])
+
+    def test_a_robots_skipped_sitemap_url_is_not_an_orphan(self):
+        import orphan_pages_from_sitemap as ops
+        crawl = {"pages": {"https://e.com/a": {"url": "https://e.com/a"}},
+                 "errors": [], "robots_skipped": ["https://e.com/blocked"]}
+        saved_crawl, saved_sitemap = ops.crawl_reachable_pages, ops.load_sitemap_urls
+        ops.crawl_reachable_pages = lambda *a, **k: crawl
+        ops.load_sitemap_urls = lambda *a, **k: {
+            "urls": ["https://e.com/a", "https://e.com/blocked"],
+            "sitemaps_checked": ["https://e.com/sitemap.xml"], "errors": []}
+        try:
+            out = ops.find_orphan_pages("https://e.com")
+        finally:
+            ops.crawl_reachable_pages, ops.load_sitemap_urls = saved_crawl, saved_sitemap
+        self.assertEqual(out["summary"]["orphan_pages"], 0)
+        self.assertEqual(out["sitemap_urls_blocked_by_robots"],
+                         ["https://e.com/blocked"])
+        self.assertIn("sitemap_robots_conflict",
+                      [i["type"] for i in out["issues"]])
 
 
 class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
@@ -631,6 +752,52 @@ class Sampling(unittest.TestCase):
         self.assertTrue(is_page_level({"check": {"requires": "offline"}}))
         self.assertFalse(is_page_level({"check": {"requires": "crawl"}}))
         self.assertFalse(is_page_level({"check": {"requires": "gsc"}}))
+
+
+class Stride(unittest.TestCase):
+    """A sample taken off the top of an ordered list is not a sample.
+
+    Sitemaps are grouped by section or by date, so `urls[:N]` returns one corner of
+    the site — and the report says "5 of 5 pages checked", which reads as
+    representative. The stride has to spread out *and* stay reproducible, because
+    every other number this tool prints is reproducible."""
+
+    def test_picks_are_spread_across_the_whole_list(self):
+        urls = [f"/p{i}" for i in range(100)]
+        self.assertEqual(stride(urls, 5), ["/p0", "/p25", "/p50", "/p74", "/p99"])
+
+    def test_both_ends_of_the_sitemap_are_covered(self):
+        """The bias being removed: with `[:N]` nothing past index N-1 could ever be
+        audited, however large the site. An open-interval step has the same blind
+        spot at the other end — it stops a full step short of the last URL."""
+        urls = [f"/p{i}" for i in range(1000)]
+        for n in (2, 3, 10, 25):
+            picked = stride(urls, n)
+            self.assertEqual(picked[0], "/p0", n)
+            self.assertEqual(picked[-1], "/p999", n)
+
+    def test_the_same_sitemap_yields_the_same_pages(self):
+        urls = [f"/p{i}" for i in range(57)]
+        self.assertEqual(stride(urls, 7), stride(urls, 7))
+
+    def test_the_first_url_is_always_kept(self):
+        """Usually the home page. Dropping it to look statistically tidy would be
+        perverse."""
+        for n in range(1, 12):
+            self.assertEqual(stride([f"/p{i}" for i in range(50)], n)[0], "/p0")
+
+    def test_a_short_list_is_returned_whole_and_in_order(self):
+        self.assertEqual(stride(["/a", "/b"], 5), ["/a", "/b"])
+
+    def test_no_duplicates_and_never_over_the_limit(self):
+        for size in (1, 2, 3, 9, 40, 41):
+            for limit in (1, 2, 5, 40):
+                picked = stride([f"/p{i}" for i in range(size)], limit)
+                self.assertEqual(len(picked), len(set(picked)))
+                self.assertLessEqual(len(picked), min(size, limit))
+
+    def test_asking_for_nothing_returns_nothing(self):
+        self.assertEqual(stride(["/a", "/b"], 0), [])
 
 
 class Domains(unittest.TestCase):
