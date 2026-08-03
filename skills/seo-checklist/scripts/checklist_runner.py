@@ -447,10 +447,27 @@ def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
         if value is _MISSING:
             return None, f"{rule['path']} missing"
         rx = re.compile(rule["none_matching"])
-        hits = [t for t in _texts(value) if rx.search(t)]
+        field = rule.get("field")
+        if field:
+            # Aimed at one field instead of the whole element. Without this the
+            # pattern is matched against every value in the dict — including the
+            # `fix` string, which is written in the vocabulary of the thing being
+            # asked for. Two keyword items fired on "…containing the primary
+            # keyword" inside a remediation message and never looked at a keyword.
+            elements = value if isinstance(value, list) else [value]
+            missing_field = [e for e in elements
+                             if not isinstance(e, dict) or field not in e]
+            if missing_field and len(missing_field) == len(elements) and elements:
+                return None, f"no {field} in any {rule['path']} element"
+            hits = [str(e[field]) for e in elements
+                    if isinstance(e, dict) and field in e and rx.search(str(e[field]))]
+        else:
+            hits = [t for t in _texts(value) if rx.search(t)]
         if hits:
-            return False, f"matched {rule['none_matching']!r}: {hits[0][:120]}"
-        return True, f"no match for {rule['none_matching']!r}"
+            return False, (f"matched {rule['none_matching']!r}"
+                           f"{f' in {field}' if field else ''}: {hits[0][:120]}")
+        return True, (f"no match for {rule['none_matching']!r}"
+                      f"{f' in {field}' if field else ''}")
 
     if "value_map" in rule:
         # The structured alternative to matching prose. The registry enumerates

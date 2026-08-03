@@ -80,6 +80,57 @@ class Evaluate(unittest.TestCase):
             evaluate({"path": "meta_robots", "none_matching": "noindex"}, data)[0], True)
 
 
+class PatternScopedToAField(unittest.TestCase):
+    """A finding says what is wrong; a `fix` says what to do about it, in the
+    vocabulary of the thing being asked for. Matching the whole element means a
+    pattern meant for findings hits the advice instead — which is how two keyword
+    items fired on "…containing the primary keyword" inside a remediation string
+    and never once looked at a keyword."""
+
+    ISSUES = {"seo_issues": [
+        {"severity": "Critical", "area": "H1", "finding": "No H1 tag detected.",
+         "fix": "Add a single, descriptive H1 containing the primary keyword."}]}
+
+    def test_unscoped_matching_hits_the_remediation_text(self):
+        """The bug, pinned so it cannot come back as a surprise."""
+        ok, why = evaluate({"path": "seo_issues",
+                            "none_matching": "(?i)h1.*keyword"}, self.ISSUES)
+        self.assertFalse(ok)
+        self.assertIn("keyword", why)
+
+    def test_scoping_to_the_finding_ignores_the_fix(self):
+        ok, why = evaluate({"path": "seo_issues", "field": "finding",
+                            "none_matching": "(?i)h1.*keyword"}, self.ISSUES)
+        self.assertTrue(ok)
+        self.assertIn("finding", why)
+
+    def test_it_still_matches_a_real_finding(self):
+        ok, why = evaluate({"path": "seo_issues", "field": "finding",
+                            "none_matching": "(?i)no h1"}, self.ISSUES)
+        self.assertFalse(ok)
+        self.assertIn("No H1", why)
+
+    def test_a_field_no_element_carries_is_undecided(self):
+        """Not a pass. An element shape that changed underneath must not read as
+        clean — that is the whole failure this file is about."""
+        ok, why = evaluate({"path": "seo_issues", "field": "message",
+                            "none_matching": "x"}, self.ISSUES)
+        self.assertIsNone(ok)
+        self.assertIn("message", why)
+
+    def test_an_empty_list_still_passes(self):
+        self.assertTrue(evaluate({"path": "seo_issues", "field": "finding",
+                                  "none_matching": "x"}, {"seo_issues": []})[0])
+
+    def test_the_two_keyword_items_are_judgements_now(self):
+        with open(os.path.join(SCRIPTS, "..", "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            by_id = {i["id"]: i for i in json.load(f)["items"]}
+        for item_id in ("KW-072", "KW-073"):
+            self.assertEqual(by_id[item_id]["source"], "llm", item_id)
+            self.assertEqual(by_id[item_id]["lens"], "copy", item_id)
+
+
 class _Resp:
     """The parts of a response the pacing logic looks at."""
 

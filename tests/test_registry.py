@@ -262,6 +262,17 @@ class NoAssertionThatCanNeverFire(unittest.TestCase):
             json.dump(fake, f)
         self.assertEqual([d["id"] for d in audit(path)], ["ZZ-001"])
 
+    def test_remediation_text_does_not_count_as_something_the_script_emits(self):
+        """The gap that let KW-072 and KW-073 through this guard for a whole tier:
+        their pattern matched a `fix` string, so the tool saw a live assertion."""
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        from audit_assertions import emittable_strings
+        strings = emittable_strings("article_seo.py")
+        advice = [t for t in strings if "primary keyword" in t.lower()]
+        self.assertEqual(advice, [], f"remediation text counted as output: {advice[:1]}")
+        self.assertTrue(any("No H1 tag detected" in t for t in strings),
+                        "findings must still count")
+
     def test_page_derived_paths_are_exempt_and_few(self):
         """A pattern over a value that comes from the page is checking the site,
         not the script's wording — but the exemption list is a way to silence the

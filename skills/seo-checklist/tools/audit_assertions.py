@@ -72,7 +72,7 @@ def assertions(registry_path: str = REGISTRY) -> list[dict]:
 def emittable_strings(script: str) -> list[str]:
     """String literals a script can put in its output.
 
-    Docstrings and argparse text are excluded. Both describe what a script is
+    Docstrings, argparse text and remediation strings are excluded. Both describe what a script is
     for using the same words its findings would, and counting them made dead
     assertions look alive: the one pattern this tool initially cleared was
     matching `robots_checker.py`'s module docstring, which mentions CSS and
@@ -83,6 +83,24 @@ def emittable_strings(script: str) -> list[str]:
 
     documentation: set[int] = set()
     for node in ast.walk(tree):
+        # Remediation text. A finding says what is wrong; a `fix` says what to do
+        # about it, in the vocabulary of the thing being asked for — so a pattern
+        # meant for findings matches advice instead and fires for the wrong reason.
+        # KW-072 and KW-073 asked whether the primary keyword was in the title and
+        # the H1; `article_seo.py` has no keyword finding at all, and both patterns
+        # were matching "…containing the primary keyword" inside a fix string. They
+        # reported a keyword problem whenever the title or H1 had any problem, and
+        # said nothing when the keyword was genuinely absent. This tool cleared
+        # them, which is why the exclusion is here and not only in the registry.
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if (isinstance(key, ast.Constant)
+                        and str(key.value).lower() in ("fix", "recommendation",
+                                                       "remediation", "suggestion",
+                                                       "action")):
+                    for sub in ast.walk(value):
+                        if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                            documentation.add(id(sub))
         # Docstrings: the first statement of a module, class or function.
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
                              ast.AsyncFunctionDef)):

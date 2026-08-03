@@ -60,6 +60,7 @@ CATEGORIES = [
 #   contains: "substr"                 substring / list membership
 #   none_severity: ["critical","high"] no issues[] entry at those severities
 #   none_matching: "regex"             no issues[] entry whose message matches
+#     + field: "finding"               match that field only, not the whole entry
 #   count_matching_lte: ["regex", n]   at most n matching issues
 #   value_map: {value: pass|fail}      enumerate the script's own vocabulary for
 #                                      a field; an unlisted value is NO_DATA.
@@ -394,12 +395,15 @@ item(70, "high", S, "gsc_cannibalization.py", GSCARG,
 item(71, "high", S, "gsc_cannibalization.py", GSCARG,
      {"path": "summary.worst_spread", "lte": 3},
      "Find keyword overuse and duplication across URLs")
-item(72, "high", S, "article_seo.py", PAGE,
-     {"path": "seo_issues", "none_matching": "(?i)title.*keyword"},
-     "Put the primary topic in the title")
-item(73, "high", S, "article_seo.py", PAGE,
-     {"path": "seo_issues", "none_matching": "(?i)h1.*keyword"},
-     "Include the primary keyword in the H1")
+# article_seo.py has no keyword finding at all — its seo_issues describe presence
+# and length, and the word "keyword" appears only inside remediation text. Both
+# patterns were matching that: KW-072 and KW-073 reported a keyword problem
+# whenever the title or the H1 had *any* problem, and said nothing when the keyword
+# was genuinely missing. Whether a title leads with the topic, and whether an H1
+# carries the primary keyword or a close variant, are the same copy judgement their
+# H2 and meta-description twins already are.
+item(72, "high", L, fix="Put the primary topic in the title")
+item(73, "high", L, fix="Include the primary keyword in the H1")
 # article_seo.py advises on title and H1 keywords but emits nothing about
 # keywords in an H2 or in the meta description, so both items passed unread.
 # Judging a "close variant" is a copy question anyway — a regex cannot see that
@@ -828,7 +832,7 @@ def load_titles() -> dict[int, str]:
 LENS = {
     "copy": ["MS-024", "MS-025", "CN-037", "CN-042", "CN-043", "CN-046",
              "CN-047", "CN-049", "CN-050", "CN-058", "CN-064", "CN-067",
-             "KW-074", "KW-075", "KW-077", "MD-188"],
+             "KW-072", "KW-073", "KW-074", "KW-075", "KW-077", "MD-188"],
     "layout": ["CN-052", "CN-059", "CN-060", "CN-061", "CN-062", "CN-063",
                "MB-101", "AR-157", "AR-159", "AR-160", "AR-161"],
     # TE-165 (subdomain vs subdirectory) is filed under technical, but the

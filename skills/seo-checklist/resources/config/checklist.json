@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "871e10d088f9",
+  "registry_version": "5bf1e36d657f",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -1504,18 +1504,8 @@
       "category_label": "Keyword Analysis",
       "title": "Use the Primary Topic in the Title",
       "severity": "high",
-      "source": "script",
-      "check": {
-        "script": "article_seo.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "seo_issues",
-          "none_matching": "(?i)title.*keyword"
-        }
-      },
+      "source": "llm",
+      "lens": "copy",
       "effort": "medium",
       "fix": "Put the primary topic in the title"
     },
@@ -1526,18 +1516,8 @@
       "category_label": "Keyword Analysis",
       "title": "Include the Primary Keyword in the H1",
       "severity": "high",
-      "source": "script",
-      "check": {
-        "script": "article_seo.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "seo_issues",
-          "none_matching": "(?i)h1.*keyword"
-        }
-      },
+      "source": "llm",
+      "lens": "copy",
       "effort": "medium",
       "fix": "Include the primary keyword in the H1"
     },
