@@ -1,0 +1,284 @@
+# seo-checklist
+
+A deterministic SEO audit for Claude Code. One fixed registry of 211 checks, run
+the same way every time, with a status on every item and an honest account of
+what could not be decided.
+
+## Why it exists
+
+The usual failure of LLM-driven SEO tooling is that the model picks what to run.
+Two audits of the same site check different things, and neither tells you what was
+skipped — so the score looks like a measurement when it is really a sample of
+whatever the model remembered.
+
+This plugin separates the two halves of that problem.
+
+`resources/config/checklist.json` is the contract: 211 items, each naming what
+answers it — a script plus an assertion over that script's output, a Search
+Console call, a language-model judgement, or a human. Nothing in the registry is
+executable; assertions are declarative and interpreted by the runner. Coverage is
+therefore a property of the registry, not an accident of the run.
+
+Two numbers come out, and they are deliberately never merged:
+
+- **SEO Score** — of the items actually decided, how many passed, weighted by severity
+- **Coverage** — of the items that applied, how many could be decided at all
+
+A 96/100 at 19% coverage is not a good site. It is a thin audit. Collapsing these
+into one number is how audits come to sound more confident than they are.
+
+## What is in the registry
+
+211 items: the [Plerdy 200-point checklist](https://www.plerdy.com/check/) plus 11
+checks it does not cover — GEO/AI search, `llms.txt`, AI-crawler policy, IndexNow,
+schema guards.
+
+| Answered by | Items |
+|---|---|
+| a script, asserted against its real output | 147 |
+| a language model reading the page | 30 |
+| a human | 31 |
+| Search Console, with no API to answer it | 3 |
+
+147 script-backed items collapse to **53 unique process launches** — the runner
+deduplicates, so `pagespeed.py` runs once, not seven times.
+
+Every item also carries an `effort` estimate, so the fix list is ranked by
+severity **against** effort rather than by severity alone: ranking by severity
+alone puts a week of rewriting above a one-line meta tag. Effort is a
+per-category heuristic, not a per-item estimate, and the report says so.
+
+Every result records the `registry_version` it came from, and `--diff` warns when
+two runs used different registry versions, profiles or modes — otherwise "no
+status changes" could mean the checklist itself changed underneath.
+
+## Install
+
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+```
+
+Core requirements are `requests`, `beautifulsoup4`, `lxml`. Search Console checks
+also need `google-auth` and `google-api-python-client`; without them those items
+report `NO_DATA` with a reason rather than failing the run. `archive` mode needs
+no HTTP library at all, only an HTML parser.
+
+## Run
+
+```bash
+S=skills/seo-checklist
+python3 $S/scripts/checklist_runner.py https://example.com               # full, live
+python3 $S/scripts/checklist_runner.py https://example.com --mode page   # one page
+python3 $S/scripts/checklist_runner.py https://example.com --archive ./backup
+python3 $S/scripts/checklist_runner.py https://example.com --diff        # vs previous run
+python3 $S/scripts/checklist_runner.py https://example.com --profile ecommerce
+python3 $S/scripts/checklist_runner.py https://example.com --sample 10   # several pages
+python3 $S/scripts/checklist_runner.py https://example.com --links-csv ~/Links.zip
+python3 $S/scripts/checklist_report.py checklist-results.json            # render output
+python3 $S/scripts/checklist_report.py checklist-results.json --lang ru  # Russian report
+```
+
+### Site profiles
+
+`--profile default|local|ecommerce|saas|blog|media` narrows the registry to what
+a given kind of site can be judged on. An excluded item is `N/A` with the profile
+as its reason and touches neither metric.
+
+Omit the flag and the run detects the site type first, then asks with that
+suggestion pre-selected — Enter accepts it, anything else overrides it. Detection
+reads structured data, platform fingerprints and cart/pricing markup rather than
+wording, and it runs on the entry page the audit was going to fetch anyway, so it
+costs no extra request. Thin evidence produces `default` and says so instead of
+guessing.
+
+`--profile auto` accepts the detection without asking. That is the only way a
+heuristic narrows scope here, and it takes an explicit flag, because passing it
+is a decision.
+
+The prompt appears **only** when a terminal is attached: CI, cron and background
+runs use `default` — the full registry — mention what detection would have
+suggested, and print why they did not act on it. A question nobody can see is a
+hang. `--no-prompt` forces that behaviour anywhere.
+
+Every non-answer — Enter, nonsense, EOF — resolves to `default`, the widest
+scope. Guessing a narrower profile would drop checks and lift the score without
+anyone deciding to. For the same reason no profile may exclude a `critical` item;
+a test enforces it. An unknown name is an error, not a silent fallback.
+
+### Several pages at once
+
+`--sample N` collects up to N same-host URLs (sitemap first, on-page links
+second) and runs the page-level checks against each; site-level checks still run
+once. The worst verdict wins, but the evidence carries the count — `1/5 pages:
+title is 61 characters` is exactly what a single-page audit would have missed.
+
+Candidates come from `<a href>` only, asset extensions are rejected by path, and
+anything served as a non-page is dropped at fetch time. Because the worst verdict
+wins, a single stylesheet in the sample would otherwise fail every page-level
+check and condemn the site.
+
+### When the site cannot be read
+
+If the entry page does not load — DNS failure, 4xx/5xx, a non-HTML response —
+every check that reads the live site is `NO_DATA` with the reason, no script runs
+against it, and **no score is printed at all**. Search Console items still run,
+because Google's stored history does not stop existing when a site goes down.
+
+Most evidence scripts exit 0 with an empty result when they cannot fetch
+anything, and an empty result satisfies exactly the assertions this registry is
+built from. Without the gate, a host that does not resolve scored **61/100 on 40
+fabricated passes**. A bot-protection challenge still gets through — it answers
+200 with real HTML — so an implausibly clean live audit is worth a second look.
+
+### Incoming links
+
+The Links report is the one part of Search Console with **no API at all**.
+`--links-csv` reads the UI export (Search Console → Links → Export) and answers
+three items: link concentration, total links, linking root domains. The rest of
+the backlinks block stays manual — judging link quality needs a link index this
+does not have, and a fabricated toxicity score would be worse than the silence.
+
+| Mode | Reaches | Use when |
+|---|---|---|
+| `live` | fetch, crawl, external APIs | full audit of a reachable site |
+| `page` | fetch, external APIs | one page, much faster |
+| `archive` | nothing — local files only | you have a copy of the site, not a URL |
+
+Anything a mode cannot satisfy is `N/A` and drops out of both metrics. "We did not
+crawl" must never read as "the site failed".
+
+Deliverables: `CHECKLIST-REPORT.md`, `CHECKLIST.html` (filterable; manual items are
+checkboxes persisted in the browser), `LLM-QUEUE*.md`, and
+`checklist-results.json`, also archived under `.seo-runs/<domain>/`.
+
+## Search Console
+
+Auth is a **service account**, not user OAuth:
+
+1. In Google Cloud, create a service account and download its JSON key.
+2. Enable the Search Console API for that project.
+3. In Search Console, add the service account's `client_email` as a user on the property.
+4. Save the key as `~/.config/gcloud/gsc-service-account.json`, or point
+   `GSC_CREDENTIALS_PATH` at it.
+
+The property defaults to `sc-domain:<registrable domain>` — `www.example.com` is
+not a property, `example.com` is. Override with `--gsc-property` for URL-prefix
+properties.
+
+Seven items are answered from live data: cannibalization, branded-query ownership,
+reported opportunities, and — via the URL Inspection API — whether Google indexed
+the page and which canonical it picked. That last one earns the setup on its own:
+a page can declare `rel=canonical` to itself and still have Google choose a
+different URL, and nothing in the page reveals it.
+
+Three items stay `NO_DATA` even with working credentials, and this is not missing
+wiring: **the Search Console API has no endpoint for manual actions, the Index
+Coverage report, or mobile-usability signals.** Those exist only in the web UI;
+mobile usability was withdrawn from the API in December 2023.
+
+Without a key, those items are `NO_DATA` in `live` and `page` mode — the run
+could have asked and did not decide — and `N/A` only in `archive`, which makes no
+network calls at all. The difference matters: `N/A` leaves the coverage
+denominator, so reporting a missing key that way would raise coverage precisely
+where the audit is thinnest.
+
+Credentials are never transmitted anywhere, and Search Console data is written only
+to local files. Values from `INDEXNOW_KEY` and `PAGESPEED_API_KEY` are replaced
+with `<redacted>` everywhere in `checklist-results.json` and `.seo-runs/` — the
+run log is built from each script's argv, so a key passed as an argument would
+otherwise be written out verbatim in the file you hand to a client.
+
+## The LLM queue is not optional
+
+30 items cannot be settled by a script — grammar, cloaking, doorway patterns,
+translation quality, ad density, whether the page was written for a reader. Left
+unanswered they stay `LLM_PENDING` and cap coverage.
+
+The report splits them into one file per **lens** — the evidence an item is
+answered from, which is not the same as the checklist category it sits in. Four
+agents can work concurrently, each reading its own slice once:
+
+| Queue | Agent | Items |
+|---|---|---|
+| `LLM-QUEUE-copy.md` | `seo-llm-copy` | 14 |
+| `LLM-QUEUE-layout.md` | `seo-llm-layout` | 11 |
+| `LLM-QUEUE-locale.md` | `seo-llm-locale` | 3 |
+| `LLM-QUEUE-market.md` | `seo-llm-market` | 2 |
+
+Answer each `PASS` / `FAIL` / `WARN` / `N/A` with concrete evidence, then merge:
+
+```bash
+python3 skills/seo-checklist/scripts/checklist_report.py checklist-results.json \
+    --llm-answers answers.json
+```
+
+The merge only overwrites `LLM_PENDING` items; an answer file cannot flip a verdict
+a script established. When the page does not support a verdict the answer is `N/A`
+— inventing a `PASS` to lift the score corrupts the one metric this exists to
+protect.
+
+## Bundled playbooks
+
+The prose half of the audit ships **inside** the plugin. Nothing here depends on
+another plugin being installed, because a missing dependency degrades an audit
+silently — and a silent degradation is exactly what this tool exists to prevent.
+
+| Playbook | Covers | Items |
+|---|---|---|
+| `resources/playbooks/local-seo.md` | Business Profile, NAP, citations, reviews | LO-196, LO-199 |
+| `resources/playbooks/competitor-research.md` | who actually ranks, with sources | CO-191…195, BL-088 |
+| `resources/references/client-report-structure.md` | reshaping the report for a decision | — |
+
+**A playbook tells you how to answer an item; it never answers one.** Reading it
+does not move a status — doing the work does. `local-seo.md` cannot read the live
+Business Profile, so LO-199 stays `MANUAL`. `competitor-research.md` uses
+firecrawl or exa when those MCP servers are configured and falls back to the
+built-in `WebSearch`; with no search tool at all, CO-191 is `N/A`, because a
+competitor list written from memory is fabrication with a confident tone.
+`client-report-structure.md` is presentation only and changes no number.
+
+Two of the three are adapted from MIT-licensed work in
+[Everything Claude Code](https://github.com/affaan-m/ECC); provenance and the
+full notices are in [CREDITS.md](CREDITS.md).
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Everything runs offline — no live site, no API key, no Search Console property.
+The suite guards the parts that fail *silently*: an assert rule using an operator
+the runner never implemented, a script the registry names but nobody shipped, an
+LLM item with no lens, a profile that hides a critical check, and the boundary
+between "failed", "could not be decided" and "out of scope" that every metric
+here depends on. CI runs it on Python 3.11 and 3.13 along with both gates and an
+offline smoke audit.
+
+## Extending the registry
+
+```bash
+S=skills/seo-checklist
+python3 $S/tools/build_checklist.py          # rewrite checklist.json
+python3 $S/tools/build_checklist.py --check  # CI: fail if stale
+```
+
+Edit `tools/build_checklist.py`, never `checklist.json` directly. Two rules:
+
+1. **Write assertions only against observed script output.** Capture it with
+   `tools/probe_shapes.py` and consult
+   `resources/references/script-output-shapes.md`. A guessed JSON path produces a
+   rule that silently reports `NO_DATA` forever.
+2. **Every LLM item needs a lens.** The build refuses without one — otherwise a new
+   item belongs to no agent and quietly never gets answered.
+
+Absence of a field is `NO_DATA`, not `PASS`. An item passes on absence only when
+its rule says `missing_is: pass`: a parser that never emits a key must not be read
+as the site being clean.
+
+## Credits
+
+See [CREDITS.md](CREDITS.md) for provenance and third-party licences: the Plerdy
+checklist, the Agentic-SEO evidence scripts, and the two playbooks adapted from
+Everything Claude Code.

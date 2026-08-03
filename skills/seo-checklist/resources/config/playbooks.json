@@ -1,0 +1,33 @@
+{
+  "_comment": [
+    "Bundled playbooks: the prose half of the audit, shipped inside the plugin so",
+    "it runs the same on any machine. They were adapted from separate skills, and",
+    "copying them in was a deliberate trade — a playbook does not get upstream bug",
+    "fixes the way a script does, and a missing skill degrades an audit silently,",
+    "which is worse than a copy going slightly stale. Provenance is in CREDITS.md.",
+    "",
+    "A playbook tells a person or an agent how to answer an item. It never answers",
+    "one by itself: nothing here may move a status without the work actually being",
+    "done. A test asserts every id below exists in the registry."
+  ],
+  "playbooks": {
+    "local-seo": {
+      "path": "resources/playbooks/local-seo.md",
+      "use_when": "profile is `local`, or LO-196 came back PASS, or LO-199 is MANUAL",
+      "items": ["LO-196", "LO-199"],
+      "leaves_status": "LO-199 stays MANUAL — it cannot read the live Business Profile"
+    },
+    "competitor-research": {
+      "path": "resources/playbooks/competitor-research.md",
+      "use_when": "answering CO-191 in the LLM queue, or planning link targets",
+      "items": ["CO-191", "CO-192", "CO-193", "CO-194", "CO-195", "BL-088"],
+      "leaves_status": "CO-191 is N/A unless a search actually ran — firecrawl, exa or WebSearch"
+    },
+    "client-report-structure": {
+      "path": "resources/references/client-report-structure.md",
+      "use_when": "the audit is going to a client or a decision meeting",
+      "items": [],
+      "leaves_status": "presentation only — no status, score or coverage number changes"
+    }
+  }
+}

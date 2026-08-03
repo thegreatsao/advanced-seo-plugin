@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+Validate a page against the W3C Nu HTML Checker.
+
+Uses the free public validator.w3.org/nu endpoint — no API key. Invalid markup
+degrades rendering, accessibility and parsing, which is why Plerdy's checklist
+raises it in three separate places.
+
+Usage:
+    python html_validator.py https://example.com
+    python html_validator.py https://example.com --json
+"""
+
+import argparse
+import json
+import sys
+from urllib.parse import urlencode
+
+try:
+    import requests
+except ImportError:
+    print("Error: requests library required. Install with: pip install requests")
+    sys.exit(1)
+
+try:
+    from lib.safe_http import default_headers
+except ImportError:
+    from scripts.lib.safe_http import default_headers
+
+NU_ENDPOINT = "https://validator.w3.org/nu/"
+MAX_MESSAGES = 40
+
+
+def validate(url: str, timeout: int = 45) -> dict:
+    result = {
+        "url": url,
+        "summary": {"errors": None, "warnings": None, "info": None},
+        "messages": [],
+        "issues": [],
+        "error": None,
+    }
+    query = urlencode({"doc": url, "out": "json"})
+    try:
+        resp = requests.get(f"{NU_ENDPOINT}?{query}",
+                            headers=default_headers({"Accept": "application/json"}),
+                            timeout=timeout)
+    except requests.RequestException as exc:
+        result["error"] = f"validator unreachable: {exc}"
+        return result
+
+    if resp.status_code != 200:
+        result["error"] = f"validator returned HTTP {resp.status_code}"
+        return result
+
+    try:
+        payload = resp.json()
+    except ValueError:
+        result["error"] = "validator returned non-JSON output"
+        return result
+
+    messages = payload.get("messages", [])
+    counts = {"error": 0, "warning": 0, "info": 0}
+    for m in messages:
+        kind = m.get("type", "info")
+        # Nu reports fatal parse failures as type=error subType=fatal.
+        bucket = "error" if kind == "error" else ("warning" if kind == "warning" else "info")
+        counts[bucket] += 1
+        if len(result["messages"]) < MAX_MESSAGES:
+            result["messages"].append({
+                "type": kind,
+                "subType": m.get("subType", ""),
+                "message": m.get("message", "")[:300],
+                "line": m.get("lastLine"),
+                "extract": (m.get("extract") or "").strip()[:160],
+            })
+
+    result["summary"] = {"errors": counts["error"], "warnings": counts["warning"],
+                         "info": counts["info"]}
+
+    if counts["error"]:
+        first = next((m for m in result["messages"] if m["type"] == "error"), {})
+        result["issues"].append({
+            "severity": "medium",
+            "message": f"{counts['error']} HTML validation error(s); first: "
+                       f"{first.get('message', '')[:160]}",
+            "url": url,
+        })
+    if counts["warning"] > 10:
+        result["issues"].append({
+            "severity": "low",
+            "message": f"{counts['warning']} HTML validation warnings",
+            "url": url,
+        })
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Validate HTML via the W3C Nu checker")
+    parser.add_argument("url", help="URL to validate")
+    parser.add_argument("--timeout", type=int, default=45)
+    parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    args = parser.parse_args()
+
+    result = validate(args.url, args.timeout)
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    if result["error"]:
+        print(f"Could not validate: {result['error']}")
+        return
+    s = result["summary"]
+    print(f"W3C validation for {result['url']}")
+    print(f"  errors:   {s['errors']}")
+    print(f"  warnings: {s['warnings']}")
+    for m in result["messages"][:15]:
+        line = f" (line {m['line']})" if m["line"] else ""
+        print(f"  [{m['type']}]{line} {m['message'][:120]}")
+
+
+if __name__ == "__main__":
+    main()

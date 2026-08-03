@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # The registry is generated, so a stale checklist.json means the committed
+      # contract and its generator disagree about what an audit covers.
+      - name: Registry is in step with its generator
+        run: python skills/seo-checklist/tools/build_checklist.py --check
+
+      # Every test here is offline by design: nothing in CI should depend on a
+      # live site, an API key, or somebody's Search Console property.
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Scripts compile
+        run: |
+          python -m compileall -q skills/seo-checklist/scripts skills/seo-checklist/tools
+
+      # A smoke run against a local page proves the whole path still works end to
+      # end — registry, runner, report — without touching the network.
+      - name: Offline smoke run
+        run: |
+          mkdir -p /tmp/site
+          cat > /tmp/site/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <title>CI smoke page</title>
+          <meta name="description" content="A page used only to prove the audit runs end to end.">
+          <link rel="canonical" href="https://ci.example/"></head>
+          <body><h1>CI smoke page</h1><p>Body copy.</p></body></html>
+          HTML
+          python skills/seo-checklist/scripts/checklist_runner.py https://ci.example/ \
+              --archive /tmp/site --no-history --quiet
+          python skills/seo-checklist/scripts/checklist_report.py checklist-results.json --no-html
+          python skills/seo-checklist/scripts/checklist_report.py checklist-results.json --no-html --lang ru
+
+      # A site that cannot be read must produce no score. Evidence scripts exit 0
+      # with empty output when they fetch nothing, and empty output satisfies the
+      # assertions this registry is built from — that combination once scored a
+      # host that does not resolve at 61/100. Unit tests cover the gate; this
+      # proves the whole path still honours it.
+      - name: An unreachable site gets no score
+        run: |
+          python skills/seo-checklist/scripts/checklist_runner.py \
+              https://unreachable.invalid/ --mode page --no-history --no-prompt \
+              --quiet --timeout 20 --json dead.json > dead.log 2>&1 || true
+          grep -q UNREACHABLE dead.log || { echo "no unreachable warning"; cat dead.log; exit 1; }
+          if grep -q "SEO Score" dead.log; then echo "scored a site it never read"; exit 1; fi
+          python - <<'PY'
+          import json
+          d = json.load(open("dead.json"))
+          assert d["entry_reachable"] is False, "entry_reachable not recorded"
+          assert d["scores"]["decided"] == 0, f"decided {d['scores']['decided']} items"
+          bad = [i["id"] for i in d["items"] if i["status"] in ("PASS", "FAIL", "WARN")]
+          assert not bad, f"verdicts without a site: {bad[:5]}"
+          PY

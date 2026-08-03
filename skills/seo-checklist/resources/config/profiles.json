@@ -1,0 +1,78 @@
+{
+  "_comment": [
+    "Site profiles narrow the registry to what a given kind of site can actually",
+    "be judged on. An excluded item reports N/A with the profile as the reason and",
+    "leaves both metrics alone — it is out of scope, not undecided and not failed.",
+    "",
+    "Exclusions are deliberately conservative. A check is only listed here when it",
+    "cannot apply, never when it merely tends to matter less: quietly dropping a",
+    "hard check would inflate the score exactly where the audit should push back.",
+    "exclude_scripts is resolved against the registry, so items stay in step with",
+    "the scripts they actually call."
+  ],
+  "profiles": {
+    "default": {
+      "label": "No assumptions",
+      "note": "The full registry. Use when the site type is unknown.",
+      "exclude_categories": [],
+      "exclude_scripts": [],
+      "exclude_items": []
+    },
+    "local": {
+      "label": "Local business",
+      "note": "Physical premises or a service area. Local SEO applies in full; storefront-only checks do not.",
+      "exclude_categories": [],
+      "exclude_scripts": [
+        "faceted_nav_audit.py",
+        "collection_page_checker.py"
+      ],
+      "exclude_items": []
+    },
+    "ecommerce": {
+      "label": "Online store",
+      "note": "Product, category and faceted-navigation checks all apply. Nothing is excluded.",
+      "exclude_categories": [],
+      "exclude_scripts": [],
+      "exclude_items": []
+    },
+    "saas": {
+      "label": "SaaS or web product",
+      "note": "No physical location and no product catalogue.",
+      "exclude_categories": [
+        "local"
+      ],
+      "exclude_scripts": [
+        "faceted_nav_audit.py",
+        "collection_page_checker.py",
+        "local_seo_checker.py"
+      ],
+      "exclude_items": []
+    },
+    "blog": {
+      "label": "Blog or personal site",
+      "note": "Article-led. No storefront, no local pack.",
+      "exclude_categories": [
+        "local"
+      ],
+      "exclude_scripts": [
+        "faceted_nav_audit.py",
+        "collection_page_checker.py",
+        "local_seo_checker.py"
+      ],
+      "exclude_items": []
+    },
+    "media": {
+      "label": "Media or publisher",
+      "note": "High-volume editorial. Storefront checks do not apply; ad-density and freshness checks matter more than usual and stay in.",
+      "exclude_categories": [
+        "local"
+      ],
+      "exclude_scripts": [
+        "faceted_nav_audit.py",
+        "collection_page_checker.py",
+        "local_seo_checker.py"
+      ],
+      "exclude_items": []
+    }
+  }
+}

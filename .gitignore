@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+
+# audit output
+checklist-results.json
+CHECKLIST-REPORT.md
+CHECKLIST.html
+LLM-QUEUE*.md
+.seo-runs/
+probe-raw.json
+
+.DS_Store
+.env
