@@ -133,33 +133,48 @@ def pace(host: str, rps: float | None = None) -> float:
     if limit <= 0 or not host:
         return 0.0
     interval = 1.0 / limit
+    fd = None
     try:
         os.makedirs(RATE_LIMIT_DIR, exist_ok=True)
-        path = _slot_path(host)
-        with open(path, "a+") as slot:
-            fcntl.flock(slot.fileno(), fcntl.LOCK_EX)
+        # Deliberately not open(path, "a+"): in append mode POSIX writes at the end
+        # of the file whatever seek() and truncate() say, so two updates
+        # concatenated into "153761.19671379115376.196978791" and float() raised —
+        # out of `pace`, through safe_get, and into 36 evidence scripts at once.
+        fd = os.open(path := _slot_path(host), os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            raw = os.read(fd, 64).decode("ascii", "replace").strip()
             try:
-                slot.seek(0)
-                raw = slot.read().strip()
                 last = float(raw) if raw else 0.0
-                now = time.monotonic()
-                # A stale slot from a previous run — or a clock that moved — must
-                # not park the audit. monotonic() is per-boot, so a value in the
-                # future means the file outlived a reboot.
-                if last > now or now - last > 3600:
-                    last = 0.0
-                waited = max(0.0, last + interval - now)
-                if waited:
-                    time.sleep(waited)
-                slot.seek(0)
-                slot.truncate()
-                slot.write(str(time.monotonic()))
-                return waited
-            finally:
-                fcntl.flock(slot.fileno(), fcntl.LOCK_UN)
-    except OSError:
+            except ValueError:
+                # A slot written by an older version, or a torn write. Pacing from
+                # zero costs one unpaced request; raising would cost the audit.
+                last = 0.0
+            now = time.monotonic()
+            # A stale slot from a previous run — or a clock that moved — must not
+            # park the audit. monotonic() is per-boot, so a value in the future
+            # means the file outlived a reboot.
+            if last > now or now - last > 3600:
+                last = 0.0
+            waited = max(0.0, last + interval - now)
+            if waited:
+                time.sleep(waited)
+            os.ftruncate(fd, 0)
+            os.pwrite(fd, str(time.monotonic()).encode("ascii"), 0)
+            return waited
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except Exception:  # noqa: BLE001
+        # Politeness must never be able to fail an audit. Whatever went wrong with
+        # the shared state, the safe answer is to pace this process on its own.
         time.sleep(interval)
         return interval
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def retry_after_seconds(response) -> float:

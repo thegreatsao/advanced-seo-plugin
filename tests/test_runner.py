@@ -157,6 +157,38 @@ class RateLimiting(unittest.TestCase):
         self.sh.pace("example.com", rps=50)
         self.assertLess(time.monotonic() - start, 0.5)
 
+    def test_a_corrupt_slot_never_raises(self):
+        """The bug this guards: the slot was opened "a+", and in append mode POSIX
+        writes at the end of the file whatever seek() and truncate() say — so two
+        updates concatenated, float() raised out of pace(), through safe_get, and
+        crashed 36 evidence scripts in one run. A politeness feature must not be
+        able to fail an audit."""
+        os.makedirs(self.dir, exist_ok=True)
+        with open(self.sh._slot_path("example.com"), "w") as f:
+            f.write("153761.196713791153761.196978791")
+        self.sh.pace("example.com", rps=50)  # must not raise
+
+    def test_a_slot_holding_nonsense_never_raises(self):
+        os.makedirs(self.dir, exist_ok=True)
+        for junk in ("", "   ", "not a number", "\x00\x01", "1,5"):
+            with open(self.sh._slot_path("example.com"), "w") as f:
+                f.write(junk)
+            self.sh.pace("example.com", rps=50)
+
+    def test_an_unwritable_state_directory_still_paces(self):
+        """Unable to co-ordinate is a reason to slow down alone, not to give up."""
+        self.sh.RATE_LIMIT_DIR = "/dev/null/nope"
+        start = time.monotonic()
+        waited = self.sh.pace("example.com", rps=20)
+        self.assertGreater(waited, 0)
+        self.assertGreaterEqual(time.monotonic() - start, 0.04)
+
+    def test_the_slot_holds_exactly_one_timestamp_after_many_writes(self):
+        for _ in range(6):
+            self.sh.pace("example.com", rps=200)
+        with open(self.sh._slot_path("example.com")) as f:
+            float(f.read().strip())  # raises if two updates concatenated again
+
     def test_retry_after_is_read_in_both_formats(self):
         self.assertEqual(self.sh.retry_after_seconds(_Resp(429, {"Retry-After": "7"})), 7.0)
         future = self.sh.retry_after_seconds(
