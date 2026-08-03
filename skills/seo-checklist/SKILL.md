@@ -12,7 +12,8 @@ description: >
 
 `resources/config/checklist.json` holds **214 items** — the Plerdy 200-point
 checklist plus 14 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
-policy, IndexNow, schema guards, lab Core Web Vitals). Each item names what answers it: a script and an
+policy, IndexNow, schema guards, lab Core Web Vitals). Each item names what
+answers it: a script and an
 assertion over that script's output, a Search Console call, a language-model
 judgement, or a human.
 
@@ -120,7 +121,7 @@ verdict wins — one asset in the sample would condemn the whole site.
 
 ## The second reading
 
-The LLM queue produces 38 verdicts from one model's reading of one page, and the
+The LLM queue produces 33 verdicts from one model's reading of one page, and the
 report presents them beside measured HTTP statuses with the same confidence. Have
 them reviewed before the report goes to anyone:
 
@@ -142,6 +143,81 @@ second first pass; one that could only agree would be decoration.
 It cannot touch script or Search Console verdicts, and it cannot answer an item
 the first pass left unanswered. Both are ignored with a message rather than
 silently applied.
+
+## Measuring the rendered page
+
+Five items are answered from what a browser actually laid out, not from HTML: font
+size, link distinctness, overlays, and — from a mobile render — tap targets. They
+are computed values, so markup alone does not settle them.
+
+Resize to a phone viewport first (375×812), load the page, then run one
+`evaluate_script`:
+
+```js
+(() => {
+  const vw = innerWidth, vh = innerHeight, area = vw * vh;
+  const px = v => parseFloat(v) || 0;
+  const visible = el => {
+    const s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden' || px(s.opacity) === 0) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+
+  let small = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    if (!visible(el)) continue;
+    const ownText = [...el.childNodes].some(
+      n => n.nodeType === 3 && n.textContent.trim().length > 3);
+    if (ownText && px(getComputedStyle(el).fontSize) < 12) small++;
+  }
+
+  let indistinct = 0;
+  for (const a of document.querySelectorAll('p a, li a, td a, article a')) {
+    if (!visible(a) || !a.parentElement) continue;
+    const s = getComputedStyle(a), parent = getComputedStyle(a.parentElement);
+    const underlined = (s.textDecorationLine || '').includes('underline');
+    const bolder = parseInt(s.fontWeight) - parseInt(parent.fontWeight) >= 200;
+    if (!underlined && !bolder && s.color === parent.color) indistinct++;
+  }
+
+  let overlays = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    const s = getComputedStyle(el);
+    if (s.position !== 'fixed' && s.position !== 'sticky') continue;
+    if (!visible(el)) continue;
+    const r = el.getBoundingClientRect();
+    const covered = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)) *
+                    Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    if (covered / area >= 0.25) overlays++;
+  }
+
+  let taps = 0;
+  for (const el of document.querySelectorAll(
+      'a, button, input, select, textarea, [role=button]')) {
+    if (!visible(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 48 || r.height < 48) taps++;
+  }
+
+  return {url: location.href, viewport: {width: vw, height: vh},
+          text_nodes_below_12px: small, links_indistinct: indistinct,
+          overlays_covering_content: overlays, tap_targets_below_48px: taps};
+})()
+```
+
+Save the object, adding a `source` line that says how it was taken, and pass
+`--rendered-json /path/to/rendered.json`.
+
+`viewport.width` is required. From a desktop render the tap-target and
+mobile-interstitial keys are **dropped**, and those items report `NO_DATA` — a
+desktop window cannot answer either question, and passing them through would be a
+verdict about a viewport nobody looked at.
+
+Adjust the snippet when a site needs it — a cookie banner counted as an overlay is
+a true positive, a `sticky` header covering a quarter of a phone screen usually is
+too — but say what you changed in `source`. If the MCP is unavailable, skip it:
+five `NO_DATA` items with a stated reason beat five guesses.
 
 ## Core Web Vitals from a local trace
 

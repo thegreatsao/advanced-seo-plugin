@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from urllib.parse import urlencode
 
 try:
@@ -23,9 +24,9 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from lib.safe_http import default_headers
+    from lib.safe_http import default_headers, pace, retry_after_seconds
 except ImportError:
-    from scripts.lib.safe_http import default_headers
+    from scripts.lib.safe_http import default_headers, pace, retry_after_seconds
 
 NU_ENDPOINT = "https://validator.w3.org/nu/"
 MAX_MESSAGES = 40
@@ -40,10 +41,22 @@ def validate(url: str, timeout: int = 45) -> dict:
         "error": None,
     }
     query = urlencode({"doc": url, "out": "json"})
+    # This is the one script that calls requests directly rather than through
+    # safe_request, because it addresses a fixed third-party endpoint rather than
+    # the audited site. It still has to be paced: the W3C validator is a free
+    # service and this asks it to fetch a page on our behalf.
     try:
+        pace("validator.w3.org")
         resp = requests.get(f"{NU_ENDPOINT}?{query}",
                             headers=default_headers({"Accept": "application/json"}),
                             timeout=timeout)
+        wait = retry_after_seconds(resp)
+        if 0 < wait <= 30:
+            time.sleep(wait)
+            pace("validator.w3.org")
+            resp = requests.get(f"{NU_ENDPOINT}?{query}",
+                                headers=default_headers({"Accept": "application/json"}),
+                                timeout=timeout)
     except requests.RequestException as exc:
         result["error"] = f"validator unreachable: {exc}"
         return result

@@ -35,18 +35,21 @@ schema guards, and lab Core Web Vitals from a local trace.
 
 | Answered by | Items |
 |---|---|
-| a script, asserted against its real output | 141 |
-| a language model reading the page | 38 |
+| a script, asserted against its real output | 146 |
+| a language model reading the page | 33 |
 | a human | 32 |
 | Search Console, with no API to answer it, so a person opens the UI | 3 |
 
-141 script-backed items collapse to **54 unique process launches** — the runner
+146 script-backed items collapse to **55 unique process launches** — the runner
 deduplicates, so `pagespeed.py` runs once, not seven times.
 
-Nine items moved from script to judgement in August 2026, and the move was a
-correction rather than a design change: each one asked a script about wording it
-never emits, so it had been reporting PASS on every site. See "Assertions that
-cannot fire".
+Nine items moved from script to judgement in August 2026 as a correction, not a
+design change: each asked a script about wording it never emits, so each had been
+reporting PASS on every site (see "Assertions that cannot fire"). Five then came
+back to being measured, from a rendered page rather than from HTML — font size,
+link distinctness, overlays and tap targets are computed values, and a model
+reading markup cannot see them. The three that stayed judgements are judgements: a
+close keyword variant and a localised title are not measurements.
 
 Every item also carries an `effort` estimate, so the fix list is ranked by
 severity **against** effort rather than by severity alone: ranking by severity
@@ -274,6 +277,33 @@ The merge only overwrites `LLM_PENDING` items; an answer file cannot flip a verd
 a script established. When the page does not support a verdict the answer is `N/A`
 — inventing a `PASS` to lift the score corrupts the one metric this exists to
 protect.
+
+## Politeness
+
+An audit is a burst by construction: the runner launches its evidence scripts
+concurrently, and several of them walk a sitemap or a link list inside their own
+process. Requests are paced to **4 per second per host by default**, shared across
+those processes through a lock file — an in-process limiter would simply let eight
+scripts go at once. `--max-rps N` changes it, `--max-rps 0` removes it, and
+`SEO_MAX_RPS` does the same for a script run on its own.
+
+A `429` or `503` carrying `Retry-After` is honoured once, up to 30 seconds. Past
+that the request fails and the item reports `NO_DATA` with the reason, which is
+more useful than an audit that appears to hang. A `Retry-After` on any other status
+is ignored — some CDNs send it on a 200, and sleeping on that would pace the audit
+to somebody else's cache policy.
+
+## Measuring the rendered page
+
+Font size, link distinctness, overlays and tap targets are **computed** values:
+they depend on stylesheets, media queries and scripts that HTML does not settle.
+Measure them in a browser (chrome-devtools MCP, one `evaluate_script` — the snippet
+is in `SKILL.md`), save the numbers and pass `--rendered-json`.
+
+`viewport.width` is required, and from a desktop render the tap-target and
+mobile-interstitial keys are dropped rather than zeroed: a desktop window cannot
+answer either question, and a 0 would be a verdict about a viewport nobody looked
+at.
 
 ## Assertions that cannot fire
 

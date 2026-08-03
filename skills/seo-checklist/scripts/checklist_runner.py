@@ -1401,11 +1401,21 @@ def main() -> int:
     ap.add_argument("--gsc-credentials", default="",
                     help="service account JSON; falls back to GSC_CREDENTIALS_PATH, "
                          "GV_SA_KEY, then ~/.config/gcloud/gsc-service-account.json")
+    ap.add_argument("--max-rps", type=float, default=None, metavar="N",
+                    help="requests per second per host, across all evidence "
+                         "scripts (default 4). 0 removes the pacing. An audit is a "
+                         "burst by construction — the scripts run concurrently and "
+                         "several walk a sitemap inside their own process.")
     ap.add_argument("--cwv-json", default="",
                     help="JSON file of Core Web Vitals from a local browser trace "
                          "(chrome-devtools MCP). Lab data, reported separately from "
                          "the CrUX field data PageSpeed provides. Without it the "
                          "three lab items report NO_DATA.")
+    ap.add_argument("--rendered-json", default="",
+                    help="JSON of measurements taken from the rendered page "
+                         "(chrome-devtools MCP). Answers font size, link "
+                         "distinctness, overlays and — from a mobile render — tap "
+                         "targets. Without it those items report NO_DATA.")
     ap.add_argument("--links-csv", default="",
                     help="Search Console Links report export (ZIP or CSV). The "
                          "Links report has no API, so incoming-link items stay "
@@ -1430,6 +1440,11 @@ def main() -> int:
                          "Must be one the service account can read — it is not always the "
                          "same string as the audited URL.")
     a = ap.parse_args()
+
+    # Passed to the evidence scripts through the environment, because they are
+    # separate processes and the pacing they share is keyed on it.
+    if a.max_rps is not None:
+        os.environ["SEO_MAX_RPS"] = str(a.max_rps)
 
     mode = a.mode or ("archive" if a.archive else "live")
     if a.archive and mode != "archive":
@@ -1467,6 +1482,12 @@ def main() -> int:
         print(f"  GSC: {gsc_path or 'no credentials found'}", file=sys.stderr)
         print(f"  registry: {len(items)} items "
               f"(version {registry_version})", file=sys.stderr)
+        if mode != "archive":
+            from lib.safe_http import max_rps
+            rps = max_rps()
+            print(f"  rate limit: {rps} request(s)/second per host"
+                  if rps else "  rate limit: OFF — every script goes as fast as it can",
+                  file=sys.stderr)
 
     # The entry page is fetched before the profile is settled so detection can
     # read it — one request, not two, and archive mode gets the same treatment.
@@ -1581,6 +1602,8 @@ def main() -> int:
         ctx["links_csv"] = os.path.expanduser(a.links_csv)
     if a.cwv_json:
         ctx["cwv_json"] = os.path.expanduser(a.cwv_json)
+    if a.rendered_json:
+        ctx["rendered_json"] = os.path.expanduser(a.rendered_json)
     for k, env in (("indexnow_key", "INDEXNOW_KEY"), ("pagespeed_key", "PAGESPEED_API_KEY")):
         if os.environ.get(env):
             ctx[k] = os.environ[env]

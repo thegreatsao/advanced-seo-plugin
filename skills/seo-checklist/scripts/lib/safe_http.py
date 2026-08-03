@@ -3,8 +3,15 @@
 
 from __future__ import annotations
 
+import fcntl
+import hashlib
 import ipaddress
+import os
 import socket
+import tempfile
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlparse, urlunparse
 
 try:
@@ -71,6 +78,115 @@ def normalize_url(url: str, default_scheme: str = "https") -> str:
     if not parsed.hostname:
         raise SafeHTTPError("URL must include a hostname")
     return urlunparse(parsed)
+
+
+# ---------------------------------------------------------------------------
+# Politeness
+# ---------------------------------------------------------------------------
+
+# An audit is a burst by construction: the runner launches its evidence scripts
+# concurrently, and several of them walk a sitemap or a link list inside their own
+# process. Nothing paced any of it, so a small site could take a few hundred
+# requests in a couple of seconds from one machine — indistinguishable from
+# something worth blocking, and rude regardless of whether anyone notices.
+#
+# The pacing has to be shared, because the scripts are separate processes and an
+# in-process limiter would just let eight of them go at once. The state is a file
+# per host holding the last request time, guarded by a lock: cheap, no daemon, and
+# it survives a script crashing mid-audit.
+DEFAULT_MAX_RPS = 4.0
+RATE_LIMIT_DIR = os.path.join(tempfile.gettempdir(), "seo-checklist-rate")
+# A server that says "come back in an hour" is not worth waiting for inside an
+# audit; past this the request fails and the item reports NO_DATA with the reason,
+# which is more useful than a run that appears to hang.
+MAX_RETRY_AFTER_WAIT = 30.0
+
+
+def max_rps() -> float:
+    """Requests per second per host. `SEO_MAX_RPS=0` switches pacing off."""
+    raw = os.environ.get("SEO_MAX_RPS", "")
+    if not raw:
+        return DEFAULT_MAX_RPS
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_MAX_RPS
+    return max(value, 0.0)
+
+
+def _slot_path(host: str) -> str:
+    # The host is not a safe filename (ports, IDN, path-like garbage from a
+    # malformed URL), so it is hashed rather than sanitised.
+    digest = hashlib.sha256(host.encode("utf-8", "replace")).hexdigest()[:32]
+    return os.path.join(RATE_LIMIT_DIR, f"{digest}.slot")
+
+
+def pace(host: str, rps: float | None = None) -> float:
+    """Wait until this process may hit `host` again. Returns the seconds waited.
+
+    Coordinated through a lock file so that concurrent evidence scripts queue
+    behind each other instead of each pacing itself. A failure to read or write
+    that file is never fatal: being unable to co-ordinate is a reason to slow down
+    on our own, not to abandon the request.
+    """
+    limit = max_rps() if rps is None else rps
+    if limit <= 0 or not host:
+        return 0.0
+    interval = 1.0 / limit
+    try:
+        os.makedirs(RATE_LIMIT_DIR, exist_ok=True)
+        path = _slot_path(host)
+        with open(path, "a+") as slot:
+            fcntl.flock(slot.fileno(), fcntl.LOCK_EX)
+            try:
+                slot.seek(0)
+                raw = slot.read().strip()
+                last = float(raw) if raw else 0.0
+                now = time.monotonic()
+                # A stale slot from a previous run — or a clock that moved — must
+                # not park the audit. monotonic() is per-boot, so a value in the
+                # future means the file outlived a reboot.
+                if last > now or now - last > 3600:
+                    last = 0.0
+                waited = max(0.0, last + interval - now)
+                if waited:
+                    time.sleep(waited)
+                slot.seek(0)
+                slot.truncate()
+                slot.write(str(time.monotonic()))
+                return waited
+            finally:
+                fcntl.flock(slot.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        time.sleep(interval)
+        return interval
+
+
+def retry_after_seconds(response) -> float:
+    """How long a 429/503 asked us to wait, 0 when it did not ask.
+
+    Both forms of the header are accepted: delta-seconds and an HTTP date. An
+    unparseable value returns 0 rather than a guess — waiting a made-up interval
+    is not more polite than not waiting.
+    """
+    if getattr(response, "status_code", 0) not in (429, 503):
+        return 0.0
+    raw = ((getattr(response, "headers", {}) or {}).get("Retry-After") or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if when is None:
+        return 0.0
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 def _port_for(parsed) -> int:
@@ -165,15 +281,8 @@ def safe_request(
     kwargs["verify"] = True
 
     for _ in range(max_redirects + 1):
-        response = requester.request(
-            method,
-            current,
-            headers=request_headers,
-            timeout=timeout,
-            allow_redirects=False,
-            stream=True,
-            **kwargs,
-        )
+        response = _paced_request(requester, method, current, request_headers,
+                                  timeout, kwargs)
 
         if not (allow_redirects and response.is_redirect):
             response.history = history
@@ -207,6 +316,27 @@ def safe_request(
         current = next_url
 
     raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
+
+
+def _paced_request(requester, method, url, headers, timeout, kwargs):
+    """One request, paced before it goes out and retried once if asked to back off.
+
+    The retry is deliberately single and bounded. A server that answers 429 has
+    told us we are going too fast, and hammering it again — or waiting out an
+    hour-long Retry-After inside an audit — are both worse than letting the item
+    report NO_DATA with the reason attached.
+    """
+    pace(urlparse(url).hostname or "")
+    response = requester.request(method, url, headers=headers, timeout=timeout,
+                                 allow_redirects=False, stream=True, **kwargs)
+    wait = retry_after_seconds(response)
+    if 0 < wait <= MAX_RETRY_AFTER_WAIT:
+        response.close()
+        time.sleep(wait)
+        pace(urlparse(url).hostname or "")
+        response = requester.request(method, url, headers=headers, timeout=timeout,
+                                     allow_redirects=False, stream=True, **kwargs)
+    return response
 
 
 def safe_get(url: str, **kwargs):

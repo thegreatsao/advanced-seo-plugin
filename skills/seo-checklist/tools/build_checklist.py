@@ -106,6 +106,7 @@ REQUIRES = {
     # the measurement happened before the run, and the run must not pretend to be
     # taking it.
     "cwv_metrics.py": "offline",
+    "rendered_audit.py": "offline",
     "readability.py": "offline",
     "pagespeed.py": "api",
     "html_validator.py": "api",
@@ -296,12 +297,21 @@ item(33, "medium", S, "social_meta.py", PAGE,
 
 # --- 3. Content -------------------------------------------------------------
 # a11y_seo_checker.py checks H1 count, lang, viewport, alt text, labels,
-# landmarks and generic link text — it has never looked at font size, link
-# styling or tap targets. The three items that asked it to were matching wording
-# it cannot emit, so they passed on every site. Rendered type size and hit areas
-# need the layout lens, which reads the CSS and the markup together.
-item(34, "medium", L, fix="Readable font size across all breakpoints")
-item(35, "medium", L, fix="Links must be visually distinct from body text")
+# landmarks and generic link text — it has never looked at font size, link styling
+# or tap targets. The three items that asked it to were matching wording it cannot
+# emit, so they passed on every site.
+#
+# These are computed values: they depend on stylesheets, media queries and scripts
+# that HTML alone does not settle, so a model reading markup is a weaker answer
+# than it looks. rendered_audit.py reads what a browser measured instead. Without
+# --rendered-json the placeholder is unresolved and they report NO_DATA.
+RENDERED = ["{rendered_json}"]
+item(34, "medium", S, "rendered_audit.py", RENDERED,
+     {"path": "text_nodes_below_12px", "eq": 0},
+     "Readable font size across all breakpoints")
+item(35, "medium", S, "rendered_audit.py", RENDERED,
+     {"path": "links_indistinct", "eq": 0},
+     "Links must be visually distinct from body text")
 item(36, "medium", S, "a11y_seo_checker.py", PAGE,
      {"path": "checks.inline_contrast_candidates", "eq": 0},
      "Text contrast at WCAG AA or better (4.5:1)")
@@ -332,11 +342,13 @@ item(48, "high", S, "parse_html.py", HTMLARG,
      "Use hierarchical headings and semantic HTML")
 item(49, "medium", L, fix="Target topics and queries, not isolated keywords")
 item(50, "high", L, fix="Follow Google Search Essentials - quality and spam policies")
-# mobile_render_checker.py reports viewport, fixed widths and sticky
-# positioning. It says nothing about interstitials, and the two items asking it
-# for them matched nothing. Whether a dialog is *intrusive* is a judgement about
-# what covers the content, which is the layout lens.
-item(51, "high", L, fix="Remove intrusive interstitials, especially on mobile")
+# mobile_render_checker.py reports viewport, fixed widths and sticky positioning.
+# It says nothing about interstitials, and the two items asking it for them matched
+# nothing. What makes a dialog intrusive is how much of the viewport it covers —
+# a measurement, once something has actually laid the page out.
+item(51, "high", S, "rendered_audit.py", RENDERED,
+     {"path": "overlays_covering_content", "eq": 0},
+     "Remove intrusive interstitials, especially on mobile")
 item(52, "medium", L, fix="Limit heavy advertising above the fold")
 item(53, "medium", S, "javascript_render_audit.py", PAGE,
      {"path": "raw.word_count", "gte": 300},
@@ -436,7 +448,9 @@ item(92, "low", M, fix="Pitch and appear on relevant podcasts")
 item(93, "critical", S, "parse_html.py", HTMLARG,
      {"path": "viewport", "truthy": True},
      "Responsive, mobile-first layout")
-item(94, "high", L, fix="Remove intrusive interstitials on mobile")
+item(94, "high", S, "rendered_audit.py", RENDERED,
+     {"path": "mobile_overlays_covering_content", "eq": 0},
+     "Remove intrusive interstitials on mobile")
 item(95, "medium", S, "image_weight_audit.py", PAGE,
      {"path": "issues", "count_matching_lte": ["(?i)large|oversize|weight", 5]},
      "Reduce mobile page weight")
@@ -457,7 +471,12 @@ item(101, "low", L, fix="Keep mobile navigation within thumb reach")
 item(102, "low", S, "video_schema_checker.py", PAGE,
      {"path": "issues", "none_severity": ["critical", "high"]},
      "Optimize video for mobile")
-item(103, "medium", L, fix="Increase tap targets to 48x48 CSS pixels")
+# Only answerable from a mobile render; rendered_audit.py drops the key when the
+# recorded viewport is a desktop window, so this is NO_DATA rather than a verdict
+# about a viewport nobody looked at.
+item(103, "medium", S, "rendered_audit.py", RENDERED,
+     {"path": "tap_targets_below_48px", "eq": 0},
+     "Increase tap targets to 48x48 CSS pixels")
 item(104, "low", S, "parse_html.py", HTMLARG,
      {"path": "favicon", "truthy": True},
      "Add a favicon - it shows in mobile SERPs")
@@ -810,9 +829,8 @@ LENS = {
     "copy": ["MS-024", "MS-025", "CN-037", "CN-042", "CN-043", "CN-046",
              "CN-047", "CN-049", "CN-050", "CN-058", "CN-064", "CN-067",
              "KW-074", "KW-075", "KW-077", "MD-188"],
-    "layout": ["CN-034", "CN-035", "CN-051", "CN-052", "CN-059", "CN-060",
-               "CN-061", "CN-062", "CN-063", "MB-094", "MB-101", "MB-103",
-               "AR-157", "AR-159", "AR-160", "AR-161"],
+    "layout": ["CN-052", "CN-059", "CN-060", "CN-061", "CN-062", "CN-063",
+               "MB-101", "AR-157", "AR-159", "AR-160", "AR-161"],
     # TE-165 (subdomain vs subdirectory) is filed under technical, but the
     # decision is almost always driven by language/region targeting.
     "locale": ["IN-126", "IN-130", "TE-165"],

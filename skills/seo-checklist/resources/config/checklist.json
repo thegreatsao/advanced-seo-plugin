@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "3047434dc981",
+  "registry_version": "871e10d088f9",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -834,8 +834,18 @@
       "category_label": "Content",
       "title": "Ensure Readable Font Sizes",
       "severity": "medium",
-      "source": "llm",
-      "lens": "layout",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "text_nodes_below_12px",
+          "eq": 0
+        }
+      },
       "effort": "high",
       "fix": "Readable font size across all breakpoints"
     },
@@ -846,8 +856,18 @@
       "category_label": "Content",
       "title": "Make Hyperlinks Clear and Distinct",
       "severity": "medium",
-      "source": "llm",
-      "lens": "layout",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "links_indistinct",
+          "eq": 0
+        }
+      },
       "effort": "high",
       "fix": "Links must be visually distinct from body text"
     },
@@ -1113,8 +1133,18 @@
       "category_label": "Content",
       "title": "Avoid Intrusive Interstitials (Especially on Mobile)",
       "severity": "high",
-      "source": "llm",
-      "lens": "layout",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "overlays_covering_content",
+          "eq": 0
+        }
+      },
       "effort": "high",
       "fix": "Remove intrusive interstitials, especially on mobile"
     },
@@ -1834,8 +1864,18 @@
       "category_label": "Mobile",
       "title": "Avoid Intrusive Interstitials on Mobile",
       "severity": "high",
-      "source": "llm",
-      "lens": "layout",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "mobile_overlays_covering_content",
+          "eq": 0
+        }
+      },
       "effort": "medium",
       "fix": "Remove intrusive interstitials on mobile"
     },
@@ -2013,8 +2053,18 @@
       "category_label": "Mobile",
       "title": "Make Tap Targets Easy to Click",
       "severity": "medium",
-      "source": "llm",
-      "lens": "layout",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "tap_targets_below_48px",
+          "eq": 0
+        }
+      },
       "effort": "medium",
       "fix": "Increase tap targets to 48x48 CSS pixels"
     },

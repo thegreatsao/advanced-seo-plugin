@@ -564,6 +564,32 @@ Observed on plerdy: 484 errors, 0 warnings, 517 info. Counts in the hundreds are
 normal for a WordPress theme, so rules should target `summary.errors` thresholds
 rather than demanding zero.
 
+### rendered_audit.py
+
+Reads a JSON file of measurements taken from a rendered page (chrome-devtools MCP
+`evaluate_script`); takes no URL and makes no request. Registry args:
+`["{rendered_json}"]`, so without `--rendered-json` the placeholder is unresolved
+and CN-034/035/051, MB-094 and MB-103 report NO_DATA.
+
+`url` — str or null
+`source` — str — `"unspecified"` when the file did not say
+`viewport.width` — number — **required**; the file is refused without it
+`viewport_class` — str — `mobile` when width ≤ 480, else `desktop`
+`measured[]` / `missing[]` — arrays of str
+`text_nodes_below_12px` — int — CN-034
+`links_indistinct` — int — CN-035 (neither underlined, nor bolder, nor a different
+  colour from the parent)
+`overlays_covering_content` — int — CN-051 (fixed/sticky elements covering ≥25% of
+  the viewport)
+`tap_targets_below_48px` — int — MB-103, **mobile renders only**
+`mobile_overlays_covering_content` — int — MB-094, **mobile renders only**; derived
+  from `overlays_covering_content`
+
+From a desktop render the two mobile keys are dropped rather than zeroed, and the
+`missing[]` entry says how wide the render was. A desktop window cannot answer a
+question about tap targets, and a 0 would be a verdict about a viewport nobody
+looked at.
+
 ### cwv_metrics.py
 
 Reads a JSON file written from a browser performance trace (chrome-devtools MCP);

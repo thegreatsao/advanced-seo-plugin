@@ -13,6 +13,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +31,7 @@ from checklist_runner import (  # noqa: E402
     visible_words,
 )
 from cwv_metrics import read as cwv_read  # noqa: E402
+from rendered_audit import read as rendered_read  # noqa: E402
 from detect_profile import detect  # noqa: E402
 
 
@@ -76,6 +78,111 @@ class Evaluate(unittest.TestCase):
         data = {"meta_robots": "index, follow"}
         self.assertEqual(
             evaluate({"path": "meta_robots", "none_matching": "noindex"}, data)[0], True)
+
+
+class _Resp:
+    """The parts of a response the pacing logic looks at."""
+
+    def __init__(self, status_code, headers):
+        self.status_code, self.headers = status_code, headers
+
+
+class RateLimiting(unittest.TestCase):
+    """An audit is a burst by construction: the evidence scripts run concurrently
+    and several walk a sitemap inside their own process. This is the only open item
+    that could harm somebody else's server rather than the audit's own honesty."""
+
+    def setUp(self):
+        self.saved = os.environ.get("SEO_MAX_RPS")
+        os.environ.pop("SEO_MAX_RPS", None)
+        import lib.safe_http as sh
+        self.sh = sh
+        self.dir = tempfile.mkdtemp()
+        self.saved_dir = sh.RATE_LIMIT_DIR
+        sh.RATE_LIMIT_DIR = self.dir
+
+    def tearDown(self):
+        self.sh.RATE_LIMIT_DIR = self.saved_dir
+        shutil.rmtree(self.dir, ignore_errors=True)
+        if self.saved is None:
+            os.environ.pop("SEO_MAX_RPS", None)
+        else:
+            os.environ["SEO_MAX_RPS"] = self.saved
+
+    def test_pacing_is_on_by_default(self):
+        self.assertGreater(self.sh.max_rps(), 0)
+
+    def test_consecutive_requests_to_one_host_are_spaced(self):
+        start = time.monotonic()
+        for _ in range(4):
+            self.sh.pace("example.com", rps=50)
+        self.assertGreaterEqual(time.monotonic() - start, 0.05)
+
+    def test_different_hosts_do_not_queue_behind_each_other(self):
+        """One slow site must not pace requests to an unrelated API."""
+        self.sh.pace("a.example", rps=2)
+        start = time.monotonic()
+        self.sh.pace("b.example", rps=2)
+        self.assertLess(time.monotonic() - start, 0.2)
+
+    def test_the_pacing_state_is_shared_between_processes(self):
+        """The scripts are separate processes; an in-process limiter would let
+        eight of them go at once, which is the burst this exists to stop."""
+        self.assertTrue(os.path.isdir(self.dir) or True)
+        self.sh.pace("shared.example", rps=50)
+        self.assertTrue(os.listdir(self.dir), "nothing was written to co-ordinate on")
+
+    def test_zero_switches_pacing_off(self):
+        os.environ["SEO_MAX_RPS"] = "0"
+        self.assertEqual(self.sh.max_rps(), 0.0)
+        start = time.monotonic()
+        for _ in range(5):
+            self.sh.pace("example.com")
+        self.assertLess(time.monotonic() - start, 0.05)
+
+    def test_a_nonsense_limit_falls_back_to_the_default(self):
+        """Never to "no limit": a typo in an env var must not silently remove the
+        one guard that protects a third party."""
+        os.environ["SEO_MAX_RPS"] = "fast please"
+        self.assertEqual(self.sh.max_rps(), self.sh.DEFAULT_MAX_RPS)
+
+    def test_a_stale_slot_does_not_park_the_audit(self):
+        """monotonic() is per-boot, so a slot file that outlived a reboot can hold
+        a value in the future. Waiting it out would look like a hang."""
+        path = self.sh._slot_path("example.com")
+        os.makedirs(self.dir, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(str(time.monotonic() + 10_000))
+        start = time.monotonic()
+        self.sh.pace("example.com", rps=50)
+        self.assertLess(time.monotonic() - start, 0.5)
+
+    def test_retry_after_is_read_in_both_formats(self):
+        self.assertEqual(self.sh.retry_after_seconds(_Resp(429, {"Retry-After": "7"})), 7.0)
+        future = self.sh.retry_after_seconds(
+            _Resp(503, {"Retry-After": "Wed, 21 Oct 2099 07:28:00 GMT"}))
+        self.assertGreater(future, 0)
+
+    def test_retry_after_only_applies_to_a_backoff_status(self):
+        """Some CDNs send the header on a 200. Sleeping on that would pace the
+        audit to somebody else's cache policy."""
+        self.assertEqual(self.sh.retry_after_seconds(_Resp(200, {"Retry-After": "7"})), 0.0)
+
+    def test_an_unparseable_retry_after_waits_for_nothing(self):
+        """Waiting a made-up interval is not more polite than not waiting."""
+        self.assertEqual(self.sh.retry_after_seconds(_Resp(429, {"Retry-After": "soon"})), 0.0)
+
+    def test_a_date_in_the_past_waits_for_nothing(self):
+        self.assertEqual(
+            self.sh.retry_after_seconds(_Resp(429, {"Retry-After": "Wed, 21 Oct 2020 07:28:00 GMT"})),
+            0.0)
+
+    def test_an_absurd_backoff_is_not_waited_out(self):
+        """A server saying "come back in an hour" is not worth blocking an audit
+        for; the item reports NO_DATA with the reason instead."""
+        self.assertLess(self.sh.MAX_RETRY_AFTER_WAIT, 120)
+        self.assertGreater(self.sh.retry_after_seconds(_Resp(429, {"Retry-After": "3600"})),
+                           self.sh.MAX_RETRY_AFTER_WAIT)
 
 
 class ValueMap(unittest.TestCase):
@@ -926,6 +1033,131 @@ class LabCoreWebVitals(unittest.TestCase):
             self.assertEqual(by_id[lab]["check"]["script"], "cwv_metrics.py")
         for field in ("SP-108", "SP-113"):
             self.assertEqual(by_id[field]["check"]["script"], "pagespeed.py")
+
+
+class LocalBusinessSubtypes(unittest.TestCase):
+    """Found by the first live audit, not by review. `find_schema_nodes(docs,
+    "LocalBusiness")` compares @type as a string, so a restaurant publishing
+    `Restaurant` — which is a LocalBusiness — was reported as having no local
+    schema, producing a `high` FAIL on LO-198 that was pure fabrication."""
+
+    def _nodes(self, schema_type):
+        from local_seo_checker import find_local_business_nodes
+        return find_local_business_nodes([{"@type": schema_type, "name": "X"}])
+
+    def test_the_base_type_matches(self):
+        self.assertEqual(len(self._nodes("LocalBusiness")), 1)
+
+    def test_a_subtype_matches(self):
+        """The live case: a restaurant site scored a fabricated failure on this."""
+        for schema_type in ("Restaurant", "Hotel", "Bakery", "Dentist", "Plumber",
+                            "ClothingStore", "Campground", "CafeOrCoffeeShop"):
+            self.assertEqual(len(self._nodes(schema_type)), 1, schema_type)
+
+    def test_an_unrelated_type_does_not_match(self):
+        for schema_type in ("Article", "Product", "WebSite", "Person",
+                            "BreadcrumbList", "Organization"):
+            self.assertEqual(self._nodes(schema_type), [], schema_type)
+
+    def test_a_type_array_matches_on_any_member(self):
+        from local_seo_checker import find_local_business_nodes
+        nodes = find_local_business_nodes(
+            [{"@type": ["Organization", "Restaurant"], "name": "X"}])
+        self.assertEqual(len(nodes), 1)
+
+    def test_an_unknown_subtype_reports_missing_rather_than_guessing(self):
+        """The list is a snapshot of a hierarchy that keeps growing, so it will go
+        stale. Failing towards "no schema found" is the visible direction —
+        accepting anything with "Business" in the name would not be."""
+        self.assertEqual(self._nodes("SomeFutureBusinessType"), [])
+
+
+class RenderedPageMeasurements(unittest.TestCase):
+    """Five items came back from the LLM queue to being measured. The thing that
+    makes that honest is refusing to answer what the render cannot: a desktop
+    window says nothing about tap targets."""
+
+    def _file(self, payload):
+        path = os.path.join(tempfile.mkdtemp(), "rendered.json")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(payload if isinstance(payload, str) else json.dumps(payload))
+        return path
+
+    MOBILE = {"url": "https://e.com/", "viewport": {"width": 375, "height": 812},
+              "text_nodes_below_12px": 0, "links_indistinct": 2,
+              "overlays_covering_content": 0, "tap_targets_below_48px": 3}
+
+    def test_a_mobile_render_answers_everything(self):
+        out = rendered_read(self._file(self.MOBILE))
+        self.assertEqual(out["viewport_class"], "mobile")
+        for key in ("text_nodes_below_12px", "links_indistinct",
+                    "overlays_covering_content", "tap_targets_below_48px",
+                    "mobile_overlays_covering_content"):
+            self.assertIn(key, out["measured"], key)
+
+    def test_a_desktop_render_drops_the_mobile_metrics(self):
+        """Not zeroed. A 0 would be a verdict about a viewport nobody looked at,
+        and the runner reads the absent key as NO_DATA."""
+        desktop = dict(self.MOBILE, viewport={"width": 1280, "height": 800})
+        out = rendered_read(self._file(desktop))
+        self.assertEqual(out["viewport_class"], "desktop")
+        self.assertNotIn("tap_targets_below_48px", out)
+        self.assertNotIn("mobile_overlays_covering_content", out)
+        self.assertIsNone(evaluate({"path": "tap_targets_below_48px", "eq": 0}, out)[0])
+        self.assertTrue(any("mobile render" in m for m in out["missing"]))
+
+    def test_the_desktop_metrics_still_answer_from_a_desktop_render(self):
+        desktop = dict(self.MOBILE, viewport={"width": 1280}, links_indistinct=5)
+        out = rendered_read(self._file(desktop))
+        self.assertFalse(evaluate({"path": "links_indistinct", "eq": 0}, out)[0])
+
+    def test_a_file_without_a_viewport_is_refused(self):
+        """Without it there is no way to know which questions the file can answer,
+        and the mobile ones would silently be answered from a desktop window."""
+        with self.assertRaises(ValueError) as caught:
+            rendered_read(self._file({k: v for k, v in self.MOBILE.items()
+                                      if k != "viewport"}))
+        self.assertIn("viewport.width", str(caught.exception))
+
+    def test_the_mobile_overlay_count_is_derived_not_invented(self):
+        payload = dict(self.MOBILE, overlays_covering_content=2)
+        payload.pop("tap_targets_below_48px")
+        out = rendered_read(self._file(payload))
+        self.assertEqual(out["mobile_overlays_covering_content"], 2)
+
+    def test_an_unmeasured_metric_stays_absent(self):
+        out = rendered_read(self._file({"viewport": {"width": 375},
+                                        "links_indistinct": 1}))
+        self.assertNotIn("text_nodes_below_12px", out)
+        self.assertIn("text_nodes_below_12px", out["missing"])
+
+    def test_a_non_count_is_refused(self):
+        with self.assertRaises(ValueError):
+            rendered_read(self._file({"viewport": {"width": 375},
+                                      "links_indistinct": "a few"}))
+
+    def test_a_file_with_no_metrics_is_refused(self):
+        with self.assertRaises(ValueError):
+            rendered_read(self._file({"viewport": {"width": 375}}))
+
+    def test_the_registry_uses_it_for_the_five_items(self):
+        with open(os.path.join(SCRIPTS, "..", "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            by_id = {i["id"]: i for i in json.load(f)["items"]}
+        for item_id in ("CN-034", "CN-035", "CN-051", "MB-094", "MB-103"):
+            self.assertEqual(by_id[item_id]["source"], "script", item_id)
+            self.assertEqual(by_id[item_id]["check"]["script"], "rendered_audit.py",
+                             item_id)
+
+    def test_the_three_judgement_items_stayed_judgements(self):
+        """A close keyword variant and a localised title are not computed values —
+        moving them to a measurement would be inventing one."""
+        with open(os.path.join(SCRIPTS, "..", "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            by_id = {i["id"]: i for i in json.load(f)["items"]}
+        for item_id in ("KW-074", "KW-075", "LO-197"):
+            self.assertEqual(by_id[item_id]["source"], "llm", item_id)
+            self.assertTrue(by_id[item_id].get("lens"), item_id)
 
 
 class ThinEntryPage(unittest.TestCase):
