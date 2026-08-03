@@ -99,6 +99,11 @@ def parse_html(
         "title": None,
         "meta_description": None,
         "meta_robots": None,
+        # MS-031 asserts this is falsy with `missing_is: pass`, and the key was
+        # never emitted at all — so the item passed on every site, including one
+        # with a stuffed keywords tag. A rule can only be as honest as the field
+        # it reads exists.
+        "meta_keywords": None,
         "x_robots_tag": header_lookup.get("x-robots-tag"),
         "canonical": None,
         "lang": None,
@@ -153,6 +158,8 @@ def parse_html(
             result["meta_description"] = content
         elif name == "robots":
             result["meta_robots"] = content
+        elif name == "keywords":
+            result["meta_keywords"] = content
         elif name == "viewport":
             result["viewport"] = content
 

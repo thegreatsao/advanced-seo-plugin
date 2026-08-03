@@ -10,6 +10,87 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.5.0 — 3 August 2026
+
+**Registry `5bf1e36d657f` → `8a66be60b820`** (214 items, unchanged in number).
+Tests 270 → 304, of which 34 are the first tests any evidence script has ever had.
+
+Phase 2 was "write tests for the scripts that decide the `critical` items". Seven
+scripts decide seventeen of the nineteen. Writing the tests found that **eighteen
+items were reporting a verdict nothing could have produced** — five of them
+`critical` — and every one had been doing it on every site ever audited.
+
+This is the same failure as the fifteen dead regex assertions in 0.1.0, in two
+families the pattern audit could not see. If you have an audit from 0.4.0 or
+earlier, these items' verdicts were not measurements.
+
+### Fixed — five critical items that could not fail
+
+- **CI-009 "Serve content at a single canonical URL"** asserted that `issues` held
+  nothing at `critical`/`high`. `canonical_checker.py` says `warning` and `error`
+  and never those two words, so the rule matched nothing and the item passed — with
+  a canonical pointing at another domain, or with no canonical at all. Now a
+  `value_map` over the script's own `verdict`: `cross_host` and `missing` fail,
+  `unknown` is unmapped and therefore NO_DATA.
+- **CI-001 "Ensure URL is indexed"** asserted `rows.0.robots_allowed` — the same
+  field, with the same rule, as CI-005 "do not block the URL in robots.txt". So a
+  page marked `noindex`, or served `X-Robots-Tag: noindex`, or canonicalised
+  elsewhere, passed a critical item about being indexed. `indexability_matrix.py`
+  already weighed all of that into `verdict`; nothing read it. Now it does.
+- **SP-113 "Meet Core Web Vitals thresholds"** and **SP-107**, **SE-119** compared
+  `metrics.*.rating` to `"fast"`. `pagespeed.py` merged two vocabularies into that
+  field — CrUX's `FAST/AVERAGE/SLOW` and Lighthouse's `good/needs-improvement/poor`
+  — so the rule could only be satisfied by field data, and **CrUX publishes none
+  for a low-traffic URL**. A page with a 1.5-second lab LCP was rated `good`, the
+  rule wanted `fast`, and a critical item reported FAIL for a fast page. The script
+  now speaks one vocabulary (`crux_category` keeps CrUX's own word beside it) and
+  the rules `value_map` it, so an unknown band is NO_DATA rather than a verdict.
+- **SP-108 "Pass Core Web Vitals (field data)"** asserted that field data *exists*,
+  which is not the question in its title and answers it wrongly: it failed every
+  site too small for CrUX to sample. `pagespeed.py` now emits `field_cwv.verdict`
+  only when there is field data, so its absence is NO_DATA — "nobody measured your
+  real users" is not "your real users had a bad time".
+
+### Fixed — thirteen more items, same disease
+
+Ten items asked for `critical`/`high` severities over scripts whose entire
+vocabulary is `error`/`warning`/`info`. `checklist_runner` now maps the second onto
+the first (`error` → high, `warning` → medium, `info` → low) so a rule author only
+has to know the registry's four words, and those items get an explicit `warn` rule:
+an error-class finding fails, a warning-class one warns. Affected: GO-136, LO-200,
+AR-154, AR-163, MD-185, MD-190, MB-102, SP-110, TE-170, TECH-002.
+
+Two more could not be fixed that way, because **`robots_checker.py` and
+`security_headers.py` append plain strings to `issues`** — there is no severity to
+read. `security_headers.py` was printing "🔴 Site not using HTTPS" and "🔴 6 security
+headers missing" while TE-175 reported PASS. Both now read structured fields:
+AR-151 asserts `status == 200` (its verb is *provide* a robots.txt) and TE-175
+asserts `headers_missing` has at most three entries — the script's own bar for
+"poor security posture". A `none_severity` rule over a list carrying no severity
+anywhere is now NO_DATA in the runner too, rather than a silent pass.
+
+And **MS-031 "remove meta keywords"** read `meta_keywords`, a field `parse_html.py`
+never emitted, with `missing_is: pass`. The script emits it now.
+
+### Added — so this family cannot come back
+
+`tools/audit_assertions.py` audited patterns only. It now also audits:
+
+- **severity rules** — a `none_severity` asking for a severity its script never
+  emits fails the build. Severity literals are read from the AST (`{"severity":
+  "High"}` and `issue("warning", …)` look nothing alike), because a regex over the
+  source finds every word in the file and clears rules that cannot fire — the
+  mistake the first version of this tool made.
+- **every asserted path** against the machine-probed
+  `resources/references/script-output-shapes.md`. A rule reading a field no probe
+  has ever seen fails the build, with a listed exemption per path that exists only
+  with a credential the probe did not have.
+
+CI runs it, and a test runs it too. 34 new tests in `tests/test_evidence.py` cover
+the seven scripts, each asserting the field the registry actually reads and
+verifying the retired rules still misbehave — a test that a bug is a bug is what
+stops a fix being quietly reverted.
+
 ## 0.4.0 — 3 August 2026
 
 Registry unchanged (`5bf1e36d657f`, 214 items). Tests 248 → 269, and CI runs the

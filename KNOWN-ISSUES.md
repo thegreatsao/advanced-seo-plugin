@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.4.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.5.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -8,7 +8,11 @@ This file exists because the audit's one promise — that "we could not check th
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
 
-**Fixed in 0.4.0**, below the line: the SSRF guard having no escape hatch (and with
+**Fixed in 0.5.0**, below the line: eighteen items — five of them `critical` —
+that were reporting a verdict nothing could have produced, and the two audits that
+now stop that family recurring.
+
+**Fixed in 0.4.0**: the SSRF guard having no escape hatch (and with
 it, the absence of any live-path test), an address being given a registrable domain,
 external-API checks crashing instead of reporting `NO_DATA` on a private host, a
 robots-disallowed sitemap URL counted as an orphan, and the report never saying when
@@ -51,28 +55,36 @@ Note what fixing 1 also fixes: robots.txt is honoured once in the shared crawler
 instead of five times, and the request volume stops being a property of how many
 scripts happen to want a crawl.
 
-## 2. 45 of the 55 evidence scripts have no unit test
+## 2. 40 of the 55 evidence scripts have no unit test
 
-As of 0.4.0 they are at least *executed* end to end: CI serves
-`tests/fixtures/site/` and fails if any of them crashes. That is a smoke test, not
-coverage — it proves each script runs and returns usable output against one small
-site, and says nothing about whether its verdict is right.
+Down from 45 in 0.5.0: the seven scripts that decide the nineteen `critical` items
+now have 34 tests, each asserting the field the registry actually reads. Writing
+them found five critical items whose rule could not produce the verdict it claimed —
+see the 0.5.0 list below — which is the argument for doing the other forty.
 
-The tests defend the *frame* — registry, runner, report — and barely touch the
-*evidence*. Every verdict is the output of an untested script interpreted by a
-well-tested interpreter.
+They are also *executed* end to end as of 0.4.0: CI serves `tests/fixtures/site/`
+and fails if any of them crashes. That is a smoke test, not coverage — it proves a
+script runs and returns usable output against one small site, and says nothing about
+whether its verdict is right.
+
+The rest of the tests defend the *frame* — registry, runner, report. Every verdict
+from those forty is the output of an untested script read by a well-tested
+interpreter.
 
 Three bugs in the borrowed scripts have been found so far, all by accident rather
 than by a test (`article_seo.py` crashing on `@graph` JSON-LD, `safe_http.py`
 exiting at import, `validate_skill_inventory.py`'s regex that never matched). How
 many remain is unknown, which is the point.
 
-Seven of the untested scripts were written here: `gsc_links_csv.py`,
+Six of the untested scripts were written here: `gsc_links_csv.py`,
 `gsc_cannibalization.py`, `gsc_url_inspection.py`, `ga4_tag_checker.py`,
-`css_minify_check.py`, `domain_safety_check.py`, `html_validator.py`.
+`css_minify_check.py`, `html_validator.py`. (`domain_safety_check.py` was the
+seventh and is now covered — its three `critical` items had never been exercised at
+all, because the user declined a Safe Browsing key and they are NO_DATA on a real
+run.)
 
-Start with the scripts whose output decides a `critical` item. HTML fixtures, no
-network.
+The critical ones are done. Next by consequence: the scripts behind the `high`
+items, of which 46 of 61 are machine-decided. HTML fixtures, no network.
 
 ## 3. The live path is exercised against one shape of site
 
@@ -119,6 +131,30 @@ be a few lines.
   report says which layers are untranslated on stderr.
 
 ---
+
+## Fixed in 0.5.0
+
+Found by writing the first tests the evidence layer has ever had. Every one had been
+reporting the same verdict on every site ever audited, and the count is the point:
+after 0.1.0 removed fifteen dead regex assertions, eighteen more were sitting in two
+families the pattern audit could not see.
+
+- **Five `critical` items could not fail.** CI-009 asked for `critical`/`high` issues
+  from a script whose whole vocabulary is `warning`/`error`. CI-001 "is this URL
+  indexed" asserted the same field, with the same rule, as CI-005 "does robots.txt
+  block it" — so `noindex` passed it. SP-107/SP-113/SE-119 compared a rating to
+  `"fast"`, a word only CrUX uses, so a fast page with no CrUX sample **failed**.
+  SP-108 asserted that field data exists, failing every site too small to be sampled.
+- **Ten more items** asked for `critical`/`high` over scripts that only say
+  `error`/`warning`/`info`. The runner now maps the two vocabularies onto each other
+  and those items carry a `warn` rule, so an error fails and a warning warns.
+- **Two items read prose that has no severity at all.** `robots_checker.py` and
+  `security_headers.py` append plain strings to `issues`; the latter was printing
+  "Site not using HTTPS" while TE-175 reported PASS. Both now read structured fields.
+- **One item read a field that was never emitted.** MS-031 asserted `meta_keywords`
+  with `missing_is: pass`, and `parse_html.py` had no such key.
+- **`tools/audit_assertions.py` now audits severity rules and asserted paths**, not
+  only patterns, so each of the three families fails the build instead of the audit.
 
 ## Fixed in 0.4.0
 

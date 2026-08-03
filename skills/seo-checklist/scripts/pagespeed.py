@@ -74,6 +74,35 @@ def _empty_result(url: str, strategy: str) -> dict:
     }
 
 
+# The two sources this script merges describe the same three bands in different
+# words: CrUX says FAST/AVERAGE/SLOW, Lighthouse says good/needs-improvement/poor.
+# Both landed in the same `rating` field, so a rule comparing it to "fast" could
+# only ever be satisfied when CrUX had data — and CrUX has none for a low-traffic
+# URL, which is most of what this tool gets pointed at. A perfect Lighthouse LCP
+# came out `good`, the rule wanted `fast`, and two critical items reported FAIL on
+# a fast page. One vocabulary now; `field_data_available` says where it came from.
+CRUX_RATING = {"fast": "good", "average": "needs-improvement", "slow": "poor"}
+
+# Which metrics decide the field-data verdict: the three Core Web Vitals and
+# nothing else. FCP and TTFB are diagnostics, not thresholds Google grades on.
+CORE_WEB_VITALS = ("LCP", "INP", "CLS")
+
+
+def field_cwv_verdict(metrics: dict) -> dict | None:
+    """Whether real users passed Core Web Vitals — or None when nobody can say.
+
+    Returns None when the field data covers none of the three, so the item reading
+    this reports NO_DATA. "CrUX has no sample for this URL" is not "the site is
+    slow": it usually means the site is small, and SP-108 used to fail it for that.
+    """
+    graded = {k: metrics[k] for k in CORE_WEB_VITALS if k in metrics}
+    if not graded:
+        return None
+    failing = sorted(k for k, m in graded.items() if m.get("rating") != "good")
+    return {"verdict": "fail" if failing else "pass",
+            "measured": sorted(graded), "failing": failing}
+
+
 def parse_pagespeed_response(data: dict[str, Any], url: str, strategy: str = "mobile") -> dict:
     """Normalize a PageSpeed Insights API response into the script output contract."""
     result = _empty_result(url, strategy)
@@ -101,7 +130,11 @@ def parse_pagespeed_response(data: dict[str, Any], url: str, strategy: str = "mo
                     "value": percentile,
                     "unit": thresholds.get("unit", ""),
                     "label": thresholds.get("label", label),
-                    "rating": category,  # FAST, AVERAGE, SLOW
+                    # CrUX's own word is kept beside the normalised one: the
+                    # rating is what rules read, the source word is what lets a
+                    # reader check this mapping against the API response.
+                    "rating": CRUX_RATING.get(category, category),
+                    "crux_category": category,
                 }
 
     # Fall back to Lighthouse lab data if no field data
@@ -157,6 +190,14 @@ def parse_pagespeed_response(data: dict[str, Any], url: str, strategy: str = "mo
 
     # Sort opportunities by savings
     result["opportunities"].sort(key=lambda x: x["savings_ms"], reverse=True)
+
+    # The field-data verdict, present only when there is field data to base it on.
+    # SP-108 reads it, and an absent key is NO_DATA — which is the truthful answer
+    # for a URL CrUX has never had enough traffic to sample.
+    if result["field_data_available"]:
+        verdict = field_cwv_verdict(result["metrics"])
+        if verdict:
+            result["field_cwv"] = verdict
 
     # Extract key diagnostics
     diagnostic_ids = [

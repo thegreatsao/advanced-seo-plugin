@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "5bf1e36d657f",
+  "registry_version": "8a66be60b820",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -101,8 +101,12 @@
         ],
         "requires": "crawl",
         "assert": {
-          "path": "rows.0.robots_allowed",
-          "truthy": true
+          "path": "rows",
+          "field": "verdict",
+          "value_map": {
+            "indexable": "pass",
+            "not_indexable": "fail"
+          }
         }
       },
       "effort": "low",
@@ -269,11 +273,14 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_severity": [
-            "critical",
-            "high"
-          ]
+          "path": "rows",
+          "field": "verdict",
+          "value_map": {
+            "self_canonical": "pass",
+            "canonicalized": "pass",
+            "cross_host": "fail",
+            "missing": "fail"
+          }
         }
       },
       "effort": "low",
@@ -2019,6 +2026,14 @@
           "path": "issues",
           "none_severity": [
             "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
             "high"
           ]
         }
@@ -2123,7 +2138,19 @@
         "requires": "api",
         "assert": {
           "path": "metrics.FCP.rating",
-          "eq": "fast"
+          "value_map": {
+            "good": "pass",
+            "needs-improvement": "fail",
+            "poor": "fail"
+          }
+        },
+        "warn": {
+          "path": "metrics.FCP.rating",
+          "value_map": {
+            "good": "pass",
+            "needs-improvement": "pass",
+            "poor": "fail"
+          }
         }
       },
       "effort": "high",
@@ -2146,12 +2173,15 @@
         ],
         "requires": "api",
         "assert": {
-          "path": "field_data_available",
-          "truthy": true
+          "path": "field_cwv.verdict",
+          "value_map": {
+            "pass": "pass",
+            "fail": "fail"
+          }
         }
       },
       "effort": "high",
-      "fix": "Collect CrUX field data; fall back to lab data when it is unavailable"
+      "fix": "Bring real-user LCP, INP and CLS inside the Core Web Vitals thresholds"
     },
     {
       "id": "SP-109",
@@ -2194,6 +2224,14 @@
         ],
         "requires": "fetch",
         "assert": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
           "path": "issues",
           "none_severity": [
             "critical",
@@ -2278,7 +2316,19 @@
         "requires": "api",
         "assert": {
           "path": "metrics.LCP.rating",
-          "eq": "fast"
+          "value_map": {
+            "good": "pass",
+            "needs-improvement": "fail",
+            "poor": "fail"
+          }
+        },
+        "warn": {
+          "path": "metrics.LCP.rating",
+          "value_map": {
+            "good": "pass",
+            "needs-improvement": "pass",
+            "poor": "fail"
+          }
         }
       },
       "effort": "medium",
@@ -2412,7 +2462,19 @@
         "requires": "api",
         "assert": {
           "path": "metrics.CLS.rating",
-          "eq": "fast"
+          "value_map": {
+            "good": "pass",
+            "needs-improvement": "fail",
+            "poor": "fail"
+          }
+        },
+        "warn": {
+          "path": "metrics.CLS.rating",
+          "value_map": {
+            "good": "pass",
+            "needs-improvement": "pass",
+            "poor": "fail"
+          }
         }
       },
       "effort": "low",
@@ -2738,6 +2800,14 @@
           "path": "issues",
           "none_severity": [
             "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
             "high"
           ]
         }
@@ -3032,11 +3102,8 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_severity": [
-            "critical",
-            "high"
-          ]
+          "path": "status",
+          "eq": 200
         }
       },
       "effort": "high",
@@ -3101,6 +3168,14 @@
         ],
         "requires": "fetch",
         "assert": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
           "path": "issues",
           "none_severity": [
             "critical",
@@ -3257,6 +3332,14 @@
           "path": "issues",
           "none_severity": [
             "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
             "high"
           ]
         }
@@ -3399,6 +3482,14 @@
           "path": "issues",
           "none_severity": [
             "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
             "high"
           ]
         }
@@ -3498,11 +3589,8 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_severity": [
-            "critical",
-            "high"
-          ]
+          "path": "headers_missing",
+          "len_lte": 3
         }
       },
       "effort": "low",
@@ -3702,6 +3790,14 @@
           "path": "issues",
           "none_severity": [
             "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
             "high"
           ]
         }
@@ -3803,6 +3899,14 @@
         ],
         "requires": "fetch",
         "assert": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
           "path": "issues",
           "none_severity": [
             "critical",
@@ -3941,6 +4045,14 @@
         ],
         "requires": "fetch",
         "assert": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
           "path": "issues",
           "none_severity": [
             "critical",
@@ -4149,6 +4261,14 @@
         ],
         "requires": "fetch",
         "assert": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
           "path": "issues",
           "none_severity": [
             "critical",

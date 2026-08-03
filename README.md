@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.4.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.5.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -502,6 +502,11 @@ the runner never implemented, a pattern that cannot fire, a script the registry
 names but nobody shipped, an LLM item with no lens, a profile that hides a critical
 check, and the boundary between "failed", "could not be decided" and "out of scope"
 that every metric here depends on.
+
+34 of them are the first tests the evidence layer has had: the seven scripts that
+decide the nineteen `critical` items, each test asserting the field the registry
+actually reads and re-checking that the rules those tests retired still misbehave.
+Writing them is how 0.5.0's eighteen unfirable assertions were found.
 
 Three of them guard documentation rather than code, because a document that has
 gone stale beside working code is its own kind of silent failure: the manifest

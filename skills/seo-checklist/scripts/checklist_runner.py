@@ -333,6 +333,21 @@ NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
 
 SEVERITY_WEIGHT = {"critical": 10, "high": 6, "medium": 3, "low": 1}
 
+# Two severity vocabularies exist in this tree and only one of them is the
+# registry's. Most evidence scripts came from upstream using `seo_common.issue()`,
+# whose callers pass error/warning/info; the registry speaks critical/high/medium/
+# low. A `none_severity: ["critical","high"]` rule over a script that only ever
+# says "error" therefore matched nothing and returned PASS — **thirteen items,
+# one of them critical, on every site ever audited.** Exactly the failure §4.12
+# found in the regex assertions, in a family the pattern audit did not look at.
+#
+# Normalising here rather than rewriting 20 upstream scripts: the rule author only
+# has to know the registry's four words, and a rule keeps working if a script is
+# later brought into line. `error` is high rather than critical because nothing
+# upstream reserves a word for "critical" — a script that means critical says so.
+SEVERITY_ALIAS = {"error": "high", "warning": "medium", "warn": "medium",
+                  "info": "low", "notice": "low"}
+
 # Why a `source: gsc` item stays undecided even with working credentials. None
 # of these is missing wiring: the Search Console API has no endpoint for manual
 # actions, the Index Coverage report, or mobile-usability signals — the last was
@@ -434,14 +449,25 @@ def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
         return verdict, f"{rule['path']} absent (treated as {rule['missing_is']})"
 
     if "none_severity" in rule:
-        levels = {s.lower() for s in rule["none_severity"]}
+        levels = {SEVERITY_ALIAS.get(s.lower(), s.lower()) for s in rule["none_severity"]}
         if value is _MISSING:
             return None, f"{rule['path']} missing"
-        hits = [it for it in (value if isinstance(value, list) else [])
-                if isinstance(it, dict) and str(it.get("severity", "")).lower() in levels]
+        entries = value if isinstance(value, list) else []
+        hits = [it for it in entries
+                if isinstance(it, dict)
+                and SEVERITY_ALIAS.get(str(it.get("severity", "")).lower(),
+                                       str(it.get("severity", "")).lower()) in levels]
         if hits:
             msg = hits[0].get("message") or hits[0].get("finding") or ""
             return False, f"{len(hits)} issue(s) at {'/'.join(sorted(levels))}: {msg[:120]}"
+        # A non-empty list carrying no severity anywhere cannot be judged by this
+        # rule, and saying "no critical issues" about it would be a verdict built on
+        # a shape we do not understand. Two scripts emit `issues` as plain strings —
+        # security_headers.py was printing "Site not using HTTPS" while the item
+        # asserting over it reported PASS on every site ever audited.
+        if entries and not any(isinstance(it, dict) and "severity" in it for it in entries):
+            return None, (f"{rule['path']} has {len(entries)} entr(y/ies) with no "
+                          f"severity field — this rule cannot judge them")
         return True, f"no {'/'.join(sorted(levels))} issues"
 
     if "none_matching" in rule:

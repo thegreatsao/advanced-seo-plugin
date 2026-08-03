@@ -1,0 +1,564 @@
+"""Tests for the evidence scripts that decide the `critical` items.
+
+Everything above these tests was well covered and everything below them was not:
+248 tests defended the registry, the runner and the report, and 45 of the 55
+evidence scripts had none at all. Every verdict an audit prints is the output of one
+of those scripts read by a well-tested interpreter, so a script that quietly stops
+emitting a field, or emits it in a second vocabulary, produces a confident number
+built on nothing — and the frame cannot tell.
+
+Seventeen of the nineteen `critical` items are decided by seven scripts. These are
+those seven, and each test asserts **the field the registry actually reads**, named
+in the test, so that a change to the script's output contract fails here rather than
+in a client's report. Writing them found four fabricated verdicts on critical items;
+they are pinned below with the item id.
+
+Offline: no fixture site, no network, no API key. The HTTP layer is stubbed at
+`seo_common.fetch_url` or `lib.safe_http.safe_get`, whichever the script uses.
+"""
+import json
+import os
+import sys
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
+REGISTRY = os.path.join(ROOT, "skills", "seo-checklist", "resources", "config",
+                        "checklist.json")
+sys.path.insert(0, SCRIPTS)
+
+from checklist_runner import NO_DATA, PASS, FAIL, WARN, evaluate, resolve  # noqa: E402
+
+
+def registry_rule(item_id: str) -> dict:
+    """The live assert rule for an item, so a test cannot drift from the registry.
+
+    Reading the rule instead of restating it is the point: a test that hard-codes
+    `{"path": "title"}` keeps passing after the registry stops asking for `title`,
+    which is precisely how a check goes quiet.
+    """
+    with open(REGISTRY, encoding="utf-8") as f:
+        items = {i["id"]: i for i in json.load(f)["items"]}
+    return items[item_id]["check"]
+
+
+def verdict(item_id: str, output: dict) -> str:
+    """Run an item's real rule over a script's real output, as the runner would."""
+    check = registry_rule(item_id)
+    ok, _ = evaluate(check["assert"], output)
+    if ok is None:
+        return NO_DATA
+    if ok:
+        return PASS
+    warn = check.get("warn")
+    if warn and evaluate(warn, output)[0]:
+        return WARN
+    return FAIL
+
+
+PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>A page with everything the critical items ask for</title>
+<meta name="description" content="Enough of a description to be a description.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://example.com/page">
+</head><body><h1>One heading</h1><p>Some prose.</p></body></html>"""
+
+
+class ParseHtml(unittest.TestCase):
+    """Four critical items read this script: CI-004 (meta robots), MS-026 (title),
+    CN-065 (one h1), MB-093 (viewport)."""
+
+    def parse(self, html, url="https://example.com/page"):
+        import parse_html
+        return parse_html.parse_html(html, url)
+
+    def test_a_complete_page_satisfies_all_four_critical_items(self):
+        out = self.parse(PAGE)
+        for item_id in ("CI-004", "MS-026", "CN-065", "MB-093"):
+            self.assertEqual(verdict(item_id, out), PASS, item_id)
+
+    def test_a_noindex_page_fails_ci_004(self):
+        out = self.parse(PAGE.replace("<meta charset=\"utf-8\">",
+                                      '<meta charset="utf-8">'
+                                      '<meta name="robots" content="noindex, follow">'))
+        self.assertEqual(out["meta_robots"], "noindex, follow")
+        self.assertEqual(verdict("CI-004", out), FAIL)
+
+    def test_an_absent_meta_robots_passes_because_the_rule_says_so(self):
+        """The one place absence is an answer: no meta robots means indexable, and
+        the rule carries `missing_is: pass` to say that out loud."""
+        out = self.parse(PAGE)
+        self.assertIsNone(out["meta_robots"])
+        self.assertEqual(registry_rule("CI-004")["assert"]["missing_is"], "pass")
+        self.assertEqual(verdict("CI-004", out), PASS)
+
+    def test_a_missing_title_and_a_missing_viewport_fail(self):
+        no_title = self.parse(PAGE.replace(
+            "<title>A page with everything the critical items ask for</title>", ""))
+        self.assertIsNone(no_title["title"])
+        self.assertEqual(verdict("MS-026", no_title), FAIL)
+        no_viewport = self.parse(PAGE.replace(
+            '<meta name="viewport" content="width=device-width, initial-scale=1">', ""))
+        self.assertIsNone(no_viewport["viewport"])
+        self.assertEqual(verdict("MB-093", no_viewport), FAIL)
+
+    def test_two_h1s_and_no_h1_both_fail_cn_065(self):
+        two = self.parse(PAGE.replace("<h1>One heading</h1>",
+                                      "<h1>One</h1><h1>Two</h1>"))
+        self.assertEqual(len(two["h1"]), 2)
+        self.assertEqual(verdict("CN-065", two), FAIL)
+        none = self.parse(PAGE.replace("<h1>One heading</h1>", "<h2>Not an h1</h2>"))
+        self.assertEqual(verdict("CN-065", none), FAIL)
+
+    def test_meta_keywords_is_emitted_at_all(self):
+        """MS-031 asserts this is falsy with `missing_is: pass`, and the script never
+        emitted the key — so the item passed on every site ever audited, including
+        one with a stuffed keywords tag. A rule can only be as honest as the
+        existence of the field it reads."""
+        out = self.parse(PAGE)
+        self.assertIn("meta_keywords", out)
+        self.assertIsNone(out["meta_keywords"])
+        self.assertEqual(verdict("MS-031", out), PASS)
+        stuffed = self.parse(PAGE.replace(
+            "</head>", '<meta name="keywords" content="seo, seo services, cheap seo">'
+                       "</head>"))
+        self.assertEqual(stuffed["meta_keywords"], "seo, seo services, cheap seo")
+        self.assertEqual(verdict("MS-031", stuffed), FAIL)
+
+
+class IndexabilityMatrix(unittest.TestCase):
+    """Four critical items read this script: CI-001 (indexable), CI-003 (200),
+    CI-005 (robots allows), CI-015 (no 5xx)."""
+
+    def setUp(self):
+        import indexability_matrix as ix
+        self.ix = ix
+        self.saved = (ix.fetch_url, ix.fetch_robots, ix.urls_from_sitemaps)
+        ix.urls_from_sitemaps = lambda *a, **k: set()
+
+    def tearDown(self):
+        (self.ix.fetch_url, self.ix.fetch_robots,
+         self.ix.urls_from_sitemaps) = self.saved
+
+    def serve(self, status=200, html=PAGE, headers=None, robots=""):
+        hdrs = {"content-type": "text/html; charset=utf-8"}
+        hdrs.update({k.lower(): v for k, v in (headers or {}).items()})
+
+        def fake_fetch(url, **kw):
+            return {"url": url, "status": status, "headers": hdrs, "text": html,
+                    "redirect_chain": [], "error": None}
+        self.ix.fetch_url = fake_fetch
+        from seo_common import parse_robots_txt
+        self.ix.fetch_robots = lambda *a, **k: {
+            "url": "https://example.com/robots.txt",
+            "fetch": {"status": 200 if robots else 404},
+            "parsed": parse_robots_txt(robots) if robots else None}
+
+    def test_a_healthy_page_satisfies_all_four(self):
+        self.serve()
+        out = self.ix.evaluate(["https://example.com/page"], "https://example.com/")
+        self.assertEqual(out["rows"][0]["status"], 200)
+        self.assertIs(out["rows"][0]["robots_allowed"], True)
+        self.assertEqual(out["rows"][0]["verdict"], "indexable")
+        for item_id in ("CI-001", "CI-003", "CI-005", "CI-015"):
+            self.assertEqual(verdict(item_id, out), PASS, item_id)
+
+    def test_a_500_fails_both_status_items(self):
+        self.serve(status=503)
+        out = self.ix.evaluate(["https://example.com/page"], "https://example.com/")
+        self.assertEqual(verdict("CI-003", out), FAIL)
+        self.assertEqual(verdict("CI-015", out), FAIL)
+
+    def test_a_robots_disallow_fails_ci_005(self):
+        self.serve(robots="User-agent: *\nDisallow: /page\n")
+        out = self.ix.evaluate(["https://example.com/page"], "https://example.com/")
+        self.assertIs(out["rows"][0]["robots_allowed"], False)
+        self.assertEqual(verdict("CI-005", out), FAIL)
+
+    def test_a_noindex_page_is_not_indexable_and_ci_001_says_so(self):
+        """CI-001 is "ensure the URL is indexed" and used to assert
+        `robots_allowed` — the same field, and the same rule, as CI-005. A page
+        crawlable by robots.txt and marked `noindex` passed a critical item about
+        being indexed. The script's own `verdict` accounts for meta robots,
+        X-Robots-Tag, the status and a canonical pointing elsewhere; nothing in the
+        registry read it."""
+        self.serve(html=PAGE.replace("</head>",
+                                     '<meta name="robots" content="noindex"></head>'))
+        out = self.ix.evaluate(["https://example.com/page"], "https://example.com/")
+        row = out["rows"][0]
+        self.assertIs(row["robots_allowed"], True)
+        self.assertEqual(row["verdict"], "not_indexable")
+        self.assertIn("meta robots noindex", row["blockers"])
+        self.assertEqual(verdict("CI-001", out), FAIL)
+        self.assertEqual(verdict("CI-005", out), PASS, "robots.txt is not the problem")
+
+    def test_an_x_robots_noindex_header_is_caught_too(self):
+        """The half of CI-004's title — "Meta Robots / X-Robots-Tag" — that
+        `parse_html.py` cannot see: it is handed a file, so it never has headers. A
+        CDN noindexing a whole path does it with the header."""
+        self.serve(headers={"X-Robots-Tag": "noindex"})
+        out = self.ix.evaluate(["https://example.com/page"], "https://example.com/")
+        self.assertIn("x-robots-tag noindex", out["rows"][0]["blockers"])
+        self.assertEqual(verdict("CI-001", out), FAIL)
+
+
+class CanonicalChecker(unittest.TestCase):
+    """CI-009 (critical) and CI-011 (high) read this script's `verdict`."""
+
+    def setUp(self):
+        import canonical_checker as cc
+        self.cc = cc
+        self.saved = cc.fetch_url
+
+    def tearDown(self):
+        self.cc.fetch_url = self.saved
+
+    def serve(self, canonical, status=200):
+        html = PAGE.replace('<link rel="canonical" href="https://example.com/page">',
+                            f'<link rel="canonical" href="{canonical}">'
+                            if canonical else "")
+
+        def fake(url, **kw):
+            return {"url": url, "status": status,
+                    "headers": {"content-type": "text/html"},
+                    "text": html, "redirect_chain": [], "error": None}
+        self.cc.fetch_url = fake
+
+    def check(self):
+        return self.cc.check_canonicals(["https://example.com/page"])
+
+    def test_a_self_canonical_passes(self):
+        self.serve("https://example.com/page")
+        out = self.check()
+        self.assertEqual(out["rows"][0]["verdict"], "self_canonical")
+        self.assertEqual(verdict("CI-009", out), PASS)
+
+    def test_a_cross_host_canonical_fails(self):
+        self.serve("https://other.example.net/page")
+        out = self.check()
+        self.assertEqual(out["rows"][0]["verdict"], "cross_host")
+        self.assertEqual(verdict("CI-009", out), FAIL)
+
+    def test_no_canonical_at_all_fails_ci_009_and_passes_ci_011(self):
+        """The split is deliberate: CI-009 is "serve content at a single canonical
+        URL", so declaring none is the failure it names; CI-011 is about a canonical
+        that contradicts something else, and there is nothing to contradict."""
+        self.serve(None)
+        out = self.check()
+        self.assertEqual(out["rows"][0]["verdict"], "missing")
+        self.assertEqual(verdict("CI-009", out), FAIL)
+        self.assertEqual(verdict("CI-011", out), PASS)
+
+    def test_the_old_rule_could_not_fire_at_all(self):
+        """CI-009 asserted `issues` had no critical/high entry. This script says
+        "warning" and "error" and never those two words, so the rule matched nothing
+        and the item reported PASS on every site ever audited — including this one,
+        whose canonical points at another domain."""
+        self.serve("https://other.example.net/page")
+        out = self.check()
+        emitted = {i["severity"] for i in out["issues"]}
+        self.assertTrue(emitted)
+        self.assertFalse(emitted & {"critical", "high"})
+        ok, _ = evaluate({"path": "issues",
+                          "none_severity": ["critical", "high"]}, out)
+        self.assertIs(ok, True, "the retired rule still passes — that was the bug")
+
+    def test_an_unreadable_page_is_undecided(self):
+        self.serve("https://example.com/page", status=500)
+        out = self.check()
+        # No text is parsed on a 500 here, so the verdict is `missing`; what matters
+        # is that `unknown` — which the script emits when it has nothing at all —
+        # stays out of the map and lands on NO_DATA.
+        rule = registry_rule("CI-009")["assert"]
+        self.assertNotIn("unknown", rule["value_map"])
+        ok, _ = evaluate(rule, {"rows": [{"verdict": "unknown"}]})
+        self.assertIsNone(ok)
+
+
+class RobotsPathTester(unittest.TestCase):
+    """CI-013 (critical): may Googlebot fetch representative CSS, JS and image
+    paths? The rule counts `allowed_urls`, so the count and ASSET_PROBES in the
+    generator have to agree."""
+
+    def setUp(self):
+        import robots_path_tester as rpt
+        self.rpt = rpt
+        self.saved = rpt.fetch_robots
+        self.args = registry_rule("CI-013")["args"]
+        self.paths = [a for a in self.args[1:] if a.startswith("/")]
+
+    def tearDown(self):
+        self.rpt.fetch_robots = self.saved
+
+    def serve(self, body, status=200):
+        from seo_common import parse_robots_txt
+        self.rpt.fetch_robots = lambda *a, **k: {
+            "url": "https://example.com/robots.txt",
+            "fetch": {"status": status},
+            "parsed": parse_robots_txt(body) if status == 200 else None}
+
+    def run_test(self):
+        return self.rpt.test_paths("https://example.com/", self.paths, ["Googlebot"])
+
+    def test_assets_reachable_passes(self):
+        self.serve("User-agent: *\nDisallow: /admin\n")
+        out = self.run_test()
+        self.assertEqual(len(out["allowed_urls"]), len(self.paths))
+        self.assertEqual(verdict("CI-013", out), PASS)
+
+    def test_a_blocked_asset_directory_fails(self):
+        self.serve("User-agent: *\nDisallow: /assets/\nDisallow: /static/\n")
+        out = self.run_test()
+        self.assertEqual(len(out["allowed_urls"]), 1)
+        self.assertEqual(verdict("CI-013", out), FAIL)
+
+    def test_an_unreachable_robots_txt_is_undecided_not_clean(self):
+        """A 500 says nothing about what is allowed, and an empty `allowed_urls`
+        would read as "every asset is blocked" while a present-but-empty list would
+        read as clean. The key is omitted instead."""
+        self.serve("", status=500)
+        out = self.run_test()
+        self.assertNotIn("allowed_urls", out)
+        self.assertEqual(verdict("CI-013", out), NO_DATA)
+
+
+class SecurityHeaders(unittest.TestCase):
+    """SE-117 and SE-118 (critical) read `https`; TE-175 (high) reads
+    `headers_missing`."""
+
+    def setUp(self):
+        import security_headers as sh
+        self.sh = sh
+        self.saved = sh.safe_get
+
+    def tearDown(self):
+        self.sh.safe_get = self.saved
+
+    def serve(self, url, headers=None):
+        class Resp:
+            def __init__(self):
+                self.url = url
+                self.headers = headers or {}
+                self.status_code = 200
+        self.sh.safe_get = lambda *a, **k: Resp()
+
+    ALL_HEADERS = {
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Content-Security-Policy": "default-src 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=()",
+    }
+
+    def test_https_with_every_header_passes_all_three(self):
+        self.serve("https://example.com/", self.ALL_HEADERS)
+        out = self.sh.check_security_headers("https://example.com/")
+        self.assertIs(out["https"], True)
+        self.assertEqual(out["headers_missing"], {})
+        for item_id in ("SE-117", "SE-118", "TE-175"):
+            self.assertEqual(verdict(item_id, out), PASS, item_id)
+
+    def test_plain_http_fails_the_two_critical_items(self):
+        self.serve("http://example.com/", {})
+        out = self.sh.check_security_headers("http://example.com/")
+        self.assertIs(out["https"], False)
+        self.assertEqual(verdict("SE-117", out), FAIL)
+        self.assertEqual(verdict("SE-118", out), FAIL)
+
+    def test_te_175_reads_a_field_and_not_the_prose(self):
+        """This script appends plain strings to `issues`, so the old
+        `none_severity` rule iterated dicts, found none, and reported PASS — while
+        the script itself was printing "Site not using HTTPS" and "6 security
+        headers missing". `headers_missing` is a dict, and the rule uses the
+        script's own bar: more than three of six absent is a failure."""
+        self.serve("http://example.com/", {})
+        out = self.sh.check_security_headers("http://example.com/")
+        self.assertEqual(len(out["headers_missing"]), 6)
+        self.assertTrue(out["issues"])
+        self.assertFalse([i for i in out["issues"] if isinstance(i, dict)],
+                         "issues are strings; no severity rule can read them")
+        ok, _ = evaluate({"path": "issues",
+                          "none_severity": ["critical", "high"]}, out)
+        self.assertIsNone(ok, "a list of strings must be undecided, never a pass")
+        self.assertEqual(verdict("TE-175", out), FAIL)
+
+    def test_three_missing_headers_is_still_a_pass(self):
+        keep = dict(list(self.ALL_HEADERS.items())[:3])
+        self.serve("https://example.com/", keep)
+        out = self.sh.check_security_headers("https://example.com/")
+        self.assertEqual(len(out["headers_missing"]), 3)
+        self.assertEqual(verdict("TE-175", out), PASS)
+
+
+class PageSpeed(unittest.TestCase):
+    """SP-108 and SP-113 (critical), SP-107 (high), SE-119 (medium). No network:
+    `parse_pagespeed_response` is the whole contract, and the API payload is the
+    input."""
+
+    def setUp(self):
+        import pagespeed
+        self.ps = pagespeed
+
+    def crux(self, lcp_category="FAST"):
+        return {
+            "loadingExperience": {"metrics": {
+                "LARGEST_CONTENTFUL_PAINT_MS": {"percentile": 1800,
+                                                "category": lcp_category},
+                "INTERACTION_TO_NEXT_PAINT": {"percentile": 120,
+                                              "category": "FAST"},
+                "CUMULATIVE_LAYOUT_SHIFT_SCORE": {"percentile": 5,
+                                                  "category": "FAST"},
+                "FIRST_CONTENTFUL_PAINT_MS": {"percentile": 1200,
+                                              "category": "FAST"},
+            }},
+            "lighthouseResult": {"categories": {"performance": {"score": 0.98}}},
+        }
+
+    def lab_only(self, lcp_ms=1500):
+        return {"lighthouseResult": {
+            "categories": {"performance": {"score": 0.97}},
+            "audits": {
+                "largest-contentful-paint": {"numericValue": lcp_ms},
+                "cumulative-layout-shift": {"numericValue": 0.02},
+                "first-contentful-paint": {"numericValue": 900},
+            }}}
+
+    def parse(self, payload):
+        return self.ps.parse_pagespeed_response(payload, "https://example.com/",
+                                                "mobile")
+
+    def test_field_data_is_normalised_to_one_vocabulary(self):
+        out = self.parse(self.crux())
+        self.assertIs(out["field_data_available"], True)
+        self.assertEqual(out["metrics"]["LCP"]["rating"], "good")
+        self.assertEqual(out["metrics"]["LCP"]["crux_category"], "fast")
+        self.assertEqual(verdict("SP-113", out), PASS)
+        self.assertEqual(verdict("SP-108", out), PASS)
+
+    def test_a_fast_page_without_crux_data_is_no_longer_failed(self):
+        """The bug: CrUX said FAST and Lighthouse says `good`, both went into the
+        same `rating`, and the rule compared it to "fast". CrUX publishes nothing for
+        a low-traffic URL — most of the sites this tool audits — so a page with a
+        1.5s lab LCP failed two critical items for being small."""
+        out = self.parse(self.lab_only(lcp_ms=1500))
+        self.assertIs(out["field_data_available"], False)
+        self.assertEqual(out["metrics"]["LCP"]["rating"], "good")
+        ok, _ = evaluate({"path": "metrics.LCP.rating", "eq": "fast"}, out)
+        self.assertIs(ok, False, "the retired rule still fails a fast page")
+        self.assertEqual(verdict("SP-113", out), PASS)
+
+    def test_no_field_data_leaves_sp_108_undecided(self):
+        """"CrUX has no sample for this URL" is not "real users had a bad time".
+        The old rule asserted that field data exists, so every small site failed a
+        critical item for being small."""
+        out = self.parse(self.lab_only())
+        self.assertNotIn("field_cwv", out)
+        self.assertEqual(verdict("SP-108", out), NO_DATA)
+
+    def test_a_slow_lcp_in_the_field_fails_and_a_borderline_one_warns(self):
+        slow = self.parse(self.crux(lcp_category="SLOW"))
+        self.assertEqual(slow["metrics"]["LCP"]["rating"], "poor")
+        self.assertEqual(verdict("SP-113", slow), FAIL)
+        self.assertEqual(slow["field_cwv"]["verdict"], "fail")
+        self.assertEqual(slow["field_cwv"]["failing"], ["LCP"])
+        self.assertEqual(verdict("SP-108", slow), FAIL)
+
+        middling = self.parse(self.crux(lcp_category="AVERAGE"))
+        self.assertEqual(middling["metrics"]["LCP"]["rating"], "needs-improvement")
+        self.assertEqual(verdict("SP-113", middling), WARN)
+
+    def test_an_unknown_rating_is_undecided(self):
+        """The reason these use `value_map`: a band nobody enumerated must not
+        become a verdict. If the API adds a category, the item says so."""
+        out = self.parse(self.crux(lcp_category="GLACIAL"))
+        self.assertEqual(out["metrics"]["LCP"]["rating"], "glacial")
+        self.assertEqual(verdict("SP-113", out), NO_DATA)
+
+
+class DomainSafety(unittest.TestCase):
+    """SE-114, SE-116 and TE-171 (critical) read `safe_browsing.*`. The user
+    declined a Safe Browsing key, so on a real run these are NO_DATA — which is
+    exactly why they need a test: nothing else here has ever exercised them."""
+
+    def setUp(self):
+        import domain_safety_check as ds
+        self.ds = ds
+        self.saved = ds.requests.post
+
+    def tearDown(self):
+        self.ds.requests.post = self.saved
+
+    def serve(self, matches, status=200):
+        class Resp:
+            status_code = status
+
+            def json(self):
+                return {"matches": matches}
+        self.ds.requests.post = lambda *a, **k: Resp()
+
+    def test_no_key_omits_the_verdict_instead_of_reporting_clean(self):
+        out = {"safe_browsing": self.ds.check_safe_browsing(
+            "https://example.com/", "", 10)}
+        self.assertIs(out["safe_browsing"]["checked"], False)
+        self.assertNotIn("clean", out["safe_browsing"])
+        for item_id in ("SE-114", "SE-116", "TE-171"):
+            self.assertEqual(verdict(item_id, out), NO_DATA, item_id)
+
+    def test_a_clean_domain_passes_all_three(self):
+        self.serve([])
+        out = {"safe_browsing": self.ds.check_safe_browsing(
+            "https://example.com/", "key", 10)}
+        self.assertIs(out["safe_browsing"]["clean"], True)
+        self.assertEqual(out["safe_browsing"]["threats"], [])
+        for item_id in ("SE-114", "SE-116", "TE-171"):
+            self.assertEqual(verdict(item_id, out), PASS, item_id)
+
+    def test_a_flagged_domain_fails_all_three(self):
+        self.serve([{"threatType": "MALWARE", "platformType": "ANY_PLATFORM"}])
+        out = {"safe_browsing": self.ds.check_safe_browsing(
+            "https://example.com/", "key", 10)}
+        self.assertIs(out["safe_browsing"]["clean"], False)
+        for item_id in ("SE-114", "SE-116", "TE-171"):
+            self.assertEqual(verdict(item_id, out), FAIL, item_id)
+
+    def test_an_api_error_is_undecided_not_clean(self):
+        self.serve([], status=503)
+        out = {"safe_browsing": self.ds.check_safe_browsing(
+            "https://example.com/", "key", 10)}
+        self.assertIs(out["safe_browsing"]["checked"], False)
+        self.assertEqual(verdict("SE-116", out), NO_DATA)
+
+
+class EveryCriticalItemIsCovered(unittest.TestCase):
+    """The list this file is measured against.
+
+    Without it, "tests for the critical scripts" quietly means "for the ones
+    somebody got round to" — and which ones those were would be invisible.
+    """
+
+    COVERED = {"parse_html.py", "indexability_matrix.py", "canonical_checker.py",
+               "robots_path_tester.py", "security_headers.py", "pagespeed.py",
+               "domain_safety_check.py"}
+
+    def test_every_script_deciding_a_critical_item_has_a_test_class(self):
+        with open(REGISTRY, encoding="utf-8") as f:
+            items = json.load(f)["items"]
+        deciders = {(i.get("check") or {}).get("script")
+                    for i in items
+                    if i["severity"] == "critical" and (i.get("check") or {}).get("script")}
+        self.assertEqual(deciders - self.COVERED, set(),
+                         "a script decides a critical item and nothing here tests it")
+
+    def test_the_covered_list_holds_no_scripts_that_stopped_mattering(self):
+        with open(REGISTRY, encoding="utf-8") as f:
+            items = json.load(f)["items"]
+        deciders = {(i.get("check") or {}).get("script")
+                    for i in items if i["severity"] == "critical"}
+        self.assertEqual(self.COVERED - deciders, set(),
+                         "this file tests a script no critical item reads any more")
+
+
+if __name__ == "__main__":
+    unittest.main()

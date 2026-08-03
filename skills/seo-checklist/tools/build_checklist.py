@@ -79,6 +79,45 @@ L = "llm"
 G = "gsc"
 M = "manual"
 
+
+# Most evidence scripts came from upstream and report through `seo_common.issue()`,
+# whose callers say error/warning/info; the registry speaks critical/high/medium/
+# low. `checklist_runner.SEVERITY_ALIAS` maps the first onto the second (error ->
+# high, warning -> medium, info -> low) so a rule only has to know one vocabulary.
+# Before that mapping existed, thirteen items asked for critical/high over scripts
+# that never say either word, and every one of them reported PASS on every site
+# ever audited — the §4.12 failure in a family the pattern audit did not cover.
+#
+# These two helpers are the shape almost every issues[] rule wants: an
+# error-class finding fails the item, a warning-class one only warns, and info is
+# informational. Passing ISSUES_ANY() without the matching warn= turns a warning
+# into a FAIL, which is a decision, not a default — say why if you make it.
+def ISSUES_ANY(path="issues"):
+    return {"path": path, "none_severity": ["critical", "high", "medium"]}
+
+
+def NOTHING_SERIOUS(path="issues"):
+    return {"path": path, "none_severity": ["critical", "high"]}
+
+
+# pagespeed.py merged CrUX's FAST/AVERAGE/SLOW and Lighthouse's
+# good/needs-improvement/poor into one `rating` field, so `eq: "fast"` could only
+# be satisfied by field data — and CrUX has none for a low-traffic URL. A page with
+# a perfect Lighthouse LCP was rated `good`, the rule wanted `fast`, and two
+# critical items reported FAIL on a fast page. The script speaks one vocabulary
+# now; these map it, so a band nobody enumerated is NO_DATA instead of a verdict.
+def RATING(metric):
+    return {"path": f"metrics.{metric}.rating",
+            "value_map": {"good": "pass", "needs-improvement": "fail",
+                          "poor": "fail"}}
+
+
+def RATING_WARN(metric):
+    return {"path": f"metrics.{metric}.rating",
+            "value_map": {"good": "pass", "needs-improvement": "pass",
+                          "poor": "fail"}}
+
+
 PAGE = ["{url}"]
 HTMLARG = ["{html}", "--url", "{url}"]
 # GSC scripts address a Search Console property, not the audited URL — the two
@@ -176,8 +215,16 @@ def item(ref, sev, source, script=None, args=None, rule=None, fix="", warn=None)
 
 
 # --- 1. Crawling & Indexing -------------------------------------------------
+# This asserted `rows.0.robots_allowed` — the same field, with the same rule, as
+# CI-005 below. So "ensure the URL is indexed" was answered by "robots.txt does not
+# block it", and a page marked `noindex`, or served with `X-Robots-Tag: noindex`, or
+# canonicalised to somewhere else, passed a critical item about being indexed. The
+# script already weighs all of those into `verdict` and nothing in the registry read
+# it. Whether Google has *actually* indexed the URL is CI-010/GO-135 via URL
+# Inspection; this item is everything the page itself can be asked.
 item(1, "critical", S, "indexability_matrix.py", PAGE,
-     {"path": "rows.0.robots_allowed", "truthy": True},
+     {"path": "rows", "field": "verdict",
+      "value_map": {"indexable": "pass", "not_indexable": "fail"}},
      "Remove noindex, allow crawling in robots.txt, add internal links, submit the URL in GSC")
 item(2, "high", S, "sitemap_checker.py", PAGE,
      {"path": "summary.urls", "gte": 1},
@@ -198,8 +245,17 @@ item(7, "medium", M, fix="Submit the sitemap in Google Search Console and Bing W
 item(8, "high", S, "link_profile.py", PAGE,
      {"path": "orphan_pages.count", "eq": 0},
      "Eliminate orphan pages: add 1-2 contextual internal links to each")
+# canonical_checker.py never emits a `critical` or `high` issue — it says
+# "warning" and "error" — so the old none_severity rule could not fire and this
+# critical item passed on every site ever audited. Its `verdict` field has a
+# closed vocabulary, so map that instead. `missing` fails here and passes in
+# CI-011 on purpose: this item is "serve content at a single canonical URL", and
+# declaring no canonical at all is the failure it names. `unknown` is deliberately
+# unmapped — it means the script could not read the page, which is NO_DATA.
 item(9, "critical", S, "canonical_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
+     {"path": "rows", "field": "verdict",
+      "value_map": {"self_canonical": "pass", "canonicalized": "pass",
+                    "cross_host": "fail", "missing": "fail"}},
      "Self-canonical on the primary version, 301 from duplicates")
 # A page can point rel=canonical at itself and still have Google pick another
 # URL. Nothing in the page reveals the disagreement — only URL Inspection does.
@@ -473,8 +529,8 @@ item(100, "medium", S, "mobile_render_checker.py", PAGE,
      "Fix mobile UX issues")
 item(101, "low", L, fix="Keep mobile navigation within thumb reach")
 item(102, "low", S, "video_schema_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Optimize video for mobile")
+     ISSUES_ANY(),
+     "Optimize video for mobile", warn=NOTHING_SERIOUS())
 # Only answerable from a mobile render; rendered_audit.py drops the key when the
 # recorded viewport is a desktop window, so this is NO_DATA rather than a verdict
 # about a viewport nobody looked at.
@@ -491,18 +547,22 @@ item(106, "medium", M, fix="Test on real devices before and after release")
 
 # --- 7. Speed ---------------------------------------------------------------
 item(107, "high", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
-     {"path": "metrics.FCP.rating", "eq": "fast"},
-     "Speed up above-the-fold rendering")
+     RATING("FCP"),
+     "Speed up above-the-fold rendering", warn=RATING_WARN("FCP"))
+# The old rule asserted that field data *exists*, which is a different question
+# from the one in the title and answers it wrongly: CrUX publishes nothing for a
+# low-traffic URL, so every small site failed a critical item for being small.
+# `field_cwv` is emitted only when there is field data, so its absence is NO_DATA.
 item(108, "critical", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
-     {"path": "field_data_available", "truthy": True},
-     "Collect CrUX field data; fall back to lab data when it is unavailable")
+     {"path": "field_cwv.verdict", "value_map": {"pass": "pass", "fail": "fail"}},
+     "Bring real-user LCP, INP and CLS inside the Core Web Vitals thresholds")
 item(109, "medium", S, "third_party_script_audit.py", PAGE,
      {"path": "blocking_third_party_count", "eq": 0},
      "Remove render-blocking third-party scripts",
      {"path": "blocking_third_party_count", "lte": 2})
 item(110, "medium", S, "critical_request_chain.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Shorten the critical request chain")
+     ISSUES_ANY(),
+     "Shorten the critical request chain", warn=NOTHING_SERIOUS())
 item(111, "high", S, "pagespeed.py", ["{url}", "--strategy", "desktop"],
      {"path": "performance_score", "gte": 90},
      "Bring desktop Core Web Vitals into the green",
@@ -512,8 +572,8 @@ item(112, "high", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
      "Bring mobile Core Web Vitals into the green",
      {"path": "performance_score", "gte": 50})
 item(113, "critical", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
-     {"path": "metrics.LCP.rating", "eq": "fast"},
-     "LCP < 2.5s, INP < 200ms, CLS < 0.1")
+     RATING("LCP"),
+     "LCP < 2.5s, INP < 200ms, CLS < 0.1", warn=RATING_WARN("LCP"))
 
 # --- 8. Security ------------------------------------------------------------
 item(114, "critical", S, "domain_safety_check.py", PAGE,
@@ -532,8 +592,8 @@ item(118, "critical", S, "security_headers.py", PAGE,
      {"path": "https", "truthy": True},
      "Maintain a valid TLS certificate")
 item(119, "medium", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
-     {"path": "metrics.CLS.rating", "eq": "fast"},
-     "The cookie banner must not cause layout shift")
+     RATING("CLS"),
+     "The cookie banner must not cause layout shift", warn=RATING_WARN("CLS"))
 item(120, "medium", S, "security_headers.py", PAGE,
      {"path": "score", "gte": 80},
      "Configure CSP, Permissions-Policy and Referrer-Policy")
@@ -580,8 +640,8 @@ item(135, "medium", S, "gsc_url_inspection.py", INSPECTARG,
      "Resolve what URL Inspection reports: blocked indexing, failed fetch, or a "
      "coverage state that keeps the page out of the index")
 item(136, "high", S, "sitemap_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Keep XML sitemaps clean")
+     ISSUES_ANY(),
+     "Keep XML sitemaps clean", warn=NOTHING_SERIOUS())
 item(137, "medium", S, "orphan_pages_from_sitemap.py", PAGE,
      {"path": "summary.orphan_pages", "eq": 0},
      "Reconcile indexed pages against sitemap contents",
@@ -619,8 +679,14 @@ item(149, "medium", S, "internal_links.py", PAGE,
 item(150, "high", S, "redirect_checker.py", PAGE,
      {"path": "total_hops", "lte": 1},
      "Remove redirect chains and loops")
+# robots_checker.py appends plain strings to `issues`, never dicts, so no severity
+# rule can read them and this item passed on every site ever audited. What it can
+# answer structurally is the item's own verb — *provide* a robots.txt: `status` is
+# 200 when one exists, 404 when it does not, and absent when the request itself
+# failed, which is NO_DATA rather than a verdict. The Sitemap directive and the
+# per-agent rules are already AR-152 and item 6.
 item(151, "high", S, "robots_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
+     {"path": "status", "eq": 200},
      "Correct robots.txt")
 item(152, "medium", S, "robots_checker.py", PAGE,
      {"path": "user_agents", "truthy": True},
@@ -629,8 +695,8 @@ item(153, "medium", S, "topical_cluster_mapper.py", PAGE,
      {"path": "score", "gte": 70},
      "Build topic hubs (silos)")
 item(154, "medium", S, "collection_page_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Optimize e-commerce category pages")
+     ISSUES_ANY(),
+     "Optimize e-commerce category pages", warn=NOTHING_SERIOUS())
 item(155, "low", S, "url_quality.py", PAGE,
      {"path": "rows.0.flags", "len_eq": 0},
      "Consistent, descriptive URL slugs")
@@ -646,8 +712,8 @@ item(162, "high", S, "link_profile.py", PAGE,
      {"path": "issues", "none_severity": ["critical", "high"]},
      "Strengthen internal linking, remove orphans")
 item(163, "medium", S, "faceted_nav_audit.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Control faceted navigation: canonical, noindex, robots")
+     ISSUES_ANY(),
+     "Control faceted navigation: canonical, noindex, robots", warn=NOTHING_SERIOUS())
 item(164, "medium", M, fix="Handle out-of-stock products via 301/410 plus clear UX")
 
 # --- 12. Technical SEO Checks ----------------------------------------------
@@ -666,8 +732,8 @@ item(169, "high", S, "javascript_render_audit.py", PAGE,
      {"path": "raw.internal_link_count", "gte": 1},
      "Ensure crawlability under JavaScript rendering")
 item(170, "medium", S, "cache_compression_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Configure server rewrites and cache/compression headers")
+     ISSUES_ANY(),
+     "Configure server rewrites and cache/compression headers", warn=NOTHING_SERIOUS())
 item(171, "critical", S, "domain_safety_check.py", PAGE,
      {"path": "safe_browsing.clean", "truthy": True},
      "Check the domain against blocklists and Safe Browsing")
@@ -678,8 +744,13 @@ item(173, "medium", M, fix="Fix browser console errors (chrome-devtools MCP: lis
 item(174, "low", S, "css_minify_check.py", PAGE,
      {"path": "unminified_count", "eq": 0},
      "Minify and optimize CSS")
+# security_headers.py also emits `issues` as strings — it was printing "Site not
+# using HTTPS" and "6 security headers missing" while this item reported PASS. Its
+# `headers_missing` is a dict of the security headers absent from the response, so
+# the rule uses the script's own bar for "poor security posture": more than three
+# of the six missing. HTTPS itself is SE-117/SE-118, so this item owns the headers.
 item(175, "high", S, "security_headers.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
+     {"path": "headers_missing", "len_lte": 3},
      "Secure pages and eliminate errors")
 item(176, "high", S, "canonical_checker.py", PAGE,
      {"path": "issues", "len_eq": 0},
@@ -707,8 +778,8 @@ item(184, "medium", S, "image_inventory.py", PAGE,
      {"path": "count", "gte": 1},
      "Audit sitewide image usage")
 item(185, "medium", S, "image_weight_audit.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Optimize images")
+     ISSUES_ANY(),
+     "Optimize images", warn=NOTHING_SERIOUS())
 item(186, "high", S, "image_inventory.py", PAGE,
      {"path": "missing_alt", "eq": 0},
      "Meaningful alt text on informative images")
@@ -724,8 +795,8 @@ item(189, "medium", S, "image_weight_audit.py", PAGE,
      {"path": "modern_format_count", "gte": 1},
      "Modern formats and responsive images")
 item(190, "medium", S, "video_schema_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Implement video SEO essentials: VideoObject, thumbnail, transcript")
+     ISSUES_ANY(),
+     "Implement video SEO essentials: VideoObject, thumbnail, transcript", warn=NOTHING_SERIOUS())
 
 # --- 14. Competition --------------------------------------------------------
 item(191, "medium", L, fix="Identify the top 3-5 competitors in the SERP")
@@ -745,8 +816,8 @@ item(198, "high", S, "local_seo_checker.py", PAGE,
      "Implement LocalBusiness structured data")
 item(199, "high", M, fix="Create and optimize the Google Business Profile — follow resources/playbooks/local-seo.md")
 item(200, "high", S, "local_seo_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
-     "Local SEO fundamentals: NAP, GBP, reviews")
+     ISSUES_ANY(),
+     "Local SEO fundamentals: NAP, GBP, reviews", warn=NOTHING_SERIOUS())
 
 # --------------------------------------------------------------------------
 # Beyond Plerdy — what the toolkit checks that the 200-point list does not.
@@ -785,8 +856,8 @@ EXTRA = [
      "rich_results_guard.py", PAGE, {"path": "summary.warnings", "eq": 0},
      "Remove HowTo (deprecated) and FAQPage outside gov/health sites"),
     ("TECH-002", "technical", "Font loading does not block render", "low", S,
-     "font_audit.py", PAGE, {"path": "issues", "none_severity": ["critical", "high"]},
-     "Preload key fonts, use font-display: swap"),
+     "font_audit.py", PAGE, ISSUES_ANY(),
+     "Preload key fonts, use font-display: swap", NOTHING_SERIOUS()),
     ("TECH-003", "technical", "LCP subparts within budget", "medium", S,
      "lcp_subparts.py", PAGE, {"path": "subparts.ttfb_ms", "lte": 800},
      "Reduce TTFB and LCP resource load delay"),
@@ -880,7 +951,11 @@ def build() -> list[dict]:
             entry["fix"] = fix
             out.append(entry)
 
-    for eid, cat, title, sev, source, script, args, rule, fix in EXTRA:
+    for row in EXTRA:
+        # An optional tenth element is a `warn` rule, so an entry here can
+        # separate "a warning" from "a failure" the way item() can.
+        eid, cat, title, sev, source, script, args, rule, fix = row[:9]
+        warn = row[9] if len(row) > 9 else None
         label = "GEO / AI Search" if cat == "geo_ai" else next(
             (l for k, _p, l, _r in CATEGORIES if k == cat), "Beyond Plerdy")
         entry = {
@@ -899,6 +974,8 @@ def build() -> list[dict]:
                 "requires": REQUIRES.get(script, DEFAULT_REQUIRES),
                 "assert": rule,
             }
+            if warn:
+                entry["check"]["warn"] = warn
         if source == L:
             entry["lens"] = LENS_OF.get(entry["id"], "")
         entry["effort"] = effort_for(entry)

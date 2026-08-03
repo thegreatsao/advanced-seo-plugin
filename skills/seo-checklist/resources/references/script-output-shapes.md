@@ -882,7 +882,8 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 `metrics.LCP.value` — int
 `metrics.LCP.unit` — str
 `metrics.LCP.label` — str
-`metrics.LCP.rating` — str
+`metrics.LCP.rating` — str  (good | needs-improvement | poor)
+`metrics.LCP.crux_category` — str  (field data only: fast | average | slow)
 `metrics.INP.value` — int
 `metrics.INP.unit` — str
 `metrics.INP.label` — str
@@ -899,6 +900,9 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 `metrics.TTFB.unit` — str
 `metrics.TTFB.label` — str
 `metrics.TTFB.rating` — str
+`field_cwv.verdict` — str  (field data only: pass | fail; the key is absent when CrUX has no sample)
+`field_cwv.measured[]` — array
+`field_cwv.failing[]` — array
 `opportunities[]` — array
   - item keys: title, savings_ms, description
 `diagnostics[]` — array
@@ -911,6 +915,7 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 `title` — str
 `meta_description` — str
 `meta_robots` — str
+`meta_keywords` — NoneType
 `x_robots_tag` — NoneType
 `canonical` — str
 `lang` — str
