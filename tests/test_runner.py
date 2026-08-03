@@ -10,7 +10,9 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,7 +24,9 @@ from checklist_runner import (  # noqa: E402
     NO_DATA, PASS, WARN, aggregate_pages, audit_target, build_plan,
     choose_profile, diff_runs, evaluate, grade, is_page_level,
     looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
-    resolve, run_script, score, unreachable_skips, visible_words,
+    history_path, load_public_suffixes, previous_run, resolve, run_script,
+    run_stamp, run_time, score, suffix_label_count, unreachable_skips,
+    visible_words,
 )
 from detect_profile import detect  # noqa: E402
 
@@ -363,6 +367,96 @@ class Domains(unittest.TestCase):
         self.assertEqual(registrable_domain("example.com"), "example.com")
         self.assertEqual(registrable_domain("shop.bbc.co.uk"), "bbc.co.uk")
 
+    def test_platform_domains_are_not_swallowed(self):
+        """What the seven hard-coded suffixes got wrong, and it is the shape most
+        small sites have: the whole host is the registrable domain here, and
+        reducing it produced a property nobody owns."""
+        for host, expected in (("something.github.io", "something.github.io"),
+                               ("myapp.vercel.app", "myapp.vercel.app"),
+                               ("site.netlify.app", "site.netlify.app"),
+                               ("shop.myshopify.com", "shop.myshopify.com")):
+            self.assertEqual(registrable_domain(host), expected, host)
+
+    def test_the_ccTLD_shapes_the_old_heuristic_got_right_still_work(self):
+        for host, expected in (("a.b.example.com.br", "example.com.br"),
+                               ("www.example.co.il", "example.co.il"),
+                               ("x.example.gov.uk", "example.gov.uk")):
+            self.assertEqual(registrable_domain(host), expected, host)
+
+    def test_a_port_and_a_trailing_dot_are_ignored(self):
+        self.assertEqual(registrable_domain("www.example.com:8443"), "example.com")
+        self.assertEqual(registrable_domain("www.example.com."), "example.com")
+
+
+class PublicSuffixList(unittest.TestCase):
+    """The list is bundled, so its absence and its content are both testable
+    offline — and both matter: a missing snapshot silently narrows every domain to
+    its last two labels."""
+
+    FIXTURE = """// a comment
+com
+co.uk
+*.ck
+!www.ck
+github.io
+"""
+
+    def _rules(self):
+        path = os.path.join(tempfile.mkdtemp(), "psl.dat")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.FIXTURE)
+        return load_public_suffixes(path)
+
+    def test_the_parser_sorts_the_three_rule_kinds(self):
+        exact, wildcard, exception = self._rules()
+        self.assertEqual(exact, {"com", "co.uk", "github.io"})
+        self.assertEqual(wildcard, {"*.ck"})
+        self.assertEqual(exception, {"www.ck"})
+
+    def test_the_longest_matching_rule_wins(self):
+        rules = self._rules()
+        self.assertEqual(suffix_label_count(["example", "com"], rules), 1)
+        self.assertEqual(suffix_label_count(["x", "example", "co", "uk"], rules), 2)
+        self.assertEqual(suffix_label_count(["x", "github", "io"], rules), 2)
+
+    def test_a_wildcard_rule_consumes_a_label(self):
+        self.assertEqual(suffix_label_count(["foo", "bar", "ck"], self._rules()), 2)
+
+    def test_an_exception_rule_shortens_the_suffix(self):
+        """`!www.ck` against `*.ck` means www.ck is registrable, not a suffix."""
+        self.assertEqual(suffix_label_count(["www", "ck"], self._rules()), 1)
+
+    def test_an_unlisted_tld_falls_back_to_the_default_rule(self):
+        self.assertEqual(suffix_label_count(["example", "zzz"], self._rules()), 1)
+
+    def test_the_bundled_snapshot_is_present_and_plausible(self):
+        """Its absence is not a crash, it is a quiet downgrade to the heuristic
+        this replaced — so the shipped file gets an assertion of its own."""
+        from checklist_runner import PSL_PATH
+        self.assertTrue(os.path.exists(PSL_PATH), f"no snapshot at {PSL_PATH}")
+        exact, wildcard, exception = load_public_suffixes(PSL_PATH)
+        self.assertGreater(len(exact), 5000)
+        self.assertIn("co.uk", exact)
+        self.assertIn("github.io", exact, "the private section is missing")
+        self.assertTrue(wildcard and exception)
+
+    def test_a_missing_list_falls_back_loudly(self):
+        import checklist_runner as cr
+        saved_cache, saved_warned = cr._PSL_CACHE, cr._PSL_WARNED
+        cr._PSL_CACHE, cr._PSL_WARNED = None, False
+        saved_path = cr.PSL_PATH
+        cr.PSL_PATH = os.path.join(tempfile.mkdtemp(), "absent.dat")
+        err = io.StringIO()
+        saved_stderr, sys.stderr = sys.stderr, err
+        try:
+            # The heuristic's answer, and the warning that it is the heuristic's.
+            self.assertEqual(cr.registrable_domain("shop.bbc.co.uk"), "bbc.co.uk")
+            self.assertIn("public suffix list not found", err.getvalue())
+        finally:
+            sys.stderr = saved_stderr
+            cr.PSL_PATH = saved_path
+            cr._PSL_CACHE, cr._PSL_WARNED = saved_cache, saved_warned
+
 
 class UnreachableSite(unittest.TestCase):
     """The worst failure this tool can have is grading a site it never read.
@@ -442,18 +536,47 @@ class SearchConsoleBoundary(unittest.TestCase):
         self.assertEqual(skipped, {})
         self.assertEqual(len(plan), 1)
 
+    def _impossible(self, has_gsc):
+        items = [{"id": i, "source": "gsc", "category": "c", "category_label": "C",
+                  "title": "t", "severity": "low", "plerdy_ref": 0, "fix": ""}
+                 for i in GSC_UNAVAILABLE]
+        return grade(items, {}, {}, {}, has_gsc)
+
     def test_impossible_items_never_blame_missing_credentials(self):
         """Three items have no API endpoint at all. Telling someone without a key
         to set GSC_CREDENTIALS_PATH sends them to configure something that cannot
         decide them — the setup finishes and the status does not move."""
-        items = [{"id": i, "source": "gsc", "category": "c", "category_label": "C",
-                  "title": "t", "severity": "low", "plerdy_ref": 0, "fix": ""}
-                 for i in GSC_UNAVAILABLE]
         for has_gsc in (True, False):
-            for row in grade(items, {}, {}, {}, has_gsc):
-                self.assertEqual(row["status"], NO_DATA)
+            for row in self._impossible(has_gsc):
                 self.assertNotIn("GSC_CREDENTIALS_PATH", row["evidence"])
                 self.assertIn("no ", row["evidence"].lower())
+
+    def test_impossible_items_are_manual_not_undecided(self):
+        """They are answerable today — by a person opening the UI. NO_DATA says
+        the audit tried and failed, and invites somebody to fix the tool."""
+        for has_gsc in (True, False):
+            for row in self._impossible(has_gsc):
+                self.assertEqual(row["status"], MANUAL)
+                self.assertIn("UI", row["evidence"])
+
+    def test_the_switch_to_manual_does_not_move_coverage(self):
+        """Both statuses stay in the denominator and out of the decided count. If
+        this ever diverges, the reclassification became a way to lift a number."""
+        rows = [{"id": "X", "category": "c", "category_label": "C",
+                 "severity": "high", "status": NO_DATA, "effort": "low"}]
+        as_no_data = score(rows)
+        as_manual = score([dict(rows[0], status=MANUAL)])
+        self.assertEqual(as_no_data["coverage_pct"], as_manual["coverage_pct"])
+        self.assertEqual(as_no_data["applicable"], as_manual["applicable"])
+        self.assertEqual(as_no_data["decided"], as_manual["decided"])
+
+    def test_a_future_gsc_item_without_an_entry_still_reports_undecided(self):
+        """The fallback is not dead code: it is what an item added to the registry
+        before anyone writes its reason falls back to."""
+        item = [{"id": "GO-999", "source": "gsc", "category": "c",
+                 "category_label": "C", "title": "t", "severity": "low",
+                 "plerdy_ref": 0, "fix": ""}]
+        self.assertEqual(grade(item, {}, {}, {}, True)[0]["status"], NO_DATA)
 
 
 class SecretsStayOutOfTheOutput(unittest.TestCase):
@@ -606,6 +729,68 @@ class PageGuard(unittest.TestCase):
         html = _page("404 Not Found", "Try the homepage. " * 200)
         self.assertGreater(visible_words(html), 120)
         self.assertEqual(page_guard(html)[0], "soft_404")
+
+
+class History(unittest.TestCase):
+    """Two runs in one second used to write the same file, so the history lost the
+    entry the next diff would have compared against."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.cwd = os.getcwd()
+        os.chdir(self.dir)
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_the_stamp_is_sub_second(self):
+        self.assertRegex(run_stamp(), r"^\d{8}T\d{9}Z$")
+
+    def test_two_runs_in_one_stamp_do_not_share_a_file(self):
+        stamp = run_stamp()
+        first = history_path("e.com", stamp)
+        with open(first, "w", encoding="utf-8") as f:
+            json.dump({"marker": 1}, f)
+        second = history_path("e.com", stamp)
+        self.assertNotEqual(first, second)
+        with open(first, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["marker"], 1,
+                             "the earlier run was overwritten")
+
+    def test_the_newest_run_wins_regardless_of_filename_format(self):
+        """A directory holding both stamp formats must still order correctly. By
+        name every legacy file outranks every current one, because `-` in an ISO
+        timestamp sorts below `0`."""
+        os.makedirs(os.path.join(".seo-runs", "e.com"))
+        for name, started in (("20260803T094000Z.json", "2026-08-03T09:40:00+00:00"),
+                              ("20260803T094100500Z.json", "2026-08-03T09:41:00.5+00:00")):
+            with open(os.path.join(".seo-runs", "e.com", name), "w", encoding="utf-8") as f:
+                json.dump({"started_at": started, "name": name}, f)
+        self.assertEqual(previous_run("e.com", "")["name"], "20260803T094100500Z.json")
+
+    def test_a_corrupt_history_file_is_skipped_not_fatal(self):
+        """A broken record of an old run is no reason to abandon the current one."""
+        os.makedirs(os.path.join(".seo-runs", "e.com"))
+        with open(os.path.join(".seo-runs", "e.com", "20260803T094000Z.json"), "w") as f:
+            f.write("{not json")
+        with open(os.path.join(".seo-runs", "e.com", "20260803T093000Z.json"), "w") as f:
+            json.dump({"started_at": "2026-08-03T09:30:00+00:00", "name": "good"}, f)
+        self.assertEqual(previous_run("e.com", "")["name"], "good")
+
+    def test_the_current_run_is_excluded(self):
+        os.makedirs(os.path.join(".seo-runs", "e.com"))
+        path = os.path.join(".seo-runs", "e.com", "20260803T094000Z.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"started_at": "2026-08-03T09:40:00+00:00"}, f)
+        self.assertIsNone(previous_run("e.com", path))
+
+    def test_an_unparseable_name_without_a_timestamp_never_wins(self):
+        os.makedirs(os.path.join(".seo-runs", "e.com"))
+        for name in ("notes.json", "20260803T094000Z.json"):
+            with open(os.path.join(".seo-runs", "e.com", name), "w", encoding="utf-8") as f:
+                json.dump({"name": name}, f)
+        self.assertEqual(previous_run("e.com", "")["name"], "20260803T094000Z.json")
 
 
 class WrongPageWidensTheGate(unittest.TestCase):

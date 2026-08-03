@@ -36,6 +36,12 @@ jobs:
         run: |
           python -m compileall -q skills/seo-checklist/scripts skills/seo-checklist/tools
 
+      # The Public Suffix List is a dated artifact. Its absence is not a crash,
+      # it is a quiet downgrade to the heuristic it replaced, so the shipped
+      # snapshot is checked rather than assumed. --check downloads nothing.
+      - name: Public suffix snapshot ships and is dated
+        run: python skills/seo-checklist/tools/refresh_public_suffix_list.py --check
+
       # A smoke run against a local page proves the whole path still works end to
       # end — registry, runner, report — without touching the network.
       - name: Offline smoke run

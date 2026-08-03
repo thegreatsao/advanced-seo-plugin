@@ -183,6 +183,13 @@ Deliverables: `CHECKLIST-REPORT.md`, `CHECKLIST.html` (filterable; manual items 
 checkboxes persisted in the browser), `LLM-QUEUE*.md`, and
 `checklist-results.json`, also archived under `.seo-runs/<domain>/`.
 
+History filenames carry milliseconds, and a run never writes over an existing
+file: at second precision two `--only` runs finished inside the same second and
+the second one destroyed the first — which is the run `--diff` would have compared
+against. `--diff` orders history by the timestamp inside each file rather than by
+its name, so a directory holding both filename formats still finds the newest, and
+a history file that will not parse is skipped instead of ending the run.
+
 ## Search Console
 
 Auth is a **service account**, not user OAuth:
@@ -197,16 +204,30 @@ The property defaults to `sc-domain:<registrable domain>` — `www.example.com` 
 not a property, `example.com` is. Override with `--gsc-property` for URL-prefix
 properties.
 
+The registrable domain comes from a bundled snapshot of the [Public Suffix
+List](https://publicsuffix.org/), refreshed with
+`tools/refresh_public_suffix_list.py`. It is bundled, not fetched at audit time,
+so a run answers the same offline and next month. The seven hard-coded suffixes it
+replaced handled `example.co.uk` correctly and every platform domain wrong —
+`something.github.io` became `github.io`, `myapp.vercel.app` became `vercel.app` —
+so the default property was one nobody owns and every Search Console item came
+back empty, which reads as a site with no search traffic.
+
 Seven items are answered from live data: cannibalization, branded-query ownership,
 reported opportunities, and — via the URL Inspection API — whether Google indexed
 the page and which canonical it picked. That last one earns the setup on its own:
 a page can declare `rel=canonical` to itself and still have Google choose a
 different URL, and nothing in the page reveals it.
 
-Three items stay `NO_DATA` even with working credentials, and this is not missing
-wiring: **the Search Console API has no endpoint for manual actions, the Index
-Coverage report, or mobile-usability signals.** Those exist only in the web UI;
-mobile usability was withdrawn from the API in December 2023.
+Three items report `MANUAL` even with working credentials, and this is not
+missing wiring: **the Search Console API has no endpoint for manual actions, the
+Index Coverage report, or mobile-usability signals.** Those exist only in the web
+UI; mobile usability was withdrawn from the API in December 2023.
+
+They are `MANUAL` rather than `NO_DATA` because they are answerable today — by a
+person opening Search Console. `NO_DATA` says the audit tried and could not
+decide, which invites somebody to go fix the tool. Coverage is unmoved either
+way: both statuses stay in the denominator and out of the decided count.
 
 Without a key, those items are `NO_DATA` in `live` and `page` mode — the run
 could have asked and did not decide — and `N/A` only in `archive`, which makes no

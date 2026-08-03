@@ -229,6 +229,12 @@ The property defaults to `sc-domain:<registrable domain>` — note that
 `www.example.com` is not a property, `example.com` is. Override with
 `--gsc-property` for URL-prefix properties.
 
+The registrable domain is derived from a bundled Public Suffix List snapshot, so a
+site on a platform domain gets its own property: `something.github.io` is the
+registrable domain, not `github.io`. If the snapshot is missing the run falls back
+to a heuristic **and says so** — that message means the default property is a
+guess and `--gsc-property` is worth passing.
+
 ```bash
 python3 <SKILL_DIR>/scripts/checklist_runner.py https://example.com/page \
     --gsc-property sc-domain:example.com
@@ -241,12 +247,17 @@ the page's indexing state. CI-010 is the one worth the setup: a page can declare
 `rel=canonical` to itself and still have Google pick another URL, and nothing in
 the page reveals the disagreement.
 
-Three items stay `NO_DATA` even with valid credentials, and that is not missing
+Three items report `MANUAL` even with valid credentials, and that is not missing
 wiring — **the Search Console API exposes no endpoint for manual actions
 (GO-141), the Index Coverage report (GO-142), or mobile-usability signals
 (MB-099).** Those exist only in the web UI; mobile usability was withdrawn from
 the API in December 2023. The Links report is UI-only too, which is why backlinks
 stay manual.
+
+`MANUAL`, not `NO_DATA`: a person can answer all three today in the UI, and that
+is what `MANUAL` means everywhere else in this registry. `NO_DATA` would say the
+audit tried and failed, sending the reader to fix a tool that is working. Neither
+status is counted as decided, so coverage does not move.
 
 GSC is offered only by modes allowed to reach external services. In `archive`
 mode a key sitting on disk is ignored and those items report `N/A` — "no network

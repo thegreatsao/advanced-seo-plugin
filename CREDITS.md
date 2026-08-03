@@ -28,6 +28,20 @@ New in this plugin: `checklist_runner.py`, `checklist_report.py`,
 `ga4_tag_checker.py`, `css_minify_check.py`, plus the registry, its generator and
 the four judgement agents.
 
+## Public Suffix List
+
+`skills/seo-checklist/resources/config/public_suffix_list.dat` is a dated snapshot
+of the [Public Suffix List](https://publicsuffix.org/), maintained by Mozilla and
+contributors, distributed under the **Mozilla Public License 2.0** — the licence
+text is at <https://mozilla.org/MPL/2.0/>.
+
+The file is unmodified except for a five-line comment header recording where it
+came from, when the snapshot was taken, and how to refresh it
+(`tools/refresh_public_suffix_list.py`). It is bundled rather than fetched at
+audit time for the same reason the registry is: a run has to produce the same
+answer offline and next month. It is used only to derive the default
+`sc-domain:` Search Console property.
+
 ## Bundled playbooks
 
 `skills/seo-checklist/resources/playbooks/local-seo.md` is adapted from the

@@ -622,10 +622,20 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
             # neither does the message. Telling someone without a key to go set
             # GSC_CREDENTIALS_PATH sends them to configure something that cannot
             # help: the API has no endpoint for any of these three.
-            row.update(status=NO_DATA,
-                       evidence=GSC_UNAVAILABLE.get(it["id"]) or (
-                           "needs Search Console" if has_gsc else
-                           "no GSC credentials — set GSC_CREDENTIALS_PATH"))
+            #
+            # MANUAL, not NO_DATA. NO_DATA says the audit tried and could not
+            # decide, which invites somebody to fix the tool; these three are
+            # answerable today, by a person opening the Search Console UI. That
+            # is what MANUAL means, and it is what the other 31 manual items say.
+            # Coverage is unmoved either way — both statuses stay in the
+            # denominator and out of the decided count — so this buys honesty
+            # about *who* has to act, not a better number.
+            if it["id"] in GSC_UNAVAILABLE:
+                row.update(status=MANUAL, evidence=GSC_UNAVAILABLE[it["id"]])
+            else:
+                row.update(status=NO_DATA,
+                           evidence="needs Search Console" if has_gsc else
+                                    "no GSC credentials — set GSC_CREDENTIALS_PATH")
         elif it["id"] in skipped:
             st, why = skipped[it["id"]]
             row.update(status=st, evidence=why)
@@ -772,22 +782,89 @@ def unreachable_skips(items: list[dict], reason: str,
     return out
 
 
+def run_stamp() -> str:
+    """A history filename that two runs cannot share.
+
+    Second precision was not enough: `--only` runs finish in under a second, so
+    a run could overwrite the one before it and the history silently lost an
+    entry — the file it would have been compared against. Milliseconds, at fixed
+    width so the names still sort chronologically among themselves.
+    """
+    now = datetime.now(timezone.utc)
+    return now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond // 1000:03d}Z"
+
+
 def history_path(domain: str, stamp: str) -> str:
+    """Where this run is filed, without ever landing on an existing file.
+
+    A stamp collision is now vanishingly unlikely, but "unlikely" is how the
+    second-precision version was justified too, and the cost of being wrong is
+    destroying a previous audit.
+    """
     d = os.path.join(os.getcwd(), ".seo-runs", domain)
     os.makedirs(d, exist_ok=True)
-    return os.path.join(d, f"{stamp}.json")
+    path = os.path.join(d, f"{stamp}.json")
+    n = 2
+    while os.path.exists(path):
+        path = os.path.join(d, f"{stamp}-{n}.json")
+        n += 1
+    return path
+
+
+EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def run_time(payload: dict, name: str) -> datetime:
+    """When a stored run happened, as something orderable.
+
+    `started_at` first, the filename stamp second. Both are parsed rather than
+    compared as text: an ISO timestamp and a compact stamp sort against each
+    other by accident of punctuation — `2026-08-03T…` always precedes
+    `20260803T…` because `-` is below `0` — so a mixed directory would rank
+    every legacy file above every current one.
+    """
+    started = str(payload.get("started_at") or "")
+    if started:
+        try:
+            parsed = datetime.fromisoformat(started)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    stamp = name.split(".")[0].split("-")[0]
+    for fmt in ("%Y%m%dT%H%M%S%fZ", "%Y%m%dT%H%M%SZ"):
+        try:
+            return datetime.strptime(stamp, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return EPOCH
 
 
 def previous_run(domain: str, exclude: str) -> dict | None:
+    """The most recent earlier run for this domain.
+
+    Ordered by the timestamp *inside* each file rather than by its name. The name
+    format has already changed once (seconds to milliseconds), and a directory
+    holding both would sort wrongly by name for any run inside the same second —
+    which is exactly the pair a diff is most likely to want.
+
+    A history file that will not parse is skipped, not fatal: a corrupt record of
+    an old run is no reason to abandon the current one.
+    """
     d = os.path.join(os.getcwd(), ".seo-runs", domain)
     if not os.path.isdir(d):
         return None
     skip = os.path.basename(exclude) if exclude else ""
-    files = sorted(f for f in os.listdir(d) if f.endswith(".json") and f != skip)
-    if not files:
-        return None
-    with open(os.path.join(d, files[-1]), encoding="utf-8") as f:
-        return json.load(f)
+    best, best_key = None, EPOCH
+    for name in sorted(f for f in os.listdir(d) if f.endswith(".json") and f != skip):
+        try:
+            with open(os.path.join(d, name), encoding="utf-8") as f:
+                payload = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        key = run_time(payload, name)
+        if key >= best_key:
+            best, best_key = payload, key
+    return best
 
 
 def diff_runs(prev: dict, cur: dict) -> tuple[list[dict], str]:
@@ -1096,15 +1173,97 @@ def aggregate_pages(primary: list[dict], per_page: list[list[dict]]) -> list[dic
     return out
 
 
+PSL_PATH = os.path.join(SKILL_DIR, "resources", "config", "public_suffix_list.dat")
+_PSL_CACHE: tuple[frozenset, frozenset, frozenset] | None = None
+_PSL_WARNED = False
+
+
+def load_public_suffixes(path: str = ""):
+    """Parse the Public Suffix List into (exact, wildcard, exception) rule sets.
+
+    The path is resolved at call time, not frozen into the default argument: a
+    default binds once at import and then cannot be pointed anywhere else, which
+    makes the missing-list branch untestable and any override silently ignored.
+
+    Both sections are kept. The private section is the one that matters most
+    here: `github.io`, `vercel.app`, `myshopify.com` and their kind are exactly
+    the hosts a small site sits on, and only the private section names them.
+    """
+    exact, wildcard, exception = set(), set(), set()
+    with open(path or PSL_PATH, encoding="utf-8") as f:
+        for line in f:
+            rule = line.strip().lower()
+            if not rule or rule.startswith("//"):
+                continue
+            if rule.startswith("!"):
+                exception.add(rule[1:])
+            elif rule.startswith("*."):
+                wildcard.add(rule)
+            else:
+                exact.add(rule)
+    return frozenset(exact), frozenset(wildcard), frozenset(exception)
+
+
+def public_suffixes():
+    """The parsed list, or None when it is not on disk. Loaded once per process."""
+    global _PSL_CACHE
+    if _PSL_CACHE is None:
+        try:
+            _PSL_CACHE = load_public_suffixes()
+        except OSError:
+            return None
+    return _PSL_CACHE
+
+
+def suffix_label_count(labels: list[str], rules) -> int:
+    """How many trailing labels form the public suffix, per the PSL algorithm."""
+    exact, wildcard, exception = rules
+    best = 1  # the implicit default rule, `*`
+    for i in range(len(labels)):
+        candidate = labels[i:]
+        joined = ".".join(candidate)
+        if joined in exception:
+            # An exception rule says this is *not* a public suffix; the prevailing
+            # rule is the same one minus its leftmost label.
+            best = max(best, len(candidate) - 1)
+        elif joined in exact:
+            best = max(best, len(candidate))
+        elif len(candidate) > 1 and "*." + ".".join(candidate[1:]) in wildcard:
+            best = max(best, len(candidate))
+    return best
+
+
 def registrable_domain(host: str) -> str:
     """Reduce a hostname to the domain a Search Console property is keyed on:
-    `www.example.com` is not a `sc-domain:` property, `example.com` is."""
-    labels = host.split(":")[0].strip(".").split(".")
+    `www.example.com` is not a `sc-domain:` property, `example.com` is.
+
+    Uses the bundled Public Suffix List. The seven hard-coded suffixes this
+    replaced got the common ccTLD shapes right (`example.co.uk`, `example.com.br`)
+    and every platform domain wrong: `something.github.io` became `github.io`,
+    `myapp.vercel.app` became `vercel.app`. The default property was then one
+    nobody owns, and every Search Console item came back empty — which reads as a
+    site with no search traffic rather than as a property that does not exist.
+    """
+    labels = [l for l in host.split(":")[0].strip(".").lower().split(".") if l]
     if len(labels) <= 2:
         return ".".join(labels)
-    second_level = {"co", "com", "net", "org", "gov", "edu", "ac"}
-    keep = 3 if labels[-2] in second_level else 2
-    return ".".join(labels[-keep:])
+
+    rules = public_suffixes()
+    if rules is None:
+        # Say so rather than guess quietly: the fallback is the old heuristic, and
+        # it is wrong about exactly the hosts people run small sites on.
+        global _PSL_WARNED
+        if not _PSL_WARNED:
+            _PSL_WARNED = True
+            print(f"  public suffix list not found at {PSL_PATH}; falling back to "
+                  f"a heuristic. Pass --gsc-property if the default looks wrong.",
+                  file=sys.stderr)
+        second_level = {"co", "com", "net", "org", "gov", "edu", "ac"}
+        keep = 3 if labels[-2] in second_level else 2
+        return ".".join(labels[-keep:])
+
+    keep = suffix_label_count(labels, rules) + 1
+    return ".".join(labels[-keep:]) if keep <= len(labels) else ".".join(labels)
 
 
 def find_gsc_credentials(explicit: str) -> str:
@@ -1211,7 +1370,7 @@ def main() -> int:
             print(f"No items match --only {a.only}", file=sys.stderr)
             return 2
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = run_stamp()
 
     if not a.quiet:
         print(f"Checklist audit: {a.url}", file=sys.stderr)
