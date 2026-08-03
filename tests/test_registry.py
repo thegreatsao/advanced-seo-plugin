@@ -273,5 +273,31 @@ class NoAssertionThatCanNeverFire(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(SCRIPTS, script)), script)
 
 
+class GradedRowsCarryWhatTheReportRanksOn(unittest.TestCase):
+    """The report claims its fix list is ranked by severity against effort. That
+    was false for every run: `grade()` did not copy `effort` onto the row, so
+    priority_of fell back to "medium" for all 214 items and the ranking collapsed
+    to severity alone. The effort column printed "?" and nobody read it as a bug."""
+
+    def test_effort_survives_grading(self):
+        from checklist_runner import grade
+        item = [{"id": "X-001", "plerdy_ref": 1, "category": "content",
+                 "category_label": "C", "title": "t", "severity": "high",
+                 "source": "manual", "effort": "low", "fix": ""}]
+        self.assertEqual(grade(item, {}, {}, {}, False)[0]["effort"], "low")
+
+    def test_effort_changes_the_ranking(self):
+        """If it did not, carrying the field would be decoration."""
+        sys.path.insert(0, SCRIPTS)
+        from checklist_report import priority_of
+        cheap = priority_of({"severity": "high", "effort": "low"})
+        dear = priority_of({"severity": "high", "effort": "high"})
+        self.assertGreater(cheap, dear)
+
+    def test_every_registry_item_declares_an_effort(self):
+        for i in ITEMS:
+            self.assertIn(i.get("effort"), VALID_EFFORT, i["id"])
+
+
 if __name__ == "__main__":
     unittest.main()

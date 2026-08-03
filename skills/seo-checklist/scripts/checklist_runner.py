@@ -655,8 +655,16 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
 
     graded = []
     for it in items:
+        # `effort` has to travel with the row. It did not, so every graded item
+        # arrived at the report without it, priority_of fell back to "medium" for
+        # all 214, and the fix list ranked by severity alone — the exact thing the
+        # effort estimate was added to prevent. The report printed "?" in its
+        # effort column for a year of runs and nobody read it as a defect.
         row = {k: it[k] for k in ("id", "plerdy_ref", "category", "category_label",
                                   "title", "severity", "source")}
+        # Defaulted rather than required, so a hand-built item cannot raise here;
+        # a registry test asserts every real item declares one.
+        row["effort"] = it.get("effort", "medium")
         row["fix"] = it.get("fix", "")
         src = it["source"]
 
