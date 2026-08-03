@@ -8,6 +8,10 @@ Version 0.2.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter 
 in 0.1.0 in ways that *lower* the reported numbers, which is the point: the entries
 say which verdicts used to be fabricated.
 
+Read [KNOWN-ISSUES.md](KNOWN-ISSUES.md) before you rely on a report. Nine defects
+and gaps are measured and ranked there; four of them change how the numbers should
+be read, starting with the fact that `--sample` is not a sample.
+
 ## Why it exists
 
 The usual failure of LLM-driven SEO tooling is that the model picks what to run.
@@ -124,6 +128,12 @@ a test enforces it. An unknown name is an error, not a silent fallback.
 second) and runs the page-level checks against each; site-level checks still run
 once. The worst verdict wins, but the evidence carries the count — `1/5 pages:
 title is 61 characters` is exactly what a single-page audit would have missed.
+
+> **These are the first N URLs in document order, not a statistical sample.**
+> Sitemaps are usually ordered by section or by date, so the first N tend to be one
+> corner of the site. The report says "on 5 of 5 pages checked", which reads as a
+> sample and is not one — read it as "N pages from the top of the sitemap". Known
+> issue, see [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
 
 Candidates come from `<a href>` only, asset extensions are rejected by path, and
 anything served as a non-page is dropped at fetch time. Because the worst verdict
@@ -329,6 +339,12 @@ that the request fails and the item reports `NO_DATA` with the reason, which is
 more useful than an audit that appears to hang. A `Retry-After` on any other status
 is ignored — some CDNs send it on a 200, and sleeping on that would pace the audit
 to somebody else's cache policy.
+
+Two gaps in this, both recorded in [KNOWN-ISSUES.md](KNOWN-ISSUES.md) and both
+about the audited site rather than the audit: **the crawlers do not consult
+`robots.txt`** before requesting a page, and five of them crawl independently, so a
+single audit fetches the same pages around 275 times. Pacing limits the rate, not
+the volume.
 
 ## Measuring the rendered page
 

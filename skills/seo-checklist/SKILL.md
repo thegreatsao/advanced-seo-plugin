@@ -113,6 +113,12 @@ fails for the site, but the evidence always carries the count: `3/8 pages: ...`
 never reads the same as every page. When no second URL can be found the run says
 so and audits the single page rather than pretending to have sampled.
 
+**Say what the sample is when you report it.** These are the first N URLs in
+sitemap document order, not a statistical sample — sitemaps are usually ordered by
+section or by date, so they tend to be one corner of the site. Describe it as "N
+pages from the top of the sitemap", never as "the site". Known issue, recorded in
+`KNOWN-ISSUES.md`.
+
 Only real pages enter the sample. Candidates come from `<a href>` alone, asset
 extensions are rejected by path, and anything whose `Content-Type` is not a page
 is dropped at fetch time with the reason printed. This matters more than it
@@ -378,6 +384,13 @@ secrets and stay readable.
 
 Always report both. A 96/100 over 19% coverage (typical for `archive` mode) is not
 a good site, it is a thin audit.
+
+The **per-category** scores in the report are a third number on a different scale:
+an unweighted pass rate, where one failing `low` costs what one failing `critical`
+does. Do not compare a category score with the headline SEO Score as if they were
+the same measure, and do not treat the order of the category bars as a severity
+ranking — the fix list below them is the severity-ranked one. Known issue, see
+`KNOWN-ISSUES.md`.
 
 ## Search Console
 

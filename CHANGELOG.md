@@ -119,6 +119,26 @@ somewhere specific.
 - Three script counts in `plugin.json`, `CREDITS.md` and the research record
   disagreed with each other and with the tree.
 
+### Known issues in this release
+
+A full review after the release measured nine defects and gaps, ranked with their
+evidence in [KNOWN-ISSUES.md](KNOWN-ISSUES.md). The four that change how a 0.2.0
+report should be read:
+
+- **`--sample N` is the first N sitemap URLs in document order, not a sample.** The
+  report's "on 5 of 5 pages checked" reads as representative and is not.
+- **The per-category scores are unweighted**, while the headline SEO Score is
+  weighted by severity — two scales in one document, and the category bars are
+  ordered by the unweighted one.
+- **A single audit fetches the same pages ~275 times**, because five scripts crawl
+  independently and nothing is cached. Pacing limits the rate, not the volume.
+- **The crawlers do not consult `robots.txt`**, and `broken_links.py` has no cap on
+  how many links it checks.
+
+None of these fabricate a verdict — that class of bug is what the release fixed.
+They overstate how much of a site was looked at and how comparable two numbers are,
+which is the next class down and is now written where a reader will find it.
+
 ## 0.1.0 — 3 August 2026
 
 First version. 211 items, 90 offline tests, no repository and no CI yet.

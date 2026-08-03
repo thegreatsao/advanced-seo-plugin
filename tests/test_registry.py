@@ -107,6 +107,56 @@ class RegistryShape(unittest.TestCase):
                 self.assertIn(i["effort"], {"medium", "high"}, i["id"])
 
 
+class DocsPointAtThingsThatExist(unittest.TestCase):
+    """Cross-references between documents rot silently.
+
+    The known-issues list is only useful if the documents that raise a caveat point
+    at it, and a relative link that stops resolving is invisible until a reader
+    follows it. Both are the documentation form of the failure this whole suite
+    guards: something that reads as true and is not."""
+
+    DOCS = ("README.md", "CHANGELOG.md", "CREDITS.md", "KNOWN-ISSUES.md",
+            os.path.join("skills", "seo-checklist", "SKILL.md"))
+
+    def _read(self, rel):
+        with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
+            return f.read()
+
+    def test_every_relative_markdown_link_resolves(self):
+        broken = []
+        for rel in self.DOCS:
+            base = os.path.dirname(os.path.join(ROOT, rel))
+            for target in re.findall(r"\]\(([^)#:]+\.md)[^)]*\)", self._read(rel)):
+                if not os.path.exists(os.path.join(base, target)):
+                    broken.append(f"{rel} -> {target}")
+        self.assertEqual(broken, [], f"dead links: {broken}")
+
+    def test_the_caveats_point_at_the_known_issues_list(self):
+        """Whoever fixes one of these must find every place that documents it. The
+        set of files naming KNOWN-ISSUES.md is that list."""
+        self.assertTrue(os.path.exists(os.path.join(ROOT, "KNOWN-ISSUES.md")))
+        for rel in ("README.md", "CHANGELOG.md",
+                    os.path.join("skills", "seo-checklist", "SKILL.md")):
+            self.assertIn("KNOWN-ISSUES.md", self._read(rel),
+                          f"{rel} raises caveats but does not point at the list")
+
+    def test_the_sample_caveat_is_stated_wherever_sampling_is_described(self):
+        """--sample takes the first N sitemap URLs in document order. Every document
+        that describes it has to say so, or the one that does not is the one a reader
+        believes."""
+        for rel in ("README.md", os.path.join("skills", "seo-checklist", "SKILL.md")):
+            text = self._read(rel)
+            self.assertIn("document order", text,
+                          f"{rel} describes --sample without saying it is not a sample")
+
+    def test_the_runner_docstring_does_not_claim_to_sample(self):
+        with open(os.path.join(SCRIPTS, "checklist_runner.py"), encoding="utf-8") as f:
+            src = f.read()
+        start = src.index("def discover_urls(")
+        doc = src[start:start + 1200]
+        self.assertIn("not a sample", doc)
+
+
 class VersionAndChangelog(unittest.TestCase):
     """A changelog nobody is forced to update is a changelog that lies. The failure
     mode is always the same one: the version moves and the entry does not."""

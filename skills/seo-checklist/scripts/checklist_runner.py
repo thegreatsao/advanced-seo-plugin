@@ -867,6 +867,14 @@ def score(graded: list[dict]) -> dict:
     for g in graded:
         c = by_cat.setdefault(g["category"], {"label": g["category_label"], "counts": {}})
         c["counts"][g["status"]] = c["counts"].get(g["status"], 0) + 1
+    # NOTE: the per-category score is an *unweighted* pass rate, while seo_score
+    # above is weighted by severity. The two numbers therefore sit on different
+    # scales in the same report — a category can show 25 where its weighted score
+    # is 42, because one failing `low` costs as much here as one failing
+    # `critical`. The report also orders its category bars by this number, so
+    # "look here first" and the severity-ranked fix list below it can disagree.
+    # Known issue, deliberately left visible rather than silently reconciled:
+    # see KNOWN-ISSUES.md.
     for c in by_cat.values():
         cs = c["counts"]
         dec = cs.get(PASS, 0) + cs.get(FAIL, 0) + cs.get(WARN, 0)
@@ -1247,9 +1255,18 @@ def looks_like_a_page(url: str) -> bool:
 
 
 def discover_urls(base_url: str, limit: int) -> list[str]:
-    """Pick up to `limit` same-host URLs to sample, sitemap first, on-page links
-    second. Returns [] when neither source yields anything — the caller then
-    audits the single entry URL and says so, rather than pretending to sample."""
+    """Pick up to `limit` same-host URLs, sitemap first, on-page links second.
+
+    **These are the first N URLs in document order, not a sample.** Sitemaps are
+    usually ordered by section or by date, so the first N are systematically one
+    corner of the site — often the newest posts, or a single category — and two
+    sites with the same page count can yield sets of very different
+    representativeness. The report says "on 5 of 5 pages checked", which reads as
+    a sample and is not one. Known issue: see KNOWN-ISSUES.md. A deterministic
+    stride over the full list would keep reproducibility and drop the bias.
+
+    Returns [] when neither source yields anything — the caller then audits the
+    single entry URL and says so, rather than claiming to have looked wider."""
     try:
         from lib.safe_http import safe_get
     except ImportError:
