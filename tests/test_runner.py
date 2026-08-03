@@ -9,6 +9,7 @@ import builtins
 import io
 import json
 import os
+import re
 import sys
 import unittest
 
@@ -17,10 +18,11 @@ SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
 sys.path.insert(0, SCRIPTS)
 
 from checklist_runner import (  # noqa: E402
-    ANCHOR_RE, FAIL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA, NO_DATA, PASS, WARN,
-    aggregate_pages, build_plan, choose_profile, diff_runs, evaluate, grade,
-    is_page_level, looks_like_a_page, profile_excludes, redact,
-    registrable_domain, resolve, score, unreachable_skips,
+    ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
+    NO_DATA, PASS, WARN, aggregate_pages, audit_target, build_plan,
+    choose_profile, diff_runs, evaluate, grade, is_page_level,
+    looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
+    resolve, run_script, score, unreachable_skips, visible_words,
 )
 from detect_profile import detect  # noqa: E402
 
@@ -498,6 +500,258 @@ class SampleDiscovery(unittest.TestCase):
         """Cutting at `?` produced a different URL that frequently 404s, and on
         many sites the query is what makes it a distinct page at all."""
         self.assertEqual(ANCHOR_RE.findall('<a href="/p?id=7#top">x</a>'), ["/p?id=7#top"])
+
+
+def _page(title="Example", body="Hello there.", head="", extra=""):
+    return (f"<!doctype html><html><head><title>{title}</title>{head}</head>"
+            f"<body><h1>{title}</h1><p>{body}</p>{extra}</body></html>")
+
+
+class PageGuard(unittest.TestCase):
+    """The hole the reachability gate left open.
+
+    A challenge page and a soft 404 both answer 200 with well-formed HTML, so
+    every evidence script runs against a page that is not the site and the
+    registry grades whatever the interstitial contains. The gate on status codes
+    cannot see either one.
+    """
+
+    def test_a_normal_page_passes(self):
+        self.assertEqual(page_guard(_page())[0], "")
+
+    def test_cloudflare_challenge_is_caught(self):
+        html = _page("Just a moment...", "",
+                     extra='<script src="/cdn-cgi/challenge-platform/h/b/orch"></script>')
+        kind, detail = page_guard(html)
+        self.assertEqual(kind, "bot_challenge")
+        self.assertIn("Cloudflare", detail)
+
+    def test_vendor_challenges_are_caught_from_their_markup(self):
+        """Where these strings actually live on a block page: a script src, a
+        stylesheet href, an element id — never the prose."""
+        for tag, vendor in (
+                ('<script src="/_Incapsula_Resource?SWJIYLWA=719">', "Imperva"),
+                ('<div id="px-captcha"></div>', "PerimeterX"),
+                ('<script src="https://ct.datado.me/c.js">', "DataDome"),
+                ('<script src="https://token.awswaf.com/x/challenge.js">', "AWS WAF"),
+                ('<script src="/sucuri_cloudproxy_js/x.js">', "Sucuri"),
+                ('<img src="//errors.edgesuite.net/18.abcd.ip">', "Akamai")):
+            kind, detail = page_guard(_page("Blocked", "", extra=tag))
+            self.assertEqual(kind, "bot_challenge", tag)
+            self.assertIn(vendor.split()[0], detail, tag)
+
+    def test_vendors_that_name_themselves_in_the_text_are_caught_there(self):
+        """Imperva and Sucuri print their name on the block page itself, so for
+        those two the visible text is the right place to look."""
+        for phrase, vendor in (("Incapsula incident ID: 282-31", "Imperva"),
+                               ("Access Denied - Sucuri Website Firewall", "Sucuri")):
+            kind, detail = page_guard(_page("Blocked", phrase))
+            self.assertEqual(kind, "bot_challenge", phrase)
+            self.assertIn(vendor, detail, phrase)
+
+    def test_challenge_title_without_a_vendor_string(self):
+        self.assertEqual(page_guard(_page("Checking your browser", ""))[0],
+                         "bot_challenge")
+        self.assertEqual(page_guard(_page("Attention Required!", ""))[0],
+                         "bot_challenge")
+
+    def test_a_short_article_quoting_a_vendor_string_is_not_a_challenge(self):
+        """The mirror-image failure, and the one an end-to-end run actually hit:
+        a 90-word article quoting `cdn-cgi/challenge-platform` in its prose was
+        called an interstitial. Word count alone cannot separate the two, because
+        real articles are often short. Placement can: on a challenge page the
+        vendor string is a script src, in an article it is text."""
+        html = _page("How Cloudflare bot protection works",
+                     "Cloudflare serves its interstitial from "
+                     "cdn-cgi/challenge-platform, which is why a crawler sees "
+                     "something different from a browser.")
+        self.assertLess(visible_words(html), 120)
+        self.assertEqual(page_guard(html)[0], "")
+
+    def test_a_content_page_with_the_marker_in_its_markup_survives(self):
+        """Cloudflare's JS detections inject that script into ordinary pages, so
+        a marker in the markup cannot condemn a page on its own either — the word
+        count is the second condition on every branch."""
+        html = _page("A real page", "Words that make this a page. " * 40,
+                     extra='<script src="/cdn-cgi/challenge-platform/h/b/jsd"></script>')
+        self.assertGreater(visible_words(html), 120)
+        self.assertEqual(page_guard(html)[0], "")
+
+    def test_script_bulk_does_not_make_a_challenge_look_content_rich(self):
+        """Word counting has to ignore script bodies: a challenge page is mostly
+        JavaScript, and counting it would push every one of them over the line."""
+        js = "var a=1; function f(){return 'x';} " * 60
+        html = _page("Just a moment...", "", extra=f"<script>{js}</script>")
+        self.assertLessEqual(visible_words(html), 120)
+        self.assertEqual(page_guard(html)[0], "bot_challenge")
+
+    def test_soft_404_is_caught(self):
+        for title in ("404 Not Found", "Page not found", "404", "Oops",
+                      "Page Not Found | Example Shop", "Страница не найдена",
+                      "Nothing found — Example Blog"):
+            self.assertEqual(page_guard(_page(title))[0], "soft_404", title)
+
+    def test_an_article_about_404s_is_not_a_soft_404(self):
+        """`404` appears in the title of every article ever written about broken
+        links. Substring matching would refuse to audit all of them."""
+        for title in ("How to fix 404 errors on your site",
+                      "The 404 page as a conversion opportunity",
+                      "Room 404 | Hotel Beispiel",
+                      "Error handling in Django"):
+            self.assertEqual(page_guard(_page(title))[0], "", title)
+
+    def test_soft_404_does_not_depend_on_page_size(self):
+        """Templated error pages carry the site's whole nav and footer, so they
+        are not small — the title is the signal, not the word count."""
+        html = _page("404 Not Found", "Try the homepage. " * 200)
+        self.assertGreater(visible_words(html), 120)
+        self.assertEqual(page_guard(html)[0], "soft_404")
+
+
+class WrongPageWidensTheGate(unittest.TestCase):
+    """A page that read fine and is the wrong page is not the same as a page that
+    could not be read, and the offline checks are where the difference shows."""
+
+    ITEMS = [
+        {"id": "F", "check": {"requires": "fetch", "script": "s.py"}},
+        {"id": "O", "check": {"requires": "offline", "script": "s.py"}},
+        {"id": "G", "check": {"requires": "gsc", "script": "s.py"}},
+    ]
+
+    def test_offline_checks_are_gated_when_the_page_is_wrong(self):
+        """An interstitial parses perfectly, so the offline scripts grade its 12
+        words as the site. In archive mode that produced 6 passes and 10 failures
+        before this gate existed."""
+        skips = unreachable_skips(self.ITEMS, "soft 404", wrong_page=True)
+        self.assertEqual(skips["O"][0], NO_DATA)
+        self.assertIn("not the site", skips["O"][1])
+
+    def test_offline_checks_are_not_gated_when_the_fetch_merely_failed(self):
+        """There is no HTML to hand them in that case, so they already drop out on
+        their missing input, with a reason that says which input."""
+        self.assertNotIn("O", unreachable_skips(self.ITEMS, "HTTP 503"))
+
+    def test_search_console_answers_either_way(self):
+        for kwargs in ({}, {"wrong_page": True}):
+            self.assertNotIn("G", unreachable_skips(self.ITEMS, "x", **kwargs))
+
+
+class CrossHostRedirect(unittest.TestCase):
+    """`fetch_page` used to discard the URL it actually landed on."""
+
+    def test_another_host_wins(self):
+        self.assertEqual(audit_target("https://old.com/", "https://new.com/"),
+                         "https://new.com/")
+
+    def test_a_same_host_hop_keeps_the_requested_url(self):
+        """So redirect_checker.py still sees the hop it exists to report; nothing
+        downstream is confused by a path-only redirect."""
+        self.assertEqual(audit_target("https://e.com/a", "https://e.com/b"),
+                         "https://e.com/a")
+
+    def test_www_counts_as_another_host(self):
+        """discover_urls filters on netloc, so www.example.com vs example.com is
+        the difference between an eight-page sample and a one-page one."""
+        self.assertEqual(audit_target("https://e.com/", "https://www.e.com/"),
+                         "https://www.e.com/")
+
+    def test_no_final_url_changes_nothing(self):
+        self.assertEqual(audit_target("https://e.com/", ""), "https://e.com/")
+
+    def test_the_search_console_property_follows_the_destination(self):
+        """The bug this fixes: sc-domain: was derived from the domain that
+        redirected away, and Search Console answered nothing for it."""
+        dest = audit_target("https://old.com/", "https://shop.new.co.uk/")
+        from urllib.parse import urlparse as _p
+        self.assertEqual(registrable_domain(_p(dest).netloc), "new.co.uk")
+
+
+class FetchCarriesTheDestination(unittest.TestCase):
+    """fetch_page against a stubbed transport — the guard and the final URL are
+    decided here, so they are worth pinning without a network."""
+
+    class _Resp:
+        def __init__(self, text, url, code=200, ctype="text/html"):
+            self.text, self.url, self.status_code = text, url, code
+            self.headers = {"Content-Type": ctype}
+
+    def _fetch(self, resp, **kw):
+        import lib.safe_http as sh
+        from checklist_runner import fetch_page
+        original = sh.safe_get
+        sh.safe_get = lambda url, **_: resp
+        try:
+            return fetch_page("https://asked.example/", **kw)
+        finally:
+            sh.safe_get = original
+
+    def test_the_final_url_is_reported(self):
+        out = self._fetch(self._Resp(_page(), "https://landed.example/en/"))
+        self.assertEqual(out.final_url, "https://landed.example/en/")
+        self.assertEqual(out.error, "")
+        os.unlink(out.path)
+
+    def test_a_challenge_page_is_an_error_not_a_page(self):
+        html = _page("Just a moment...", "")
+        out = self._fetch(self._Resp(html, "https://asked.example/"))
+        self.assertEqual(out.path, "")
+        self.assertEqual(out.guard, "bot_challenge")
+        self.assertIn("bot protection", out.error)
+
+    def test_no_page_guard_records_the_suspicion_instead_of_erasing_it(self):
+        """An escape hatch that forgets why it was needed is how a challenge page
+        ends up scored as a site with nobody able to tell afterwards."""
+        html = _page("Just a moment...", "")
+        out = self._fetch(self._Resp(html, "https://asked.example/"),
+                          enforce_guard=False)
+        self.assertTrue(out.path)
+        self.assertEqual(out.error, "")
+        self.assertEqual(out.guard, "bot_challenge")
+        os.unlink(out.path)
+
+
+class ScriptFailureKind(unittest.TestCase):
+    """A timeout and a crash both end as NO_DATA, and until now the report could
+    not tell you which. Only one of the two is worth retrying."""
+
+    ITEM = [{"id": "X", "source": "script", "severity": "high", "category": "c",
+             "category_label": "C", "plerdy_ref": "", "title": "t",
+             "check": {"script": "s.py", "assert": {"path": "n", "eq": 1}}}]
+
+    def _graded(self, result):
+        plan = {("s.py", ("s.py",)): ["X"]}
+        return grade(self.ITEM, plan, {("s.py", ("s.py",)): result}, {}, False)[0]
+
+    def test_timeout_is_labelled_and_marked_retryable(self):
+        row = self._graded({"__error__": "no result after 180s; retryable",
+                            "__error_kind__": "timeout"})
+        self.assertEqual(row["status"], NO_DATA)
+        self.assertEqual(row["error_kind"], "timeout")
+        self.assertIn("timed out", row["evidence"])
+
+    def test_crash_is_labelled_a_failure(self):
+        row = self._graded({"__error__": "[s.py] Traceback", "__error_kind__": "crash"})
+        self.assertEqual(row["error_kind"], "crash")
+        self.assertIn("script failed", row["evidence"])
+
+    def test_an_unlabelled_error_is_treated_as_a_crash(self):
+        """Older history and any script path that forgets to set a kind must not
+        be silently reported as a timeout — a crash is the honest default."""
+        row = self._graded({"__error__": "something"})
+        self.assertEqual(row["error_kind"], "crash")
+
+    def test_every_kind_run_script_produces_has_a_label(self):
+        """The labels live next to the code that raises them; a list kept in a
+        test drifts exactly the way the bug did."""
+        with open(os.path.join(SCRIPTS, "checklist_runner.py"), encoding="utf-8") as f:
+            src = f.read()
+        kinds = set(re.findall(r'"error_kind":\s*"(\w+)"', src))
+        self.assertTrue(kinds)
+        self.assertEqual(kinds - set(FAILURE_LABEL), set())
+
+    def test_a_missing_script_says_so(self):
+        out = run_script("definitely_not_a_script.py", [])
+        self.assertEqual(out["error_kind"], "missing")
 
 
 if __name__ == "__main__":

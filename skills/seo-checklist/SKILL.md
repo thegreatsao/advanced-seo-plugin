@@ -164,9 +164,33 @@ for a warning pattern. Before the gate, a run against a host that does not
 resolve returned **61/100 on 40 fabricated passes**. `missing_is` cannot catch
 this: the key is present and its value is zero.
 
-What it does **not** catch: a bot-protection challenge or a soft 404 answers 200
-with real HTML, and at this level is indistinguishable from the site. If a live
-audit comes back implausibly clean, check what was actually served.
+### The page that answers 200 and is not the site
+
+A status code is not enough. A bot-protection challenge and a soft 404 both
+answer **200 with well-formed HTML**, so the gate above waves them through and
+every script grades the interstitial. The audit User-Agent is exactly what bot
+protection exists to stop, which makes this the common case, not the exotic one.
+
+Two signals, each deliberately narrow:
+
+- **Interstitial** — a vendor fingerprint (Cloudflare, Imperva, PerimeterX,
+  DataDome, AWS WAF, Sucuri, Akamai) **in the markup**, or one of a short list of
+  challenge titles, **and** under 120 words of visible text. Both conditions are
+  required. An article explaining Cloudflare quotes `cdn-cgi/challenge-platform`
+  in its prose, and Cloudflare's JS detections inject that script into ordinary
+  content pages — either one alone would condemn a working page.
+- **Soft 404** — the title, or one of its `|`-separated segments, *equals* a
+  known not-found phrase. Never a substring: `404` appears in the title of every
+  article ever written about broken links.
+
+When either fires the entry page is treated as unreadable — **no score, and the
+offline checks are gated too**, because unlike a failed fetch the file is there
+and parses fine, so nothing else would stop them from grading its twelve words.
+
+`--no-page-guard` audits the page anyway, for auditing an error page on purpose
+or when the guard is wrong about yours. The suspicion is still recorded in
+`entry_guard`, and the run says so on every surface: an artifact that scored an
+interstitial without admitting it would be the same lie in a new place.
 
 ## Statuses
 

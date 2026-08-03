@@ -11,9 +11,9 @@ jobs:
       matrix:
         python-version: ["3.11", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -72,4 +72,70 @@ jobs:
           assert d["scores"]["decided"] == 0, f"decided {d['scores']['decided']} items"
           bad = [i["id"] for i in d["items"] if i["status"] in ("PASS", "FAIL", "WARN")]
           assert not bad, f"verdicts without a site: {bad[:5]}"
+          PY
+
+      # The other half of the same failure, and the harder half: a bot-protection
+      # challenge and a soft 404 answer 200 with well-formed HTML, so the status
+      # gate above waves them through and every script grades an interstitial as
+      # if it were the site. Run offline against saved copies of both, which is
+      # exactly the shape of the real thing.
+      - name: A challenge page and a soft 404 get no score
+        run: |
+          mkdir -p /tmp/challenge /tmp/soft404
+          cat > /tmp/challenge/index.html <<'HTML'
+          <!doctype html><html><head><title>Just a moment...</title></head>
+          <body><h1>Checking your browser</h1>
+          <script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script>
+          </body></html>
+          HTML
+          cat > /tmp/soft404/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <title>404 Not Found | Example Shop</title>
+          <link rel="canonical" href="https://example.com/missing"></head>
+          <body><h1>Page not found</h1><p>Try the homepage.</p></body></html>
+          HTML
+          for kind in challenge soft404; do
+            python skills/seo-checklist/scripts/checklist_runner.py https://example.com/ \
+                --archive /tmp/$kind --no-history --no-prompt --quiet \
+                --json $kind.json > $kind.log 2>&1
+            if grep -q "SEO Score" $kind.log; then
+              echo "scored a $kind page"; cat $kind.log; exit 1
+            fi
+            python - "$kind" <<'PY'
+          import json, sys
+          kind = sys.argv[1]
+          d = json.load(open(f"{kind}.json"))
+          assert d["entry_guard"], f"{kind}: guard did not fire"
+          assert d["entry_guard_enforced"] is True, f"{kind}: guard not enforced"
+          assert d["scores"]["decided"] == 0, f"{kind}: decided {d['scores']['decided']}"
+          bad = [i["id"] for i in d["items"] if i["status"] in ("PASS", "FAIL", "WARN")]
+          assert not bad, f"{kind}: verdicts on the wrong page: {bad[:5]}"
+          PY
+          done
+
+      # And the mirror image: an article that quotes a vendor's challenge string
+      # in its prose is a real page and must still be audited. Refusing to audit
+      # it would be the same bug pointing the other way.
+      - name: An article about bot protection is still audited
+        run: |
+          mkdir -p /tmp/article
+          cat > /tmp/article/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <title>How to fix 404 errors on your site | Example</title>
+          <meta name="description" content="Finding and fixing broken links and soft 404s.">
+          <link rel="canonical" href="https://example.com/fix-404"></head>
+          <body><h1>How to fix 404 errors</h1><p>Cloudflare serves its interstitial
+          from cdn-cgi/challenge-platform, which is why a crawler sees something
+          different from a browser.</p></body></html>
+          HTML
+          python skills/seo-checklist/scripts/checklist_runner.py https://example.com/ \
+              --archive /tmp/article --no-history --no-prompt --quiet \
+              --json article.json > article.log 2>&1
+          grep -q "SEO Score" article.log || {
+            echo "refused to audit a real page"; cat article.log; exit 1; }
+          python - <<'PY'
+          import json
+          d = json.load(open("article.json"))
+          assert d["entry_guard"] is None, f"guard fired on a real page: {d['entry_guard']}"
+          assert d["scores"]["decided"] > 0, "decided nothing on a readable page"
           PY

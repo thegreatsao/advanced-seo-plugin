@@ -118,6 +118,26 @@ anything served as a non-page is dropped at fetch time. Because the worst verdic
 wins, a single stylesheet in the sample would otherwise fail every page-level
 check and condemn the site.
 
+### Redirects to another host
+
+When the entry URL redirects to a **different host**, the destination is what
+gets audited, and `requested_url` records what you asked for. Otherwise the run
+disagrees with itself: `--sample` filters candidates on the old host and collapses
+to a single page, and `sc-domain:` is derived from a domain the service account
+has no property for — both of which fail quietly, looking like a small site with
+no search traffic.
+
+A same-host hop (`/` → `/en/`, http → https) keeps the URL you gave, so
+`redirect_checker.py` still sees the hop it exists to report.
+
+### When a script does not finish
+
+A timeout and a crash both leave the item `NO_DATA`, but they are recorded apart —
+`error_kind` per item, `script_failures` for the run, `T` instead of `!` in the
+progress line. A timeout means the site was slow and the run is worth repeating
+with a longer `--timeout`; a crash means the script is broken and repeating it
+changes nothing.
+
 ### When the site cannot be read
 
 If the entry page does not load — DNS failure, 4xx/5xx, a non-HTML response —
@@ -128,8 +148,19 @@ because Google's stored history does not stop existing when a site goes down.
 Most evidence scripts exit 0 with an empty result when they cannot fetch
 anything, and an empty result satisfies exactly the assertions this registry is
 built from. Without the gate, a host that does not resolve scored **61/100 on 40
-fabricated passes**. A bot-protection challenge still gets through — it answers
-200 with real HTML — so an implausibly clean live audit is worth a second look.
+fabricated passes**.
+
+A page that answers **200 and is not the site** is caught too: a bot-protection
+challenge (a vendor fingerprint in the markup plus almost no visible text) or a
+soft 404 (a title that *equals* a not-found phrase). Both are treated as
+unreadable, and the offline checks are gated as well — the file parses fine, so
+nothing else would stop them from grading an interstitial's twelve words. A saved
+challenge page in `archive` mode used to produce 6 passes and 10 failures.
+
+Both tests are narrow on purpose. An article that quotes
+`cdn-cgi/challenge-platform`, or one titled "How to fix 404 errors", is a real
+page and is still audited — refusing it would be the same bug pointing the other
+way. `--no-page-guard` overrides the guard and records that it did.
 
 ### Incoming links
 

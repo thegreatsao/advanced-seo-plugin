@@ -26,6 +26,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from typing import NamedTuple
 from urllib.parse import urljoin, urlparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -35,34 +36,231 @@ REGISTRY = os.path.join(SKILL_DIR, "resources", "config", "checklist.json")
 sys.path.insert(0, SCRIPT_DIR)
 
 
+# How an evidence script failed. All four end as NO_DATA — the item is undecided
+# either way — but they are not the same problem and the report must not pretend
+# they are: a timeout is a run that needed more time, a crash is a defect in the
+# script or its arguments. Only one of the two is worth retrying, and a reader
+# who cannot tell which one happened cannot know whether to raise --timeout or
+# open the script.
+FAILURE_LABEL = {
+    "timeout": "script timed out",
+    "crash": "script failed",
+    "missing": "script not found",
+    "bad_output": "script returned unusable output",
+}
+
+
 def run_script(script_name: str, args: list, timeout: int = 120) -> dict:
     """Run an evidence script and capture its JSON output.
 
     A script that fails is reported, never silently dropped: the caller turns an
     `error` key into NO_DATA with the reason attached, so a broken check is
-    visibly undecided rather than quietly absent.
+    visibly undecided rather than quietly absent. `error_kind` travels with it so
+    the reason survives into the report — see FAILURE_LABEL.
     """
     script_path = os.path.join(SCRIPT_DIR, script_name)
     if not os.path.exists(script_path):
-        return {"error": f"Script {script_name} not found"}
+        return {"error": f"{script_name} is not in {SCRIPT_DIR}",
+                "error_kind": "missing"}
 
     cmd = [sys.executable, script_path] + args + ["--json"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
-        err_msg = result.stderr.strip() or f"Exit code {result.returncode}"
-        return {"error": f"[{script_name}] {err_msg}"}
+        err_msg = result.stderr.strip() or f"exit code {result.returncode}"
+        return {"error": f"[{script_name}] {err_msg}", "error_kind": "crash"}
     except subprocess.TimeoutExpired:
-        return {"error": f"Script timed out after {timeout}s"}
+        # Retryable, and worth saying so: the default is a compromise between a
+        # slow site and a run that never ends, not a verdict about the site.
+        return {"error": f"no result after {timeout}s; retryable with a longer "
+                         f"--timeout or fewer --workers",
+                "error_kind": "timeout"}
     except json.JSONDecodeError:
-        return {"error": "Invalid JSON output from script"}
+        return {"error": f"[{script_name}] stdout is not JSON",
+                "error_kind": "bad_output"}
     except Exception as e:  # noqa: BLE001 - surfaced to the caller as NO_DATA
-        return {"error": str(e)}
+        return {"error": f"[{script_name}] {type(e).__name__}: {e}",
+                "error_kind": "crash"}
 
 
-def fetch_page(url: str) -> tuple[str, str]:
-    """Fetch page HTML to a temp file. Returns (path, error) — exactly one is set.
+# ---------------------------------------------------------------------------
+# Is a 200 response actually the page that was asked for?
+# ---------------------------------------------------------------------------
+
+# Fingerprints of an interstitial: a bot-protection challenge, a CAPTCHA wall or
+# a WAF block page. Each string belongs to the product that serves the challenge,
+# not to the site being audited.
+#
+# Split by *where* the string legitimately appears, which is what separates a
+# challenge from an article about challenges. On a challenge page the vendor
+# string is machinery — a script src, a form action, an element id — so it lives
+# inside a tag. In an article it is prose, inside the text. Searching the whole
+# document for `cdn-cgi/challenge-platform` flags every page that explains how
+# Cloudflare works, and refusing to audit those is the mirror image of the bug
+# this guards against.
+CHALLENGE_MARKUP_MARKERS = (
+    ("cdn-cgi/challenge-platform", "Cloudflare"),
+    ("cf_chl_opt", "Cloudflare"),
+    ("cf-browser-verification", "Cloudflare"),
+    ("_incapsula_resource", "Imperva Incapsula"),
+    ("px-captcha", "PerimeterX"),
+    ("captcha.px-cdn.net", "PerimeterX"),
+    ("ct.datado.me", "DataDome"),
+    ("token.awswaf.com", "AWS WAF"),
+    ("sucuri_cloudproxy_js", "Sucuri"),
+    ("errors.edgesuite.net", "Akamai"),
+    ("distil_r_captcha", "Distil Networks"),
+)
+
+# The vendors that name themselves in the visible text of a block page.
+CHALLENGE_TEXT_MARKERS = (
+    ("incapsula incident id", "Imperva Incapsula"),
+    ("sucuri website firewall", "Sucuri"),
+    ("generated by cloudfront", "CloudFront"),
+)
+
+# Titles an interstitial announces itself with when no vendor string is present.
+# Same word-count condition applies.
+CHALLENGE_TITLES = (
+    "just a moment", "attention required", "checking your browser",
+    "access denied", "security check", "are you a robot", "one more step",
+    "verify you are human", "please verify you are a human",
+    "human verification", "bot verification", "client challenge",
+    "ddos protection",
+)
+
+# Above this many words of visible prose, a page has content and is not an
+# interstitial no matter what strings it contains.
+CHALLENGE_MAX_WORDS = 120
+
+# A soft 404 is a 200 response whose own title says it is an error page. Matched
+# by equality against a normalized title segment, never by substring: "404"
+# appears in the title of every article ever written about broken links, and an
+# audit that refuses to run on those is its own kind of wrong.
+NOT_FOUND_PHRASES = frozenset({
+    "404 error", "error 404", "404 not found", "not found", "page not found",
+    "404 page not found", "page not found 404", "this page could not be found",
+    "this page does not exist", "page does not exist", "page doesnt exist",
+    "nothing found", "no page found", "page unavailable", "file not found",
+    "oops that page cant be found", "oops that page can not be found",
+    "seite nicht gefunden", "page introuvable", "pagina niet gevonden",
+    "pagina no encontrada", "pagina non trovata",
+    "страница не найдена", "ошибка 404",
+})
+# Accepted only as the entire title, because a lone number is also a room, a
+# model, a year and a chapter.
+NOT_FOUND_EXACT = frozenset({"404", "410", "error", "oops"})
+
+_TAG_RE = re.compile(r"<[^>]+>")
+_DROP_BLOCK_RE = re.compile(
+    r"<(script|style|noscript|template)\b[^>]*>.*?</\1>", re.S | re.I)
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+_TITLE_SPLIT_RE = re.compile(r"\s+[|·•—–]\s+|\s+-\s+")
+_KEEP_RE = re.compile(r"[^\w\s]", re.U)
+
+
+def visible_text(html: str) -> str:
+    """What a reader would see. Script and style bodies are dropped first,
+    because a challenge page is mostly JavaScript and counting it as text would
+    make every interstitial look content-rich."""
+    return _TAG_RE.sub(" ", _DROP_BLOCK_RE.sub(" ", html))
+
+
+def visible_words(html: str) -> int:
+    return len(visible_text(html).split())
+
+
+def markup_only(html: str) -> str:
+    """Everything inside tags, with the prose removed: attributes, script srcs,
+    element ids. Where a challenge page carries its vendor's name."""
+    return " ".join(_TAG_RE.findall(html)).lower()
+
+
+def _normalize_title(raw: str) -> str:
+    return " ".join(_KEEP_RE.sub(" ", raw).lower().split())
+
+
+def page_guard(html: str) -> tuple[str, str]:
+    """Decide whether a 200 response is something other than the page asked for.
+
+    Returns `(kind, detail)` — kind is `bot_challenge`, `soft_404` or `""`.
+
+    This is the hole left open when the reachability gate was added: a challenge
+    or a soft 404 answers 200 with well-formed HTML, so every evidence script
+    runs happily against a page that is not the site, and the registry grades
+    whatever the interstitial happens to contain. Both are common — the audit
+    User-Agent is exactly what bot protection is built to stop.
+    """
+    text = visible_text(html)
+    words = len(text.split())
+    raw_title = (_TITLE_RE.search(html) or [None, ""])[1]
+    title = _normalize_title(raw_title)
+
+    # The word count is the second condition on every branch below, and it is
+    # what keeps a real page safe. Cloudflare's JS detections inject
+    # `cdn-cgi/challenge-platform` into ordinary content pages, so the marker on
+    # its own would condemn a working site the moment it turned that feature on.
+    if words <= CHALLENGE_MAX_WORDS:
+        markup = markup_only(html)
+        for marker, vendor in CHALLENGE_MARKUP_MARKERS:
+            if marker in markup:
+                return "bot_challenge", (f"bot protection ({vendor}): a 200 "
+                                         f"response with {words} words of text "
+                                         f"and a {vendor} challenge in its markup")
+        lowered_text = text.lower()
+        for marker, vendor in CHALLENGE_TEXT_MARKERS:
+            if marker in lowered_text:
+                return "bot_challenge", (f"bot protection ({vendor}): a 200 "
+                                         f"response with {words} words of text, "
+                                         f"and {vendor} named in them")
+        for phrase in CHALLENGE_TITLES:
+            if phrase in title:
+                return "bot_challenge", (f"bot protection: a 200 response "
+                                         f"titled {raw_title.strip()[:60]!r} "
+                                         f"with {words} words of text")
+
+    segments = [_normalize_title(s) for s in _TITLE_SPLIT_RE.split(raw_title)]
+    if title in NOT_FOUND_EXACT or any(s in NOT_FOUND_PHRASES for s in segments):
+        return "soft_404", (f"soft 404: a 200 response titled "
+                            f"{raw_title.strip()[:60]!r}")
+    return "", ""
+
+
+def audit_target(requested: str, final_url: str) -> str:
+    """Which URL the rest of the run has to agree on.
+
+    A redirect to another host leaves the requested URL describing nothing that
+    was measured: `discover_urls` filters candidates on the old netloc so the
+    sample collapses to the single entry page, and `sc-domain:` is derived from a
+    domain the service account has no property for. Both fail quietly — a
+    one-page sample looks like a small site, and an empty Search Console answer
+    looks like a site with no traffic.
+
+    A same-host redirect keeps the requested URL: nothing downstream is confused
+    by it, and `redirect_checker.py` is then still handed the address that
+    actually redirects, which is the hop it exists to report.
+    """
+    if final_url and urlparse(final_url).netloc != urlparse(requested).netloc:
+        return final_url
+    return requested
+
+
+class Fetch(NamedTuple):
+    """What one page request produced.
+
+    `error` and `path` are mutually exclusive. `guard` is set whenever the
+    response looked like an interstitial or an error page **even when it was not
+    enforced**, so `--no-page-guard` records the suspicion instead of erasing it.
+    """
+    path: str        # temp file holding the HTML, "" when the fetch failed
+    error: str       # why it failed, "" on success
+    final_url: str   # the URL the request actually ended on, after redirects
+    guard: str       # "bot_challenge" | "soft_404" | ""
+
+
+def fetch_page(url: str, enforce_guard: bool = True) -> Fetch:
+    """Fetch page HTML to a temp file.
 
     The reason a fetch failed is returned rather than swallowed, because the
     caller has to distinguish "this page could not be read" from "this page is
@@ -87,26 +285,36 @@ def fetch_page(url: str) -> tuple[str, str]:
         detail = " ".join(str(e).split())
         if len(detail) > 120:
             detail = detail[:120].rsplit(" ", 1)[0] + "…"
-        return "", f"{type(e).__name__}: {detail}" if detail else type(e).__name__
+        return Fetch("", f"{type(e).__name__}: {detail}" if detail
+                         else type(e).__name__, "", "")
 
+    # Where the request actually landed. safe_request follows redirects itself and
+    # returns the last response, so this is the resolved URL — the one the rest of
+    # the run has to agree on.
+    final_url = getattr(resp, "url", "") or url
     code = getattr(resp, "status_code", 200)
     if code >= 400:
-        return "", f"HTTP {code}"
+        return Fetch("", f"HTTP {code}", final_url, "")
     ctype = (getattr(resp, "headers", {}) or {}).get("Content-Type", "")
     if ctype and not any(t in ctype.lower() for t in ("html", "xml", "text/plain")):
-        return "", f"not a page: Content-Type {ctype.split(';')[0]}"
+        return Fetch("", f"not a page: Content-Type {ctype.split(';')[0]}",
+                     final_url, "")
     html = resp.text
     # An empty or non-markup body is not a page either. This catches a server
-    # answering 200 with nothing; it does not catch a bot-protection challenge,
-    # which is real HTML and indistinguishable from the site at this level.
+    # answering 200 with nothing.
     if "<" not in html:
-        return "", f"no HTML in a {len(html)}-byte 200 response"
+        return Fetch("", f"no HTML in a {len(html)}-byte 200 response",
+                     final_url, "")
+
+    kind, detail = page_guard(html)
+    if kind and enforce_guard:
+        return Fetch("", detail, final_url, kind)
 
     tmp = tempfile.NamedTemporaryFile(suffix=".html", delete=False,
                                       mode="w", encoding="utf-8")
     tmp.write(html)
     tmp.close()
-    return tmp.name, ""
+    return Fetch(tmp.name, "", final_url, kind)
 
 # Statuses
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
@@ -357,7 +565,9 @@ def _timed(key: tuple, timeout: int) -> dict:
     out = run_script(script, list(args), timeout=timeout)
     elapsed = round(time.time() - start, 1)
     if isinstance(out, dict) and out.get("error"):
-        return {"__error__": str(out["error"])[:300], "__elapsed__": elapsed}
+        return {"__error__": str(out["error"])[:300],
+                "__error_kind__": out.get("error_kind", "crash"),
+                "__elapsed__": elapsed}
     payload = out if isinstance(out, dict) else {"__value__": out}
     payload["__elapsed__"] = elapsed
     return payload
@@ -377,7 +587,10 @@ def execute(plan: dict[tuple, list[str]], workers: int, timeout: int, quiet: boo
             results[key] = fut.result()
             done += 1
             if not quiet:
-                mark = "!" if results[key].get("__error__") else "."
+                # A distinct mark for a timeout: watching a run, "T" tells you the
+                # site is slow, "!" tells you a script is broken.
+                mark = "." if not results[key].get("__error__") else (
+                    "T" if results[key].get("__error_kind__") == "timeout" else "!")
                 print(f"  [{done}/{len(order)}] {mark} {key[0]}"
                       f" ({results[key]['__elapsed__']}s)", file=sys.stderr)
     return results
@@ -426,8 +639,10 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                 data = results.get(key, {})
                 row["script"] = key[0]
                 if "__error__" in data:
-                    row.update(status=NO_DATA,
-                               evidence=f"script failed: {data['__error__'][:160]}")
+                    kind = data.get("__error_kind__", "crash")
+                    row.update(status=NO_DATA, error_kind=kind,
+                               evidence=f"{FAILURE_LABEL.get(kind, FAILURE_LABEL['crash'])}: "
+                                        f"{data['__error__'][:160]}")
                 else:
                     ok, ev = evaluate(it["check"]["assert"], data)
                     if ok is None:
@@ -522,7 +737,18 @@ def redact(value, secrets: tuple[str, ...]):
 NEEDS_A_LIVE_SITE = {"fetch", "crawl", "api"}
 
 
-def unreachable_skips(items: list[dict], reason: str) -> dict[str, tuple[str, str]]:
+# What a *wrong* entry page makes undecidable — everything the reachability gate
+# covers, plus the offline checks. When the fetch simply failed there is no HTML
+# to hand an offline script and it drops out on its missing input; when the page
+# loaded but is an interstitial or an error page, the file exists and reads
+# perfectly, so nothing stops those scripts from grading the wrong document. In
+# archive mode that is not hypothetical: a saved challenge page scored 6 passes
+# and 10 failures on its 12 words of text.
+NEEDS_THE_RIGHT_PAGE = NEEDS_A_LIVE_SITE | {"offline"}
+
+
+def unreachable_skips(items: list[dict], reason: str,
+                      wrong_page: bool = False) -> dict[str, tuple[str, str]]:
     """Mark every check that reads the live site as undecided.
 
     Without this the audit grades a site it never saw. Most evidence scripts exit
@@ -532,12 +758,17 @@ def unreachable_skips(items: list[dict], reason: str) -> dict[str, tuple[str, st
     host that does not resolve, 29 of 42 scripts returned success and the run
     scored 61/100 on 40 fabricated passes. `missing_is` cannot catch it: the key
     is present, and its value is zero.
+
+    `wrong_page` widens the gate to the offline checks, for the case where a page
+    was read successfully and is the wrong page — see NEEDS_THE_RIGHT_PAGE.
     """
+    gate = NEEDS_THE_RIGHT_PAGE if wrong_page else NEEDS_A_LIVE_SITE
+    label = "entry page is not the site" if wrong_page else "entry page unreachable"
     out = {}
     for it in items:
         need = (it.get("check") or {}).get("requires", "fetch")
-        if need in NEEDS_A_LIVE_SITE:
-            out[it["id"]] = (NO_DATA, f"entry page unreachable ({reason})")
+        if need in gate:
+            out[it["id"]] = (NO_DATA, f"{label} ({reason})")
     return out
 
 
@@ -938,6 +1169,11 @@ def main() -> int:
                          "attached; otherwise default (the full registry).")
     ap.add_argument("--no-prompt", action="store_true",
                     help="never ask for a profile, even on a terminal")
+    ap.add_argument("--no-page-guard", action="store_true",
+                    help="audit the entry page even when it looks like a bot "
+                         "challenge or a soft 404. The suspicion is still "
+                         "recorded; use this when auditing an error page on "
+                         "purpose, or when the guard is wrong about your page.")
     ap.add_argument("--sample", type=int, default=1, metavar="N",
                     help="audit N pages instead of one; page-level checks are "
                          "aggregated across them, site-level checks run once")
@@ -954,7 +1190,6 @@ def main() -> int:
     caps = set(MODE_CAPS[mode])
 
     gsc_path = find_gsc_credentials(a.gsc_credentials)
-    gsc_property = a.gsc_property or f"sc-domain:{registrable_domain(urlparse(a.url).netloc)}"
     # Search Console is an external API, so it is offered only by modes allowed
     # to reach external services at all. Without this gate a key that merely
     # happens to sit on disk pulls `archive` — documented as making no network
@@ -976,14 +1211,12 @@ def main() -> int:
             print(f"No items match --only {a.only}", file=sys.stderr)
             return 2
 
-    domain = urlparse(a.url).netloc or "unknown"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     if not a.quiet:
         print(f"Checklist audit: {a.url}", file=sys.stderr)
         print(f"  mode: {mode} — {MODE_HELP[mode]}", file=sys.stderr)
-        print(f"  GSC: {gsc_path or 'no credentials found'}"
-              f"{f' -> {gsc_property}' if gsc_path else ''}", file=sys.stderr)
+        print(f"  GSC: {gsc_path or 'no credentials found'}", file=sys.stderr)
         print(f"  registry: {len(items)} items "
               f"(version {registry_version})", file=sys.stderr)
 
@@ -991,6 +1224,8 @@ def main() -> int:
     # read it — one request, not two, and archive mode gets the same treatment.
     temp_html = ""
     entry_error = ""
+    entry_guard = ""
+    audit_url = a.url
     if mode == "archive":
         html_path = archive_entry(a.archive, a.entry)
         if not html_path:
@@ -998,17 +1233,46 @@ def main() -> int:
             return 2
         if not a.quiet:
             print(f"  entry: {html_path}", file=sys.stderr)
+        # A saved copy can be a challenge page too — somebody archives a site
+        # they were blocked from and the audit grades the interstitial.
+        with open(html_path, encoding="utf-8", errors="replace") as f:
+            entry_guard, guard_detail = page_guard(f.read())
+        if entry_guard and not a.no_page_guard:
+            entry_error = guard_detail
     else:
-        html_path, entry_error = fetch_page(a.url)
+        fetched = fetch_page(a.url, enforce_guard=not a.no_page_guard)
+        html_path, entry_error, entry_guard = fetched.path, fetched.error, fetched.guard
         temp_html = html_path
+        # Audit the URL the request actually landed on when the host changed.
+        # Otherwise every script is handed the address that redirected away:
+        # discover_urls filters on the old netloc and the sample collapses to one
+        # page, and the Search Console property is derived from a domain the
+        # service account cannot read. A same-host redirect keeps the requested
+        # URL, so redirect_checker.py can still see the hop it is there to report.
+        audit_url = audit_target(a.url, fetched.final_url)
+        if audit_url != a.url:
+            print(f"  redirected to another host: {a.url} -> {audit_url}\n"
+                  f"  auditing the destination; Search Console property and the "
+                  f"URL sample follow it", file=sys.stderr)
         if entry_error:
             print(f"\n  ENTRY PAGE UNREACHABLE: {entry_error}\n"
                   f"  Every check that reads the live site reports NO_DATA. "
                   f"Nothing about this site was measured.", file=sys.stderr)
+        elif entry_guard:
+            print(f"\n  WARNING: the entry page looks like "
+                  f"{entry_guard.replace('_', ' ')}, audited anyway "
+                  f"(--no-page-guard). Every verdict below describes that page.",
+                  file=sys.stderr)
+
+    domain = urlparse(audit_url).netloc or "unknown"
+    gsc_property = a.gsc_property or (
+        f"sc-domain:{registrable_domain(urlparse(audit_url).netloc)}")
+    if gsc_path and not a.quiet:
+        print(f"  GSC property: {gsc_property}", file=sys.stderr)
 
     # Only worth parsing while the answer is still open: an explicit --profile
     # other than `auto` has already decided.
-    detected = detect_profile(html_path, a.url) if a.profile in ("", "auto") else {}
+    detected = detect_profile(html_path, audit_url) if a.profile in ("", "auto") else {}
     try:
         a.profile = choose_profile(a.profile, not (a.no_prompt or a.quiet), detected)
         profile = load_profile(a.profile)
@@ -1023,13 +1287,17 @@ def main() -> int:
     # item that does not apply to this site type is N/A whether or not the page
     # loaded. Everything else the live site would have answered is undecided.
     if entry_error:
-        for item_id, skip in unreachable_skips(items, entry_error).items():
+        # A page that read fine and is the wrong page also takes the offline
+        # checks with it: the file is there and parses, so nothing else would
+        # stop them from grading an interstitial's 12 words as a site.
+        for item_id, skip in unreachable_skips(
+                items, entry_error, wrong_page=bool(entry_guard)).items():
             preskip.setdefault(item_id, skip)
     if not a.quiet and excluded:
         print(f"  profile: {a.profile} — {profile['label']}; "
               f"{len(excluded)} item(s) out of scope", file=sys.stderr)
 
-    ctx = {"url": a.url}
+    ctx = {"url": audit_url}
     if html_path:
         ctx["html"] = html_path
     if gsc_path:
@@ -1063,7 +1331,7 @@ def main() -> int:
             print("  --sample skipped: the entry page could not be read, so there "
                   "is nothing to discover URLs from", file=sys.stderr)
         else:
-            sampled_urls = discover_urls(a.url, a.sample)
+            sampled_urls = discover_urls(audit_url, a.sample)
             if len(sampled_urls) < 2:
                 print("  --sample found no other URLs (no sitemap, no internal "
                       "links); auditing the single page", file=sys.stderr)
@@ -1076,12 +1344,13 @@ def main() -> int:
             print(f"  sampling {len(sampled_urls)} pages for "
                   f"{len(page_items)} page-level checks", file=sys.stderr)
         for n, page_url in enumerate(sampled_urls, 1):
-            page_html, page_err = fetch_page(page_url)
-            if page_err:
+            page = fetch_page(page_url)
+            page_html = page.path
+            if page.error:
                 # Dropped rather than graded. A sampled URL that turns out to be
-                # an asset or an error page would otherwise fail every
-                # page-level check, and the worst verdict wins.
-                print(f"  [{n}/{len(sampled_urls)}] skipped {page_url} — {page_err}",
+                # an asset, an error page or a challenge would otherwise fail
+                # every page-level check, and the worst verdict wins.
+                print(f"  [{n}/{len(sampled_urls)}] skipped {page_url} — {page.error}",
                       file=sys.stderr)
                 continue
             pctx = dict(ctx, url=page_url, html=page_html)
@@ -1096,7 +1365,7 @@ def main() -> int:
             graded = aggregate_pages(graded, per_page)
 
     payload = {
-        "url": a.url,
+        "url": audit_url,
         "domain": domain,
         "mode": mode,
         "archive": os.path.expanduser(a.archive) if mode == "archive" else None,
@@ -1112,12 +1381,28 @@ def main() -> int:
         "only": sorted(keep) if a.only else None,
         "entry_reachable": not entry_error,
         "entry_error": entry_error or None,
+        # What the entry page looked like, whether or not it stopped the run. A
+        # `--no-page-guard` run that scored a challenge page must say so in the
+        # artifact, or the file is the same lie the guard exists to prevent.
+        "entry_guard": entry_guard or None,
+        "entry_guard_enforced": bool(entry_guard) and not a.no_page_guard,
+        # The URL as asked for, when it is not the URL that was audited.
+        "requested_url": a.url if audit_url != a.url else None,
         "sample": a.sample,
         "sampled_urls": sampled_urls,
         "scores": score(graded),
         "runs": {f"{k[0]} {' '.join(str(x) for x in k[1][1:])}".strip():
-                 {"elapsed": v.get("__elapsed__"), "error": v.get("__error__")}
+                 {"elapsed": v.get("__elapsed__"), "error": v.get("__error__"),
+                  "error_kind": v.get("__error_kind__")}
                  for k, v in results.items()},
+        # Timeouts and crashes both land in NO_DATA; counted apart so a run that
+        # was merely too slow does not read as a plugin full of broken scripts.
+        "script_failures": {
+            kind: sum(1 for v in results.values()
+                      if v.get("__error_kind__") == kind)
+            for kind in FAILURE_LABEL
+            if any(v.get("__error_kind__") == kind for v in results.values())
+        },
         "items": graded,
     }
 
@@ -1144,7 +1429,7 @@ def main() -> int:
     s = payload["scores"]
     print(f"\nMode: {mode}   GSC: {'yes' if gsc_path else 'no'}")
     if entry_error:
-        print(f"UNREACHABLE: {a.url} could not be read — {entry_error}.")
+        print(f"UNREACHABLE: {audit_url} could not be read — {entry_error}.")
         print(f"No score: nothing about this site was measured. "
               f"{s['decided']}/{s['applicable']} items decided.")
     else:
@@ -1154,6 +1439,18 @@ def main() -> int:
     for st in (PASS, WARN, FAIL, NO_DATA, LLM_PENDING, MANUAL, NA):
         if s["status_counts"].get(st):
             print(f"  {st:<12} {s['status_counts'][st]}")
+    if payload["requested_url"]:
+        print(f"Redirected: {payload['requested_url']} -> {audit_url} "
+              f"(another host; the destination was audited)")
+    if entry_guard and not entry_error:
+        print(f"WARNING: the entry page looks like {entry_guard.replace('_', ' ')} "
+              f"and was audited anyway (--no-page-guard). Every verdict above "
+              f"describes that page, not the site.")
+    if payload["script_failures"]:
+        parts = ", ".join(f"{n} {kind}" for kind, n in payload["script_failures"].items())
+        print(f"Script failures: {parts}"
+              + ("  — timeouts are retryable: raise --timeout or lower --workers"
+                 if "timeout" in payload["script_failures"] else ""))
     print(f"\nResults: {os.path.abspath(a.json_out)}")
     if hist:
         print(f"History: {hist}")

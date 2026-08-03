@@ -127,5 +127,33 @@ class Localisation(unittest.TestCase):
         self.assertIn("SEO Checklist Audit", render_markdown(data))
 
 
+class NoScoreSurvivesEveryRenderer(unittest.TestCase):
+    """The runner refuses to print a score when nothing was read. Every surface
+    downstream has to refuse it too — the HTML tile printed the literal `None`,
+    which reads as a broken tool in the one file that gets handed to a client."""
+
+    def _unread(self):
+        from checklist_runner import score
+        data = results(item("A", "NO_DATA"))
+        data["scores"] = score(data["items"])
+        data["entry_reachable"] = False
+        data["entry_error"] = "soft 404: a 200 response titled '404 Not Found'"
+        return data
+
+    def test_the_score_is_none_when_nothing_was_decided(self):
+        self.assertIsNone(self._unread()["scores"]["seo_score"])
+
+    def test_the_markdown_says_why_instead_of_a_number(self):
+        out = render_markdown(self._unread())
+        self.assertIn("could not be read", out)
+        self.assertNotIn("None/100", out)
+
+    def test_the_html_prints_no_number_at_all(self):
+        from checklist_report import render_html
+        out = render_html(self._unread())
+        self.assertNotIn(">None<", out)
+        self.assertIn("No SEO Score", out)
+
+
 if __name__ == "__main__":
     unittest.main()

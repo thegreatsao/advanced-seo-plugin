@@ -394,8 +394,14 @@ def render_html(data: dict) -> str:
         f'<p class="sub">{html.escape(data["url"])} &middot; mode <code>{mode}</code> '
         f'&middot; {html.escape(str(data.get("started_at", ""))[:19])}</p>',
         '<div class="metrics">',
-        f'<div class="metric"><b>{s["seo_score"]}</b><span>SEO Score — passed checks, '
-        f'severity-weighted</span></div>',
+        # Never a number when nothing was read. `seo_score` is None in that case
+        # and printing it renders "None", which reads as a broken tool in the one
+        # document that gets handed to a client.
+        (f'<div class="metric"><b>{s["seo_score"]}</b><span>SEO Score — passed checks, '
+         f'severity-weighted</span></div>'
+         if s.get("seo_score") is not None else
+         '<div class="metric"><b>—</b><span>No SEO Score: the entry page could not '
+         'be read, so nothing was measured</span></div>'),
         f'<div class="metric"><b>{s["coverage_pct"]}%</b><span>Coverage — {s["decided"]} of '
         f'{s["applicable"]} items applicable in {mode} mode</span></div>',
         f'<div class="metric"><b>{counts.get(FAIL, 0)}</b><span>failing checks</span></div>',
@@ -528,8 +534,12 @@ def main() -> int:
                   file=sys.stderr)
 
     s = data["scores"]
-    print(f"\nSEO Score {s['seo_score']}/100   Coverage {s['coverage_pct']}% "
-          f"({s['decided']}/{s['applicable']})")
+    if s.get("seo_score") is None:
+        print(f"\nNo SEO Score: {data.get('entry_error') or 'the site could not be read'}"
+              f"\nCoverage {s['coverage_pct']}% ({s['decided']}/{s['applicable']})")
+    else:
+        print(f"\nSEO Score {s['seo_score']}/100   Coverage {s['coverage_pct']}% "
+              f"({s['decided']}/{s['applicable']})")
     for label, path in written:
         print(f"  {label}: {path}")
     if pending:
