@@ -2,13 +2,37 @@
 __pycache__/
 *.pyc
 
-# audit output
+# Audit output. An audit writes into whatever directory it is run from, and this
+# repository is the obvious place to run one, so every file a run can produce has to
+# be listed here or it ends up in a commit. Two of them did.
+#
+# `checklist-results-crawl.json` is the crawl inventory, and it is derived from the
+# `--json` path rather than named separately, so adding the inventory in 0.9.0 added
+# an output nobody thought to ignore. The `-crawl` glob is deliberately wider than
+# the one filename for that reason: the next derived artifact should already be
+# covered. There is a test that checks this list against the runner's own defaults.
 checklist-results.json
+checklist-results*-crawl.json
 CHECKLIST-REPORT.md
 CHECKLIST.html
 LLM-QUEUE*.md
 .seo-runs/
 probe-raw.json
+
+# The live-path check in .github/workflows/ci.yml, run by hand. Reproducing that
+# step locally is the only way to know whether it will pass, so it is worth doing
+# and its output is worth ignoring.
+blocked.json
+blocked.log
+live.json
+live.md
+live.html
+live.log
+live-crawl.json
+live-queue*.md
+orphans.json
+report.log
+server.log
 
 .DS_Store
 .env

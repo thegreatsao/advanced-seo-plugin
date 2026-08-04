@@ -2295,7 +2295,13 @@ class OneFetchPerUrl(unittest.TestCase):
 
     def test_the_runner_removes_its_cache_when_the_run_ends(self):
         """Per run, not global, is the whole reason a stale page cannot be served:
-        there must be no directory left for a later audit to read."""
+        there must be no directory left for a later audit to read.
+
+        Run from a temp directory, and not for tidiness: an audit writes its results
+        beside itself, so a test that runs the runner from the checkout writes into
+        the checkout. This one did, and `checklist-results-crawl.json` reached a
+        commit because of it.
+        """
         import subprocess
         with harness.served({"/": self.PAGE, "/robots.txt": (404, "")}) as site:
             out = subprocess.run(
@@ -2304,7 +2310,7 @@ class OneFetchPerUrl(unittest.TestCase):
                  "--no-prompt", "--quiet", "--only", "crawling_indexing",
                  "--timeout", "60"],
                 env=harness.offline_env(), capture_output=True, text=True,
-                timeout=300)
+                timeout=300, cwd=self.dir)
             self.assertEqual(out.returncode, 0, out.stderr[-2000:])
         left = [d for d in os.listdir(tempfile.gettempdir())
                 if d.startswith("seo-http-")]

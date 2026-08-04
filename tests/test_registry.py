@@ -152,6 +152,63 @@ class DocsPointAtThingsThatExist(unittest.TestCase):
             self.assertNotIn("is not a sample", text, f"{rel} is out of date")
 
 
+class AnAuditDoesNotCommitItself(unittest.TestCase):
+    """Every file a run writes by default must be ignored by git.
+
+    An audit writes its results beside itself, and this checkout is the obvious place
+    to run one, so an output nobody listed in `.gitignore` ends up in a commit. Two
+    did: `checklist-results-crawl.json`, whose name is *derived* from the `--json`
+    path rather than declared, so adding the crawl inventory in 0.9.0 added an output
+    no list mentioned; and the by-lens LLM queues, derived the same way from
+    `--llm-queue`.
+
+    Read out of the argparse defaults rather than listed here, because a list in a
+    test drifts exactly the way `.gitignore` drifted. `git check-ignore` answers the
+    question, because reimplementing gitignore matching would be testing this test.
+    """
+
+    def _defaults(self, script: str) -> dict:
+        with open(os.path.join(SCRIPTS, script), encoding="utf-8") as f:
+            src = f.read()
+        return dict(re.findall(r'add_argument\("--([a-z-]+)"[^)]*?default="([^"]+)"',
+                               src))
+
+    def outputs(self) -> set:
+        runner = self._defaults("checklist_runner.py")
+        report = self._defaults("checklist_report.py")
+        results, queue = runner["json"], report["llm-queue"]
+        stem = queue[:-3] if queue.endswith(".md") else queue
+        names = {results, report["markdown"], report["html"], queue,
+                 # The derived one, spelled the way checklist_runner derives it.
+                 os.path.splitext(results)[0] + "-crawl.json"}
+        names |= {f"{stem}-{lens}.md"
+                  for lens in ("copy", "layout", "locale", "market")}
+        return names
+
+    def test_every_default_output_is_ignored(self):
+        found = self.outputs()
+        self.assertIn("checklist-results.json", found,
+                      "the defaults were not read; this test would pass on nothing")
+        proc = subprocess.run(["git", "check-ignore", "-v", *sorted(found)],
+                              cwd=ROOT, capture_output=True, text=True)
+        if proc.returncode == 128:
+            self.skipTest("not a git checkout")
+        ignored = {line.rsplit("\t", 1)[-1] for line in proc.stdout.splitlines()}
+        self.assertEqual(sorted(found - ignored), [],
+                         "a run writes these into the checkout and git would offer "
+                         "to commit them; add them to .gitignore")
+
+    def test_none_of_them_is_already_committed(self):
+        """The same check from the other end. A pattern added to `.gitignore` does
+        nothing for a file already in the index, and that was the second half of the
+        mistake: the ignore list and the index both had to be fixed."""
+        proc = subprocess.run(["git", "ls-files"], cwd=ROOT,
+                              capture_output=True, text=True)
+        if proc.returncode != 0:
+            self.skipTest("not a git checkout")
+        self.assertEqual(sorted(self.outputs() & set(proc.stdout.split())), [])
+
+
 class VersionAndChangelog(unittest.TestCase):
     """A changelog nobody is forced to update is a changelog that lies. The failure
     mode is always the same one: the version moves and the entry does not."""
