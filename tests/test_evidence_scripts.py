@@ -28,7 +28,6 @@ the rest of the suite put together.
 """
 import json
 import os
-import subprocess
 import sys
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -40,6 +39,7 @@ REGISTRY = os.path.join(SKILL, "resources", "config", "checklist.json")
 sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import harness  # noqa: E402
 from harness import served  # noqa: E402
 
 from checklist_runner import NO_DATA, PASS, FAIL, WARN, evaluate  # noqa: E402
@@ -612,9 +612,13 @@ def setUpModule():
                 .replace("{logs}", os.path.join(fixtures, "logs") + os.sep)
                 .replace("{artifacts}", os.path.join(fixtures, "artifacts") + os.sep)
                 for a in template]
-        proc = subprocess.run(
+        # `cwd` is deliberately not passed: it would put the child back on CPython's
+        # `fork` path, which macOS kills outright once Network.framework has been
+        # initialised in this process. See `harness.spawn`. Both paths below are
+        # absolute, so nothing needed the working directory anyway.
+        proc = harness.spawn(
             [sys.executable, os.path.join(SCRIPTS, script)] + argv + ["--json"],
-            capture_output=True, text=True, timeout=180, env=env, cwd=SCRIPTS)
+            env=env, timeout=180)
         # A non-zero exit carrying JSON is an answer, not a crash. With `--json`
         # these scripts put a refusal in the payload and still exit 1 so a shell
         # notices, and treating that as a failure would hide exactly the cases worth
@@ -1654,9 +1658,9 @@ class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):
         scripts = sorted(cls.url_taking_scripts())
 
         def run(script):
-            proc = subprocess.run(
+            proc = harness.spawn(
                 [sys.executable, os.path.join(SCRIPTS, script), cls.DEAD, "--json"],
-                capture_output=True, text=True, timeout=120, env=env, cwd=SCRIPTS)
+                env=env, timeout=120)
             if proc.returncode != 0 or not proc.stdout.strip():
                 # A non-zero exit is fine here — the runner turns it into NO_DATA with
                 # the reason. What must not happen is a *verdict*.

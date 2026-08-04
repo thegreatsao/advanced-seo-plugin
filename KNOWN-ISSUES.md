@@ -1,12 +1,18 @@
 # Known issues
 
-What is wrong with this plugin as of **0.13.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.14.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.14.0**: the HTML parser was chosen by import order, so one machine could
+parse a page two ways and two scripts inside one audit could disagree — measured,
+decided, recorded in the artifact and overridable. Four of the five site shapes in issue
+3 are now exercised live, TLS included. And an evidence script killed by the operating
+system no longer reports as a script that failed.
 
 **Fixed in 0.12.0**: issues 4 and 5 — the report says what changed since the previous
 audit, and `--fixes` writes the actionable items where a tracker can read them. Both were
@@ -217,16 +223,26 @@ Two narrower gaps, both measured:
   disagree about the DOM, and which one runs depends on import order — see §6. A test
   now pins both. Nothing pins the other structural queries that do not exist yet.
 
-## 3. The live path is exercised against one shape of site
+## 3. One site shape is still untested live, and it is the one a fixture cannot be
 
-Fixed in 0.4.0 in the sense that it can now be exercised at all — but CI audits a
-static six-page fixture served by `http.server`. Four things that only happen in the
-wild are still tested with fixtures and never live: a cross-host redirect, a real
-bot-protection challenge, a site large enough for `--sample` to matter, and a Search
-Console property with enough history for the cannibalization items.
+Four of the five shapes item 3 used to list are exercised live as of 0.14.0, in
+`tests/test_shapes.py`: a **cross-host redirect** (two origins, a real 301), a **bot
+protection challenge** (a Cloudflare fingerprint served with a 200, refused, plus the
+mirror case of an article *about* Cloudflare being audited anyway), a **sixty-page site**
+where `--sample` has to choose and the stride has to reach the far end, and **TLS** —
+the harness generates a certificate and hands it to the child through
+`REQUESTS_CA_BUNDLE`, so `verify=True` stays on and the HTTPS and HSTS items get their
+first verdicts from a real handshake.
 
-The fixture is also HTTP, so nothing exercises TLS, HSTS, or a certificate problem —
-`security_headers.py` and the HTTPS items get their verdicts from offline tests only.
+What remains is **a Search Console property with enough history for the cannibalization
+items**. It needs a property Google recognises and a key that can read it; neither is
+something a fixture can be, and a test that stubbed the API while claiming live
+coverage would be worse than the gap. Those items are covered by stubbed unit tests and
+report `NO_DATA` against any fixture, which is the honest answer.
+
+Still true, and worth keeping in view: every origin in the suite is loopback, so
+nothing here exercises a slow network, a flaky connection, or a CDN's behaviour under
+load.
 
 ## 4. Closed in 0.12.0 — the deliverable has history
 
@@ -271,18 +287,30 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
-- **Which HTML parser reads a page depends on import order.** `seo_common.parse_html`
-  picks `lxml` if and only if `"lxml" in sys.modules` at the moment it runs — not on
-  whether lxml is installed. So a page can be parsed two different ways on the same
-  machine, and the two are not equivalent: libxml2 predates `<picture>` and does not
-  know `<source>` is void, so it nests the `<img>` *inside* the first `<source>` while
-  `html.parser` follows the spec. Nothing structural depended on this until 0.7.0,
-  when the `<picture>` fix nearly shipped broken because of it — `picture_sources()`
-  copes with both and a test pins the divergence. The real fix is to decide the parser
-  deliberately, and it is not a one-liner: choosing lxml everywhere spreads the
-  mis-nesting, choosing `html.parser` everywhere gives up its tolerance of broken
-  markup, and both change the substrate under every verdict. It needs measuring on
-  real sites, not a default.
+- **The answer-block score depends on whether the page closes its tags.**
+  `answer_block_scanner.py` finds the answer to a heading with `find_next_sibling()`,
+  and on markup with an unclosed `<p>` — the commonest invalidity on the web — the two
+  HTML parsers see different documents: one finds a list and no direct answer, the other
+  a direct answer and no list. GO-144 asserts `score >= 70`; the score is 10 against 32,
+  and **neither reading is right**. Measured and pinned in `tests/test_parser.py`, which
+  is how the parser question got settled without settling this one: the parser is now
+  deliberate, so the score is at least reproducible, but a sibling walk is the wrong
+  instrument for markup a browser repairs. The fix is to search forward in document
+  order to the next heading rather than to the next sibling, and it is not written.
+- **macOS kills a forked child inside Apple's own framework, and the runner forks 55 of
+  them.** Once Network.framework has been initialised in a process, `fork()` runs its
+  `pthread_atfork` child handler — `nw_settings_child_has_forked` — which dereferences
+  freed state and segfaults *in the child, before it execs*. Nothing of the child's own
+  code has run, so the failure is silent: signal 11, no stdout, no stderr. It surfaced
+  in this project's own suite, where `tests/test_shapes.py` passed alone and its audits
+  died under `discover` depending only on which module ran first; the crash report names
+  the chain outright. `run_script` and `harness.spawn` now start children through
+  `posix_spawn`, which does not fork, and a signal death is classified as `signal` with
+  the signal named rather than as `crash` with "exit code -11". What is *not* fixed: the
+  trade is that a child inherits this process's descriptors for the moment before exec,
+  and the workaround holds only while nothing reintroduces a `cwd=` or `close_fds=True`
+  to those call sites — a test asserts both, because the symptom of getting it wrong is
+  55 evidence scripts appearing to crash at once.
 - **A crawler's identity in a server log is a claim, not proof.** `server_log_audit.py`
   classifies by User-Agent, which is a string the client chose. Confirming Googlebot
   needs a reverse DNS lookup plus a forward confirmation, and this script makes no

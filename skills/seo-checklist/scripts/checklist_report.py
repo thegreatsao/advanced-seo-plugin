@@ -547,6 +547,17 @@ def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
     """
     L = L or Lang()
     out = []
+    # Only when it is not the default. `lxml` is what a normal run uses, so saying so
+    # every time would be noise; a run that fell back to `html.parser` — or was told
+    # to use it — read every page through a different substrate, and the structural
+    # checks are not equivalent between the two.
+    parser = data.get("html_parser")
+    if parser and parser not in ("lxml", "unknown"):
+        out.append(L.t("w_parser",
+                       "Pages were parsed with {parser} rather than lxml. Every field "
+                       "the checklist reads is identical between the two, but checks "
+                       "that depend on document structure are not — a run with the "
+                       "other parser can disagree about them.").format(parser=parser))
     if data.get("entry_private"):
         # The stronger statement, and the only one that is a fact rather than a
         # permission: the host resolved to an address only the auditing machine can

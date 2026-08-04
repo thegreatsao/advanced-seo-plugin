@@ -50,7 +50,38 @@ FAILURE_LABEL = {
     "crash": "script failed",
     "missing": "script not found",
     "bad_output": "script returned unusable output",
+    # A script the operating system killed, which is not the same as a script that
+    # failed: nothing in it ran wrong, and opening it will show nothing. See
+    # `_signal_failure` for the one cause of this we have actually seen.
+    "signal": "script was killed by the operating system",
 }
+
+
+def _signal_failure(script_name: str, signal_number: int, stderr: str) -> dict:
+    """A script the OS killed, reported as that rather than as a script defect.
+
+    It used to arrive as `crash` with the message "exit code -11", which sends the
+    reader to open a script that never ran a line wrong. The distinction is the same
+    one §4.10 drew between a timeout and a crash: all of these end as NO_DATA, and
+    they are not the same problem.
+
+    The hint is narrow on purpose — it names the one cause we have diagnosed, and
+    only in the exact shape that cause produces (SIGSEGV, on Darwin, with the child
+    dying before it could print anything).
+    """
+    import signal as signal_module
+    try:
+        name = signal_module.Signals(signal_number).name
+    except ValueError:
+        name = f"signal {signal_number}"
+    hint = ""
+    if (signal_number == getattr(signal_module, "SIGSEGV", 11)
+            and sys.platform == "darwin" and not stderr):
+        hint = ("; on macOS this is usually Apple's Network.framework crashing in a "
+                "forked child rather than anything in the script — rerun, and report "
+                "it if it persists")
+    return {"error": f"[{script_name}] killed by {name}{hint}",
+            "error_kind": "signal"}
 
 
 def run_script(script_name: str, args: list, timeout: int = 120) -> dict:
@@ -68,9 +99,27 @@ def run_script(script_name: str, args: list, timeout: int = 120) -> dict:
 
     cmd = [sys.executable, script_path] + args + ["--json"]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        # close_fds=False so CPython takes its `posix_spawn` path instead of
+        # `fork` + `exec`, and that is not a micro-optimisation. On macOS, Apple's
+        # Network.framework registers a `pthread_atfork` child handler
+        # (`nw_settings_child_has_forked`) which dereferences freed state and
+        # segfaults *in the child, before exec* once the framework has been
+        # initialised in the parent. The runner does its own fetching before
+        # spawning 55 scripts, so it is precisely the shape that trips it: every
+        # script dies with signal 11, empty output, and a run that reports 55
+        # broken scripts. Found in this project's own test suite, where it killed
+        # the audits in `tests/test_shapes.py` depending on which module ran first.
+        # The cost of the workaround is that a child inherits the parent's open
+        # descriptors for the milliseconds before it execs; these children are
+        # short-lived and the alternative is losing the evidence layer on one
+        # platform.
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                                close_fds=False)
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
+        if result.returncode < 0:
+            return _signal_failure(script_name, -result.returncode,
+                                   result.stderr.strip())
         err_msg = result.stderr.strip() or f"exit code {result.returncode}"
         return {"error": f"[{script_name}] {err_msg}", "error_kind": "crash"}
     except subprocess.TimeoutExpired:
@@ -1753,6 +1802,21 @@ def load_public_suffixes(path: str = ""):
 PSL_STALE_DAYS = 365
 
 
+def html_parser() -> str:
+    """Which parser the evidence scripts will read pages with, for the record.
+
+    Imported lazily and defensively: the runner is deliberately importable without
+    bs4 or lxml so `--archive` can run on a bare checkout, and this is only needed to
+    fill one field in the artifact. An unimportable `seo_common` records "unknown"
+    rather than failing the run over a label.
+    """
+    try:
+        from seo_common import html_parser as choose
+        return choose()
+    except Exception:  # noqa: BLE001 — a missing label must not fail an audit
+        return "unknown"
+
+
 def psl_snapshot_date(path: str = "") -> str:
     """The date recorded in the bundled list's header, "" when there is none."""
     try:
@@ -2411,6 +2475,15 @@ def main() -> int:
         # that decides whether "no external service could measure this" is true.
         "entry_private": entry_private,
         "public_suffix_snapshot": psl_snapshot_date() or None,
+        # Which parser read every page. It belongs beside the suffix snapshot for the
+        # same reason: both are substrate the verdicts rest on, chosen by this run
+        # rather than by the site. `lxml` and `html.parser` agree on every field the
+        # registry reads (fifteen document shapes, tests/test_parser.py) and disagree
+        # on structure — on markup with an unclosed `<p>`, GO-144's score is 10 under
+        # one and 32 under the other. A reader comparing two runs that differ has to
+        # be able to rule this out, and until 0.14.0 the choice was made by import
+        # order and recorded nowhere.
+        "html_parser": html_parser(),
         "sample": a.sample,
         "sampled_urls": sampled_urls,
         "scores": score(graded),

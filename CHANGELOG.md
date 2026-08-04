@@ -10,6 +10,96 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.14.0 — 4 August 2026
+
+Registry unchanged (`1c4b3697cc1f`, 214 items). Tests 525 → 549, in two new files.
+
+The last two items of the plan: decide the HTML parser, and get the live path in front
+of the site shapes it had never seen. Both were "needs measuring", and the measuring
+found a third thing — a platform bug that had been silently killing this suite's own
+audits depending on which test module ran first.
+
+### Changed — the parser is a decision now, and it is recorded
+
+`seo_common.parse_html` chose its parser with `"lxml" if "lxml" in sys.modules else
+"html.parser"`, which does not ask whether lxml is *installed* — only whether something
+imported it first. So one machine could parse the same page two ways, and
+`parse_html.py` held a second copy of the test, so two checks inside a single audit
+could disagree about a document. For a tool whose whole claim is that two runs of one
+site agree, the substrate cannot be chosen by import order.
+
+**It is lxml, when it can be imported**, and `SEO_HTML_PARSER` overrides it. The run
+records which parser produced its verdicts, next to the Public Suffix List snapshot and
+for the same reason; the report says so when it is not the default.
+
+**The evidence is a committed corpus, not a crawl** — `tests/test_parser.py`, fifteen
+document shapes chosen for what real generators emit: unclosed `<p>` and `<li>`,
+300-deep `<div>` nesting, an inline `<svg>` with its own `<title>`, `<template>` and
+`<noscript>`, a `<div>` inside `<head>`, `<picture>`, a bare fragment, duplicate
+attributes. A crawl was the other option and was rejected on this project's own
+precedent: the Public Suffix List is bundled as a dated snapshot rather than fetched,
+because a run must answer the same offline and next month, and the evidence behind a
+*decision* deserves that no less than the evidence behind a verdict. What a corpus
+cannot do is contain a divergence nobody thought of — so the override exists, which is
+what makes being wrong here recoverable.
+
+**What the measurement found.** Every field the registry reads is identical under both
+parsers across all fifteen shapes. The divergence is structural, and it reaches two call
+sites: `picture_sources()`, which already walks up to any ancestor because libxml2 nests
+the `<img>` inside the first `<source>`, and `answer_block_scanner.py`, which finds an
+answer with `find_next_sibling()`. On markup with an unclosed `<p>` that script scores
+**10 under lxml and 32 under html.parser**, and GO-144 reads that score — and neither
+reading is right. That is now its own KNOWN-ISSUES entry rather than a parser problem:
+the parser is deliberate, so the score is at least reproducible; a sibling walk is still
+the wrong instrument for markup a browser repairs.
+
+### Added — the four site shapes, live
+
+`tests/test_shapes.py` puts the runner in front of what KNOWN-ISSUES item 3 listed as
+tested-with-fixtures-and-never-live. Two of the four had already gone wrong in exactly
+that gap: the discarded final URL (0.4.0) and the page guard's first draft calling a
+90-word article an interstitial (0.4.0).
+
+- **A cross-host redirect** — two origins and a real 301. The destination is audited,
+  the requested URL is recorded, the sample follows the destination host, and a
+  *same-host* hop deliberately keeps the requested URL so `redirect_checker.py` still
+  sees the hop it exists to report.
+- **A bot-protection challenge** — a Cloudflare fingerprint served with a 200. Refused
+  with no score; `--no-page-guard` scores it and says so on every surface; and an
+  article *about* Cloudflare, short enough to look like a challenge, is audited anyway.
+- **A sixty-page site** — where `--sample` has to choose. The picks span the sitemap
+  rather than clustering at its start, the far end is reachable, and the worst page
+  supplies both the verdict and the measurement.
+- **TLS** — the harness generates a certificate with `openssl` and hands it to the child
+  through `REQUESTS_CA_BUNDLE`, so `verify=True` stays on. The HTTPS and HSTS items get
+  their first verdicts from a real handshake instead of a stub, and the test skips
+  rather than lying if `openssl` is absent.
+
+The fifth shape — a Search Console property with real history — stays unexercised, and
+stays written down. It needs a property Google recognises and a key that can read it,
+and stubbing the API while claiming live coverage would be worse than the gap.
+
+### Fixed — a script the operating system killed reported as a script that failed
+
+Found while getting the above to pass: `tests/test_shapes.py` was green on its own and
+its audits died under `discover`, with signal 11 and no output, depending only on which
+module ran first. The crash report named it:
+
+    fork → _pthread_atfork_child_handlers → nw_settings_child_has_forked
+         → nw_path_release_globals → NEFlowDirectorDestroy → os_log → SIGSEGV
+
+Apple's Network.framework registers a `pthread_atfork` child handler that dereferences
+freed state, so on macOS **any** `fork()` after that framework has been initialised
+segfaults the child before it execs. `checklist_runner.run_script` forks 55 evidence
+scripts, after the runner has done its own fetching — precisely the shape that trips it,
+and the symptom would be a run reporting 55 broken scripts.
+
+`run_script` and the test harness now start children through `posix_spawn`, which does
+not fork. And a signal death is classified as `signal` with the signal named, rather
+than as `crash` with the message "exit code -11" — the same distinction 0.4.0 drew
+between a timeout and a crash, for the same reason: it sends the reader to open a script
+that never ran a line wrong.
+
 ## 0.13.0 — 4 August 2026
 
 **Registry unchanged** (`1c4b3697cc1f`, 214 items). Tests 520 → 525. Calibration —

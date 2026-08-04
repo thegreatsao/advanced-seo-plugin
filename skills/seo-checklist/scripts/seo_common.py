@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -276,9 +277,46 @@ def load_html(source: str, timeout: int = 15) -> tuple[str, str, dict]:
     return html, "", {"url": source, "status": None, "headers": {}, "error": None}
 
 
+def html_parser() -> str:
+    """Which parser reads every page in this run. One decision, in one place.
+
+    It used to be `"lxml" if "lxml" in sys.modules else "html.parser"` — which does
+    not ask whether lxml is *installed*, only whether something imported it first.
+    Two runs on one machine could therefore parse the same page two different ways
+    depending on which script pulled lxml in, and the parsers are not equivalent: on
+    markup with an unclosed `<p>` — the commonest invalidity there is —
+    `answer_block_scanner.py` scores 10 under lxml and 32 under `html.parser`, and
+    GO-144 reads that score. A tool whose whole claim is that two runs of one site
+    agree cannot choose its substrate by accident of import order.
+
+    **lxml, when it can be imported.** It is a declared requirement, so it is what
+    runs in practice; it tolerates the broken markup real sites serve; and measured
+    over the corpus in `tests/test_parser.py`, every field the registry reads comes
+    out identical between the two across fifteen document shapes — deep nesting,
+    unclosed tags, an SVG `<title>`, templates, fragments. The divergence is
+    structural rather than field-level, and it has exactly two call sites.
+
+    `SEO_HTML_PARSER` overrides it, and the run records which parser produced its
+    verdicts. That pair is what makes a fixture-measured decision safe: an operator
+    who suspects the parser on a real site can re-run with the other one and diff
+    rather than taking this docstring's word for it.
+    """
+    choice = (os.environ.get("SEO_HTML_PARSER") or "").strip().lower()
+    if choice in ("lxml", "html.parser", "html5lib"):
+        return choice
+    try:
+        import lxml  # noqa: F401 — presence, not use: bs4 names its parser by string
+        return "lxml"
+    except ImportError:
+        # Not a silent downgrade: the substrate under every verdict has changed, and
+        # the runner reports which parser ran. The structural checks are the ones
+        # that differ — the divergence table in tests/test_parser.py says how.
+        return "html.parser"
+
+
 def parse_html(html: str, base_url: str = "") -> dict:
     require_bs4()
-    soup = BeautifulSoup(html or "", "lxml" if "lxml" in sys.modules else "html.parser")
+    soup = BeautifulSoup(html or "", html_parser())
 
     def text_or_none(tag):
         return tag.get_text(" ", strip=True) if tag else None

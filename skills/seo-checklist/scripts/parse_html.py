@@ -27,6 +27,8 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get
 
+from seo_common import html_parser
+
 
 def _fetch_url(url: str, timeout: int = 20) -> dict[str, Any]:
     """Fetch HTML for direct parsing."""
@@ -91,7 +93,11 @@ def parse_html(
     Returns:
         Dictionary with extracted SEO data
     """
-    soup = BeautifulSoup(html, "lxml" if "lxml" in sys.modules else "html.parser")
+    # One decision, in one place: see seo_common.html_parser. This script used to
+    # repeat the `"lxml" in sys.modules` test, so the *same page* could be parsed
+    # one way by parse_html.py and another by every check that goes through
+    # seo_common — within a single audit.
+    soup = BeautifulSoup(html, html_parser())
     headers = headers or {}
     header_lookup = {str(k).lower(): v for k, v in headers.items()}
 

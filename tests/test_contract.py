@@ -24,7 +24,6 @@ in test_evidence.py, and this file asserts that the reason is the honest one.
 """
 import json
 import os
-import subprocess
 import sys
 import unittest
 
@@ -35,7 +34,7 @@ REGISTRY = os.path.join(SKILL, "resources", "config", "checklist.json")
 sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from harness import FixtureSite, offline_env  # noqa: E402
+from harness import FixtureSite, spawn  # noqa: E402
 
 FAIL, PASS, WARN = "FAIL", "PASS", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
@@ -79,11 +78,11 @@ def audit(url: str, label: str) -> dict:
         path = SITE.artifact(label, filename)
         if path:
             artifacts += [flag, path]
-    proc = subprocess.run(
+    proc = spawn(
         [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
          "--allow-private", "--max-rps", "0", "--no-history", "--no-prompt",
          "--quiet", "--timeout", "120", "--json", out, *artifacts],
-        capture_output=True, text=True, timeout=900, env=offline_env(), cwd=SITE.dir)
+        timeout=900)
     if proc.returncode != 0:
         raise AssertionError(f"the {label} audit exited {proc.returncode}\n"
                              f"{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
@@ -101,11 +100,11 @@ def partial_audit(label: str, url: str, *extra: str) -> dict:
     that to seconds instead of the ten a full registry pass costs.
     """
     out = os.path.join(SITE.dir, f"{label}.json")
-    proc = subprocess.run(
+    proc = spawn(
         [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
          "--allow-private", "--max-rps", "0", "--no-history", "--no-prompt",
          "--quiet", "--only", "speed", "--timeout", "120", "--json", out, *extra],
-        capture_output=True, text=True, timeout=600, env=offline_env(), cwd=SITE.dir)
+        timeout=600)
     if proc.returncode != 0:
         raise AssertionError(f"the {label} run exited {proc.returncode}\n"
                              f"{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")

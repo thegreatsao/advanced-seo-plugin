@@ -490,6 +490,50 @@ class PrivateAddresses(unittest.TestCase):
             shutil.rmtree(site, ignore_errors=True)
 
 
+class AScriptTheOperatingSystemKilled(unittest.TestCase):
+    """A signal death is not a script defect, and used to be reported as one.
+
+    It arrived as `crash` with the message "exit code -11", which sends a reader to
+    open a script that never ran a line wrong. Same distinction §4.10 drew between a
+    timeout and a crash: all of them end as NO_DATA, and they are not the same problem.
+
+    The cause we have actually diagnosed is macOS killing a forked child inside Apple's
+    Network.framework `atfork` handler — it took this suite from green to eight
+    failures depending on module order. `run_script` now spawns without forking, so
+    this classification is the safety net rather than the fix.
+    """
+
+    def test_a_signal_death_is_its_own_kind_with_the_signal_named(self):
+        from checklist_runner import _signal_failure
+        out = _signal_failure("parse_html.py", 9, "")
+        self.assertEqual(out["error_kind"], "signal")
+        self.assertIn("SIGKILL", out["error"])
+        self.assertIn("signal", FAILURE_LABEL)
+
+    def test_the_macos_hint_is_narrow(self):
+        """A hint that fires on every signal would be a guess wearing a diagnosis. It
+        names one cause, only in the shape that cause produces: SIGSEGV, on Darwin,
+        with the child dying before it printed anything."""
+        import sys as _sys
+        from checklist_runner import _signal_failure
+        segv = _signal_failure("x.py", 11, "")
+        if _sys.platform == "darwin":
+            self.assertIn("Network.framework", segv["error"])
+        self.assertNotIn("Network.framework", _signal_failure("x.py", 9, "")["error"])
+        self.assertNotIn("Network.framework",
+                         _signal_failure("x.py", 11, "real stderr")["error"])
+
+    def test_the_runner_does_not_fork_to_start_a_script(self):
+        """The fix itself. `close_fds=False` with no `cwd` is what makes CPython choose
+        `posix_spawn`; either of those changing puts 55 evidence scripts back on a code
+        path macOS kills outright, and the symptom is 55 scripts "crashing" at once."""
+        import inspect
+        import checklist_runner
+        source = inspect.getsource(checklist_runner.run_script)
+        self.assertIn("close_fds=False", source)
+        self.assertNotIn("cwd=", source)
+
+
 class Robots(unittest.TestCase):
     """robots.txt applies to what the tool discovers, never to what it was given.
 

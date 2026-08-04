@@ -300,7 +300,7 @@ class Served:
     URL once rather than nine times.
     """
 
-    def __init__(self, routes: dict):
+    def __init__(self, routes: dict, tls: bool = False):
         self.routes = {path: _normalise(value) for path, value in routes.items()}
         handler = type("Handler", (_Routed,), {"routes": self.routes, "seen": []})
         self.handler = handler
@@ -310,8 +310,19 @@ class Served:
         # moment one worker holds a connection while another asks for a page.
         self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
         self.server.daemon_threads = True
+        self.tls = tls
+        if tls:
+            # HTTPS matters here for one reason: `safe_http` sets `verify=True` and
+            # never relaxes it, so until something in this suite could speak TLS, the
+            # HTTPS items and every HSTS check had verdicts from stubs only. The CA is
+            # handed to the script through `REQUESTS_CA_BUNDLE` — see `tls_env` — which
+            # keeps certificate *verification* switched on while trusting one cert for
+            # one test. Disabling verification instead would have made the test pass
+            # while removing the property it is testing.
+            self.server.socket = tls_context().wrap_socket(self.server.socket,
+                                                           server_side=True)
         self.port = self.server.server_address[1]
-        self.base = f"http://127.0.0.1:{self.port}"
+        self.base = f"{'https' if tls else 'http'}://127.0.0.1:{self.port}"
         self.url = self.base + "/"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -386,9 +397,94 @@ class allow_loopback:
                 os.environ[key] = was
 
 
-def served(routes: dict) -> Served:
-    """`with served({...}) as site:` — see `Served`."""
-    return Served(routes)
+def served(routes: dict, tls: bool = False) -> Served:
+    """`with served({...}) as site:` — see `Served`. `tls=True` serves it over HTTPS."""
+    return Served(routes, tls=tls)
+
+
+_TLS = {}
+
+
+def tls_context():
+    """A TLS context for 127.0.0.1, from a certificate generated once per process.
+
+    `openssl` rather than a bundled key pair: a committed certificate expires, and a
+    test that starts failing on a date nobody chose is worse than one that skips when a
+    tool is absent. Raises `unittest.SkipTest` when openssl is not on PATH, so the
+    HTTPS shape reports itself as unexercised rather than silently not running.
+    """
+    import ssl
+    import subprocess
+    import unittest
+    if "context" in _TLS:
+        return _TLS["context"]
+    folder = tempfile.mkdtemp(prefix="seo-tls-")
+    cert, key = os.path.join(folder, "cert.pem"), os.path.join(folder, "key.pem")
+    try:
+        subprocess.run(
+            ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+             "-keyout", key, "-out", cert, "-days", "2",
+             "-subj", "/CN=127.0.0.1",
+             "-addext", "subjectAltName=IP:127.0.0.1"],
+            check=True, capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise unittest.SkipTest(f"openssl unavailable, so the HTTPS shape cannot be "
+                                f"served: {exc}") from exc
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert, key)
+    _TLS.update(context=context, cert=cert)
+    return context
+
+
+def tls_env(**extra) -> dict:
+    """`offline_env` plus the one certificate the HTTPS fixture is signed with.
+
+    Both variables: `requests` reads `REQUESTS_CA_BUNDLE`, and anything falling through
+    to `ssl` reads `SSL_CERT_FILE`. Verification stays on — this widens trust to one
+    self-signed certificate rather than turning the check off.
+    """
+    tls_context()
+    return offline_env(REQUESTS_CA_BUNDLE=_TLS["cert"], SSL_CERT_FILE=_TLS["cert"],
+                       **extra)
+
+
+def spawn(args, env=None, timeout=600, stdin_text=None, cwd=None):
+    """`subprocess.run` for a child process, on the one code path that survives macOS.
+
+    Every test module that runs a script or an audit goes through here, and the reason
+    is a platform bug rather than tidiness. CPython uses `fork` + `exec` whenever
+    `close_fds` is true or a `cwd` is given, and on macOS Apple's Network.framework
+    installs a `pthread_atfork` child handler — `nw_settings_child_has_forked` — that
+    dereferences freed state and segfaults **in the child, before it execs**, once the
+    framework has been initialised anywhere in the parent. The crash report says it
+    plainly:
+
+        fork → _pthread_atfork_child_handlers → nw_settings_child_has_forked
+             → nw_path_release_globals → NEFlowDirectorDestroy → os_log → SIGSEGV
+
+    Nothing in the child's own code has run at that point, so the failure is silent:
+    signal 11, empty stdout, empty stderr. It took this suite from green to eight
+    failures depending only on which module ran first — `tests/test_shapes.py` passed
+    alone and its audits died under `discover`, because by then some earlier module had
+    touched the framework.
+
+    `close_fds=False` with no `cwd` is what makes CPython choose `posix_spawn`, which
+    does not fork and therefore never runs those handlers. A child inherits this
+    process's descriptors for the moment before exec; in a test suite that costs
+    nothing, and `checklist_runner.run_script` now does the same thing for the same
+    reason.
+
+    Pass a directory as `cwd` only if a test genuinely depends on it — it puts the
+    child back on the forking path, and on macOS it will start dying again.
+    """
+    kwargs = {"capture_output": True, "text": True, "timeout": timeout,
+              "env": env or offline_env(), "close_fds": False}
+    if cwd is not None:
+        kwargs["cwd"] = cwd
+    if stdin_text is not None:
+        kwargs["input"] = stdin_text
+    import subprocess
+    return subprocess.run(list(args), **kwargs)
 
 
 def offline_env(**extra) -> dict:
