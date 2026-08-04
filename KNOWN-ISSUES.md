@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.10.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.10.1**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
