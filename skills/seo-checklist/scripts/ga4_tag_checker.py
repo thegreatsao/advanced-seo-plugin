@@ -71,6 +71,16 @@ def check(url: str, timeout: int = 15) -> dict:
     for gid, n in Counter(config_ids).items():
         if n > 1:
             result["duplicates"].append({"id": gid, "count": n, "kind": "gtag_config"})
+    # And one *loaded* more than once, which is the ordinary way GA4 ends up installed
+    # twice over: a theme ships `gtag/js?id=` and a plugin ships it again, or somebody
+    # adds it by hand beside GTM. Only `gtag('config', …)` calls were counted, so the
+    # common case reported zero duplicates — and GO-132 "Prevent GA4 Tag Duplication"
+    # reads this field, so the item passed the exact situation it exists to catch. The
+    # script had already noticed, emitting a "gtag.js loaded 2x" issue further down;
+    # the number the registry reads was the one that could not see it.
+    for gid, n in Counter(src_ids).items():
+        if n > 1 and Counter(config_ids)[gid] <= 1:
+            result["duplicates"].append({"id": gid, "count": n, "kind": "gtag_loader"})
     for cid, n in Counter(containers).items():
         if n > 2:  # GTM ships a <script> plus a <noscript> iframe by design.
             result["duplicates"].append({"id": cid, "count": n, "kind": "gtm_container"})

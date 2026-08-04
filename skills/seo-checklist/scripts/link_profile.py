@@ -263,6 +263,8 @@ def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
         })
 
     return {
+        # Zero orphans out of zero crawled pages is not a healthy link graph.
+        "fetch_error": None if total_pages else "no page could be read",
         "pages_crawled": total_pages,
         "total_internal_links": sum(d["internal_out"] for d in pages.values()),
         "total_external_links": sum(d["external_out"] for d in pages.values()),

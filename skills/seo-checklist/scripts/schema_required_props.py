@@ -211,7 +211,8 @@ def main() -> None:
     documents, meta = extract_schema_documents(args.source, timeout=args.timeout)
     result = validate_schema_required_props(documents, args.schema_type,
                                             meta.get("invalid_blocks"))
-    result.update({"source": args.source, "final_url": meta["final_url"]})
+    result.update({"source": args.source, "final_url": meta["final_url"],
+                   "fetch_error": (meta.get("fetch") or {}).get("error")})
     lines = [
         f"Schema required properties for {args.source}",
         f"Nodes checked: {result['schema_nodes']}  Errors: {result['summary']['errors']}  Warnings: {result['summary']['warnings']}",

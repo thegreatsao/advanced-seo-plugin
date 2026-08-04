@@ -54,6 +54,13 @@ def fetch_page(url: str, timeout: int = 12, respect_robots: bool = False) -> str
     """
     try:
         resp = safe_get(url, timeout=timeout, respect_robots=respect_robots)
+        # 200 only. An error page is HTML and is not content: a 404 body was being
+        # analysed like any other page, so a site with one dead internal link
+        # collected a `Critical` thin-content finding advising somebody to expand a
+        # page that does not exist — and it counted against CN-039, which is the
+        # thin-content item. Broken links are `broken_links.py`'s finding, once.
+        if resp.status_code != 200:
+            return ""
         ct = resp.headers.get("Content-Type", "")
         if "text/html" not in ct:
             return ""
@@ -353,6 +360,10 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85) -> dict:
             })
 
     return {
+        # An empty crawl is not a site with no duplicates. Without this the runner
+        # cannot tell "nothing is wrong" from "nothing was read", and four items —
+        # two of them `high` — graded the emptiness as a pass.
+        "fetch_error": None if pages else "no page could be read",
         "pages_analyzed": len(pages),
         "exact_duplicates": exact_dupes,
         "near_duplicates": near_dupes,

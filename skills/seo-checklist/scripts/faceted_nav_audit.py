@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Detect faceted navigation crawl traps from URLs and optional page fetches."""
+"""Detect faceted navigation crawl traps from URLs and optional page fetches.
+
+Takes a *list* of URLs, because a crawl trap is a property of a set: five parameter
+variants sharing one path, or one parameter recurring across many URLs. A single URL
+can exhibit neither.
+
+Which is what `--from-page` is for. The registry has exactly one URL to give — the
+entry point — and passing it alone made AR-163 an item that could not fail on any site
+ever audited: `path_explosions` needs five URLs sharing a path and `frequent_params`
+needs a parameter seen three times, and one URL supplies one of each. `--from-page`
+audits the internal links of the page it is given, which is also the truer form of the
+question: a facet becomes a crawl trap when the site *links to* it, because that is how
+a crawler finds it.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +21,7 @@ import json
 from collections import Counter, defaultdict
 from urllib.parse import parse_qs, urlparse
 
-from seo_common import fetch_url, parse_html, read_urls
+from seo_common import fetch_url, parse_html, read_urls, same_host
 
 
 FACET_KEYS = {"sort", "filter", "color", "size", "brand", "price", "min_price", "max_price", "rating", "page", "view", "availability", "material"}
@@ -57,15 +70,45 @@ def audit(urls: list[str], fetch: bool = False, timeout: int = 15) -> dict:
     return {"count": len(rows), "frequent_params": frequent_params, "path_explosions": path_explosions, "rows": rows, "issues": issues}
 
 
+def urls_from_page(url: str, timeout: int = 15, limit: int = 300) -> list[str]:
+    """The page's own internal links, plus the page itself.
+
+    Same-host only: a facet on somebody else's site is not this site's crawl trap.
+    Capped, because a category page on a real store can link to thousands of parameter
+    combinations — which is the finding, and does not need all of them enumerated.
+    """
+    page = fetch_url(url, timeout=timeout, max_bytes=2_000_000)
+    if not page.get("text"):
+        return [url]
+    parsed = parse_html(page["text"], page.get("url") or url)
+    found = [url]
+    for link in parsed.get("links") or []:
+        href = link.get("href") if isinstance(link, dict) else link
+        if href and same_host(href, url):
+            found.append(href)
+        if len(found) >= limit:
+            break
+    return found
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Audit faceted navigation URLs")
+    parser = argparse.ArgumentParser(description="Audit faceted navigation URLs",
+                                     epilog=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("urls", nargs="*")
     parser.add_argument("--url-file")
+    parser.add_argument("--from-page", action="store_true",
+                        help="audit the internal links of the given page rather than "
+                             "the page alone — a crawl trap is a property of a set of "
+                             "URLs, so one URL can never show one")
     parser.add_argument("--fetch", action="store_true", help="Fetch pages for canonical/noindex checks")
     parser.add_argument("--timeout", type=int, default=15)
     parser.add_argument("--json", "-j", action="store_true")
     args = parser.parse_args()
-    result = audit(read_urls(args.urls, args.url_file), args.fetch, args.timeout)
+    urls = read_urls(args.urls, args.url_file)
+    if args.from_page and urls:
+        urls = read_urls(urls_from_page(urls[0], args.timeout))
+    result = audit(urls, args.fetch, args.timeout)
     print(json.dumps(result, indent=2) if args.json else "\n".join(f"{','.join(r['flags']) or 'ok'}\t{r['url']}" for r in result["rows"]))
 
 

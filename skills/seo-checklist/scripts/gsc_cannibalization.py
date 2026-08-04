@@ -115,7 +115,14 @@ def analyze(site_url: str, credentials: str, days: int) -> dict:
         "queries_analyzed": 0,
         "cannibalized": [],
         "branded": {},
-        "summary": {"cannibalized_queries": None, "worst_spread": None},
+        # Empty, not `{"cannibalized_queries": None, …}`. `eq` and `truthy` read a
+        # None as a *failing value* rather than as silence, so pre-seeding the keys
+        # turned a revoked token or an exhausted quota into "two of your URLs compete
+        # for one query" and "you do not rank first for your own brand" — four
+        # fabricated `high` verdicts about a property nobody managed to open. The
+        # measurement fills these in on success; an absent key is NO_DATA, which is
+        # what "we could not ask" actually is.
+        "summary": {},
         "issues": [],
         "error": None,
     }
@@ -124,6 +131,9 @@ def analyze(site_url: str, credentials: str, days: int) -> dict:
         rows, start, end = fetch_query_page_rows(service, site_url, days)
     except Exception as exc:
         result["error"] = str(exc)[:300]
+        # And `issues`, for the same reason the summary is empty: an empty list
+        # satisfies `none_severity` and reads as "nothing wrong here".
+        result.pop("issues", None)
         return result
 
     result["period"] = {"start": start, "end": end}

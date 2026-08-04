@@ -35,7 +35,11 @@ MAX_MESSAGES = 40
 def validate(url: str, timeout: int = 45) -> dict:
     result = {
         "url": url,
-        "summary": {"errors": None, "warnings": None, "info": None},
+        # Empty until the validator answers. `{"errors": None}` is not silence:
+        # `eq: 0` reads a None as a failing value, so an outage or a 429 from a free
+        # service reported "your HTML has validation errors" — CI-017 and TE-181,
+        # invented out of the validator being busy. An absent key is NO_DATA.
+        "summary": {},
         "messages": [],
         "issues": [],
         "error": None,

@@ -801,6 +801,27 @@ def execute(plan: dict[tuple, list[str]], workers: int, timeout: int, quiet: boo
     return results
 
 
+# Where a script says "I could not read the thing I was asked about". Two spellings,
+# because there are two conventions in the tree and both are load-bearing:
+# `fetch_error` for a page that could not be fetched, `error` for a third-party call
+# that failed. Both mean the measurement did not happen.
+#
+# Deliberately *not* the plural forms. `errors` and `fetch_errors` are per-URL lists
+# from the crawlers: one refused page out of fifty is a fact about that page, and
+# discarding the other forty-nine verdicts because of it would be its own kind of
+# dishonesty.
+UNREAD_KEYS = ("fetch_error", "error")
+
+
+def unread_reason(data: dict) -> str:
+    """Why this script's output describes nothing, or "" when it describes something."""
+    for key in UNREAD_KEYS:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
 def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
           has_gsc: bool) -> list[dict]:
     key_for = {}
@@ -866,6 +887,21 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                     row.update(status=NO_DATA, error_kind=kind,
                                evidence=f"{FAILURE_LABEL.get(kind, FAILURE_LABEL['crash'])}: "
                                         f"{data['__error__'][:160]}")
+                elif unread_reason(data):
+                    # The script ran, exited 0, and read nothing. Not a crash, and not
+                    # handled until now: a script that fetched nothing still emits its
+                    # defaults — `score: 0`, `missing_alt: 0`, `issues: []` — and those
+                    # defaults grade. Sixty-two items produced a confident PASS or FAIL
+                    # about a host that refused every connection, which is the failure
+                    # that once scored an unresolvable domain 61/100, one layer in.
+                    #
+                    # The entry-reachability gate stops the wholly-dead case before any
+                    # scoring. This is the case that gate cannot see: a site that
+                    # answers the entry request and then stops — rate limiting, a WAF
+                    # tripping after N requests, a deploy during an audit.
+                    row.update(status=NO_DATA, error_kind="unread",
+                               evidence=f"the site could not be read: "
+                                        f"{unread_reason(data)[:160]}")
                 else:
                     row["measure"] = measurement(it["check"]["assert"], data)
                     ok, ev = evaluate(it["check"]["assert"], data)

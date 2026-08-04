@@ -153,6 +153,14 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
         issues.append({"severity": "info", "type": "low_anchor_diversity", "count": len(low_diversity), "message": "Targets have low anchor diversity"})
 
     return {
+        # Zero overused anchors across zero crawled pages is not a clean link
+        # profile. `fetch_errors` (plural) stays per-URL; this is the whole-crawl
+        # verdict the runner needs to tell silence from a pass.
+        # Every crawled page having errored is the same as no page at all: the seed
+        # counts as "crawled" whether or not it answered, so counting pages was not
+        # enough and BL-081 reported "no overused anchors" for a refused connection.
+        "fetch_error": (None if len(crawl["fetch_errors"]) < len(crawl["pages"])
+                        else "no page could be read"),
         "start_url": normalize_url(start_url),
         "pages_crawled": len(crawl["pages"]),
         "links_analyzed": len(links),

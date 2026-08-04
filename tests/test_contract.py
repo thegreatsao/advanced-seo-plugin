@@ -192,7 +192,11 @@ SAME_ON_BOTH = {
     "BL-079": "backlink items need a link index this tool does not have",
     "BL-080": "backlink items need a link index this tool does not have",
     "BL-082": "backlink items need a link index this tool does not have",
-    "BL-083": "backlink items need a link index this tool does not have",
+    # BL-083 was here until 0.8.0 with the same reason, and the reason was wrong: it
+    # reads `external_link_quality.summary.broken_links`, which is measurable without
+    # any link index. It answered the same on both sites because a dead host produces
+    # no status code and the count only looked for 4xx — so the ordinary form of link
+    # rot was invisible. The exemption outlived a defect rather than a limitation.
     "BL-084": "backlink items need a link index this tool does not have",
     "BL-085": "backlink items need a link index this tool does not have",
 

@@ -85,7 +85,12 @@ def analyze(inspected_url: str, site_url: str, credentials: str, lang: str) -> d
         "crawled_as": None,
         "google_canonical": None,
         "user_canonical": None,
-        "canonical_match": None,
+        # Deliberately not pre-seeded with None. The comparison below already says
+        # the right thing — "a page that declares no canonical has nothing to
+        # disagree with Google about, so the comparison is absent rather than
+        # passing" — but None is not absent: `truthy` reads it as a *failing value*,
+        # so CI-010 reported "Google chose a different canonical" both for a page
+        # with no canonical at all and for a run where the API never answered.
         "indexed": None,
         "sitemaps": [],
         "referring_urls": 0,
@@ -106,6 +111,11 @@ def analyze(inspected_url: str, site_url: str, credentials: str, lang: str) -> d
             if attempt + 1 < RETRIES:
                 time.sleep(2)
     if inspection is None:
+        # `issues` goes too. An empty list satisfies `none_severity`, which is how
+        # GO-135 reported "no indexing problems" for a property the API never
+        # answered about — the same fabrication as a None read as a failure, pointing
+        # the other way. Absent is the only honest shape for "we did not look".
+        result.pop("issues", None)
         return result
 
     idx = inspection.get("indexStatusResult", {})
@@ -133,7 +143,7 @@ def analyze(inspected_url: str, site_url: str, credentials: str, lang: str) -> d
     if gc and uc:
         result["canonical_match"] = gc.rstrip("/") == uc.rstrip("/")
 
-    if result["canonical_match"] is False:
+    if result.get("canonical_match") is False:
         result["issues"].append({
             "severity": "high",
             "message": f"Google chose {gc} as canonical, the page declares {uc} — "

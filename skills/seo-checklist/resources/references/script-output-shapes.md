@@ -1,7 +1,7 @@
 <!-- Updated: 2026-08-02 -->
 # Script output shapes
 
-All 52 scripts the registry runs are documented here. Four of them break the
+All 55 scripts the registry runs are documented here. Four of them break the
 `issues[].severity` + `message` convention the rest share — `gsc_checker.py` and
 `indexnow_checker.py` capitalise severity, `indexnow_checker.py` uses `finding`
 instead of `message`, and `robots_path_tester.py` emits no `issues[]` at all.
@@ -679,6 +679,10 @@ string and prove ownership by serving `<key>.txt` from the site root.
 `issues[]` — array
   - item keys: passed, severity, finding, fix
 `summary.passed` / `summary.failed` / `summary.info` — int
+`key_valid` — bool — the roll-up GEO-007 reads: True only when `/<key>.txt` is served
+  and contains the key. Added in 0.8.0; it had never been emitted, so GEO-007 reported
+  NO_DATA on every site including one with a correctly hosted key. The meta tag and
+  the robots.txt reference are optional in the protocol and do not affect it.
 
 **No `message` field, and severity is capitalised** (`"Critical"`, `"Info"`) — this
 script predates the `issues[].severity` + `message` convention the rest follow.

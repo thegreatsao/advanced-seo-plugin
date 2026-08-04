@@ -35,6 +35,14 @@ Fixture URLs are written with the literal `http://127.0.0.1:8000`, which is also
 CI serves the good site on. The harness copies each tree to a temp directory and
 rewrites that string to the port it actually bound, so nothing depends on a fixed
 port being free and the two sites' canonicals point at themselves.
+
+`served()` is the second half, and the one the per-script unit tests use: a throwaway
+origin routed from a dict, so a test can say what the site returns for each path —
+status, headers and body — without a directory on disk. `FixtureSite` answers "does
+this check notice the difference between two whole sites"; `served()` answers "what
+exactly does this script do when the header is missing, or the status is 500, or the
+sitemap is gzipped". Both run the script through its own HTTP path, which is the point
+of neither being a stub.
 """
 from __future__ import annotations
 
@@ -204,6 +212,169 @@ class FixtureSite:
 
     def __exit__(self, *exc):
         self.stop()
+
+
+class _Routed(http.server.BaseHTTPRequestHandler):
+    """Serve a routing table, and remember what was asked for."""
+
+    routes: dict = {}
+    seen: list = []
+
+    protocol_version = "HTTP/1.1"          # so keep-alive works and nothing hangs
+
+    def _resolve(self):
+        path = self.path.split("#", 1)[0]
+        # Exact match first, then the same path without its query. A script that
+        # appends `?` to a URL is asking for the same document.
+        for candidate in (path, path.split("?", 1)[0]):
+            if candidate in self.routes:
+                return self.routes[candidate]
+        return None
+
+    def _respond(self, body_too: bool):
+        type(self).seen.append((self.command, self.path))
+        found = self._resolve()
+        if found is None:
+            self.send_response(404)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", "9")
+            self.end_headers()
+            if body_too:
+                self.wfile.write(b"not found")
+            return
+
+        status, headers, body = found
+        raw = body.encode("utf-8") if isinstance(body, str) else body
+        self.send_response(status)
+        sent = {k.lower() for k in headers}
+        if "content-type" not in sent:
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+        for key, value in headers.items():
+            self.send_header(key, value)
+        # Always, and computed rather than taken from `headers`: a wrong length is
+        # a hang, and a test that hangs is worse than one that fails.
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        if body_too:
+            self.wfile.write(raw)
+
+    def do_GET(self):
+        self._respond(True)
+
+    def do_HEAD(self):
+        self._respond(False)
+
+    def log_message(self, *args):
+        pass
+
+
+class Served:
+    """A throwaway origin whose every response a test decides.
+
+    Routes map a path to what the server returns. Values are written the shortest way
+    that is unambiguous:
+
+        "/"             : "<html>…"                     → 200, text/html
+        "/robots.txt"   : (200, "User-agent: *")        → 200, text/html
+        "/x"            : (301, {"Location": "/y"}, "") → status, headers, body
+
+    Anything not routed is a real 404 — which is usually what a test wants, because
+    "the site does not have a robots.txt" is a case, not an oversight.
+
+    `requested` is what the server actually received, so a test can assert the thing
+    no output field shows: that a script honoured a `Disallow`, or fetched the entry
+    URL once rather than nine times.
+    """
+
+    def __init__(self, routes: dict):
+        self.routes = {path: _normalise(value) for path, value in routes.items()}
+        handler = type("Handler", (_Routed,), {"routes": self.routes, "seen": []})
+        self.handler = handler
+        socketserver.ThreadingTCPServer.allow_reuse_address = True
+        # Threading, for the same reason FixtureSite needs it: several of these
+        # scripts fetch concurrently, and a single-threaded server deadlocks the
+        # moment one worker holds a connection while another asks for a page.
+        self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
+        self.server.daemon_threads = True
+        self.port = self.server.server_address[1]
+        self.base = f"http://127.0.0.1:{self.port}"
+        self.url = self.base + "/"
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def rewrite(self, needle: str, replacement: str = "") -> "Served":
+        """Point a placeholder in the routed bodies and headers at this origin.
+
+        Needed because a canonical, a sitemap entry and a `Location` header all have
+        to name the port, and the port does not exist until the socket is bound. Same
+        two-pass shape as `_Site._rewrite`, for the same reason.
+        """
+        replacement = replacement or self.base
+        for path, (status, headers, body) in list(self.routes.items()):
+            if isinstance(body, str):
+                body = body.replace(needle, replacement)
+            headers = {k: (v.replace(needle, replacement) if isinstance(v, str) else v)
+                       for k, v in headers.items()}
+            self.routes[path] = (status, headers, body)
+        return self
+
+    @property
+    def requested(self) -> list:
+        return list(self.handler.seen)
+
+    def paths(self, method: str = "GET") -> list:
+        return [p for m, p in self.handler.seen if m == method]
+
+    def stop(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.stop()
+
+
+def _normalise(value) -> tuple:
+    if isinstance(value, (str, bytes)):
+        return (200, {}, value)
+    if len(value) == 2:
+        status, rest = value
+        if isinstance(rest, dict):
+            return (status, rest, "")
+        return (status, {}, rest)
+    return tuple(value)
+
+
+class allow_loopback:
+    """Let the SSRF guard through, and switch pacing off, for the duration.
+
+    A context manager rather than a fixture-wide setting: these are process
+    environment variables read at call time, and a test that leaves them set changes
+    the behaviour of every test that runs after it in the same process — including the
+    ones whose whole point is that loopback is refused by default.
+    """
+
+    VARS = {"SEO_ALLOW_PRIVATE": "1", "SEO_MAX_RPS": "0"}
+
+    def __enter__(self):
+        self.saved = {k: os.environ.get(k) for k in self.VARS}
+        os.environ.update(self.VARS)
+        return self
+
+    def __exit__(self, *exc):
+        for key, was in self.saved.items():
+            if was is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = was
+
+
+def served(routes: dict) -> Served:
+    """`with served({...}) as site:` — see `Served`."""
+    return Served(routes)
 
 
 def offline_env(**extra) -> dict:

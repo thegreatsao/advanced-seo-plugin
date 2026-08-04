@@ -1,12 +1,18 @@
 # Known issues
 
-What is wrong with this plugin as of **0.7.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.8.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.8.0**: issue 2 below, which was the largest open item after the shared
+crawl — every one of the 55 evidence scripts now has a unit test. Writing them found
+sixty-two items that graded a site which answered nothing, five more that could not
+produce the verdict they claimed, and seven that reported a defect in the site when a
+third party was unavailable.
 
 **Fixed in 0.7.0**: the four defects that used to be §6's first four bullets — the
 `<picture>` blind spot that failed sites for following the recommendation, a
@@ -67,63 +73,39 @@ Note what fixing 1 also fixes: robots.txt is honoured once in the shared crawler
 instead of five times, and the request volume stops being a property of how many
 scripts happen to want a crawl.
 
-## 2. 43 of the 55 evidence scripts have no unit test
+## 2. The tests prove a script's shape, not its thresholds
 
-Counted as "no test imports this module", read from the test files' AST. The looser
-count — "the script's name appears somewhere in tests/" — is wrong in the flattering
-direction: several scripts are named only inside a registry audit or a docstring,
-which exercises nothing.
+**Closed in 0.8.0**: all 55 evidence scripts have unit tests, 462 in total, and each
+asserts *the field the registry actually reads*, named in the test. The count is not
+the point — the yield is. Three releases of writing these found, in order: eighteen
+assertions that had never fired, two items that failed sites for serving images the
+recommended way, and then sixty-two items grading a site that refused every
+connection. Roughly one defect per three tests, and the rate did not fall off.
 
-12 are covered: the seven that decide the nineteen `critical` items, plus
-`cwv_metrics.py`, `rendered_audit.py`, `orphan_pages_from_sitemap.py`,
-`image_weight_audit.py` (0.7.0) and part of `local_seo_checker.py`. The seven
-`critical` ones got 34 tests in 0.5.0, each asserting the field the registry actually
-reads, and writing them found five critical items whose rule could not produce the
-verdict it claimed. `image_weight_audit.py` got eight in 0.7.0 and they found two
-items that failed sites for following the recommendation. That yield — two releases
-running, one defect per two or three tests — is the argument for doing the other 43.
+Three layers now, each catching what the others cannot:
 
-**The whole registry is also run against two fixture sites as of 0.6.0**, and every
-script-backed item has to answer them differently or carry a written exemption. That
-is a stronger guarantee than the end-to-end smoke run 0.4.0 added, and still not unit
-coverage: it proves a check can tell a good site from a bad one, not that its
-threshold is the right one or that its output survives a shape a fixture does not
-contain. As of 0.7.0, 77 of 144 script-backed items differ across the pair; of the 67
-that do not, 21 are external APIs no loopback host can reach and the rest carry
-reasons.
+| Layer | What it proves |
+|---|---|
+| `test_evidence.py`, `test_evidence_scripts.py`, `test_evidence_apis.py` | a named field answers a named question, in both directions |
+| `test_contract.py` — the good/broken pair | a check can tell two whole sites apart, or says in writing why it cannot |
+| the dead-origin sweep | nothing is decided about a site that answered nothing |
 
-The rest of the tests defend the *frame* — registry, runner, report. Every verdict
-from those 44 is the output of an untested script read by a well-tested interpreter.
-Between them they decide 31 `high` and 51 `medium` items.
+What remains is not coverage but calibration. **A test can show that a threshold
+fires; it cannot show the threshold is right.** MB-095 warns at 250 KB, CN-039 at 300
+words, SP-216 at 200 ms of blocking time — those numbers came from Google's published
+guidance and from the borrowed scripts, and no test here argues with them. A site
+audited at the wrong threshold gets a confident verdict about the wrong question,
+which is the failure this suite is worst at seeing.
 
-**What makes the next batch expensive is missing scaffolding, not the scripts.** Each
-of the seven needed its own hand-rolled HTTP stub, at a different seam:
-`seo_common.fetch_url` for some, `lib.safe_http.safe_get` for others,
-`requests.post` for the Safe Browsing call, `fetch_robots` for the robots tests. 33
-of the 44 are single-fetch scripts that would each need the same ten lines again. One
-shared harness — serve this HTML with these headers and this robots.txt, whichever
-seam the script reaches for — turns the remaining work from 44 setups into 44
-assertions. Build that first.
+Two narrower gaps, both measured:
 
-Seven of the 44 are the crawlers item 1 will rewrite into readers of a shared
-inventory. Their internals are about to be replaced, so test their **output
-contract** rather than their crawling: that is what the rewrite has to preserve, and
-those tests are the ones that survive it.
-
-Three bugs in the borrowed scripts have been found so far, all by accident rather
-than by a test (`article_seo.py` crashing on `@graph` JSON-LD, `safe_http.py`
-exiting at import, `validate_skill_inventory.py`'s regex that never matched). How
-many remain is unknown, which is the point.
-
-Six of the untested scripts were written here: `gsc_links_csv.py`,
-`gsc_cannibalization.py`, `gsc_url_inspection.py`, `ga4_tag_checker.py`,
-`css_minify_check.py`, `html_validator.py`. (`domain_safety_check.py` was the
-seventh and is now covered — its three `critical` items had never been exercised at
-all, because the user declined a Safe Browsing key and they are NO_DATA on a real
-run.)
-
-The critical ones are done. Next by consequence: the scripts behind the `high`
-items, of which 46 of 61 are machine-decided. HTML fixtures, no network.
+- **Three scripts are exercised only through a stub**: the two Search Console readers
+  and the W3C validator. Nothing here can prove they read Google's *real* response
+  shape, only the shape they were written for. That is the honest limit of an offline
+  suite, and the reason `tools/probe_shapes.py` exists.
+- **The `<picture>` fix nearly shipped broken** because `lxml` and `html.parser`
+  disagree about the DOM, and which one runs depends on import order — see §6. A test
+  now pins both. Nothing pins the other structural queries that do not exist yet.
 
 ## 3. The live path is exercised against one shape of site
 
@@ -184,6 +166,35 @@ be a few lines.
   since the translation shipped.
 
 ---
+
+## Fixed in 0.8.0
+
+Found by writing the last 43 scripts' tests. The first one written found nothing; the
+one written *last* found sixty-two items, which is worth remembering next time the
+cheap sweeping test gets postponed for the careful per-script ones.
+
+- **62 items graded a site that answered nothing.** A script that fetched nothing
+  exits 0 and returns its defaults, and the defaults grade. The entry-reachability
+  gate catches a site dead *before* an audit; nothing caught one that stops answering
+  *during* it. Fixed in the runner for every script at once, plus twelve scripts that
+  recorded no failure for the runner to read.
+- **GEO-007 read `key_valid`, a field never emitted** — NO_DATA on every site,
+  including one hosting its IndexNow key correctly. It outlived MS-031 because the
+  item needs a secret to run, so nothing ever probed its output.
+- **GO-132 could not see the ordinary GA4 duplicate** (two copies of the loader, which
+  is how a theme and a plugin collide), **BL-083 could not see a dead domain** (no
+  status code means no `status >= 400`), and **AR-163 could not fail at all** (a crawl
+  trap needs a set of URLs; the registry passed one).
+- **Seven items reported a site defect when a third party was unavailable.** `None`
+  pre-seeded into a summary reads as a failing value to `eq` and `truthy`; an empty
+  `issues` list reads as "nothing wrong" to `none_severity`. A busy W3C validator
+  became "your HTML has errors"; an expired token became "you do not rank first for
+  your own brand".
+- **A 404 page was analysed as thin content**, so one dead internal link produced a
+  `Critical` finding advising somebody to expand a page that does not exist.
+- **`entity_checker.py` dropped the address half of its own NAP check**, and
+  `jaccard_from_minhash` compared signatures without `strict`, which would bias
+  similarity downwards and lose duplicate pages rather than raising.
 
 ## Fixed in 0.7.0
 

@@ -110,6 +110,10 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
         "issues": [],
         "recommendations": [],
         "error": None,
+        # Filled below when the crawl reached nothing. AR-149 asserts `pages` is
+        # truthy, and an empty dict is falsy, so this is belt and braces — but the
+        # next item to read this script should not have to rediscover it.
+        "fetch_error": None,
     }
 
     # BFS crawl
@@ -174,6 +178,11 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
                         queue.append((link["url"], depth + 1))
 
     result["pages_crawled"] = len(visited)
+    if not result["pages"]:
+        # An empty crawl. AR-149 asserts `pages` is truthy so it lands on
+        # NO_DATA either way, but the runner should hear the reason rather
+        # than infer it from an absence.
+        result["fetch_error"] = "no page could be crawled"
     result["total_internal_links"] = len(all_links)
     result["unique_pages_found"] = len(pages_linking_to)
 

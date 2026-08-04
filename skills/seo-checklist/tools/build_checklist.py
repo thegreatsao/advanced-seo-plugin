@@ -727,7 +727,13 @@ item(161, "medium", L, fix="Clear header and mobile menus")
 item(162, "high", S, "link_profile.py", PAGE,
      {"path": "issues", "none_severity": ["critical", "high"]},
      "Strengthen internal linking, remove orphans")
-item(163, "medium", S, "faceted_nav_audit.py", PAGE,
+# `--from-page`, not the bare URL. A crawl trap is a property of a set of URLs —
+# five parameter variants on one path, or a parameter recurring across many — so
+# handing this script the entry URL alone made the item unable to fail on any site:
+# one URL yields one path and each parameter counted once, and both thresholds need
+# more. With the flag it audits the internal links of the page, which is also the
+# truer question, since a facet becomes a trap when the site links to it.
+item(163, "medium", S, "faceted_nav_audit.py", ["{url}", "--from-page"],
      ISSUES_ANY(),
      "Control faceted navigation: canonical, noindex, robots", warn=NOTHING_SERIOUS())
 item(164, "medium", M, fix="Handle out-of-stock products via 301/410 plus clear UX")

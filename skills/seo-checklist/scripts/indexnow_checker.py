@@ -213,6 +213,19 @@ def run_indexnow_check(site_url: str, key: str) -> dict:
         else:
             results["summary"]["info"] += 1
 
+    # The roll-up GEO-007 reads, and it did not exist: the item asserts `key_valid`
+    # truthy, no such key was ever emitted, and an absent path is NO_DATA — so the
+    # item reported "we could not check this" on every site, including one with a
+    # perfectly hosted key. The same family as MS-031, and it survived longer for a
+    # duller reason: the item needs an IndexNow key to run at all, so
+    # `tools/probe_shapes.py` never had an input for it and the audit that compares
+    # asserted paths against real output had nothing to compare.
+    #
+    # Only the key file decides it. The meta tag and the robots.txt reference are
+    # optional in the protocol; hosting `/{key}.txt` is what proves the origin owns
+    # the key, and that is the whole question.
+    results["key_valid"] = results["checks"]["key_file"].get("passed") is True
+
     return results
 
 

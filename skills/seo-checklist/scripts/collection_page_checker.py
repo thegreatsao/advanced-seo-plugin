@@ -67,6 +67,7 @@ def check_collection_page(source: str, timeout: int = 15) -> dict:
         "source": source,
         "final_url": url,
         "status": fetch.get("status"),
+        "fetch_error": fetch.get("error"),
         "word_count": word_count,
         "filter_parameters": filter_params,
         "product_links_detected": len(set(product_links)),

@@ -10,6 +10,101 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.8.0 — 4 August 2026
+
+**Registry `6e3cca477308` → `f949859fabd1`** (214 items, unchanged in number; one
+item's arguments changed). Tests 357 → 462.
+
+**Every one of the 55 evidence scripts now has a unit test.** The last release left 43
+of them untested and called that phase 2; this is phase 2, and it went the way the
+previous two did — the tests found defects at about one per three tests, and the
+biggest of them was not in a script at all.
+
+### Fixed — 62 items graded a site that answered nothing
+
+The one test worth writing first, and it was written last: every URL-taking script
+pointed at a port where nothing is listening, asserting that no item comes back PASS,
+FAIL or WARN. Sixty-two did.
+
+A script that fetches nothing exits 0 and returns its defaults — `score: 0`,
+`missing_alt: 0`, `issues: []` — and those defaults grade. It is the same failure as
+the run that once scored an unresolvable domain 61/100, one layer further in: the
+entry-reachability gate catches a site that is dead *before* the audit starts, and
+nothing caught a site that stops answering *during* one. Rate limiting, a WAF tripping
+after N requests, a deploy mid-audit.
+
+- The runner now treats a payload that says it read nothing as NO_DATA for every item
+  reading it, with the reason. One place, covering every script — a `fetch_error` or
+  an `error` (singular: the plural forms are per-URL and one refused page out of fifty
+  must not discard the other forty-nine verdicts).
+- Twelve scripts recorded no failure at all, so the runner could not tell. They do
+  now, and two of the twelve needed more than a missing key: `anchor_text_audit.py`
+  and `topical_cluster_mapper.py` counted the unreadable seed as a crawled page, so
+  "zero overused anchors across one page" and "score 100 across one page" were
+  reports about nothing.
+- `url_quality.py` and `faceted_nav_audit.py` are exempt and tested as exempt: they
+  judge the URL string and never fetch it, so a verdict about an unreachable host is
+  correct.
+
+### Fixed — five more verdicts nothing could have produced
+
+- **GEO-007 "Submit URLs via IndexNow" read `key_valid`, which was never emitted.**
+  NO_DATA on every site ever audited, including one hosting its key correctly. The
+  same family as MS-031, and it outlived it for a duller reason: the item needs an
+  IndexNow key to run, so `probe_shapes.py` had no input for it and the audit that
+  compares asserted paths against real output had nothing to compare.
+- **GO-132 "Prevent GA4 Tag Duplication" could not see the ordinary duplicate.**
+  `duplicates` counted `gtag('config', …)` calls only, and GA4 usually ends up
+  installed twice as two copies of the *loader* — a theme plus a plugin, or a
+  hand-added tag beside GTM. The script said "gtag.js loaded 2x" in its `issues`
+  list; the field the registry read could not.
+- **BL-083 could not see a dead domain.** Broken meant `status >= 400`, and a host
+  that does not resolve produces no status at all — so the ordinary form of external
+  link rot was the one form the check missed. A timeout is deliberately still not
+  called broken: that is a fact about the run, not the link, and it now has its own
+  count.
+- **AR-163 "Control Faceted Navigation" could not fail.** A crawl trap is a property
+  of a *set* of URLs — five variants sharing a path, or a parameter recurring three
+  times — and the registry handed the script the entry URL alone, which supplies one
+  of each. `--from-page` audits the page's internal links instead, which is also the
+  truer question: a facet becomes a trap when the site links to it.
+- **CI-017, TE-181, CI-010, MS-023, KW-070, GO-139 and GO-135 reported site defects
+  when a third party was unavailable.** `html_validator.py`,
+  `gsc_cannibalization.py` and `gsc_url_inspection.py` pre-seeded their summary
+  fields with `None` and their `issues` with `[]`. Neither is silence: `eq` and
+  `truthy` read a None as a *failing value*, and `none_severity` reads an empty list
+  as "nothing wrong". So a busy W3C validator became "your HTML has errors", and an
+  expired token became "Google chose a different canonical" and "you do not rank
+  first for your own brand". Absent keys now, which is what NO_DATA is made of.
+
+### Fixed — smaller, found the same way
+
+- **A 404 page was analysed as content.** An error page is HTML, so a site with one
+  dead internal link collected a `Critical` thin-content finding telling somebody to
+  expand a page that does not exist — and it counted against CN-039. A broken link is
+  `broken_links.py`'s finding, made once.
+- **`entity_checker.py` computed whether a street address is visible and dropped the
+  answer**, so half of "check for visible phone/address" did nothing. Found by the
+  linter 0.7.0 turned on.
+- **`jaccard_from_minhash` zipped two signatures without `strict`.** A length mismatch
+  would have biased similarity *downwards* and dropped duplicate pages under the
+  threshold rather than raising.
+
+### Changed
+
+- `tests/harness.py` gained `served()`: a throwaway origin routed from a dict, so a
+  test says what the site returns for each path — status, headers and body — without a
+  directory on disk. That is what made 43 scripts affordable to test; 33 of them are
+  single-fetch scripts that previously needed ten lines of hand-rolled stub each.
+- The good fixture is no longer thin. Its longest page was 288 words against a
+  300-word threshold, so the site the pair calls "good" tripped a `high` content
+  warning — which weakens every claim the pair makes.
+- `BL-083` left `SAME_ON_BOTH`. Its stated reason — "backlink items need a link index
+  this tool does not have" — was wrong: it reads a count that needs no link index, and
+  it answered the same on both fixtures because of the defect above. An exemption
+  outliving a defect rather than a limitation is exactly what that list is checked
+  for.
+
 ## 0.7.0 — 4 August 2026
 
 **Registry `6e3cca477308`, unchanged.** No item changed what it asserts; what

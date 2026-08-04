@@ -128,7 +128,15 @@ def map_clusters(rows: list[dict]) -> dict:
     total_missing = sum(len(cluster["missing_links"]) for cluster in clusters.values())
     total_edges = sum(len(cluster["internal_edges"]) for cluster in clusters.values())
     score = max(0, 100 - min(60, total_missing * 4) - (20 if total_edges == 0 and len(rows) > 1 else 0))
-    return {"page_count": len(rows), "cluster_count": len(clusters), "score": score, "clusters": clusters, "issues": issues}
+    # A score of 100 out of zero pages is not a coherent site, it is an empty crawl.
+    return {"page_count": len(rows), "cluster_count": len(clusters), "score": score,
+            "clusters": clusters, "issues": issues,
+            # A row exists for a page that could not be read — with an empty title
+            # and no links — and one empty row scored 100 out of one "page". Read
+            # means it produced something.
+            "fetch_error": (None if any(r.get("title") or r.get("links")
+                                        for r in rows)
+                            else "no page could be read")}
 
 
 def main() -> None:

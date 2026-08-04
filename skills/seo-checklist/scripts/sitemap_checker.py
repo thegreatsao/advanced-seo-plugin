@@ -138,7 +138,16 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
     # No sitemap anywhere *is* a finding, and downgrading the probe misses must not
     # swallow it. This is the one case where absence is the site's problem: nothing
     # declared a sitemap and none of the conventional names answered.
-    if not result["summary"]["loaded"]:
+    # ...unless nothing answered at all. Every attempt refused at the connection is
+    # not a site without a sitemap, it is a site we never reached — and reporting the
+    # first as the second put "No sitemap found" plus a failing CI-002 on any origin
+    # that dropped connections mid-audit.
+    reached = [e for e in result["sitemaps_checked"] if e.get("status") is not None]
+    if not reached and result["sitemaps_checked"]:
+        result["fetch_error"] = ("no sitemap location could be reached: "
+                                 + (result["sitemaps_checked"][0].get("error")
+                                    or "connection failed"))
+    if not result["summary"]["loaded"] and not result.get("fetch_error"):
         result["issues"].append(issue(
             "error", "No sitemap found",
             result["site"],

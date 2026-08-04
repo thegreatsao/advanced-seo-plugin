@@ -45,6 +45,21 @@ def extract_external_links(html: str, page_url: str, site_url: str) -> list[dict
     return output
 
 
+# What a failed request has to say before we are willing to call a link dead. DNS
+# failure and a refused connection are properties of the link; a timeout, a TLS
+# handshake we could not complete and a rate limit are properties of this run.
+DEAD_ERRORS = ("nodename nor servname", "name or service not known",
+               "temporary failure in name resolution", "no address associated",
+               "nameresolutionerror", "failed to resolve",
+               "connection refused", "connectionrefusederror",
+               "network is unreachable", "no route to host")
+
+
+def _is_dead(error: str | None) -> bool:
+    text = (error or "").lower()
+    return bool(text) and any(marker in text for marker in DEAD_ERRORS)
+
+
 def _check_external_url(url: str, timeout: int) -> dict:
     head = fetch_url(url, method="HEAD", timeout=timeout, allow_redirects=True, max_bytes=0)
     if head.get("status") in (405, 403, None) and head.get("error"):
@@ -83,7 +98,21 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
             row["error"] = fetched.get("error")
         checked.append(row)
 
-    broken = [link for link in checked if link.get("status") and link["status"] >= 400]
+    # A host that does not resolve is broken. It used to be invisible here: the test
+    # was `status >= 400`, and a dead domain never produces a status at all — it
+    # produces an error and a `status` of None. That is the *ordinary* form of external
+    # link rot, and it was the one form this check could not see, so a page full of
+    # links to expired domains reported zero broken links.
+    #
+    # A timeout is deliberately not in that set. It means the request did not finish,
+    # which is a fact about this run rather than about the link, and calling it broken
+    # would put a slow host in a client's fix list as a dead one.
+    unreachable = [link for link in checked
+                   if link.get("status") is None and _is_dead(link.get("error"))]
+    unresolved = [link for link in checked
+                  if link.get("status") is None and not _is_dead(link.get("error"))]
+    broken = [link for link in checked
+              if (link.get("status") and link["status"] >= 400)] + unreachable
     redirects = [link for link in checked if link.get("redirect_chain")]
     low_trust = [link for link in checked if link.get("low_trust_pattern")]
     commercial_without_rel = [link for link in checked
@@ -92,7 +121,16 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
     hosts = Counter(link["host"] for link in checked if link.get("host"))
     issues = []
     if broken:
-        issues.append({"severity": "error", "type": "broken_external_links", "count": len(broken), "message": "External links return 4xx/5xx"})
+        issues.append({"severity": "error", "type": "broken_external_links", "count": len(broken),
+                       "message": "External links are dead: 4xx/5xx, or a host that "
+                                  "does not resolve"})
+    if unresolved:
+        # Reported, and not as a defect in the site: the run could not settle these,
+        # which is the honest thing to say about them.
+        issues.append({"severity": "info", "type": "unchecked_external_links",
+                       "count": len(unresolved),
+                       "message": "External links could not be checked (timeout, TLS "
+                                  "or a refusal aimed at crawlers)"})
     if redirects:
         issues.append({"severity": "warning", "type": "redirecting_external_links", "count": len(redirects), "message": "External links redirect"})
     if low_trust:
@@ -107,7 +145,12 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
             "external_links_found": len(links),
             "unique_external_links": len(deduped),
             "checked_links": len(checked),
+            # BL-083 reads `broken_links`. `unreachable_links` is the subset of it
+            # that answered nothing at all, kept separate so a fix list can say
+            # "this domain is gone" rather than "this link returns 404".
             "broken_links": len(broken),
+            "unreachable_links": len(unreachable),
+            "unchecked_links": len(unresolved),
             "redirecting_links": len(redirects),
             "low_trust_pattern_links": len(low_trust),
             "commercial_rel_review": len(commercial_without_rel),
@@ -116,6 +159,11 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
         "links": checked,
         "issues": issues,
         "errors": errors,
+        # `errors` is per-source-page and stays that way. This says the audit read no
+        # page at all, which is different from "no external link was broken" — and
+        # BL-083 was reporting the second when the first was true.
+        "fetch_error": None if any(p.get("status") == 200 for p in pages)
+                       else "no source page could be read",
     }
 
 

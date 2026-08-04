@@ -33,7 +33,14 @@ def matrix(site: str, paths: list[str] | None = None, timeout: int = 15) -> dict
             "llms_txt_available": llms.get("status") == 200,
             "alignment": "documented" if llms.get("status") == 200 and allowed_all else "robots_only" if not allowed_all else "allowed_without_llms_txt",
         })
-    return {"site": base, "robots_url": robots["url"], "robots_status": robots["fetch"].get("status"), "llms_txt_url": base + "/llms.txt", "llms_txt_status": llms.get("status"), "rows": rows}
+    # `fetch_error` so the runner can tell "this site allows GPTBot" from "nobody
+    # answered". Without it a refused connection produced a full policy matrix built
+    # entirely out of absent robots.txt rules, and GEO-003 graded it.
+    return {"site": base, "robots_url": robots["url"],
+            "robots_status": robots["fetch"].get("status"),
+            "llms_txt_url": base + "/llms.txt", "llms_txt_status": llms.get("status"),
+            "fetch_error": robots["fetch"].get("error") or llms.get("error"),
+            "rows": rows}
 
 
 def main() -> None:

@@ -60,6 +60,10 @@ def _static_checks(source: str, timeout: int = 15) -> dict:
         "source": source,
         "url": final_url or source,
         "fetch": fetched,
+        # "Missing viewport meta tag" is a `critical` finding, and it was being made
+        # about pages that were never fetched: no HTML means no viewport tag either
+        # way. MB-100 reported a critical mobile defect for a refused connection.
+        "fetch_error": fetched.get("error"),
         "viewport_meta": viewport,
         "fixed_width_values": wide_values[:25],
         "sticky_position_count": sticky_hits,

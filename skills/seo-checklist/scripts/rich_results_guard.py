@@ -70,7 +70,8 @@ def main() -> None:
     args = parser.parse_args()
     documents, meta = extract_schema_documents(args.source, timeout=args.timeout)
     result = guard_rich_results(documents)
-    result.update({"source": args.source, "final_url": meta["final_url"]})
+    result.update({"source": args.source, "final_url": meta["final_url"],
+                   "fetch_error": (meta.get("fetch") or {}).get("error")})
     lines = [
         f"Rich results guard for {args.source}",
         f"Nodes: {result['nodes']}  Errors: {result['summary']['errors']}  Warnings: {result['summary']['warnings']}",

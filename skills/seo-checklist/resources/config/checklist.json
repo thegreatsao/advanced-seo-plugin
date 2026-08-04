@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "6e3cca477308",
+  "registry_version": "f949859fabd1",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -3328,7 +3328,8 @@
       "check": {
         "script": "faceted_nav_audit.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--from-page"
         ],
         "requires": "fetch",
         "assert": {
