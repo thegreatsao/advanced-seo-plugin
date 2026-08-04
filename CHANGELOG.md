@@ -70,6 +70,25 @@ read missed while the writer was still fetching, and whose lock then succeeded b
 the writer had just released, went and fetched a page already on disk. It cost one
 duplicate GET in one measured run out of two.
 
+### Fixed — robots.txt fetched five times on a CI runner and once on mine
+
+Its disk cache has a 30-minute TTL and always had, but no lock: 45 evidence scripts
+start inside the same second, all miss a file nobody has written yet, and all fetch.
+`_fetch_robots` cannot go through `safe_request` — that would recurse through
+`robots_allows` — so it now takes the same lock the response cache takes, with the same
+read-again-after-locking and the same fall back to fetching if the wait runs out.
+
+**This was found by the new CI assertion on the first run, not by the local
+measurement**, which is the argument for asserting the count rather than printing it: the
+duplicate depended on process scheduling, so it appeared five times on a GitHub runner
+and once on a developer machine. The answer was correct either way and only the request
+count was wrong, which is exactly the class of defect nothing finds later.
+
+Two fetches of `/robots.txt` remain and are two different things: the policy the crawler
+obeys, and the document `robots_checker.py` audits. Different consumers with different
+failure semantics — the policy fetch fails open, the audit fetch reports — so they are
+not merged, and the CI comment says so where it would otherwise look like a bug.
+
 ### Fixed — two spellings of one request
 
 Neither of these was findable before requests became countable, and both had been

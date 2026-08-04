@@ -2247,6 +2247,31 @@ class OneFetchPerUrl(unittest.TestCase):
             with self.assertRaises(self.sh.RobotsDisallowed):
                 self.sh.crawl_get(site.base + "/open")
 
+    def test_robots_txt_is_fetched_once_however_many_ask(self):
+        """It does not go through the response cache — `_fetch_robots` cannot, or it
+        would recurse — and its own disk cache had no lock, so 45 scripts starting
+        together all missed it and all fetched. Five requests on a CI runner, one on
+        a developer machine: a difference only a counted request shows."""
+        import subprocess
+        with harness.served({"/": self.PAGE, "/a": self.PAGE,
+                             "/robots.txt": (200, {"Content-Type": "text/plain"},
+                                             "User-agent: *\nAllow: /\n")}) as site:
+            code = ("import sys; sys.path.insert(0, %r);"
+                    "from lib.safe_http import crawl_get;"
+                    "print(crawl_get(%r).status_code)" % (SCRIPTS, site.base + "/a"))
+            env = harness.offline_env(**{self.sh.CACHE_DIR_VAR: self.dir})
+            # Its cache is keyed on the origin and lives in the shared rate-limit
+            # directory rather than the run's, so this test has to be told about a
+            # port nothing has seen before — which every `served()` origin is.
+            procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True)
+                     for _ in range(6)]
+            outs = [p.communicate(timeout=60) for p in procs]
+            self.assertEqual([o.strip() for o, _ in outs], ["200"] * 6,
+                             [e for _, e in outs])
+            self.assertEqual(site.paths("GET").count("/robots.txt"), 1)
+
     def test_eight_processes_asking_at_once_make_one_request(self):
         """The runner starts eight workers together, so without single-flight they
         all miss together and eight processes fetch the page the cache exists to

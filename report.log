@@ -1,0 +1,12 @@
+
+SEO Score 77/100   Coverage 50% (106/214)
+  ! The audited host is only reachable from the machine that ran this audit (--allow-private), so this describes a local or staging copy, not the site a visitor or a search engine sees. Anything that needs an outside service — PageSpeed, Search Console, index checks — could not be decided.
+  Report: /Users/antonstovba/.claude/skills/seo-checklist/live.md
+  HTML: /Users/antonstovba/.claude/skills/seo-checklist/live.html
+  LLM queue: /Users/antonstovba/.claude/skills/seo-checklist/live-queue.md
+    -> seo-llm-copy: /Users/antonstovba/.claude/skills/seo-checklist/live-queue-copy.md
+    -> seo-llm-layout: /Users/antonstovba/.claude/skills/seo-checklist/live-queue-layout.md
+    -> seo-llm-locale: /Users/antonstovba/.claude/skills/seo-checklist/live-queue-locale.md
+    -> seo-llm-market: /Users/antonstovba/.claude/skills/seo-checklist/live-queue-market.md
+
+36 item(s) still need an LLM verdict — answer LLM-QUEUE.md, then rerun with --llm-answers

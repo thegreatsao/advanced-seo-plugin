@@ -214,10 +214,52 @@ ROBOTS_TOKEN = "AgenticSEOSkill"
 # the same fan-out the pacing slots exist to avoid.
 ROBOTS_CACHE_TTL = 1800.0
 ROBOTS_MAX_BYTES = 512 * 1024
+# The disk cache is not enough on its own, because the scripts do not start one at a
+# time: 45 of them launch inside the same second, all miss a cache nobody has
+# written yet, and all fetch. It was five requests on a CI runner and one on a
+# developer machine — a difference invisible until the requests were counted, which
+# is why the count in CI is an assertion rather than a printout. So the fetch takes
+# the same lock the response cache takes, and waits this long for whoever has it.
+ROBOTS_FETCH_WAIT = 10.0
 
 
 class RobotsDisallowed(SafeHTTPError):
     """Raised when robots.txt forbids a URL we discovered ourselves."""
+
+
+def _take_lock(path: str):
+    """An exclusive lock on `path`, or None if somebody else holds it. Never waits.
+
+    Shared by the response cache and the robots.txt fetch because they want the same
+    thing: **one process does the work while the others wait for its result.** A
+    failure to create or lock the file returns None, which both callers read as "do
+    it yourself" — being unable to co-ordinate is a reason to duplicate a request,
+    never a reason to fail one.
+    """
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        _close_lock(fd)
+        return None
+    return fd
+
+
+def _close_lock(fd) -> None:
+    if fd is None:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
 
 
 def _robots_cache_path(origin: str) -> str:
@@ -272,6 +314,39 @@ def _fetch_robots(origin: str) -> str:
         return ""
 
 
+def _robots_text_once(origin: str, host: str, path: str) -> str:
+    """Fetch `/robots.txt` at most once per origin, across the whole run.
+
+    The lock is taken and then the cache read *again* — without that second read, a
+    process whose read missed while the holder was still fetching, and whose lock
+    then succeeded because the holder had just released, fetches a file already on
+    disk. Same shape and same reason as `_CacheSlot.lookup`.
+
+    Running out of patience is not an error: we fetch it ourselves, which is what
+    every one of these calls did before there was a lock.
+    """
+    deadline = time.monotonic() + ROBOTS_FETCH_WAIT
+    fd = None
+    try:
+        while True:
+            text = _read_robots_cache(path)
+            if text is not None:
+                return text
+            if fd is not None:
+                break
+            fd = _take_lock(f"{path}.lock")
+            if fd is None and time.monotonic() >= deadline:
+                break
+            if fd is None:
+                time.sleep(_CACHE_POLL)
+        pace(host)
+        text = _fetch_robots(origin)
+        _write_robots_cache(path, text)
+        return text
+    finally:
+        _close_lock(fd)
+
+
 def robots_policy(url: str):
     """`(RobotFileParser, crawl_delay)` for a URL's origin. Never raises."""
     from urllib.robotparser import RobotFileParser
@@ -284,9 +359,7 @@ def robots_policy(url: str):
     text = _read_robots_cache(path)
     if text is None:
         _require_requests()
-        pace(parsed.hostname)
-        text = _fetch_robots(origin)
-        _write_robots_cache(path, text)
+        text = _robots_text_once(origin, parsed.hostname, path)
     if not text.strip():
         return None, 0.0
     parser = RobotFileParser()
@@ -767,21 +840,8 @@ class _CacheSlot:
         self.fd = None
 
     def _try_lock(self) -> bool:
-        try:
-            os.makedirs(os.path.dirname(self.path), exist_ok=True)
-            fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o600)
-        except OSError:
-            return False
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            return False
-        self.fd = fd
-        return True
+        self.fd = _take_lock(self.lock_path)
+        return self.fd is not None
 
     def lookup(self, max_response_bytes: int | None) -> dict | None:
         """The stored entry, or None — in which case this process must fetch.
@@ -820,17 +880,8 @@ class _CacheSlot:
         _write_entry(self.path, meta, body)
 
     def close(self) -> None:
-        if self.fd is None:
-            return
         fd, self.fd = self.fd, None
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        except OSError:
-            pass
-        try:
-            os.close(fd)
-        except OSError:
-            pass
+        _close_lock(fd)
 
 
 def _cache_slot(method: str, url: str, headers: dict, kwargs: dict, *,

@@ -238,10 +238,18 @@ jobs:
           if seen.get(("GET", "/"), 0) != 1:
               bad.append(f'the entry URL was fetched {seen.get(("GET", "/"), 0)}x '
                          f'as a GET, not once')
-          # Two HEADs per sampled page are expected and are two different questions:
-          # redirect_checker asks with redirects off because the hop is the finding,
-          # and the hreflang and cache-header checks ask with them on. Three would
-          # mean something stopped sharing.
+          # Two requests for one URL happen twice here, both deliberately:
+          #
+          #   HEAD on a sampled page — redirect_checker asks with redirects off
+          #   because the hop is what it reports, while the hreflang and cache-header
+          #   checks ask with them on. Different requests, different cache entries.
+          #
+          #   GET /robots.txt — once as the policy the crawler obeys (fetched outside
+          #   safe_request, which cannot consult it without recursing) and once as the
+          #   document robots_checker.py audits. Different consumers with different
+          #   failure semantics: the policy fetch fails open, the audit fetch reports.
+          #
+          # Three of anything would mean something stopped sharing.
           worse = {f"{m} {p}": n for (m, p), n in seen.items() if n > 2}
           if worse:
               bad.append(f"a URL was requested more than twice: {worse}")
