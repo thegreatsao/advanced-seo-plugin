@@ -61,15 +61,21 @@ def tearDownModule():
 def audit(url: str, label: str) -> dict:
     """One full audit, through the runner, as an operator would get it.
 
-    The two browser-measured artifacts are supplied, so the eight items that read
-    them are exercised in both directions rather than reporting NO_DATA on both.
-    They are hand-written and say so in their own `source` field — see
-    tests/fixtures/artifacts/README.md for what that does and does not verify.
+    The operator-supplied inputs are supplied, so the nine items that read them are
+    exercised in both directions rather than reporting NO_DATA on both. All three
+    are hand-written and say so — see tests/fixtures/artifacts/README.md for what
+    that does and does not verify.
+
+    The access log is the one whose two versions differ on purpose rather than
+    incidentally: the good site's log is a crawl that got what it asked for, 304s
+    and all, and the broken site's is a crawl budget going nowhere. Supplying only
+    one of them would let CI-018 pass by never being asked.
     """
     out = os.path.join(SITE.dir, f"{label}.json")
     artifacts = []
     for flag, filename in (("--cwv-json", "cwv.json"),
-                           ("--rendered-json", "rendered.json")):
+                           ("--rendered-json", "rendered.json"),
+                           ("--server-log", "access.log")):
         path = SITE.artifact(label, filename)
         if path:
             artifacts += [flag, path]

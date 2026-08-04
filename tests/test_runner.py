@@ -28,7 +28,8 @@ from checklist_runner import (  # noqa: E402
     NEEDS_THE_OUTSIDE_WORLD, NO_DATA, PASS, WARN, aggregate_pages, artifact_subject,
     audit_target,
     build_plan, choose_profile, diff_runs, evaluate, grade, is_page_level,
-    private_host_skips, reads_artifact, same_page,
+    ctx_keys_of, private_host_skips, reads_artifact, same_page,
+    PAGE_ARTIFACT_KEYS,
     looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
     THIN_ENTRY_WORDS, history_path, load_public_suffixes, previous_run,
     psl_snapshot_date, psl_staleness, resolve, run_script,
@@ -770,13 +771,26 @@ class BrowserArtifacts(unittest.TestCase):
         found = {i["id"] for i in registry if reads_artifact(i)}
         self.assertEqual(found, {"SP-214", "SP-215", "SP-216", "CN-034", "CN-035",
                                  "CN-051", "MB-094", "MB-103", "BL-084", "BL-086",
-                                 "BL-087"})
-        # Every one of them is page-level, which is exactly why they had to be
-        # excluded from sampling by hand: nothing about `requires` distinguishes a
-        # check that reads a file from one that reads the page.
+                                 "BL-087", "CI-018"})
+        # An item reading an artifact that *describes one page* has to be page-level:
+        # the file was measured at one URL, and running the check against a second
+        # page would judge it on numbers taken somewhere else. That is the constraint
+        # the subject guard in the runner enforces, and PAGE_ARTIFACT_KEYS is the
+        # same list.
+        #
+        # It used to be asserted for every supplied file, which held only while all
+        # of them happened to describe a page. Two do not, and they are not the same
+        # case as each other: `links_csv` is a site-wide export answering a
+        # page-level question (this URL's backlinks), while `server_log` is a
+        # site-wide file answering a site-wide one. Neither has a page to check
+        # itself against, so neither belongs in the guard — but only the second is
+        # site-level, so "not page-describing" and "not page-level" are different
+        # properties and collapsing them fails here.
         for item in registry:
-            if reads_artifact(item):
-                self.assertTrue(is_page_level(item), item["id"])
+            if ctx_keys_of(item) & set(PAGE_ARTIFACT_KEYS):
+                self.assertTrue(is_page_level(item), f"{item['id']} reads a file "
+                                                     f"measured at one URL but is "
+                                                     f"not page-level")
 
 
 class ValueMap(unittest.TestCase):

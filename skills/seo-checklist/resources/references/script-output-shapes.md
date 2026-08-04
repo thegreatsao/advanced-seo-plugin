@@ -1169,6 +1169,55 @@ to walk `rows[].decisions` directly; there is no aggregate to assert against.
 `recommendations[]` — array
 `error` — NoneType
 
+### server_log_audit.py
+
+The only script here that reports what crawlers **did** rather than what the site
+offers them, and the only one whose evidence no run could ever collect for itself:
+the fact is in the past. The operator supplies the log (`--server-log`), this reads
+it, CI-018 decides. Same artifact pattern as `cwv_metrics.py`.
+
+`log_file` / `base_url` — str
+`format` — str — `combined` / `common` / `json` / `unknown`
+`lines_read` / `lines_parsed` / `lines_unparsed` — int
+`truncated` — bool (`--max-lines` reached)
+`user_agent_recorded` — NoneType or bool
+`error` — NoneType or str — **set, and everything else left empty, when the log
+  cannot answer**: no such file, nothing parsed, or Common Log Format, which records
+  no User-Agent. "No crawler visited" and "this file cannot say" are opposite
+  findings and the second is never printed as the first
+`bot_identity` — str — a fixed sentence saying the User-Agent is a claim, not proof
+`window.first` / `.last` — NoneType or str (ISO 8601)
+`window.days` — NoneType or int (rounded up, so a partial day is 1 and never 0)
+`by_status_class` — object — counts over every request, bots and humans
+`search` / `ai` — object — the same counts for search and AI crawlers only
+  - class keys: `served`, `not_modified`, `redirect_permanent`, `redirect_temporary`,
+    `rate_limited`, `gone`, `client_error`, `server_error`. **`not_modified` is not
+    waste** — a 304 is the cheapest exchange there is
+`bots.<label>` — object — `kind` (`search`/`ai`/`other`), `requests`, `distinct_ips`,
+  `by_status_class`
+`top_crawled[]` / `top_wasted[]` / `parameters[]` — array (≤20)
+`never_crawled` — NoneType or array — **NoneType when the window is under 7 days**,
+  because below that "never crawled" and "not crawled yet" are the same thing. An
+  empty array would read as "we looked and there were none"
+`crawled_not_offered` — NoneType or array — same gate
+`robots_disallowed_hits[]` — array — paths robots.txt refuses that crawlers still asked
+  for; needs `--inventory`
+`summary.search_bot_requests` / `.ai_bot_requests` / `.search_bot_urls` — int
+`summary.wasted_requests` / `.redirect_requests` / `.not_modified_requests` /
+  `.server_error_requests` — int
+`summary.rates_meaningful` — bool — false under 50 search-bot requests, and the
+  percentages below are then **absent** rather than computed from nothing
+`summary.wasted_pct` / `.redirect_pct` / `.server_error_pct` — float, only when
+  `rates_meaningful`
+`summary.days` / `.search_requests_per_day` — int / float
+`summary.never_crawled_count` / `.crawled_not_offered_count` — int, only with an
+  inventory and a long enough window
+`issues[]` — `severity` (`high`/`medium`/`low`) + `type` + `message`
+
+Every threshold behind those severities is a constant at the top of the script with
+its justification beside it, and each says plainly that it is a convention rather
+than a measurement — see §2 of KNOWN-ISSUES.md.
+
 ### site_crawl.py
 
 Not a registry item's script — the runner runs it once before it builds the plan and

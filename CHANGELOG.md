@@ -10,6 +10,114 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.11.0 — 4 August 2026
+
+**Registry `18b1b372a6ed` → `1c4b3697cc1f`** (214 items, unchanged in number; one item
+moved from manual to script). Tests 493 → 508. Sources now 144 script / 36 llm / 31
+manual / 3 gsc.
+
+**Server logs.** The registry has exactly one item that no request could ever answer,
+and it was `manual` for that reason: CI-018, "Analyze Logs & Manage Crawl Budget". Every
+other check asks the site what it **offers**; this is the one that says what crawlers
+**did**, and the fact is in the past, so no amount of fetching reaches it.
+
+### Added — `server_log_audit.py` and `--server-log`
+
+Same artifact pattern as `cwv_metrics.py` and `rendered_audit.py`: the operator supplies
+the file, the script reads it, the registry decides. It measures nothing and fetches
+nothing. Combined Log Format, Common Log Format and JSON lines, `.gz` read directly
+because a log worth analysing has usually been rotated.
+
+It reports what the crawl cost and where it went: requests per search crawler and per AI
+crawler, counted apart because **an AI crawler pulling 10,000 pages is not Google's crawl
+budget** and one number for both would carry two claims; the status classes those
+requests got; the URLs that returned nothing indexable; and the parameters multiplying one
+page into dozens.
+
+Composed with the shared crawl (`--inventory`), it answers two questions neither half can:
+**sitemap URLs no crawler ever requested**, and **URLs crawlers request that the site
+offers nowhere**. Both are subtractions between what the log saw and what the crawl found.
+
+What it refuses to do is the part worth reading:
+
+- **A log with no User-Agent field reports `error`, not zero crawlers.** Common Log Format
+  records none, so every question here is unanswerable from it — and "no crawler visited"
+  and "this file cannot say which crawlers visited" are opposite findings. Printing the
+  second as the first is the single failure this whole tool is arranged against.
+- **`304` is not waste.** A conditional request answered "not modified" is the cheapest
+  exchange there is; counting it against the site would penalise exactly what
+  `cache_compression_checker.py` asks for two items away.
+- **Never-crawled findings need a window of at least seven days**, and are `null` rather
+  than `[]` below that, because an empty list reads as "we looked and found none". A
+  one-day log would otherwise report every URL on the site as never crawled.
+- **Percentages need at least 50 search-bot requests.** Three requests and one 404 is not
+  "33% waste"; `summary.rates_meaningful` is a field so a rule can read it, and the
+  percentages are absent rather than computed from nothing.
+- **The User-Agent is a claim, not proof.** Confirming Googlebot needs a reverse DNS
+  lookup this script does not make, so `bot_identity` says so in the output — a fixed
+  sentence rather than a comment in the source. Distinct IPs per crawler are reported as
+  data. See KNOWN-ISSUES for what that leaves unanswered.
+
+Every threshold behind a severity is a constant at the top of the file with its
+justification beside it, and each says plainly that it is a **convention, not a
+measurement** — nothing here is calibrated against a corpus of real sites, because none
+was available. §2 of KNOWN-ISSUES.md is about exactly this, and a new script was the wrong
+place to add another unexplained number.
+
+### Fixed — a robots-refused URL reported as a page nobody crawled
+
+Two defects of the same shape, both found while writing this.
+
+`server_log_audit.py` read `sitemap.robots_blocked` for something that lives at the top
+level of the inventory. A wrong key does not raise: it reads as an empty set, the
+subtraction quietly does nothing, and the tool reports **its own politeness as the site's
+defect** — `/private/secret.html` is disallowed in the good fixture's `robots.txt`, and it
+came out as a sitemap URL no crawler had visited. That is the 0.4.0 orphan-pages bug,
+written a second time in a new script.
+
+So the key names now live where they are written: `site_crawl.sitemap_urls()` and
+`site_crawl.robots_refused()`, used by all three readers (`link_profile.py`,
+`orphan_pages_from_sitemap.py`, `server_log_audit.py`). A shared accessor can only be
+misspelled in every caller at once, which is a failure somebody notices.
+
+And `applebot-extended` contains `applebot`, so substring matching counted a **robots.txt
+token no client ever sends** as Apple's search crawler, and therefore as search crawl
+budget. `Google-Extended` escapes it only by not containing `googlebot`. The robots-only
+tokens are now checked first and land in `other`, where they are visible and decide
+nothing. A test pins it.
+
+### Changed — a missing input now says which flag supplies it
+
+`missing input 'cwv_json'` names an internal key rather than the argument that fills it,
+so an item reported NO_DATA for want of a file read as a limitation of the tool instead of
+something a reader could fix with one flag. Three of those have been in reports since
+0.6.0; the fourth is why they were noticed. `HOW_TO_SUPPLY` maps each operator-supplied
+key to the flag, and only those — `html` and `inventory_json` are produced by the run
+itself, so advice there would be advice to do something impossible.
+
+### Tests — 493 → 508
+
+Twelve for the log reader, and the ones that matter are the refusals: a log with no
+User-Agent leaves `summary` and `bots` empty rather than zeroed, a rotated log gives
+byte-identical answers to the plain one, `304`s appear and waste stays at zero, coverage
+findings are `null` without an inventory, and a robots-only token is not counted as a real
+crawler. Three more assert the direction: the good fixture's log produces no finding, the
+broken one produces two `high`, and the AI crawler stays out of the crawl-budget number.
+
+**The contract pair now supplies the log**, the way 0.6.0 started supplying the browser
+artifacts — the good site's is a crawl that got what it asked for, 304s and all, and the
+broken site's is a crawl budget going nowhere. Without both, CI-018 would pass by never
+being asked.
+
+Two existing tests changed scope rather than gaining an exemption. `NothingIsUndecided­
+AboutASiteThatAnswered` asserts something about sites that answered, so it now covers the
+runs that address a site — derived from the argv templates, not listed — and a second test
+asserts the same guarantee for the log runs that *can* be read. And the artifact-item test
+used to require every supplied file to describe one page, which held only while they all
+did; `links_csv` is a site-wide export answering a page-level question and `server_log` is
+a site-wide file answering a site-wide one, so "not page-describing" and "not page-level"
+are now distinguished instead of collapsed.
+
 ## 0.10.1 — 4 August 2026
 
 **Registry unchanged** (`18b1b372a6ed`, 214 items). Tests 492 → 493. `v0.10.0`'s CI failed and this is why; the tag

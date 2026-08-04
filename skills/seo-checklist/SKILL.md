@@ -423,6 +423,15 @@ to audit: a block on that URL is a `critical` finding to report, not a reason to
 audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
 configured rate.
 
+**Server logs, if the operator has one.** `--server-log PATH` is the only evidence here
+about what crawlers *did*; everything else asks what the site offers them, and that fact
+is in the past. It decides CI-018 — crawl budget spent on non-200s, parameters multiplying
+pages, AI crawlers counted apart from search engines — and, with the crawl inventory,
+sitemap URLs nothing requested. Ask for a week or more; below that it declines to report
+never-crawled URLs, because "never" and "not yet" are the same observation in a one-day
+log. A log in Common Log Format records no User-Agent and is refused with that reason
+rather than read as zero crawlers.
+
 **One fetch per URL.** Responses are shared across the whole run through a directory
 the runner creates and deletes with the run, so the same document is not requested 37
 times by 36 single-page scripts. Requests are the smaller half of it: 37 fetches are 37

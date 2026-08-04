@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "18b1b372a6ed",
+  "registry_version": "1c4b3697cc1f",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -490,9 +490,35 @@
       "category_label": "Crawling & Indexing",
       "title": "Analyze Logs & Manage Crawl Budget",
       "severity": "medium",
-      "source": "manual",
-      "effort": "high",
-      "fix": "Analyze server logs for Googlebot UA: crawl frequency, 404s, parameterized URLs, crawl budget"
+      "source": "script",
+      "check": {
+        "script": "server_log_audit.py",
+        "args": [
+          "{server_log}",
+          "--url",
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
+        ],
+        "requires": "crawl",
+        "assert": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high"
+          ]
+        }
+      },
+      "effort": "low",
+      "fix": "Stop the crawl waste the log shows: fix or 410 the URLs in top_wasted, canonicalise or disallow the parameterised ones, and add internal links to sitemap URLs nothing crawled"
     },
     {
       "id": "CI-019",

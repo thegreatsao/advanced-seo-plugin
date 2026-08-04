@@ -562,6 +562,19 @@ RUNS = [
     ("urls_bad", "url_quality.py", ["{bad}shop?utm_source=a&SESSIONID=1&color=red&size=xl&sort=price"]),
     ("video", "video_schema_checker.py", ["{good}video.html"]),
     ("video_bad", "video_schema_checker.py", ["{good}"]),
+    # `server_log_audit.py` reads files and makes no request, so these are the only
+    # runs here with no origin in them. `{logs}` and `{artifacts}` are directories in
+    # the checkout rather than temp copies: the logs carry fixed dates, because the
+    # script refuses to report never-crawled URLs from a window under a week, and a
+    # fixture generated relative to today would make that refusal fire or not
+    # depending on which day the suite ran.
+    ("log_good", "server_log_audit.py", ["{artifacts}good/access.log"]),
+    ("log_waste", "server_log_audit.py", ["{artifacts}broken/access.log"]),
+    ("log_common", "server_log_audit.py", ["{logs}common.log"]),
+    ("log_json", "server_log_audit.py", ["{logs}nginx-json.log"]),
+    ("log_gz", "server_log_audit.py", ["{logs}rotated.log.gz"]),
+    ("log_junk", "server_log_audit.py", ["{logs}unparsable.log"]),
+    ("log_absent", "server_log_audit.py", ["{logs}no-such-file.log"]),
 ]
 
 
@@ -593,12 +606,20 @@ def setUpModule():
 
     def run(spec):
         key, script, template = spec
+        fixtures = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "fixtures")
         argv = [a.replace("{good}", GOOD.url).replace("{bad}", BAD.url)
+                .replace("{logs}", os.path.join(fixtures, "logs") + os.sep)
+                .replace("{artifacts}", os.path.join(fixtures, "artifacts") + os.sep)
                 for a in template]
         proc = subprocess.run(
             [sys.executable, os.path.join(SCRIPTS, script)] + argv + ["--json"],
             capture_output=True, text=True, timeout=180, env=env, cwd=SCRIPTS)
-        if proc.returncode != 0 or not proc.stdout.strip():
+        # A non-zero exit carrying JSON is an answer, not a crash. With `--json`
+        # these scripts put a refusal in the payload and still exit 1 so a shell
+        # notices, and treating that as a failure would hide exactly the cases worth
+        # asserting: a log with no User-Agent field, a file that is not a log at all.
+        if not proc.stdout.strip():
             return key, {"__failed__": f"exit {proc.returncode}: "
                                        f"{(proc.stderr or '')[-400:]}"}
         try:
@@ -645,6 +666,123 @@ class EveryScriptRan(unittest.TestCase):
         unused = [key for key, _, _ in RUNS
                   if source.count(f'"{key}"') < 2]
         self.assertEqual(unused, [], f"runs nothing asserts on: {unused}")
+
+
+class ServerLogs(unittest.TestCase):
+    """CI-018, the one item no request could ever answer.
+
+    Its evidence is in the past, so the tests that matter here are not about
+    arithmetic. They are about the four ways this script could report a confident
+    number about nothing: a log that records no crawler, a window too short for
+    absence to mean anything, a file that is not a log, and a `304` counted as waste.
+    """
+
+    def test_a_clean_crawl_produces_no_findings(self):
+        """The good fixture's log: every sitemap URL fetched, then revalidated.
+        Nothing here should be reported, or the item accuses every healthy site."""
+        d = out("log_good")
+        self.assertEqual(d["error"], None)
+        self.assertEqual([i for i in d["issues"]
+                          if i["severity"] in ("high", "medium")], [])
+
+    def test_revalidation_is_not_waste(self):
+        """A `304` is the cheapest exchange there is: the crawler kept its copy and
+        the server sent no body. Counting it against the site would penalise exactly
+        what `cache_compression_checker.py` asks for two items away."""
+        d = out("log_good")
+        self.assertGreater(d["summary"]["not_modified_requests"], 0,
+                           "the fixture stopped exercising 304s")
+        self.assertEqual(d["summary"]["wasted_requests"], 0)
+        self.assertEqual(d["summary"]["wasted_pct"], 0.0)
+
+    def test_a_wasted_crawl_budget_is_reported_as_high(self):
+        d = out("log_waste")
+        types = {i["type"]: i["severity"] for i in d["issues"]}
+        self.assertEqual(types.get("crawl_budget_wasted"), "high", types)
+        self.assertEqual(types.get("server_errors_to_crawlers"), "high", types)
+        self.assertIn("parameter_crawl", types)
+        self.assertGreater(d["summary"]["wasted_pct"], 20)
+        # And it says which URLs, because "44% wasted" is not an action.
+        self.assertTrue(d["top_wasted"])
+        self.assertTrue(all(row["status"] >= 400 for row in d["top_wasted"]))
+
+    def test_ai_crawlers_are_counted_apart_from_crawl_budget(self):
+        """An AI crawler pulling pages is not Google's crawl budget, and folding the
+        two together would put two claims in one number."""
+        d = out("log_waste")
+        self.assertGreater(d["summary"]["ai_bot_requests"], 0)
+        self.assertIn("GPTBot", d["bots"])
+        self.assertEqual(d["bots"]["GPTBot"]["kind"], "ai")
+        self.assertEqual(d["bots"]["Googlebot"]["kind"], "search")
+        self.assertNotIn("GPTBot", [k for k, v in d["bots"].items()
+                                    if v["kind"] == "search"])
+
+    def test_a_log_with_no_user_agent_refuses_to_answer(self):
+        """Common Log Format records no User-Agent, so every question here is
+        unanswerable. "No crawler visited" and "this file cannot say which crawlers
+        visited" are opposite findings, and reporting the second as the first is the
+        one thing this tool exists to refuse."""
+        d = out("log_common")
+        self.assertIs(d["user_agent_recorded"], False)
+        self.assertEqual(d["format"], "common")
+        self.assertIn("no User-Agent", d["error"])
+        # No zeros left lying around for a rule to read as a pass.
+        self.assertEqual(d["summary"], {})
+        self.assertEqual(d["bots"], {})
+
+    def test_json_lines_are_read_with_nginx_key_names(self):
+        d = out("log_json")
+        self.assertEqual(d["format"], "json")
+        self.assertEqual(d["error"], None)
+        self.assertEqual(d["summary"]["search_bot_requests"], 63)
+        # 1 July to 21 July is a 20-day span, not 21 days of entries.
+        self.assertEqual(d["window"]["days"], 20)
+
+    def test_a_rotated_log_reads_the_same_as_a_plain_one(self):
+        """Not merely that gzip did not crash: the same bytes must give the same
+        answer, because a log worth analysing has usually been rotated."""
+        plain, rotated = out("log_good"), out("log_gz")
+        for field in ("lines_parsed", "search", "by_status_class"):
+            self.assertEqual(rotated[field], plain[field], field)
+        self.assertEqual(rotated["summary"]["search_bot_requests"],
+                         plain["summary"]["search_bot_requests"])
+
+    def test_a_file_that_is_not_a_log_says_so(self):
+        d = out("log_junk")
+        self.assertIn("parsed as an access log", d["error"])
+        self.assertEqual(d["summary"], {})
+
+    def test_a_missing_file_says_so(self):
+        d = out("log_absent")
+        self.assertIn("no such log file", d["error"])
+
+    def test_coverage_findings_need_an_inventory_and_are_absent_without_one(self):
+        """`None`, not `[]`. An empty list reads as "we looked and found none", and
+        these two questions cannot be asked of a log alone at all."""
+        d = out("log_good")
+        self.assertIsNone(d["never_crawled"])
+        self.assertIsNone(d["crawled_not_offered"])
+
+    def test_the_user_agent_is_reported_as_a_claim(self):
+        """It is a lookup table over a string the client chose. Anything that reads
+        this output has to know that, so the caveat is a field rather than a comment
+        in the source."""
+        self.assertIn("not verified", out("log_good")["bot_identity"])
+
+    def test_no_robots_only_token_is_treated_as_a_user_agent(self):
+        """`Google-Extended` and `Applebot-Extended` are robots.txt tokens that
+        nothing ever sends. Matching them would define a crawler that cannot appear
+        and then report zero visits from it forever."""
+        import server_log_audit as sla
+        for token in sla.NOT_USER_AGENTS:
+            self.assertNotIn(token, sla.AI_BOTS)
+            self.assertNotIn(token, sla.SEARCH_BOTS)
+            # `applebot-extended` contains `applebot`, so substring matching read it as
+            # Apple's search crawler and therefore search crawl budget. What matters
+            # is not which bucket it lands in but that it is neither of the two that
+            # decide anything.
+            self.assertNotIn(sla.classify_agent(token)[0], ("search", "ai"),
+                             f"{token} is counted as a real crawler")
 
 
 # ---------------------------------------------------------------------------
@@ -1409,11 +1547,24 @@ class NothingIsUndecidedAboutASiteThatAnswered(unittest.TestCase):
     # site with no sitemap has nothing to read — and the exemption was wrong twice
     # over: a 404 *is* an answer, and `sitemap_checker` already distinguishes "no
     # sitemap here" from "no location responded". Both runs pass without it.
+    #
+    # The *scope* is narrowed, which is a different thing from an exemption and is
+    # derived rather than listed: this asserts something about sites that answered,
+    # so it covers the runs that address a site. Three `server_log_audit.py` runs
+    # address a file chosen to be unreadable — no User-Agent field, not a log, not
+    # there — and "I read nothing" is the correct and required answer for each. A
+    # hand-written exemption list would have said the same thing while also excusing
+    # whatever got added to it later.
     def test_no_script_reports_a_site_it_read_as_unread(self):
         from checklist_runner import unread_reason
+        about_a_site = {key for key, _script, template in RUNS
+                        if any("{good}" in a or "{bad}" in a for a in template)}
+        self.assertGreater(len(about_a_site), 60,
+                           "the scope filter matched almost nothing, so this test "
+                           "would pass without checking anything")
         wrong = []
         for key, payload in OUT.items():
-            if "__failed__" in payload:
+            if "__failed__" in payload or key not in about_a_site:
                 continue
             reason = unread_reason(payload)
             if reason:
@@ -1422,6 +1573,15 @@ class NothingIsUndecidedAboutASiteThatAnswered(unittest.TestCase):
                          "these runs read a served fixture and told the runner they "
                          "read nothing, so every item behind them is NO_DATA on "
                          "every site:\n" + "\n".join(f"  {w}" for w in wrong))
+
+    def test_a_log_that_could_be_read_is_not_reported_as_unread(self):
+        """The same guarantee for the runs the filter above excludes. Two of the
+        seven log runs read their file fine, and those must reach the runner as
+        evidence rather than as a refusal — otherwise CI-018 is NO_DATA whenever a
+        log *is* supplied, which is the AR-149 failure in a new script."""
+        from checklist_runner import unread_reason
+        for key in ("log_good", "log_waste", "log_json", "log_gz"):
+            self.assertEqual(unread_reason(out(key)), "", key)
 
 
 class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):

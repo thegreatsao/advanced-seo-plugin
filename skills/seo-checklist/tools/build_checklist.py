@@ -162,6 +162,9 @@ REQUIRES = {
     "internal_links.py": "crawl",
     "anchor_text_audit.py": "crawl",
     "orphan_pages_from_sitemap.py": "crawl",
+    # Reads two files and fetches nothing, but one of them is the shared crawl's
+    # inventory, so it can only run where a crawl happened.
+    "server_log_audit.py": "crawl",
     "link_profile.py": "crawl",
     "external_link_quality.py": "crawl",
     "broken_links.py": "crawl",
@@ -308,7 +311,27 @@ item(16, "high", S, "image_inventory.py", PAGE,
 item(17, "medium", S, "html_validator.py", PAGE,
      {"path": "summary.errors", "eq": 0},
      "Fix W3C validation errors - they affect rendering and parsing")
-item(18, "medium", M, fix="Analyze server logs for Googlebot UA: crawl frequency, 404s, parameterized URLs, crawl budget")
+# The only item in the registry that no amount of fetching could ever answer, so it
+# was `manual` until something could read the evidence. `server_log_audit.py` reads a
+# log the operator supplies — every other check asks the site what it *offers*, and
+# this is the one that says what crawlers *did*.
+#
+# `{inventory_json}` is required rather than optional, which means the item is
+# NO_DATA in `page` and `archive` mode even with a log. The two findings worth having
+# — sitemap URLs no crawler requested, and URLs crawlers request that the site does
+# not offer — are subtractions between the log and the crawl, and neither half is
+# useful alone. Anyone with a server log is auditing a live site, where the crawl runs.
+#
+# ISSUES_ANY with the NOTHING_SERIOUS warn band, so the script's own three severities
+# carry through: high fails, medium warns, low is informational. The thresholds behind
+# them are in the script beside the numbers they judge, stated as the conventions they
+# are — see §2 of KNOWN-ISSUES.md for why that matters here more than most.
+item(18, "medium", S, "server_log_audit.py",
+     ["{server_log}", "--url", "{url}", "--inventory", "{inventory_json}"],
+     ISSUES_ANY(), warn=NOTHING_SERIOUS(),
+     fix="Stop the crawl waste the log shows: fix or 410 the URLs in top_wasted, "
+         "canonicalise or disallow the parameterised ones, and add internal links "
+         "to sitemap URLs nothing crawled")
 item(19, "high", S, "robots_path_tester.py", ["{url}", "/search", "/cart", "/checkout", "/login"],
      # `allowed` and `true` sit in different fields of a nested dict, so they
      # never appeared in one string and the pattern never fired. The script now

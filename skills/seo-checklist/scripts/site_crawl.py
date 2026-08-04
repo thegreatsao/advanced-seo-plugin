@@ -560,6 +560,24 @@ def html_pages(inventory: dict) -> dict[str, dict]:
             if row.get("html")}
 
 
+# The next two exist so these key names live where they are written instead of in
+# every reader. Three scripts subtract robots-refused URLs from a set, and getting
+# the key wrong does not raise: it reads as an empty set, the subtraction quietly
+# does nothing, and the tool reports **its own politeness as the site's defect**.
+# That bug shipped once, in `orphan_pages_from_sitemap.py` before 0.4.0, and it was
+# written again in `server_log_audit.py`, which looked for `sitemap.robots_blocked`
+# for something that lives at the top level. A shared accessor can only be
+# misspelled in every caller at once, which is a failure somebody notices.
+def sitemap_urls(inventory: dict) -> list[str]:
+    """Every URL the site's sitemaps listed, as page keys."""
+    return list((inventory.get("sitemap") or {}).get("urls") or ())
+
+
+def robots_refused(inventory: dict) -> dict[str, str]:
+    """URL -> why the crawl did not fetch it. Ours to explain, not the site's fault."""
+    return dict(inventory.get("robots_blocked") or {})
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------

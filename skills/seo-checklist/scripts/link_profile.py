@@ -66,7 +66,7 @@ def graph_from_inventory(inventory: dict) -> tuple:
 
     crawled = set(pages)
     base_domain = urlparse(inventory.get("site") or "").netloc
-    robots_refused = set(inventory.get("robots_blocked") or ())
+    robots_refused = set(site_crawl.robots_refused(inventory))
     return graph, crawled, base_domain, robots_refused
 
 

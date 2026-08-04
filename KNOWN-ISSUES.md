@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.10.1**, ranked by consequence, with the
+What is wrong with this plugin as of **0.11.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -218,6 +218,17 @@ be a few lines.
   mis-nesting, choosing `html.parser` everywhere gives up its tolerance of broken
   markup, and both change the substrate under every verdict. It needs measuring on
   real sites, not a default.
+- **A crawler's identity in a server log is a claim, not proof.** `server_log_audit.py`
+  classifies by User-Agent, which is a string the client chose. Confirming Googlebot
+  needs a reverse DNS lookup plus a forward confirmation, and this script makes no
+  network calls at all — partly by design, and partly because the test suite is offline
+  and a DNS-dependent check could not be verified there. So a scraper announcing itself
+  as Googlebot inflates the crawl-budget numbers, and the direction of the error is
+  towards *over*-reporting the crawl. `bot_identity` says this in the output rather than
+  in a comment, and distinct IPs per crawler are reported so a reader can notice one
+  address doing all of it. Verification would be a `--verify-bots` flag; it is not
+  written, because adding an unverifiable network call to a new script's first release
+  is the risk this project keeps refusing.
 - **The rendered-page artifacts are the one input that cannot be checked by
   re-measuring.** 0.7.0 closed the part that could be: an artifact naming a different
   page is refused with the reason. What remains unverifiable is *when* — a trace from

@@ -733,6 +733,31 @@ def measurement(rule: dict, data: dict) -> dict:
     return out
 
 
+# How a reader supplies an input this run did not have.
+#
+# `missing input 'cwv_json'` is accurate and nearly useless: it names an internal
+# key rather than the flag that fills it, so an item reported NO_DATA for want of a
+# file reads as a limitation of the tool instead of a thing the reader can fix with
+# one argument. Three of these have been in the report since 0.6.0 saying exactly
+# that; the fourth is why they were noticed.
+#
+# Only the inputs somebody can actually provide belong here. `html` and
+# `inventory_json` are produced by the run itself, so their absence is a failure
+# already reported with its own reason and a suggestion here would be advice to do
+# something impossible.
+HOW_TO_SUPPLY = {
+    "cwv_json": "pass --cwv-json with a browser performance trace "
+                "(see cwv_metrics.py for the shape)",
+    "rendered_json": "pass --rendered-json with a rendered-page measurement "
+                     "(see rendered_audit.py for the shape)",
+    "links_csv": "pass --links-csv with the Links export from Search Console",
+    "server_log": "pass --server-log with a server access log, ideally a week or "
+                  "more of it (see server_log_audit.py)",
+    "gsc_credentials": "pass --gsc-credentials, or set GSC_CREDENTIALS_PATH, for a "
+                       "service account that can read the property",
+}
+
+
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
@@ -789,7 +814,8 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                     no_input = rejected[key]
                     break
                 if key not in ctx:
-                    no_input = f"missing input '{key}'"
+                    hint = HOW_TO_SUPPLY.get(key, "")
+                    no_input = f"missing input '{key}'" + (f" — {hint}" if hint else "")
                     break
                 args.append(ctx[key])
             else:
@@ -1547,10 +1573,17 @@ def is_page_level(item: dict) -> bool:
 
 
 # Inputs the operator hands us rather than ones we collect: a browser trace, a
-# rendered-page measurement, a Search Console export. Each describes one URL, at
-# one moment, and the file cannot be re-taken for another page — which is what
-# separates them from every other `requires: offline` check.
-ARTIFACT_CTX_KEYS = ("cwv_json", "rendered_json", "links_csv")
+# rendered-page measurement, a Search Console export, a server log. None can be
+# re-taken by this run, which is what separates them from every other check.
+#
+# Two of them describe one URL at one moment, and those are the ones the guard below
+# checks the subject of. `server_log` describes a whole site over weeks and has no
+# subject to check — asking whether it "describes the audited page" is not a
+# question about it. Both kinds are listed here because `reads_artifact` is used for
+# something else: keeping an item that reads a supplied file out of the per-page
+# sample, where it would be run once per page against the same file.
+PAGE_ARTIFACT_KEYS = ("cwv_json", "rendered_json")
+ARTIFACT_CTX_KEYS = PAGE_ARTIFACT_KEYS + ("links_csv", "server_log")
 
 
 def ctx_keys_of(item: dict) -> set[str]:
@@ -1883,6 +1916,12 @@ def main() -> int:
                          "attached; otherwise default (the full registry).")
     ap.add_argument("--no-prompt", action="store_true",
                     help="never ask for a profile, even on a terminal")
+    ap.add_argument("--server-log", default="",
+                    help="server access log (combined format or JSON lines, .gz "
+                         "fine). The only evidence here about what crawlers "
+                         "actually did rather than what the site offers them; "
+                         "CI-018 is NO_DATA without it. A week or more of log is "
+                         "worth much more than a day.")
     ap.add_argument("--no-http-cache", action="store_true",
                     help="fetch every URL again in every script instead of once "
                          "per run. Slower, more requests, and the page-level "
@@ -2116,6 +2155,8 @@ def main() -> int:
         ctx["gsc_property"] = gsc_property
     if a.links_csv:
         ctx["links_csv"] = os.path.expanduser(a.links_csv)
+    if a.server_log:
+        ctx["server_log"] = os.path.expanduser(a.server_log)
     if a.cwv_json:
         ctx["cwv_json"] = os.path.expanduser(a.cwv_json)
     if a.rendered_json:
@@ -2130,7 +2171,7 @@ def main() -> int:
     # numbers nobody took here, which is the exact failure this tool exists to
     # refuse. Rejected means NO_DATA with the reason, not a quiet pass.
     artifacts, rejected = {}, {}
-    for key in ("cwv_json", "rendered_json"):
+    for key in PAGE_ARTIFACT_KEYS:
         if key not in ctx:
             continue
         claimed = artifact_subject(ctx[key])

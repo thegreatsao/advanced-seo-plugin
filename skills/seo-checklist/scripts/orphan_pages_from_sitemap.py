@@ -49,7 +49,7 @@ def reachable_from_inventory(inventory: dict) -> dict:
             # our own politeness — and GO-137 fails on a single orphan. Reported
             # separately: a sitemap listing a robots-blocked URL is a real finding,
             # just not this one.
-            "robots_skipped": sorted(inventory.get("robots_blocked") or ())}
+            "robots_skipped": sorted(site_crawl.robots_refused(inventory))}
 
 
 def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None,
