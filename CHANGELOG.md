@@ -16,7 +16,7 @@ breaking change for whoever read the old number, and saying so is the point.
 is asserted changed; one evidence string did, and it is named below.
 
 **One fetch per URL.** The other half of issue 1 in KNOWN-ISSUES.md. One audit of the
-seven-page fixture, `--sample 3`, counted at the server: **201 requests → 20**, for 17
+seven-page fixture, `--sample 3`, counted at the server: **201 requests → 21**, for 17
 distinct `(method, path)` pairs. All 214 verdicts identical with the cache on and off.
 
 ### Added — the run-scoped response cache
