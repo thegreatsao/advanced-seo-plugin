@@ -6,17 +6,19 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import ipaddress
+import json
 import os
 import socket
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlparse, urlunparse
 
 try:
     import requests
+    from requests.structures import CaseInsensitiveDict
     _REQUESTS_ERROR = ""
 except ImportError:  # pragma: no cover - environment guard
     # Deferred, not fatal. This module is imported transitively by the checklist
@@ -24,6 +26,7 @@ except ImportError:  # pragma: no cover - environment guard
     # calls at all and has no business needing an HTTP library installed. The
     # failure now happens when something actually tries to make a request.
     requests = None
+    CaseInsensitiveDict = dict
     _REQUESTS_ERROR = ("requests library required for network access. "
                        "Install with: pip install requests")
 
@@ -41,9 +44,16 @@ DEFAULT_TIMEOUT = 15
 DEFAULT_MAX_REDIRECTS = 5
 DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 
+# `text/xml;q=0.9` is here rather than in `seo_common.fetch_url`, which is where it
+# used to live. Two spellings of one header is what that was — the two conventions
+# in this tree each wrote their own Accept, differing only by that one media type —
+# and the cost was invisible until the response cache made it countable: every
+# audited page was fetched twice, once per spelling, because a different Accept is
+# a different request and has to be. This list is the union, so no caller loses a
+# type it used to advertise, and one page is now one fetch.
 DEFAULT_HEADERS = {
     "User-Agent": AGENTIC_SEO_USER_AGENT,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
@@ -67,7 +77,16 @@ def default_headers(extra: dict | None = None) -> dict:
 
 
 def normalize_url(url: str, default_scheme: str = "https") -> str:
-    """Normalize a user-supplied URL, adding https:// when no scheme exists."""
+    """Normalize a user-supplied URL, adding https:// when no scheme exists.
+
+    An empty path becomes `/`, which `seo_common.normalize_url` has always done and
+    this one did not. The two forms are not two requests: every HTTP client, this
+    one included, puts `/` on the wire for an empty path, so `http://x` and
+    `http://x/` are the same GET described two ways. Keeping them distinct cost the
+    audit an extra fetch of the site's own home page — once as the entry URL and
+    once as a sampled one — and that only became visible when requests became
+    countable.
+    """
     if not url:
         raise SafeHTTPError("URL is required")
     parsed = urlparse(url)
@@ -78,7 +97,7 @@ def normalize_url(url: str, default_scheme: str = "https") -> str:
         raise SafeHTTPError(f"Invalid URL scheme: {parsed.scheme}")
     if not parsed.hostname:
         raise SafeHTTPError("URL must include a hostname")
-    return urlunparse(parsed)
+    return urlunparse(parsed._replace(path=parsed.path or "/"))
 
 
 # ---------------------------------------------------------------------------
@@ -505,6 +524,341 @@ def _consume_capped(response, max_response_bytes: int | None):
     return response
 
 
+# ---------------------------------------------------------------------------
+# The run-scoped response cache
+# ---------------------------------------------------------------------------
+
+# One audit of a seven-page site fetched the entry URL 37 times. Nothing was
+# written badly to make that happen: 36 evidence scripts each need the page they
+# are judging, each is its own process, and nothing connected them. The shared
+# crawl (0.9.0) removed the site-wide half of the same problem and left this as the
+# largest measurable waste — 37 requests for one document, paced four a second, so
+# nine seconds of an audit spent asking a server a question it already answered.
+#
+# Requests are the smaller half of what it cost. **Thirty-seven fetches are
+# thirty-seven different documents** whenever the page is not static: a CMS
+# rotating a hero image, a deploy landing mid-audit, an A/B test. Items would then
+# disagree about the page and every one of them would be right about what it read,
+# which is precisely the failure the crawl inventory removed for the site. This
+# removes it for the page: every item that reports on a URL now reports on the same
+# bytes, and that is the guarantee, with the saved requests as the side effect.
+#
+# It is still a cache, so the way it fails is by answering with something that is
+# no longer true — the one failure this tool exists to refuse. Hence:
+#
+#   * **Off unless a run turns it on.** `SEO_HTTP_CACHE` names the directory; the
+#     runner makes one per run and deletes it afterwards. A script run by hand
+#     caches nothing, and there is no shared cache that could outlive an audit and
+#     feed the next one a stale page.
+#   * **Only real responses.** A timeout, a refused connection, a redirect loop and
+#     a robots.txt refusal are not answers and are never stored, so one transient
+#     failure cannot become every item's failure. Any status code *is* an answer,
+#     including 404 and 503 — and re-asking a server that just said 503 thirty-six
+#     more times is the opposite of the politeness the pacing exists for.
+#   * **GET and HEAD only.** Never POST: `indexnow_checker` submits URLs, and
+#     replaying a submission from disk would report something that did not happen.
+CACHE_DIR_VAR = "SEO_HTTP_CACHE"
+# Belt to the per-run directory's braces. The directory is removed when the run
+# ends, so nothing should ever be this old; a run killed with SIGKILL leaves one
+# behind, and an entry from it must not be able to answer anything.
+CACHE_TTL = 900.0
+CACHE_MAX_BODY = 8 * 1024 * 1024
+CACHEABLE_METHODS = ("GET", "HEAD")
+# In the key, so a change to what an entry contains cannot be read by code
+# expecting the old shape. A mismatch is a miss, not an error.
+CACHE_ENTRY_VERSION = 1
+_CACHE_POLL = 0.05
+
+
+def cache_dir() -> str:
+    """The directory this run caches responses in, or "" when caching is off."""
+    return os.environ.get(CACHE_DIR_VAR, "").strip()
+
+
+def _cache_key(method: str, url: str, headers: dict, allow_redirects: bool,
+               kwargs: dict) -> str:
+    """A digest of everything that could change the response, and nothing else.
+
+    `timeout` is absent: it decides whether an answer arrives, never what the
+    answer says, and a caller with a longer patience should be allowed to use what
+    a shorter one managed to get. `max_response_bytes` is absent because a complete
+    body satisfies any cap large enough to hold it — `_cap_allows` decides that per
+    lookup, which is what lets the entry URL's callers share one entry despite
+    asking for 1.5MB, 2MB and 5MB of it.
+
+    `allow_redirects` is in: with it off the response *is* the redirect, and
+    serving the destination to a caller that asked for the hop would hide the hop.
+
+    Anything else a caller passes goes in by `repr`. An argument this function has
+    never heard of has to make the key *differ*; a repr that is unstable across
+    processes (an object's address, say) costs an extra request, which is the
+    failure that leaves the answer correct.
+    """
+    material = "\n".join([
+        str(CACHE_ENTRY_VERSION), method, url, str(bool(allow_redirects)),
+        repr(sorted((str(k).lower(), str(v)) for k, v in headers.items())),
+        repr(sorted((str(k), repr(v)) for k, v in kwargs.items() if k != "verify")),
+    ])
+    return hashlib.sha256(material.encode("utf-8", "replace")).hexdigest()[:40]
+
+
+def _read_entry(path: str) -> dict | None:
+    """The stored response, or None when there is nothing usable at `path`.
+
+    Every failure is None — a half-written file, an entry from another version, one
+    older than the TTL. A cache that can raise would put a defect of its own in
+    front of 36 scripts at once.
+
+    The stored byte count is checked against the body actually on disk. A length
+    that does not match is a torn write, and serving half a document as though it
+    were the page is the exact lie this module is arranged to prevent.
+    """
+    try:
+        if time.time() - os.path.getmtime(path) > CACHE_TTL:
+            return None
+        with open(path, "rb") as f:
+            blob = f.read()
+    except OSError:
+        return None
+    head, _, body = blob.partition(b"\n")
+    try:
+        meta = json.loads(head.decode("ascii"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(meta, dict) or meta.get("v") != CACHE_ENTRY_VERSION:
+        return None
+    if meta.get("bytes") != len(body):
+        return None
+    meta["body"] = body
+    return meta
+
+
+def _write_entry(path: str, meta: dict, body: bytes) -> None:
+    """Write one entry, atomically. Never raises.
+
+    JSON header line, then the raw body — deliberately not pickle. A reader of a
+    pickled entry executes whatever the writer put there, and this directory's
+    whole job is to be read by 36 other processes.
+    """
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}"
+        with open(tmp, "wb") as f:
+            # ensure_ascii, so the header cannot contain a raw newline and the
+            # partition above always finds the real boundary.
+            f.write(json.dumps(meta, ensure_ascii=True).encode("ascii"))
+            f.write(b"\n")
+            f.write(body)
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError):
+        # A header that will not serialise means no entry, not a failed request.
+        try:
+            os.unlink(f"{path}.{os.getpid()}")
+        except OSError:
+            pass
+
+
+def _cap_allows(meta: dict, max_response_bytes: int | None) -> bool:
+    """Whether a caller's size cap can accept the stored body.
+
+    Stored bodies are complete by construction — `_consume_capped` raises rather
+    than truncating — so the only question is whether this caller asked for less
+    than the whole thing. When it did, this is a miss and the request goes out and
+    raises exactly as it would have without a cache. Truncating the stored body to
+    fit would be inventing a document.
+    """
+    if max_response_bytes is None:
+        return True
+    return int(meta.get("bytes", 0)) <= max_response_bytes
+
+
+def _hop_from(entry: dict):
+    """One redirect in a restored chain. Callers read `.url` and `.status_code`."""
+    hop = requests.Response()
+    hop.status_code = entry.get("status")
+    hop.url = entry.get("url", "")
+    hop.headers = CaseInsensitiveDict(entry.get("headers", {}))
+    hop._content = b""
+    hop._content_consumed = True
+    return hop
+
+
+def _response_from_entry(meta: dict):
+    """A `requests.Response` a caller cannot tell from the one that was fetched.
+
+    `elapsed` is restored rather than zeroed, and that is not cosmetic: three
+    scripts report response time from it (`broken_links`, `redirect_checker`,
+    `lcp_subparts`). A restored elapsed is a real measurement of a real request to
+    that URL, which is what those scripts claim to report. Zero would be a
+    fabricated performance number, and `None` would crash them.
+    """
+    response = requests.Response()
+    response.status_code = meta.get("status")
+    response.reason = meta.get("reason") or ""
+    response.url = meta.get("url", "")
+    response.headers = CaseInsensitiveDict(meta.get("headers", {}))
+    response.encoding = meta.get("encoding")
+    response.elapsed = timedelta(seconds=float(meta.get("elapsed") or 0.0))
+    response._content = meta.get("body", b"")
+    response._content_consumed = True
+    response.history = [_hop_from(h) for h in meta.get("chain", ())]
+    # Not part of `requests`; a marker for tests and for anyone reading a trace.
+    response.from_cache = True
+    return response
+
+
+def _entry_from_response(response, asked: dict) -> dict:
+    return {
+        "v": CACHE_ENTRY_VERSION,
+        # What was asked, beside what came back. The key is a digest and a digest
+        # cannot be read, so without this an audit that fetched a page three times
+        # gives no way to find out why — and "why are there three entries for one
+        # URL" is the question this cache exists to answer. `url` below is where the
+        # request landed; `asked` is what went out.
+        "asked": asked,
+        "status": response.status_code,
+        "reason": response.reason or "",
+        "url": response.url,
+        "headers": dict(response.headers),
+        "encoding": response.encoding,
+        "elapsed": response.elapsed.total_seconds() if response.elapsed else 0.0,
+        "chain": [{"status": h.status_code, "url": h.url, "headers": dict(h.headers)}
+                  for h in (response.history or ())],
+    }
+
+
+def _robots_permits_entry(meta: dict) -> None:
+    """Raise if a stored redirect chain crosses a path robots.txt forbids.
+
+    The requested URL was gated before the lookup; its redirect hops were not, and
+    a cache hit must not become a way to follow a redirect the live path would have
+    refused. Without this, any site that redirects could opt out of the rule by
+    being fetched twice. robots.txt is itself cached on disk, so the re-check costs
+    nothing.
+    """
+    hops = [h.get("url", "") for h in meta.get("chain", ())] + [meta.get("url", "")]
+    for hop in hops[1:]:
+        allowed, _ = robots_allows(hop)
+        if not allowed:
+            raise RobotsDisallowed(
+                f"robots.txt disallows {hop} (redirected from {hops[0]})")
+
+
+class _CacheSlot:
+    """One key's place in the run cache, and the right to be who fetches it.
+
+    Lookup and single-flight are one object because they are one decision: either
+    this process has the answer or it is the process that goes and gets it while
+    the others wait. Without the waiting the cache would save almost nothing here —
+    the runner starts eight workers at once, they miss together, and eight
+    processes fetch the page the cache exists to fetch once.
+
+    Waiting is bounded by the caller's own timeout, and running out is not an
+    error: it falls back to fetching, which is what every one of these calls did
+    before this cache existed. A cache must not be able to turn one slow server
+    into an audit that hangs.
+    """
+
+    def __init__(self, directory: str, key: str, deadline: float, asked: dict):
+        self.path = os.path.join(directory, f"{key}.resp")
+        self.lock_path = f"{self.path}.lock"
+        self.deadline = deadline
+        self.asked = asked
+        self.fd = None
+
+    def _try_lock(self) -> bool:
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        except OSError:
+            return False
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            return False
+        self.fd = fd
+        return True
+
+    def lookup(self, max_response_bytes: int | None) -> dict | None:
+        """The stored entry, or None — in which case this process must fetch.
+
+        The loop is the single-flight: read, then try to become the fetcher, then
+        wait for whoever already is. A holder that dies releases the lock without
+        writing an entry, and the next waiter takes it — the fallback is another
+        request, never a wedge.
+
+        **The read is repeated after the lock is taken**, and that is not belt and
+        braces. Without it, a process whose read misses while the writer is still
+        fetching, and whose lock then succeeds because the writer has just
+        released, goes and fetches a page that is already on disk. It cost one
+        duplicate GET of the entry URL in one measured run out of two — a race that
+        only ever costs a request, which is exactly why nothing would have found it
+        later.
+        """
+        while True:
+            meta = _read_entry(self.path)
+            if meta is not None:
+                # Present but too large for this caller's cap: a miss that no
+                # amount of waiting improves, and not ours to replace.
+                return meta if _cap_allows(meta, max_response_bytes) else None
+            if self.fd is not None:
+                return None          # we hold the lock and there is nothing: ours
+            if not self._try_lock():
+                if time.monotonic() >= self.deadline:
+                    return None
+                time.sleep(_CACHE_POLL)
+
+    def store(self, response, body: bytes) -> None:
+        if len(body) > CACHE_MAX_BODY:
+            return
+        meta = _entry_from_response(response, self.asked)
+        meta["bytes"] = len(body)
+        _write_entry(self.path, meta, body)
+
+    def close(self) -> None:
+        if self.fd is None:
+            return
+        fd, self.fd = self.fd, None
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def _cache_slot(method: str, url: str, headers: dict, kwargs: dict, *,
+                allow_redirects: bool, stream: bool, session, timeout):
+    """The slot for this request, or None when it must not be cached at all.
+
+    Each exclusion is a way a restored response would differ from a real one: a
+    body nobody has read (`stream`), a request that changes something on the server
+    (anything but GET and HEAD), and a session whose cookie jar a replayed response
+    would not update. Nothing in this tree passes `session` today; it is excluded
+    anyway, because a cache that has to be re-examined whenever somebody adds an
+    argument is a cache nobody will re-examine.
+    """
+    directory = cache_dir()
+    if not directory or stream or session is not None:
+        return None
+    if method not in CACHEABLE_METHODS:
+        return None
+    key = _cache_key(method, url, headers, allow_redirects, kwargs)
+    try:
+        patience = float(timeout or 0.0)
+    except (TypeError, ValueError):
+        patience = float(DEFAULT_TIMEOUT)
+    asked = {"method": method, "url": url, "headers": dict(headers),
+             "allow_redirects": bool(allow_redirects)}
+    return _CacheSlot(directory, key, time.monotonic() + max(patience, 1.0), asked)
+
+
 def safe_request(
     method: str,
     url: str,
@@ -538,6 +892,12 @@ def safe_request(
     A `Crawl-delay` in robots.txt is honoured when it is *slower* than the
     configured rate. Faster is ignored — the site cannot talk us into being less
     polite than we chose to be.
+
+    When `SEO_HTTP_CACHE` names a directory, an identical GET or HEAD made earlier
+    in the same run is answered from it instead of going out again. See the cache
+    section above for what "identical" means and what is never stored. The robots
+    gate runs *before* the lookup, and a stored redirect chain is re-checked against
+    robots.txt on the way out, so caching cannot become a way around either.
     """
     _require_requests()
     current = assert_safe_url(url)
@@ -552,50 +912,83 @@ def safe_request(
         if not allowed:
             raise RobotsDisallowed(f"robots.txt disallows {current} for {ROBOTS_TOKEN}")
 
-    for _ in range(max_redirects + 1):
-        response = _paced_request(requester, method, current, request_headers,
-                                  timeout, kwargs, robots_delay)
+    slot = _cache_slot(method, current, request_headers, kwargs,
+                       allow_redirects=allow_redirects, stream=stream,
+                       session=session, timeout=timeout)
+    try:
+        if slot is not None:
+            meta = slot.lookup(max_response_bytes)
+            if meta is not None:
+                if respect_robots:
+                    _robots_permits_entry(meta)
+                return _response_from_entry(meta)
 
-        if not (allow_redirects and response.is_redirect):
-            response.history = history
-            if method == "HEAD":
-                response.close()
-                return response
-            if stream:
-                return response
-            return _consume_capped(response, max_response_bytes)
+        for _ in range(max_redirects + 1):
+            response = _paced_request(requester, method, current, request_headers,
+                                      timeout, kwargs, robots_delay)
 
-        location = response.headers.get("Location")
-        if not location:
-            response.history = history
-            if method == "HEAD":
-                response.close()
-                return response
-            if stream:
-                return response
-            return _consume_capped(response, max_response_bytes)
+            if not (allow_redirects and response.is_redirect):
+                response.history = history
+                return _finish(response, slot, method, stream, max_response_bytes)
 
+            location = response.headers.get("Location")
+            if not location:
+                response.history = history
+                return _finish(response, slot, method, stream, max_response_bytes)
+
+            response.close()
+            history.append(response)
+            if len(history) > max_redirects:
+                raise requests.exceptions.TooManyRedirects(
+                    f"Too many redirects (max {max_redirects})")
+
+            next_url = assert_safe_url(urljoin(current, location))
+            if respect_robots:
+                # A redirect can land on a path robots.txt forbids, and following it
+                # because the first hop was allowed would make the rule trivially
+                # avoidable by any site that redirects.
+                allowed, robots_delay = robots_allows(next_url)
+                if not allowed:
+                    raise RobotsDisallowed(
+                        f"robots.txt disallows {next_url} (redirected from {current})")
+            if response.status_code == 303 and method not in ("GET", "HEAD"):
+                method = "GET"
+                kwargs.pop("data", None)
+                kwargs.pop("json", None)
+            current = next_url
+
+        raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
+    finally:
+        # Whatever happened, stop making the other processes wait for us. An
+        # exception on the way out is why this is a `finally`: a request that failed
+        # stores nothing, and the next waiter has to be free to try it itself.
+        if slot is not None:
+            slot.close()
+
+
+def _finish(response, slot, method: str, stream: bool,
+            max_response_bytes: int | None):
+    """Hand back the response that ends a request, storing it if we may.
+
+    The body is read here rather than inside the cache, because this is the one
+    place that knows what "the body" is: empty for HEAD, unread for a stream, and
+    otherwise whatever `_consume_capped` allowed through. A stream is never stored —
+    the caller has not read it yet, and a cache cannot store what nobody has seen.
+    """
+    if method == "HEAD":
         response.close()
-        history.append(response)
-        if len(history) > max_redirects:
-            raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
-
-        next_url = assert_safe_url(urljoin(current, location))
-        if respect_robots:
-            # A redirect can land on a path robots.txt forbids, and following it
-            # because the first hop was allowed would make the rule trivially
-            # avoidable by any site that redirects.
-            allowed, robots_delay = robots_allows(next_url)
-            if not allowed:
-                raise RobotsDisallowed(
-                    f"robots.txt disallows {next_url} (redirected from {current})")
-        if response.status_code == 303 and method not in ("GET", "HEAD"):
-            method = "GET"
-            kwargs.pop("data", None)
-            kwargs.pop("json", None)
-        current = next_url
-
-    raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
+        # A HEAD has no body, and a restored one has none either. Deliberately not
+        # `response.content`: the connection is closed and reading it now would be
+        # asking for bytes that were never going to arrive.
+        if slot is not None:
+            slot.store(response, b"")
+        return response
+    if stream:
+        return response
+    _consume_capped(response, max_response_bytes)
+    if slot is not None:
+        slot.store(response, response.content)
+    return response
 
 
 def _rate_for(crawl_delay: float) -> float | None:

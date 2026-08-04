@@ -10,6 +10,116 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.10.0 — 4 August 2026
+
+**Registry unchanged** (`18b1b372a6ed`, 214 items). Tests 473 → 492. Nothing about what
+is asserted changed; one evidence string did, and it is named below.
+
+**One fetch per URL.** The other half of issue 1 in KNOWN-ISSUES.md. One audit of the
+seven-page fixture, `--sample 3`, counted at the server: **201 requests → 20**, for 17
+distinct `(method, path)` pairs. All 214 verdicts identical with the cache on and off.
+
+### Added — the run-scoped response cache
+
+`lib/safe_http.py` gained a response cache, which is where it belongs: all four of this
+tree's HTTP seams converge on `safe_request`. `SEO_HTTP_CACHE` names a directory, the
+runner creates one per run and deletes it when the run ends, and without the variable
+nothing is cached at all — a script run by hand behaves exactly as it did in 0.9.0, and
+no directory survives to answer a later audit.
+
+**Requests were the smaller half of what this fixes.** Thirty-six evidence scripts each
+need the page they are judging and each is its own process, so one document was fetched
+37 times — and 37 fetches are 37 *different* documents the moment a page is not static.
+Items could disagree about a page with every one of them right about what it read. That
+is the failure the shared crawl removed for the site in 0.9.0; this removes it for the
+page. `http_cache` is in the JSON artifact so a reader comparing verdicts that disagree
+can tell which kind of run produced them.
+
+What is never answered from disk, each because a stored answer would differ from a live
+one:
+
+- **A request that failed.** A timeout, a refused connection, a redirect loop and a
+  `robots.txt` refusal are not answers. One transient failure must not become every
+  item's failure — `NO_DATA` on 106 items is not more honest for being consistent. Any
+  status code *is* an answer, 404 and 503 included; asking a server that just said 503
+  thirty-six more times is the opposite of what the pacing is for.
+- **A `POST`.** `indexnow_checker.py` submits URLs; replaying that from disk would
+  report something that did not happen.
+- **A body nobody read** (`stream=True`), and any request carrying a `session`, whose
+  cookie jar a replayed response would not update.
+
+The key is what could change the answer — method, URL, request headers,
+`allow_redirects` — and nothing that could not. `timeout` is excluded because it decides
+whether an answer arrives, never what it says. `max_response_bytes` is excluded because
+a complete body satisfies any cap large enough to hold it, which is what lets callers
+asking for 500KB, 1.5MB, 2MB and 5MB of one page share one entry; a cap *smaller* than
+the stored body is a miss, and the request goes out and fails exactly as before, because
+trimming the body to fit would be inventing a document.
+
+`robots.txt` is not avoidable through the cache: the gate runs before the lookup, and a
+stored redirect chain is re-checked hop by hop on the way out. Without that, any site
+that redirects could opt out of the rule by being fetched twice — once by something that
+does not consult `robots.txt`, then from disk by something that does.
+
+Single-flight, per key, through a lock file. The runner starts eight workers together;
+without it they miss together and eight processes fetch the page the cache exists to
+fetch once. Waiting is bounded by the caller's own timeout and running out falls back to
+fetching: a cache must not be able to turn one slow server into a hung audit. The lock
+is taken *and then the entry is read again* — without that second read, a process whose
+read missed while the writer was still fetching, and whose lock then succeeded because
+the writer had just released, went and fetched a page already on disk. It cost one
+duplicate GET in one measured run out of two.
+
+### Fixed — two spellings of one request
+
+Neither of these was findable before requests became countable, and both had been
+fetching pages twice for as long as the code existed.
+
+- **`Accept`.** `seo_common.fetch_url` sent its own, differing from `default_headers()`
+  by one media type (`text/xml;q=0.9`). Both were reasonable; together they made every
+  audited page two requests, because a different `Accept` is a different request and has
+  to be. `DEFAULT_HEADERS` now carries the union and `fetch_url` overrides nothing, so
+  no caller advertises less than it did. A test refuses a second spelling.
+- **The trailing slash.** `lib/safe_http.normalize_url` left an empty path empty, while
+  `seo_common.normalize_url` has always made it `/`. They are not two requests: every
+  HTTP client puts `/` on the wire for an empty path. The disagreement fetched the
+  site's own home page twice — once as the entry URL, once as a sampled one. A test
+  requires the two normalisers to agree.
+
+### Changed — one measurement instead of three
+
+`elapsed` travels with a cached response rather than being zeroed, because
+`broken_links.py`, `redirect_checker.py` and `lcp_subparts.py` report response time from
+it and a zero would be a fabricated performance number. So **TECH-003's TTFB is now the
+run's single fetch of the page** rather than `lcp_subparts.py`'s own request: on the
+fixture it moved from 1ms to 3ms, the only one of 214 evidence strings that changed at
+all. Deliberate — one measurement everything shares beats three scripts reporting three
+TTFBs for one page. `--no-http-cache` restores the old behaviour.
+
+### Added — `--no-http-cache`
+
+Every script fetches for itself. Slower, more requests, and the page-level items may
+then be reporting on different copies of a page that changed mid-audit — use it to find
+out whether the cache is what a surprising result is about, or to time a single request
+in isolation.
+
+### Tests — 473 → 492
+
+Nineteen new tests, all offline on loopback. The ones that matter are not the hit-rate
+ones: a failure is never stored, a `POST` goes out every time, a stream is not stored, a
+cached hit still refuses a path `robots.txt` forbids, a torn entry is a miss rather than
+half a page, a smaller byte cap refetches rather than truncating, a restored response
+matches the fetched one field by field including `elapsed`, **eight separate processes
+asking at once make one request**, and the runner's cache directory does not outlive the
+run. Two more pin the duplication fixes above so they cannot come back by being locally
+sensible somewhere.
+
+CI now empties the fixture server's log before the audit — so the printed count is the
+audit's own rather than including the readiness probes — and asserts three things about
+it: at most 40 requests, the entry URL fetched exactly once as a `GET`, and no URL
+requested more than twice. The one legitimate pair is `HEAD` with redirects on and off,
+which are two different questions.
+
 ## 0.9.0 — 4 August 2026
 
 **Registry `f949859fabd1` → `18b1b372a6ed`** (214 items, unchanged in number; ten

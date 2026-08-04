@@ -17,10 +17,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import ipaddress
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -83,6 +85,41 @@ def run_script(script_name: str, args: list, timeout: int = 120) -> dict:
     except Exception as e:  # noqa: BLE001 - surfaced to the caller as NO_DATA
         return {"error": f"[{script_name}] {type(e).__name__}: {e}",
                 "error_kind": "crash"}
+
+
+def open_http_cache() -> str:
+    """Open this run's response cache and return its directory, or "" on failure.
+
+    One directory per run, announced to the evidence scripts through the
+    environment because they are separate processes — the same reason the pacing
+    slots and `--allow-private` travel that way. Two things follow from it being
+    per run rather than global, and both are the point:
+
+    * Every item that reports on a URL reports on the same bytes. Before this, 36
+      single-page scripts fetched the entry page 36 times, and on a site that is not
+      static those were 36 different documents — items disagreeing about a page with
+      every one of them right about what it read.
+    * Nothing survives the run. There is no cache directory to go stale between
+      audits, so a second audit an hour later cannot be answered by the first.
+
+    Removal is registered with `atexit` rather than written at each return, because
+    `main` leaves by half a dozen paths and a cache that outlives its run on the
+    unusual one is exactly the failure worth preventing. A run killed outright
+    leaves the directory behind; `safe_http.CACHE_TTL` is why an entry from it can
+    still not answer anything.
+    """
+    try:
+        directory = tempfile.mkdtemp(prefix="seo-http-")
+    except OSError as exc:
+        # Not fatal, and not silent: without a cache the audit is the audit we
+        # shipped in 0.9.0, only slower.
+        print(f"  response cache unavailable ({exc}); every script fetches for "
+              f"itself", file=sys.stderr)
+        return ""
+    from lib.safe_http import CACHE_DIR_VAR
+    os.environ[CACHE_DIR_VAR] = directory
+    atexit.register(shutil.rmtree, directory, ignore_errors=True)
+    return directory
 
 
 # ---------------------------------------------------------------------------
@@ -1846,6 +1883,12 @@ def main() -> int:
                          "attached; otherwise default (the full registry).")
     ap.add_argument("--no-prompt", action="store_true",
                     help="never ask for a profile, even on a terminal")
+    ap.add_argument("--no-http-cache", action="store_true",
+                    help="fetch every URL again in every script instead of once "
+                         "per run. Slower, more requests, and the page-level "
+                         "items may then be reporting on different copies of a "
+                         "page that changed mid-audit — use it to check whether "
+                         "the cache is what a surprising result is about.")
     ap.add_argument("--no-page-guard", action="store_true",
                     help="audit the entry page even when it looks like a bot "
                          "challenge or a soft 404. The suspicion is still "
@@ -1877,6 +1920,10 @@ def main() -> int:
         print(f"--archive given but --mode {mode}: archive files will be ignored",
               file=sys.stderr)
     caps = set(MODE_CAPS[mode])
+
+    http_cache = ""
+    if caps & {"fetch", "crawl", "api"} and not a.no_http_cache:
+        http_cache = open_http_cache()
 
     gsc_path = find_gsc_credentials(a.gsc_credentials)
     # Search Console is an external API, so it is offered only by modes allowed
@@ -1913,6 +1960,12 @@ def main() -> int:
             rps = max_rps()
             print(f"  rate limit: {rps} request(s)/second per host"
                   if rps else "  rate limit: OFF — every script goes as fast as it can",
+                  file=sys.stderr)
+            print("  response cache: one fetch per URL for this run"
+                  if http_cache else
+                  "  response cache: OFF (--no-http-cache) — every script fetches "
+                  "for itself, and two of them may read different copies of a page "
+                  "that changes",
                   file=sys.stderr)
             if a.allow_private:
                 print("  private addresses: ALLOWED (--allow-private) — loopback, "
@@ -2263,6 +2316,11 @@ def main() -> int:
         # staging box and an audit of the live site produce the same-shaped file,
         # and only one of them describes what a visitor or a crawler gets.
         "allow_private": bool(a.allow_private),
+        # Whether the page-level items all read the same bytes. With the cache off
+        # each script fetches for itself, so on a site that changes mid-audit two
+        # items can describe two different documents — a reader comparing verdicts
+        # that disagree needs to know which kind of run this was.
+        "http_cache": bool(http_cache),
         # Whether the host actually turned out to be one only we can reach. The
         # flag says what was permitted; this says what happened, and it is the one
         # that decides whether "no external service could measure this" is true.

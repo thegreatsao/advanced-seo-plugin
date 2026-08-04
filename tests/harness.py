@@ -264,6 +264,20 @@ class _Routed(http.server.BaseHTTPRequestHandler):
     def do_HEAD(self):
         self._respond(False)
 
+    def do_POST(self):
+        # The body is read and discarded rather than ignored: with keep-alive an
+        # unread body becomes the next request's first line, and the symptom is a
+        # test that hangs somewhere else. Answered at all so `requested` can show
+        # that a submission went out — a POST is the one thing the response cache
+        # must never replay from disk.
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length > 0:
+            self.rfile.read(length)
+        self._respond(True)
+
     def log_message(self, *args):
         pass
 

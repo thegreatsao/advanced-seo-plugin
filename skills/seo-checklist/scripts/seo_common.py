@@ -210,9 +210,12 @@ def fetch_url(
         result["error"] = f"Unsupported URL scheme: {parsed.scheme}"
         return result
 
-    headers = {"Accept": "text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.8"}
-    if extra_headers:
-        headers.update(extra_headers)
+    # No Accept of its own any more. It used to send one differing from
+    # `default_headers()` by a single media type, and two spellings of one header
+    # made every audited page two requests instead of one — invisible until the
+    # response cache made it countable. DEFAULT_HEADERS now carries the union, so
+    # nothing here advertises less than it did.
+    headers = dict(extra_headers) if extra_headers else {}
 
     try:
         response = safe_request(

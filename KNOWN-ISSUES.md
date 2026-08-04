@@ -1,12 +1,18 @@
 # Known issues
 
-What is wrong with this plugin as of **0.9.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.10.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.10.0**: the rest of issue 1 — a run-scoped response cache means one fetch
+per URL, and the fixture audit went from 76 requests to 16 with all 214 verdicts
+unchanged. It also made a duplication visible that nothing could count before: two
+spellings of one `Accept` header, from the two conventions in this tree, had been
+fetching every audited page twice.
 
 **Fixed in 0.9.0**: the crawling half of issue 1 — six independent crawls became one
 shared one, and the report finally names the broken URLs instead of counting them. On
@@ -43,39 +49,82 @@ having no cap.
 
 ---
 
-## 1. Every script re-fetches the entry page
+## 1. Closed in 0.10.0 — one fetch per URL
 
-**The crawling half of this closed in 0.9.0.** Six scripts used to walk the same pages
-independently — 50 pages each for `duplicate_content.py`, `link_profile.py` and
-`internal_links.py`, 100 for `orphan_pages_from_sitemap.py`, 25 for
-`anchor_text_audit.py`, and one page's links for `broken_links.py` — each with its own
-budget, its own robots handling and its own idea of what the site was. One crawl
-(`site_crawl.py`) now writes an inventory and all ten site-wide items read it.
+Kept at the top because the shape of it is the useful part, not the fix.
 
-Measured against the seven-page fixture, one audit with `--sample 1`:
+An audit used to ask a seven-page site the same question 37 times. Nothing was written
+badly to make that happen: 36 evidence scripts each need the page they are judging,
+each runs in its own process, and nothing connected them. It closed in two halves,
+because it was two problems wearing one number.
 
-| | Requests | The site's inner pages |
-|---|---|---|
-| 0.8.0 | 97 | fetched 6× each |
-| 0.9.0 | 72 | fetched 2× each |
+**The site-wide half (0.9.0).** Six scripts walked the same pages independently — 50
+pages each for `duplicate_content.py`, `link_profile.py` and `internal_links.py`, 100
+for `orphan_pages_from_sitemap.py`, 25 for `anchor_text_audit.py`, and one page's links
+for `broken_links.py` — each with its own budget, its own robots handling and its own
+idea of what the site was. `site_crawl.py` now writes an inventory and all ten
+site-wide items read it.
 
-**What remains is the other half, and it is now the dominant cost:** 37 of those 72
-requests are the entry URL, fetched again by each of the 36 single-page scripts. There
-is no HTTP cache anywhere, so `parse_html.py`, `social_meta.py`, `font_audit.py` and
-thirty-three others each ask the site for the same document. At `--sample 3` the
-multiplication is per sampled page: 201 requests, of which ~105 are three pages
-fetched 35 times each.
+**The per-page half (0.10.0).** A run-scoped response cache in `lib/safe_http.py`,
+where all four of this tree's HTTP seams converge. `SEO_HTTP_CACHE` names a directory;
+the runner makes one per run and deletes it afterwards, so a hand-run script caches
+nothing and no directory survives to answer a later audit.
 
-The fix is the same shape as the crawl: one fetch per URL, shared. It is not the same
-size — a response cache has to decide what is cacheable within a run, and every script
-reaches for HTTP through one of four seams, so the cache belongs in `lib/safe_http.py`
-where all four converge. CI asserts a ceiling of 230 requests on the fixture audit, so
-a change that makes this worse fails the build rather than only somebody's server.
+Measured against the seven-page fixture, one audit with `--sample 1`, counted at the
+server:
 
-Note what fixing the crawl also fixed: robots.txt is honoured once instead of six
-times, `--sample` picks its pages out of the inventory instead of re-reading the
-sitemap, and the report can finally say **which** URLs are broken and which pages link
-to them — an address and an edit, rather than a count.
+| | Requests | The entry URL | The site's inner pages |
+|---|---|---|---|
+| 0.8.0 | 97 | 37× | 6× each |
+| 0.9.0 | 76 | 37× | 2× each |
+| 0.10.0 | **16** | **1×** | **1× each** |
+
+Sixteen requests for fifteen distinct `(method, path)` pairs. The one repeat is `HEAD /`
+twice, and those are two different questions: `redirect_checker.py` asks with redirects
+off because the hop *is* the finding, and the cache/compression check asks with them on.
+
+**Requests were the smaller half of what it cost.** Thirty-seven fetches are
+thirty-seven different documents the moment the page is not static — a CMS rotating a
+hero image, a deploy landing mid-audit, an A/B test — and items would then disagree
+about the page with every one of them right about what it read. That is the same failure
+the crawl inventory removed for the site, one level down, and removing it for the page
+is the guarantee; the requests are the side effect. `http_cache` is in the artifact so a
+reader comparing two verdicts that disagree can tell which kind of run produced them.
+
+The safety argument is in the exclusions, and each one is a way a stored answer would
+differ from a live one:
+
+* **Only real responses.** A timeout, a refused connection, a redirect loop and a
+  robots.txt refusal are never stored, so one transient failure cannot become every
+  item's failure. Any status code *is* an answer, 404 and 503 included.
+* **GET and HEAD only.** `indexnow_checker.py` submits URLs; replaying a submission
+  from disk would report something that did not happen.
+* **The key is what could change the answer** — method, URL, request headers,
+  `allow_redirects` — and not what could not. `timeout` is out because it decides
+  whether an answer arrives, never what it says. `max_response_bytes` is out because a
+  complete body satisfies any cap large enough to hold it, which is what lets callers
+  asking for 500KB, 1.5MB, 2MB and 5MB of one page share one entry; a cap *smaller*
+  than the stored body is a miss and the request goes out and fails exactly as before,
+  because trimming it to fit would be inventing a document.
+* **robots.txt is not avoidable through it.** The gate runs before the lookup, and a
+  stored redirect chain is re-checked hop by hop on the way out. Otherwise any site
+  that redirects could opt out of the rule by being fetched twice.
+* **Single-flight.** The runner starts eight workers together; without a lock per key
+  they miss together and eight processes fetch the page the cache exists to fetch once.
+  Waiting is bounded by the caller's own timeout and running out falls back to
+  fetching — a cache must not be able to turn one slow server into a hung audit.
+
+**One consequence to know about.** `elapsed` is restored with the entry rather than
+zeroed, because three scripts report response time from it and a zero would be a
+fabricated performance number. So TECH-003's TTFB is now the run's single fetch of the
+page rather than `lcp_subparts.py`'s own — on the fixture it moved from 1ms to 3ms, the
+only one of 214 verdicts whose evidence string changed at all. That is deliberate: one
+measurement everything shares beats three scripts reporting three TTFBs for one page.
+`--no-http-cache` restores the old behaviour for anyone who wants an isolated timing.
+
+CI asserts a ceiling of 40 requests on the fixture audit at `--sample 3`, and that the
+entry URL is fetched once, so a regression fails the build rather than only somebody's
+server.
 
 ## 2. The tests prove a script's shape, not its thresholds
 

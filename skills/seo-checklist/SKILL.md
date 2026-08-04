@@ -423,19 +423,28 @@ to audit: a block on that URL is a `critical` finding to report, not a reason to
 audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
 configured rate.
 
+**One fetch per URL.** Responses are shared across the whole run through a directory
+the runner creates and deletes with the run, so the same document is not requested 37
+times by 36 single-page scripts. Requests are the smaller half of it: 37 fetches are 37
+different documents whenever the page is not static, and items would then disagree
+about it while each was right about what it read. Never shared: a failed request, a
+`POST`, or a body nobody read; and a stored redirect chain is re-checked against
+`robots.txt` before it is handed over. `--no-http-cache` switches it off, and
+`http_cache` in the JSON says which kind of run produced the file.
+
 **One crawl, kept.** Before the plan is built, the runner runs `site_crawl.py` once
 and hands the inventory to the ten site-wide checks — status, canonical, noindex, word
 count, content hash and every link for each URL it reached. Six scripts used to crawl
 independently; on a seven-page fixture that was 97 requests for one audited page and is
-now 72. The inventory is written beside the results (`*-crawl.json`, or
+now 16, with the response cache below taking most of the rest. The inventory is written
+beside the results (`*-crawl.json`, or
 `--crawl-json PATH`), because it is the audit's record of which URLs exist and which
 are broken. `--crawl-depth` (3) and `--crawl-max-pages` (100) are the whole crawl
 budget now, not one of six.
 
-What this does not fix: the 36 single-page scripts each re-fetch the entry URL, with no
-HTTP cache between them — 37 of those 72 requests. Pacing bounds the rate, not the
-volume. If a site owner asks about load, that is the honest answer. `KNOWN-ISSUES.md`
-in the plugin root ranks this and the rest of what is still wrong — read it before
+Pacing bounds the rate, not the volume, and one audit of a large site is still a crawl
+plus a fetch of every sampled page. If a site owner asks about load, that is the honest
+answer. `KNOWN-ISSUES.md` in the plugin root ranks what is still wrong — read it before
 defending a number.
 
 ## Secrets

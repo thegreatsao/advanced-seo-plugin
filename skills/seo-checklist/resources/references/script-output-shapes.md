@@ -34,6 +34,11 @@ topical_cluster_mapper, llms_txt_checker (`quality.score`), pagespeed (`performa
 
 ## Runtime (single page, cold)
 
+Times below are for a script run on its own. Inside an audit most of them are faster,
+because the run shares one response per URL: a script that would fetch the entry page
+reads it from the run's cache instead. That is also why a number measured here does not
+add up to the audit's wall time.
+
 | Script | Note |
 |---|---|
 | `site_crawl.py` | one crawl for all ten site-wide checks; the budget is `--crawl-max-pages` (100) |
@@ -46,6 +51,17 @@ topical_cluster_mapper, llms_txt_checker (`quality.score`), pagespeed (`performa
 | everything else | < 1.5s |
 
 Slow scripts must run first in the pool so they overlap the fast ones.
+
+**Two scripts ask for the same URL twice on purpose,** and a change that "fixes" it
+would delete a finding: `redirect_checker.py` sends `HEAD` with redirects *off*
+because the hop is what it reports, while `hreflang_checker.py` and
+`cache_compression_checker.py` send `HEAD` with them on. Those are different requests
+and get different cache entries. CI asserts that nothing else asks twice.
+
+**`lcp_subparts.py` reports the run's fetch, not its own.** `elapsed` travels with a
+cached response — three scripts read response time from it, and a zero would be a
+fabricated performance number — so TECH-003's TTFB is the one request the audit made
+for that page. Use `--no-http-cache` for an isolated timing.
 
 ## Scripts needing extra required args
 

@@ -19,6 +19,9 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import harness  # noqa: E402
 
 from checklist_runner import (  # noqa: E402
     ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
@@ -2003,6 +2006,284 @@ class ScriptFailureKind(unittest.TestCase):
     def test_a_missing_script_says_so(self):
         out = run_script("definitely_not_a_script.py", [])
         self.assertEqual(out["error_kind"], "missing")
+
+
+class OneFetchPerUrl(unittest.TestCase):
+    """The response cache, and the ways a cache could lie.
+
+    Its purpose is stated in the direction that matters: not "fewer requests" but
+    **every item that reports on a URL reports on the same bytes**. Thirty-seven
+    fetches of one page are thirty-seven documents the moment the page is not
+    static, and items would then disagree with each other while each one was right
+    about what it read.
+
+    So the interesting tests here are not the hit-rate ones. They are the ones that
+    fix what may never be answered from disk: a request that failed, a request that
+    changes something on the server, a body nobody read, and a redirect chain into
+    a path robots.txt forbids.
+    """
+
+    def setUp(self):
+        import lib.safe_http as sh
+        self.sh = sh
+        self.dir = tempfile.mkdtemp(prefix="test-http-cache-")
+        self.saved = os.environ.get(sh.CACHE_DIR_VAR)
+        self.loopback = harness.allow_loopback()
+        self.loopback.__enter__()
+
+    def tearDown(self):
+        self.loopback.__exit__(None, None, None)
+        if self.saved is None:
+            os.environ.pop(self.sh.CACHE_DIR_VAR, None)
+        else:
+            os.environ[self.sh.CACHE_DIR_VAR] = self.saved
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _on(self):
+        os.environ[self.sh.CACHE_DIR_VAR] = self.dir
+
+    PAGE = "<html><head><title>One</title></head><body><p>only once</p></body></html>"
+
+    def test_nothing_is_cached_unless_a_run_asks_for_it(self):
+        """The default is no cache at all. A script run by hand a minute after the
+        last one must read the site, not a directory left behind by an audit."""
+        with harness.served({"/": self.PAGE}) as site:
+            self.sh.safe_get(site.url)
+            self.sh.safe_get(site.url)
+            self.assertEqual(len(site.paths("GET")), 2)
+        self.assertEqual(os.listdir(self.dir), [])
+
+    def test_the_same_url_is_fetched_once(self):
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            self.sh.safe_get(site.url)
+            self.sh.safe_get(site.url)
+            self.assertEqual(len(site.paths("GET")), 1)
+
+    def test_a_restored_response_is_the_response_that_was_fetched(self):
+        """Field by field, because a caller cannot be asked to know which it got.
+        `elapsed` is in the list on purpose: three scripts report response time
+        from it, so a zero there would be a fabricated performance number."""
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            live = self.sh.safe_get(site.url)
+            cached = self.sh.safe_get(site.url)
+            self.assertFalse(getattr(live, "from_cache", False))
+            self.assertTrue(getattr(cached, "from_cache", False))
+            for field in ("text", "content", "status_code", "url", "encoding",
+                          "reason", "elapsed"):
+                self.assertEqual(getattr(cached, field), getattr(live, field), field)
+            self.assertEqual(dict(cached.headers), dict(live.headers))
+
+    def test_a_redirect_chain_survives_intact(self):
+        """`redirect_chain` and the hop count are checklist evidence, not
+        decoration: an item reports the number of hops it found."""
+        with harness.served({"/hop": (301, {"Location": "/"}, ""),
+                             "/": self.PAGE}) as site:
+            self._on()
+            live = self.sh.safe_get(site.base + "/hop")
+            # Two requests so far: the hop and the page it points at. The entry
+            # covers the whole chain, so asking again costs nothing.
+            self.assertEqual(len(site.paths("GET")), 2)
+            cached = self.sh.safe_get(site.base + "/hop")
+            self.assertEqual([(h.status_code, h.url) for h in cached.history],
+                             [(h.status_code, h.url) for h in live.history])
+            self.assertEqual(cached.url, live.url)
+            self.assertEqual(len(site.paths("GET")), 2)
+
+    def test_a_404_is_an_answer_and_is_kept(self):
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            first = self.sh.safe_get(site.base + "/nope")
+            second = self.sh.safe_get(site.base + "/nope")
+            self.assertEqual((first.status_code, second.status_code), (404, 404))
+            self.assertEqual(site.paths("GET").count("/nope"), 1)
+
+    def test_a_failure_is_never_kept(self):
+        """One refused connection must not become every item's refused connection.
+        A cached error would turn a transient failure into a whole-audit failure,
+        and NO_DATA on 106 items is not more honest for being consistent."""
+        import socket
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        dead = probe.getsockname()[1]
+        probe.close()
+        self._on()
+        import requests
+        for _ in range(2):
+            with self.assertRaises(requests.exceptions.RequestException):
+                self.sh.safe_get(f"http://127.0.0.1:{dead}/", timeout=3)
+        self.assertEqual([n for n in os.listdir(self.dir) if n.endswith(".resp")], [])
+
+    def test_a_post_goes_out_every_time(self):
+        """`indexnow_checker` submits URLs. Replaying a submission from disk would
+        report a thing that did not happen — or hide one that needed to."""
+        with harness.served({"/ping": "ok"}) as site:
+            self._on()
+            self.sh.safe_post(site.base + "/ping", data={"n": "1"})
+            self.sh.safe_post(site.base + "/ping", data={"n": "1"})
+            self.assertEqual(len([m for m, _ in site.requested if m == "POST"]), 2)
+
+    def test_a_stream_is_not_stored(self):
+        """Nobody has read the body yet, and a cache cannot store what no one has
+        seen — it would write an empty document and serve it as the page."""
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            self.sh.safe_get(site.url, stream=True).close()
+            self.assertEqual([n for n in os.listdir(self.dir) if n.endswith(".resp")], [])
+
+    def test_head_and_get_are_different_questions(self):
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            self.sh.safe_head(site.url)
+            body = self.sh.safe_get(site.url)
+            self.assertEqual(len(site.paths("HEAD")), 1)
+            self.assertEqual(len(site.paths("GET")), 1)
+            self.assertIn("only once", body.text)
+
+    def test_a_hop_a_caller_wanted_to_see_is_not_answered_with_its_destination(self):
+        """`redirect_checker` asks with redirects off because the hop *is* the
+        finding. Handing it the 200 at the end would delete the thing it reports."""
+        with harness.served({"/hop": (301, {"Location": "/"}, ""),
+                             "/": self.PAGE}) as site:
+            self._on()
+            self.sh.safe_get(site.base + "/hop")
+            hop = self.sh.safe_get(site.base + "/hop", allow_redirects=False)
+            self.assertEqual(hop.status_code, 301)
+
+    def test_a_smaller_cap_refetches_rather_than_truncating(self):
+        """Callers ask for between 500KB and 5MB of the same page. A stored body
+        larger than this caller's cap is a miss and the request goes out and fails
+        exactly as it would have — trimming the stored body to fit would be
+        inventing a document."""
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            whole = self.sh.safe_get(site.url)
+            with self.assertRaises(self.sh.SafeHTTPError):
+                self.sh.safe_get(site.url, max_response_bytes=10)
+            self.assertEqual(len(site.paths("GET")), 2)
+            # And a cap the stored body does fit inside is still a hit.
+            again = self.sh.safe_get(site.url, max_response_bytes=None)
+            self.assertEqual(again.content, whole.content)
+            self.assertEqual(len(site.paths("GET")), 2)
+
+    def test_a_different_accept_is_a_different_request(self):
+        """Servers may negotiate on it, so it has to be in the key — which is why
+        two spellings of one Accept header used to cost every page an extra
+        fetch. See `test_there_is_one_accept_header`."""
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            self.sh.safe_get(site.url)
+            self.sh.safe_get(site.url, headers={"Accept": "text/plain"})
+            self.assertEqual(len(site.paths("GET")), 2)
+
+    def test_there_is_one_accept_header(self):
+        """`seo_common.fetch_url` used to send its own, differing from
+        `default_headers()` by one media type. Both were reasonable; together they
+        made every audited page two requests instead of one, and nothing could see
+        it until the requests were countable. A second spelling must not come back
+        by being locally sensible somewhere."""
+        import seo_common
+        with open(seo_common.__file__, encoding="utf-8") as f:
+            src = f.read()
+        self.assertNotIn('"Accept":', src,
+                         "fetch_url is overriding Accept again; put the media type "
+                         "in DEFAULT_HEADERS so one page stays one request")
+
+    def test_the_origin_with_and_without_a_slash_is_one_request(self):
+        """`http://x` and `http://x/` are one GET described two ways — every client
+        puts `/` on the wire for an empty path. Keeping them apart fetched the
+        site's home page twice, once as the entry URL and once as a sampled one."""
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            bare = self.sh.safe_get(site.base)
+            slashed = self.sh.safe_get(site.base + "/")
+            self.assertEqual(len(site.paths("GET")), 1)
+            self.assertEqual(bare.url, slashed.url)
+
+    def test_normalising_agrees_with_seo_common(self):
+        """The two normalisers used to disagree about exactly this, which is how a
+        URL got two cache keys. Same input, same answer, or the disagreement comes
+        back somewhere nothing counts requests."""
+        import seo_common
+        for url in ("http://example.com", "https://example.com",
+                    "http://example.com/a", "https://example.com/a?b=1"):
+            self.assertEqual(self.sh.normalize_url(url),
+                             seo_common.normalize_url(url), url)
+
+    def test_a_torn_entry_is_a_miss_not_a_half_page(self):
+        """Serving half a document as though it were the page is the exact failure
+        this cache must not have, so the stored length is checked against the body
+        actually on disk."""
+        with harness.served({"/": self.PAGE}) as site:
+            self._on()
+            self.sh.safe_get(site.url)
+            entry = [n for n in os.listdir(self.dir) if n.endswith(".resp")][0]
+            path = os.path.join(self.dir, entry)
+            with open(path, "rb") as f:
+                blob = f.read()
+            with open(path, "wb") as f:
+                f.write(blob[:len(blob) - 20])          # a write that did not finish
+            self.assertIsNone(self.sh._read_entry(path))
+            served_again = self.sh.safe_get(site.url)
+            self.assertIn("only once", served_again.text)
+            self.assertEqual(len(site.paths("GET")), 2)
+
+    def test_a_cache_hit_still_refuses_a_path_robots_forbids(self):
+        """A cached redirect chain must not become the way around robots.txt.
+        Without re-checking the hops, any site that redirects could opt out of the
+        rule by being fetched twice — once by something that does not consult
+        robots.txt, and then from disk by something that does."""
+        with harness.served({
+            "/robots.txt": (200, {"Content-Type": "text/plain"},
+                            "User-agent: *\nDisallow: /private/\n"),
+            "/open": (301, {"Location": "/private/page.html"}, ""),
+            "/private/page.html": self.PAGE,
+        }) as site:
+            self._on()
+            # Warmed by a caller that does not consult robots.txt — the audit
+            # target is fetched exactly this way, by design.
+            self.assertEqual(self.sh.safe_get(site.base + "/open").status_code, 200)
+            with self.assertRaises(self.sh.RobotsDisallowed):
+                self.sh.crawl_get(site.base + "/open")
+
+    def test_eight_processes_asking_at_once_make_one_request(self):
+        """The runner starts eight workers together, so without single-flight they
+        all miss together and eight processes fetch the page the cache exists to
+        fetch once. Separate processes, because that is what the audit is: an
+        in-process cache would be no cache at all here."""
+        import subprocess
+        with harness.served({"/": self.PAGE}) as site:
+            code = ("import sys; sys.path.insert(0, %r);"
+                    "from lib.safe_http import safe_get;"
+                    "print(len(safe_get(%r).text))" % (SCRIPTS, site.url))
+            env = harness.offline_env(**{self.sh.CACHE_DIR_VAR: self.dir})
+            procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True)
+                     for _ in range(8)]
+            outs = [p.communicate(timeout=60) for p in procs]
+            self.assertEqual([o.strip() for o, _ in outs],
+                             [str(len(self.PAGE))] * 8,
+                             [e for _, e in outs])
+            self.assertEqual(len(site.paths("GET")), 1)
+
+    def test_the_runner_removes_its_cache_when_the_run_ends(self):
+        """Per run, not global, is the whole reason a stale page cannot be served:
+        there must be no directory left for a later audit to read."""
+        import subprocess
+        with harness.served({"/": self.PAGE, "/robots.txt": (404, "")}) as site:
+            out = subprocess.run(
+                [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"),
+                 site.url, "--allow-private", "--max-rps", "50", "--no-history",
+                 "--no-prompt", "--quiet", "--only", "crawling_indexing",
+                 "--timeout", "60"],
+                env=harness.offline_env(), capture_output=True, text=True,
+                timeout=300)
+            self.assertEqual(out.returncode, 0, out.stderr[-2000:])
+        left = [d for d in os.listdir(tempfile.gettempdir())
+                if d.startswith("seo-http-")]
+        self.assertEqual(left, [], "a run's response cache outlived the run")
 
 
 if __name__ == "__main__":

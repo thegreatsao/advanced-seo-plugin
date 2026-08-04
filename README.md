@@ -4,16 +4,18 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.9.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.10.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
-measured rather than suspected. The largest was six scripts crawling independently;
-0.9.0 replaced them with one crawl whose record the audit keeps, which is also what
-lets the report name the broken URLs rather than count them. What remains of it is
-36 single-page scripts each re-fetching the entry URL with no HTTP cache between
-them — now the dominant cost of an audit, measured at 37 of 72 requests.
+measured rather than suspected. Its largest entry closed in two halves: 0.9.0
+replaced six independent crawls with one crawl whose record the audit keeps — which
+is also what lets the report name the broken URLs rather than count them — and
+0.10.0 gave the run a shared response cache, so a URL is fetched once by the whole
+audit instead of 37 times by 36 scripts. One audit of the seven-page fixture, one page
+audited, went from **97 requests to 16** across the two releases, with all 214 verdicts
+unchanged.
 
 ## Why it exists
 
@@ -358,6 +360,23 @@ refuses every one of the 40-odd checks that fetch it, collapsing the audit to
 `NO_DATA` and burying the finding that matters — "this page is blocked from
 crawling" is a `critical` checklist item, a result rather than a prohibition. You
 asked for that URL; robots.txt governs what a crawler discovers on its own.
+
+**A URL is fetched once per run.** Thirty-six of the evidence scripts need the page
+they are judging and each runs in its own process, so the same document used to be
+requested 37 times. Responses are now shared through a directory the runner creates
+for the run and deletes when it ends — there is no cache between audits, and a script
+run by hand caches nothing. Requests are the smaller half of what that fixes: 37
+fetches are 37 *different* documents the moment a page is not static, and items would
+then disagree about it with every one of them right about what it read. `http_cache`
+in the JSON says which kind of run produced the file; `--no-http-cache` goes back to
+every script fetching for itself, which is worth doing if a surprising result might be
+about the cache — or if you want `lcp_subparts.py` to time its own request rather than
+report the run's one fetch of the page.
+
+Never cached: a request that failed (one refused connection must not become every
+item's refused connection), a `POST` (`indexnow_checker.py` submits URLs), and a
+response nobody has read. A stored redirect chain is re-checked against `robots.txt`
+before it is handed over, so the cache cannot become the way around the rule below.
 
 A `Crawl-delay` is honoured when it asks for more patience than `--max-rps`
 allows. A `Crawl-delay` that would make us faster is ignored: a site can ask us to

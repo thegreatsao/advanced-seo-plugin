@@ -202,24 +202,52 @@ jobs:
           # SEO_MAX_RPS is raised rather than switched off, deliberately — the
           # pacing must run, with several processes contending for the same slot
           # file, because that contention is the bug this step exists to catch.
+          #
+          # The log is emptied first so the count below is the audit's own. The two
+          # readiness curls and the SSRF-guard run above are not part of what is
+          # being measured, and a number that quietly includes them is a number that
+          # cannot be compared with the one in KNOWN-ISSUES.
+          : > server.log
           python skills/seo-checklist/scripts/checklist_runner.py http://127.0.0.1:8000/ \
               --allow-private --sample 3 --max-rps 50 --no-history --no-prompt \
               --timeout 90 --json live.json > live.log 2>&1
           grep -q "SEO Score" live.log || {
             echo "no score"; cat live.log; tail -40 server.log; exit 1; }
-          # Not decoration: this is the size of the request fan-out, and the number
-          # the shared crawl exists to bring down. It is a *ceiling* rather than a
-          # printed figure now, because a printed number in a green build is a number
-          # nobody reads — the count went 97 -> 72 for one page audited, and what
-          # remains is 36 single-page scripts each re-fetching the entry URL with no
-          # HTTP cache between them. Raise the ceiling deliberately or not at all.
-          REQUESTS=$(grep -c '"GET' server.log)
-          echo "one audit of a 6-page site, 3 pages sampled, made $REQUESTS requests"
-          if [ "$REQUESTS" -gt 230 ]; then
-            echo "the request fan-out grew past its ceiling (230); see KNOWN-ISSUES 1"
-            grep -o '"GET [^ ]*' server.log | sort | uniq -c | sort -rn | head
-            exit 1
-          fi
+          python - <<'PY'
+          import collections, re, sys
+
+          # The request fan-out, asserted rather than printed: a number in a green
+          # build is a number nobody reads. It went 97 (0.8.0) -> 201 -> 20 for this
+          # exact command, as the shared crawl and then the response cache landed;
+          # see KNOWN-ISSUES 1 for the table. Raise these deliberately or not at all.
+          seen = collections.Counter()
+          for line in open("server.log"):
+              m = re.search(r'"(GET|HEAD) (\S+) HTTP', line)
+              if m:
+                  seen[m.groups()] += 1
+          total = sum(seen.values())
+          print(f"one audit of a 6-page site, 3 pages sampled, made {total} "
+                f"requests for {len(seen)} distinct (method, path) pairs")
+          for (method, path), n in sorted(seen.items(), key=lambda kv: -kv[1]):
+              print(f"    {n:>3}  {method} {path}")
+          bad = []
+          if total > 40:
+              bad.append(f"{total} requests is past the ceiling of 40")
+          # One page, one fetch. This is the whole claim of the response cache, and
+          # the only place it is checked against a real audit end to end.
+          if seen.get(("GET", "/"), 0) != 1:
+              bad.append(f'the entry URL was fetched {seen.get(("GET", "/"), 0)}x '
+                         f'as a GET, not once')
+          # Two HEADs per sampled page are expected and are two different questions:
+          # redirect_checker asks with redirects off because the hop is the finding,
+          # and the hreflang and cache-header checks ask with them on. Three would
+          # mean something stopped sharing.
+          worse = {f"{m} {p}": n for (m, p), n in seen.items() if n > 2}
+          if worse:
+              bad.append(f"a URL was requested more than twice: {worse}")
+          if bad:
+              sys.exit("\n".join("  " + b for b in bad))
+          PY
           python skills/seo-checklist/scripts/checklist_report.py live.json \
               --markdown live.md --html live.html --llm-queue live-queue.md > report.log 2>&1
           python - <<'PY'
