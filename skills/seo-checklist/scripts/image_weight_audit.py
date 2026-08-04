@@ -17,7 +17,8 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import fetch_url, load_html, parse_html
+from seo_common import (fetch_url, likely_lcp_candidate, load_html,
+                        parse_html)
 
 
 MODERN_FORMATS = {"avif", "webp"}
@@ -78,7 +79,7 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         ext = _extension(src)
         sources = img.get("picture_sources") or []
         modern_sources = _modern_sources(sources)
-        likely_lcp = index == 0 or img.get("fetchpriority") == "high" or img.get("loading") == "eager"
+        likely_lcp = likely_lcp_candidate(img, index)
         row = {
             "src": src,
             "format": ext,

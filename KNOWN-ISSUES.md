@@ -1,12 +1,19 @@
 # Known issues
 
-What is wrong with this plugin as of **0.8.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.9.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.9.0**: the crawling half of issue 1 — six independent crawls became one
+shared one, and the report finally names the broken URLs instead of counting them. On
+the way: twelve more items that graded a site which answered nothing (including three
+`critical` ones, invisible to the previous release's sweep because that sweep's script
+list was hand-maintained), an item that could not fail and its twin that accused every
+site, and five checks that reported a defect in every correct site on the internet.
 
 **Fixed in 0.8.0**: issue 2 below, which was the largest open item after the shared
 crawl — every one of the 55 evidence scripts now has a unit test. Writing them found
@@ -36,66 +43,82 @@ having no cap.
 
 ---
 
-## 1. The site is crawled five times over, and nothing is shared
+## 1. Every script re-fetches the entry page
 
-Five scripts each run their own independent crawl, with their own page budget, and
-throw the result away:
+**The crawling half of this closed in 0.9.0.** Six scripts used to walk the same pages
+independently — 50 pages each for `duplicate_content.py`, `link_profile.py` and
+`internal_links.py`, 100 for `orphan_pages_from_sitemap.py`, 25 for
+`anchor_text_audit.py`, and one page's links for `broken_links.py` — each with its own
+budget, its own robots handling and its own idea of what the site was. One crawl
+(`site_crawl.py`) now writes an inventory and all ten site-wide items read it.
 
-| Script | Pages |
-|---|---|
-| `orphan_pages_from_sitemap.py` | 100 |
-| `duplicate_content.py` | 50 |
-| `link_profile.py` | 50 |
-| `internal_links.py` | 50 |
-| `anchor_text_audit.py` | 25 |
+Measured against the seven-page fixture, one audit with `--sample 1`:
 
-That is **~275 fetches of the same pages per audit** on a site large enough to fill
-those budgets, plus 36 more scripts each re-fetching the entry URL, with no shared
-HTTP cache anywhere. At the default 4 rps/host that is over a minute of pure pacing,
-and the audited site absorbs five crawls where one would do.
+| | Requests | The site's inner pages |
+|---|---|---|
+| 0.8.0 | 97 | fetched 6× each |
+| 0.9.0 | 72 | fetched 2× each |
 
-Measured rather than budgeted: the CI live step counts the requests its own server
-receives, and **a seven-page fixture with `--sample 3` absorbs 181** — for a site
-whose entire content is seven pages. The count is printed in the build log on every
-run, so a change that makes it worse is visible here rather than only on somebody
-else's server.
+**What remains is the other half, and it is now the dominant cost:** 37 of those 72
+requests are the entry URL, fetched again by each of the 36 single-page scripts. There
+is no HTTP cache anywhere, so `parse_html.py`, `social_meta.py`, `font_audit.py` and
+thirty-three others each ask the site for the same document. At `--sample 3` the
+multiplication is per sampled page: 201 requests, of which ~105 are three pages
+fetched 35 times each.
 
-The fix is the pattern this plugin already uses for `cwv_metrics.py` and
-`rendered_audit.py`: crawl once into an inventory artifact (URL, status, title,
-description, canonical, content hash, inbound links, depth) and have every
-site-wide check read it. That also produces the thing the report cannot currently
-give anyone — **a list of which URLs are broken**, rather than a verdict about the
-site.
+The fix is the same shape as the crawl: one fetch per URL, shared. It is not the same
+size — a response cache has to decide what is cacheable within a run, and every script
+reaches for HTTP through one of four seams, so the cache belongs in `lib/safe_http.py`
+where all four converge. CI asserts a ceiling of 230 requests on the fixture audit, so
+a change that makes this worse fails the build rather than only somebody's server.
 
-Not a small change: one new crawler plus five scripts rewritten to read a table.
-
-Note what fixing 1 also fixes: robots.txt is honoured once in the shared crawler
-instead of five times, and the request volume stops being a property of how many
-scripts happen to want a crawl.
+Note what fixing the crawl also fixed: robots.txt is honoured once instead of six
+times, `--sample` picks its pages out of the inventory instead of re-reading the
+sitemap, and the report can finally say **which** URLs are broken and which pages link
+to them — an address and an edit, rather than a count.
 
 ## 2. The tests prove a script's shape, not its thresholds
 
-**Closed in 0.8.0**: all 55 evidence scripts have unit tests, 462 in total, and each
-asserts *the field the registry actually reads*, named in the test. The count is not
-the point — the yield is. Three releases of writing these found, in order: eighteen
-assertions that had never fired, two items that failed sites for serving images the
-recommended way, and then sixty-two items grading a site that refused every
-connection. Roughly one defect per three tests, and the rate did not fall off.
+**Closed in 0.8.0**: all 55 evidence scripts have unit tests, and each asserts *the
+field the registry actually reads*, named in the test. The count is not the point —
+the yield is. Four releases of writing these found, in order: eighteen assertions that
+had never fired, two items that failed sites for serving images the recommended way,
+sixty-two items grading a site that refused every connection, and then twelve more of
+that family plus five checks that accused every correct site. Roughly one defect per
+three tests, and the rate has not fallen off.
 
-Three layers now, each catching what the others cannot:
+Four layers now, each catching what the others cannot:
 
 | Layer | What it proves |
 |---|---|
 | `test_evidence.py`, `test_evidence_scripts.py`, `test_evidence_apis.py` | a named field answers a named question, in both directions |
 | `test_contract.py` — the good/broken pair | a check can tell two whole sites apart, or says in writing why it cannot |
 | the dead-origin sweep | nothing is decided about a site that answered nothing |
+| the good-site sweep | nothing is decided *against* the site that should pass |
+
+The last two are four lines each and found more than everything above them. Both take
+their list of what to cover **from the registry**, which they did not always: 0.8.0's
+sweep enumerated a table maintained by hand, so the one crawler nobody had listed and
+the seven scripts tested in a different file were exactly the scripts it could not see
+— three `critical` items among them. A sweep whose coverage is a list somebody
+maintains has the same blind spot as the thing it is checking.
 
 What remains is not coverage but calibration. **A test can show that a threshold
 fires; it cannot show the threshold is right.** MB-095 warns at 250 KB, CN-039 at 300
-words, SP-216 at 200 ms of blocking time — those numbers came from Google's published
-guidance and from the borrowed scripts, and no test here argues with them. A site
-audited at the wrong threshold gets a confident verdict about the wrong question,
-which is the failure this suite is worst at seeing.
+words, SP-216 at 200 ms of blocking time, BL-081 at five identical anchors, the LCP
+candidate floor at 100×100 declared pixels — those numbers came from Google's
+published guidance, from the borrowed scripts, and in the last two cases from this
+release deciding them. No test here argues with any of them. A site audited at the
+wrong threshold gets a confident verdict about the wrong question, which is the
+failure this suite is worst at seeing.
+
+0.9.0 is the evidence that this is not theoretical. Sharing one crawl changed *how
+many pages* the anchor-text check reads, and BL-081's threshold — five identical
+anchors to one target, 80% of the links to it — went from firing on nothing to firing
+on every site with a navigation bar. The check had been reporting the good fixture and
+passing the broken one for two releases, and the contract pair recorded that as a
+difference and called it working. The fix was a distinction the threshold could not
+express: repetition *across* pages is a menu, repetition *within* a page is stuffing.
 
 Two narrower gaps, both measured:
 
@@ -166,6 +189,52 @@ be a few lines.
   since the translation shipped.
 
 ---
+
+## Fixed in 0.9.0
+
+Found by replacing six crawls with one, and by two four-line sweeps that the release
+also taught to derive their own coverage.
+
+- **The crawling half of issue 1.** `site_crawl.py` crawls once into an inventory; the
+  ten site-wide items read it. 97 → 72 requests for one audited page of the fixture,
+  and the site's inner pages went from six fetches each to two. The report now lists
+  broken URLs with the pages that link to them.
+- **AR-149 could not fail, and had been NO_DATA on every site for a release.** The item
+  is titled "Eliminate Internal Redirects" and asserted that `internal_links.pages` was
+  non-empty — true of any site that answers. Then 0.8.0 introduced a `fetch_error` set
+  unconditionally (the check ran before the field it tested was filled), so the item
+  was NO_DATA everywhere; its contract exemption said "no internal redirects to find
+  without a server that redirects", which was true, unrelated, and hid both defects.
+  It now reads `summary.internal_redirects`, which the shared crawl can measure.
+- **Twelve more items graded a site that answered nothing**, three of them `critical`:
+  `indexability_matrix.py` reported a page "not indexable" and robots.txt "allows it",
+  `canonical_checker.py` reported a missing canonical, `local_seo_checker.py` reported
+  a business with no local signals, and `orphan_pages_from_sitemap.py` reported no
+  orphan pages — all about a host that refused every connection. Every one was outside
+  0.8.0's sweep, because that sweep's script list was maintained by hand.
+- **AR-146 could not fail either.** It asserted `pagination` was truthy, and
+  `pagination` is a dict that always holds both keys — `{"prev": None, "next": None}`
+  is a non-empty dict. Its twin CN-055 asserted `pagination.next` was truthy, so every
+  page that is not part of a paginated series — nearly every page audited — was told to
+  "make infinite scroll crawlable". AR-146 now reads a pagination `issues` list;
+  CN-055 became an LLM item, because nothing here observes scroll behaviour.
+- **Five checks accused every correct site.** `schema_required_props.py` asked for
+  `name`, `position` and `item` *on the BreadcrumbList*, where no correct markup puts
+  them (they belong to each `ListItem`), and its placeholder detector tested `"["`
+  against a JSON dump of the value — so every property whose value was a list or an
+  object was "placeholder text". AR-158 failed every site with a working breadcrumb,
+  twice over. `image_inventory.py` and `image_weight_audit.py` treated the first `<img>`
+  in document order as the LCP candidate regardless of size, so CN-054 and MD-185
+  reported a correctly lazy-loaded 64px logo as a deferred LCP image.
+- **The W3C validator answering "I could not fetch your page" was read as "no
+  errors".** Nu reports that as `type: non-document-error` with a 200, so CI-017 and
+  TE-181 said the HTML validated on any page the validator could not reach — a 403
+  aimed at its user agent, a timeout, a TLS problem. The same family as the outage
+  0.8.0 fixed, one step further in: the service answered, and the answer was not about
+  the page.
+- **The good fixture had a dead internal link on purpose**, planted before the pair
+  existed and invisible while TE-168 checked one page's links. A site-wide check found
+  it immediately and warned about the fixture the pair calls good.
 
 ## Fixed in 0.8.0
 

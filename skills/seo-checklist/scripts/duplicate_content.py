@@ -5,30 +5,23 @@ Duplicate & Thin Content Detector
 Detects near-duplicate pages and thin content across a site using
 MinHash / Jaccard similarity and word-count thresholds.
 
+Reads the shared crawl inventory (`site_crawl.py`), which carries each page's word
+count, exact content hash and MinHash signature — so this script compares pages
+rather than fetching them. Without `--inventory` it crawls one for itself, so the CLI
+still works alone.
+
 Usage:
     python duplicate_content.py https://example.com --depth 2 --json
+    python duplicate_content.py https://example.com --inventory inventory.json
     python duplicate_content.py https://example.com --threshold 0.85
 """
 
 import argparse
-import hashlib
 import json
-import re
 import sys
-import time
 from collections import defaultdict
-from urllib.parse import urljoin, urlparse
 
-try:
-    from bs4 import BeautifulSoup
-except ImportError:
-    print("Error: beautifulsoup4 required. Install with: pip install beautifulsoup4")
-    sys.exit(1)
-
-try:
-    from lib.safe_http import safe_get
-except ImportError:
-    from scripts.lib.safe_http import safe_get
+import site_crawl
 
 # Quality gates from resources/references/quality-gates.md
 THIN_CONTENT_THRESHOLDS = {
@@ -41,247 +34,62 @@ THIN_CONTENT_THRESHOLDS = {
 
 
 # ---------------------------------------------------------------------------
-# Fetch & extract
+# Reading pages off the inventory
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, timeout: int = 12, respect_robots: bool = False) -> str:
-    """The page HTML, or "" for anything that is not fetchable HTML.
+def pages_from_inventory(inventory: dict) -> dict:
+    """{page key: {word_count, text_hash, signature, noindex}} for pages with content.
 
-    `respect_robots` belongs on pages found by following links, not on the URL the
-    operator handed us. Returning "" for a robots refusal is safe here: fewer pages
-    crawled means fewer duplicate pairs found, which understates and cannot
-    fabricate.
+    Non-200 responses are left out. An error page is HTML and is not content: a 404
+    body was being analysed like any other page, so a site with one dead internal
+    link collected a `Critical` thin-content finding advising somebody to expand a
+    page that does not exist — and it counted against CN-039, the thin-content item.
+    A broken link is `internal_links.py`'s finding now, and it is made once.
     """
-    try:
-        resp = safe_get(url, timeout=timeout, respect_robots=respect_robots)
-        # 200 only. An error page is HTML and is not content: a 404 body was being
-        # analysed like any other page, so a site with one dead internal link
-        # collected a `Critical` thin-content finding advising somebody to expand a
-        # page that does not exist — and it counted against CN-039, which is the
-        # thin-content item. Broken links are `broken_links.py`'s finding, once.
-        if resp.status_code != 200:
-            return ""
-        ct = resp.headers.get("Content-Type", "")
-        if "text/html" not in ct:
-            return ""
-        return resp.text
-    except Exception:
-        return ""
-
-
-def extract_text(html: str) -> str:
-    """Extract visible body text, stripping nav/footer/scripts."""
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-        tag.decompose()
-    body = soup.find("body")
-    if not body:
-        return ""
-    return body.get_text(separator=" ", strip=True)
-
-
-def canonical_form(url: str) -> str:
-    """One spelling per page, so the same page cannot be its own duplicate.
-
-    The trailing slash used to be stripped unconditionally, which turned
-    `http://example.com/` into `http://example.com` — a second URL for the same
-    document. The seed URL kept its slash, both were crawled, both returned identical
-    bytes, and the exact-hash comparison reported the home page as **Critical**
-    duplicate content. Every site with a `href="/"` link in its navigation, which is
-    every site, got that finding.
-
-    The root keeps its slash because an empty path is not a path; everything deeper
-    loses it, so `/about` and `/about/` are one page.
-    """
-    if url.endswith("/"):
-        stripped = url[:-1]
-        # Deeper than the origin? Then the slash was decoration. `://` is still
-        # present in a bare origin, so its absence after stripping means the path was
-        # exactly "/".
-        return stripped if urlparse(stripped).path else url
-    return url
-
-
-def extract_internal_links(html: str, base_url: str) -> list:
-    """Extract internal links from a page, one canonical spelling each."""
-    soup = BeautifulSoup(html, "html.parser")
-    base_domain = urlparse(base_url).netloc
-    links = []
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if href.startswith("#") or href.startswith("javascript:") or href.startswith("mailto:"):
+    pages = {}
+    for key, row in sorted((inventory.get("pages") or {}).items()):
+        if not row.get("html") or row.get("status") != 200:
             continue
-        full = urljoin(base_url, href)
-        parsed = urlparse(full)
-        if parsed.netloc == base_domain and parsed.scheme in ("http", "https"):
-            links.append(canonical_form(
-                f"{parsed.scheme}://{parsed.netloc}{parsed.path}"))
-    return list(set(links))
-
-
-# ---------------------------------------------------------------------------
-# Shingle-based MinHash for near-duplicate detection
-# ---------------------------------------------------------------------------
-
-def shingle(text: str, k: int = 5) -> set:
-    """Create k-word shingles from text."""
-    words = re.findall(r"\b[a-z]+\b", text.lower())
-    if len(words) < k:
-        return {" ".join(words)}
-    return {" ".join(words[i:i+k]) for i in range(len(words) - k + 1)}
-
-
-def minhash_signature(shingles: set, num_hashes: int = 100) -> list:
-    """Compute MinHash signature for a set of shingles."""
-    sig = []
-    for i in range(num_hashes):
-        min_hash = float("inf")
-        for s in shingles:
-            h = int(hashlib.md5(f"{i}:{s}".encode()).hexdigest(), 16)
-            if h < min_hash:
-                min_hash = h
-        sig.append(min_hash)
-    return sig
-
-
-def jaccard_from_minhash(sig1: list, sig2: list) -> float:
-    """Estimate Jaccard similarity from two MinHash signatures.
-
-    `strict=True` because the estimate is only valid over signatures of the same
-    length: `zip` stops at the shorter one while the denominator stays `len(sig1)`,
-    so a short signature does not raise — it returns a similarity biased downwards,
-    and a pair of duplicate pages quietly falls under the threshold. Every signature
-    here comes from the same fixed number of hash functions, so a length mismatch is
-    a defect rather than an input, and this is where it should be heard about.
-    """
-    if not sig1 or not sig2:
-        return 0.0
-    matches = sum(1 for a, b in zip(sig1, sig2, strict=True) if a == b)
-    return matches / len(sig1)
-
-
-def exact_hash(text: str) -> str:
-    """SHA-256 of normalized text for exact duplicate detection."""
-    normalized = re.sub(r"\s+", " ", text.lower().strip())
-    return hashlib.sha256(normalized.encode()).hexdigest()
-
-
-def _robots_directives(value: str | None) -> set[str]:
-    """Normalize a robots directive string into lowercase tokens."""
-    if not value:
-        return set()
-    return {token.strip().lower() for token in re.split(r"[\s,;]+", value) if token.strip()}
-
-
-def _robots_content_has_noindex(content: str | None) -> bool:
-    directives = _robots_directives(content)
-    return "noindex" in directives or "none" in directives
-
-
-def html_has_noindex(html: str) -> bool:
-    """Return True when retained HTML contains a robots noindex directive."""
-    if not html:
-        return False
-
-    soup = BeautifulSoup(html, "html.parser")
-    for meta in soup.find_all("meta"):
-        name = (meta.get("name") or "").strip().lower()
-        http_equiv = (meta.get("http-equiv") or "").strip().lower()
-        content = meta.get("content")
-
-        if name in {"robots", "googlebot", "bingbot"} and _robots_content_has_noindex(content):
-            return True
-        if http_equiv == "x-robots-tag" and _robots_content_has_noindex(content):
-            return True
-
-    return False
-
-
-def page_is_noindex(data: dict) -> bool:
-    """Detect noindex from explicit fields first, then retained HTML."""
-    if data.get("noindex") is True:
-        return True
-
-    for key in ("meta_robots", "robots", "x_robots_tag", "x-robots-tag"):
-        if _robots_content_has_noindex(data.get(key)):
-            return True
-
-    return html_has_noindex(data.get("html") or "")
-
-
-# ---------------------------------------------------------------------------
-# Crawl
-# ---------------------------------------------------------------------------
-
-def crawl_site(start_url: str, max_pages: int = 50, depth: int = 2) -> dict:
-    """
-    Crawl a site starting from start_url.
-    Returns {url: {"text": str, "word_count": int, "html": str}}.
-    """
-    # The seed goes through the same spelling rule as every discovered link, or the
-    # entry page is crawled twice under two names and duplicates itself.
-    start_url = canonical_form(start_url)
-    visited = {}
-    queue = [(start_url, 0)]
-    seen = {start_url}
-
-    while queue and len(visited) < max_pages:
-        url, d = queue.pop(0)
-        time.sleep(0.5)  # polite delay
-
-        html = fetch_page(url, respect_robots=d > 0)
-        if not html:
+        if not row.get("text_hash"):
             continue
-
-        text = extract_text(html)
-        word_count = len(re.findall(r"\b\w+\b", text))
-
-        visited[url] = {
-            "text": text,
-            "word_count": word_count,
-            "html": html,
-            "noindex": html_has_noindex(html),
+        pages[key] = {
+            "word_count": row.get("content_words", 0),
+            "text_hash": row["text_hash"],
+            "signature": row.get("signature") or [],
+            # From the crawl, which reads the `X-Robots-Tag` header as well as the
+            # meta tag. The header was invisible to this script before, so a page
+            # kept out of the index by a header was still asked for 300 more words.
+            "noindex": bool(row.get("noindex")),
         }
-
-        if d < depth:
-            for link in extract_internal_links(html, url):
-                if link not in seen and len(seen) < max_pages * 3:
-                    seen.add(link)
-                    queue.append((link, d + 1))
-
-    return visited
+    return pages
 
 
 # ---------------------------------------------------------------------------
 # Analysis
 # ---------------------------------------------------------------------------
 
-def detect_duplicates(pages: dict, similarity_threshold: float = 0.85) -> dict:
+def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
+                      fetch_error: str | None = None) -> dict:
     """
     Detect exact and near-duplicate pages.
     Returns report with exact dupes, near-dupes, and thin content.
+
+    `pages` comes from `pages_from_inventory`: the hash and the signature were
+    computed by the crawl that read the page, so nothing here fetches anything.
     """
-    # Step 1: Exact duplicates (hash comparison)
     hash_groups = defaultdict(list)
     signatures = {}
 
-    for url, data in pages.items():
-        text = data["text"]
-        if not text.strip():
-            continue
-        h = exact_hash(text)
-        hash_groups[h].append(url)
-
-        # MinHash signature for near-duplicate comparison
-        s = shingle(text)
-        if s:
-            signatures[url] = minhash_signature(s)
+    for url, data in sorted(pages.items()):
+        hash_groups[data["text_hash"]].append(url)
+        if data.get("signature"):
+            signatures[url] = data["signature"]
 
     exact_dupes = []
     for _digest, urls in hash_groups.items():
         if len(urls) > 1:
-            indexable_urls = [url for url in urls if not page_is_noindex(pages[url])]
-            noindex_urls = [url for url in urls if page_is_noindex(pages[url])]
+            indexable_urls = [url for url in urls if not pages[url]["noindex"]]
+            noindex_urls = [url for url in urls if pages[url]["noindex"]]
 
             if len(indexable_urls) > 1:
                 exact_dupes.append({
@@ -314,12 +122,14 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85) -> dict:
                 continue
             checked.add(pair)
 
-            sim = jaccard_from_minhash(signatures[urls[i]], signatures[urls[j]])
+            sim = site_crawl.jaccard_from_minhash(signatures[urls[i]],
+                                                  signatures[urls[j]])
             if sim >= similarity_threshold:
                 # Skip if already in exact dupes
                 if any(urls[i] in ed["urls"] and urls[j] in ed["urls"] for ed in exact_dupes):
                     continue
-                noindex_in_pair = page_is_noindex(pages[urls[i]]) or page_is_noindex(pages[urls[j]])
+                noindex_in_pair = (pages[urls[i]]["noindex"]
+                                   or pages[urls[j]]["noindex"])
                 near_dupes.append({
                     "type": "near_duplicate",
                     "severity": "Info" if noindex_in_pair else "Warning",
@@ -343,8 +153,8 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85) -> dict:
 
     # Step 3: Thin content
     thin_pages = []
-    for url, data in pages.items():
-        if page_is_noindex(data):
+    for url, data in sorted(pages.items()):
+        if data["noindex"]:
             continue
         wc = data["word_count"]
         threshold = THIN_CONTENT_THRESHOLDS["default"]
@@ -362,8 +172,9 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85) -> dict:
     return {
         # An empty crawl is not a site with no duplicates. Without this the runner
         # cannot tell "nothing is wrong" from "nothing was read", and four items —
-        # two of them `high` — graded the emptiness as a pass.
-        "fetch_error": None if pages else "no page could be read",
+        # two of them `high` — graded the emptiness as a pass. The crawl's own
+        # reason wins when it has one: it knows why nothing was read.
+        "fetch_error": fetch_error or (None if pages else "no page could be read"),
         "pages_analyzed": len(pages),
         "exact_duplicates": exact_dupes,
         "near_duplicates": near_dupes,
@@ -388,6 +199,9 @@ def main():
         description="Duplicate & Thin Content Detector (MinHash / Jaccard similarity)"
     )
     parser.add_argument("url", help="Start URL to crawl")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory from site_crawl.py; crawled here when "
+                             "not supplied")
     parser.add_argument("--depth", type=int, default=2, help="Crawl depth (default: 2)")
     parser.add_argument("--max-pages", type=int, default=50, help="Max pages to crawl (default: 50)")
     parser.add_argument("--threshold", type=float, default=0.85,
@@ -395,11 +209,13 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
-    print(f"Crawling {args.url} (depth={args.depth}, max={args.max_pages})...", file=sys.stderr)
-    pages = crawl_site(args.url, max_pages=args.max_pages, depth=args.depth)
-    print(f"Crawled {len(pages)} pages. Analyzing...", file=sys.stderr)
+    inventory = site_crawl.inventory_for(args.url, args.inventory, depth=args.depth,
+                                         max_pages=args.max_pages)
+    pages = pages_from_inventory(inventory)
+    print(f"{len(pages)} page(s) with content. Analyzing...", file=sys.stderr)
 
-    report = detect_duplicates(pages, similarity_threshold=args.threshold)
+    report = detect_duplicates(pages, similarity_threshold=args.threshold,
+                               fetch_error=inventory.get("fetch_error"))
 
     if args.json:
         print(json.dumps(report, indent=2))

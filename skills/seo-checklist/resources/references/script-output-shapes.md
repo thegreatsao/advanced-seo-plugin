@@ -1,7 +1,9 @@
-<!-- Updated: 2026-08-02 -->
+<!-- Updated: 2026-08-04 -->
 # Script output shapes
 
-All 55 scripts the registry runs are documented here. Four of them break the
+All 55 scripts the registry runs are documented here, plus `site_crawl.py`, which
+the runner runs itself before building the plan and whose inventory the ten site-wide
+checks read. Four of them break the
 `issues[].severity` + `message` convention the rest share — `gsc_checker.py` and
 `indexnow_checker.py` capitalise severity, `indexnow_checker.py` uses `finding`
 instead of `message`, and `robots_path_tester.py` emits no `issues[]` at all.
@@ -34,10 +36,11 @@ topical_cluster_mapper, llms_txt_checker (`quality.score`), pagespeed (`performa
 
 | Script | Note |
 |---|---|
-| `duplicate_content.py` | ~55s — crawls 50 pages |
-| `orphan_pages_from_sitemap.py` | ~49s — pulls the full sitemap |
+| `site_crawl.py` | one crawl for all ten site-wide checks; the budget is `--crawl-max-pages` (100) |
+| `duplicate_content.py` | fast with `--inventory`: it compares hashes the crawl computed |
+| `orphan_pages_from_sitemap.py` | fast with `--inventory`: sitemap membership against the crawl's link graph |
 | `pagespeed.py` | ~19s — external PageSpeed API |
-| `anchor_text_audit.py` | ~12s — crawls 25 pages |
+| `anchor_text_audit.py` | fast with `--inventory` |
 | `external_link_quality.py` | ~10s — checks every outbound link |
 | `indexability_matrix.py`, `sitemap_checker.py`, `broken_links.py` | ~6-8s |
 | everything else | < 1.5s |
@@ -89,6 +92,9 @@ Slow scripts must run first in the pool so they overlap the fast ones.
 
 ### anchor_text_audit.py
 
+Reads `--inventory` (see `site_crawl.py`); crawls one for itself without it.
+
+`fetch_error` — NoneType or str (the crawl's reason, copied through)
 `start_url` — str
 `pages_crawled` — int
 `links_analyzed` — int
@@ -96,24 +102,25 @@ Slow scripts must run first in the pool so they overlap the fast ones.
 `summary.empty_anchors` — int
 `summary.generic_anchors` — int
 `summary.nofollow_internal_links` — int
+`summary.navigation_links` — int (pairs carried by most pages: site chrome)
+`summary.editorial_links` — int (the rest, which is what the repetition checks read)
 `summary.overused_exact_match_targets` — int
 `summary.low_diversity_targets` — int
 `top_anchor_texts[]` — array
   - item keys: anchor, count
 `targets[]` — array
-  - item keys: target, total_internal_links, unique_anchor_texts, diversity_ratio, top_anchor, top_anchor_count
+  - item keys: target, total_internal_links, editorial_links, unique_anchor_texts, diversity_ratio, top_anchor, top_anchor_count
 `examples.empty_anchors[]` — array
   - item keys: source, target, anchor, rel, nofollow
 `examples.generic_anchors[]` — array
 `examples.nofollow_internal_links[]` — array
   - item keys: source, target, anchor, rel, nofollow
 `examples.overused_exact_match_targets[]` — array
-  - item keys: target, total_internal_links, unique_anchor_texts, diversity_ratio, top_anchor, top_anchor_count
+  - item keys: target, total_internal_links, editorial_links, unique_anchor_texts, diversity_ratio, top_anchor, top_anchor_count
 `examples.low_diversity_targets[]` — array
-  - item keys: target, total_internal_links, unique_anchor_texts, diversity_ratio, top_anchor, top_anchor_count
 `issues[]` — array
   - item keys: severity, type, count, message
-`fetch_errors[]` — array
+`fetch_errors[]` — array (per-URL; not the whole-crawl verdict)
 
 ### answer_block_scanner.py
 
@@ -162,22 +169,30 @@ Slow scripts must run first in the pool so they overlap the fast ones.
 
 ### broken_links.py
 
-`page_url` — str
+With `--inventory` the scope is the whole site's **internal** links, read out of the
+shared crawl with no requests; `scope` says which path produced the answer. Without
+one it fetches a single page and checks every link on it, internal and external.
+
+`page_url` — str (the site with `--inventory`, the page without)
+`scope` — str: `internal` (inventory) — absent on the single-page path
 `total_links` — int
 `checked` — int
+`truncated` — bool
 `broken[]` — array
-  - item keys: url, anchor_text, is_internal, status, error, redirect, response_time_ms
+  - item keys: url, anchor_text, is_internal, status, error, redirect, response_time_ms, linked_from
 `redirected[]` — array
-  - item keys: url, anchor_text, is_internal, status, error, redirect, response_time_ms
 `timeout[]` — array
+`unchecked[]` — array (targets the crawl did not reach; counted in neither direction)
 `healthy` — int
 `summary.total` — int
 `summary.healthy` — int
 `summary.broken` — int
 `summary.redirected` — int
 `summary.timeout` — int
+`summary.unchecked` — int
 `issues[]` — array
 `error` — NoneType
+`fetch_error` — NoneType or str
 
 ### cache_compression_checker.py
 
@@ -194,6 +209,7 @@ Slow scripts must run first in the pool so they overlap the fast ones.
 `rows[]` — array
   - item keys: url, status, final_url, canonical, verdict, issues
 `issues[]` — array
+`fetch_error` — NoneType or str (no URL answered; CI-009 is `critical`)
 
 ### citation_readiness.py
 
@@ -299,10 +315,16 @@ reverse-IP service. Both report `checked: false` with a reason instead.
 
 ### duplicate_content.py
 
+Reads `--inventory` (see `site_crawl.py`): the word count, the content hash and the
+MinHash signature are computed by the crawl, so this script compares pages rather
+than fetching them.
+
+`fetch_error` — NoneType or str
 `pages_analyzed` — int
 `exact_duplicates[]` — array
   - item keys: type, severity, urls, finding, fix
 `near_duplicates[]` — array
+  - item keys: type, severity, similarity, url_a, url_b, word_count_a, word_count_b, noindex_in_pair, finding, fix
 `thin_content[]` — array
   - item keys: type, severity, url, word_count, threshold, finding, fix
 `summary.exact_duplicate_groups` — int
@@ -628,6 +650,10 @@ one — the script refuses the file instead.
   - item keys: severity, message, url
 `images[]` — array
   - item keys: src, alt, has_alt, width, height, is_responsive_fill, loading, srcset, sizes, format, likely_lcp_candidate
+    `likely_lcp_candidate` comes from `seo_common.likely_lcp_candidate`: first in
+    document order, or `fetchpriority=high`, or `loading=eager` — and never an image
+    whose *declared* size is under 100×100, because an icon is not the largest paint.
+    One definition, shared with `image_weight_audit.py`.
 `fetch_error` — NoneType
 
 ### image_weight_audit.py
@@ -663,8 +689,9 @@ one — the script refuses the file instead.
 
 `site` — str
 `count` — int
+`fetch_error` — NoneType or str (no URL answered; three `critical` items read `rows.0`)
 `rows[]` — array
-  - item keys: url, final_url, status, robots_allowed, robots_rule, meta_robots, x_robots_tag, canonical, in_sitemap, redirects, verdict, blockers
+  - item keys: url, final_url, status, robots_allowed, robots_rule, meta_robots, x_robots_tag, canonical, in_sitemap, redirects, verdict, blockers, error
 
 ### indexnow_checker.py
 
@@ -690,46 +717,38 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 
 ### internal_links.py
 
+Reads `--inventory` (see `site_crawl.py`). `pages` is keyed by page URL, so the paths
+below are examples rather than a schema.
+
+`fetch_error` — NoneType or str
 `start_url` — str
 `domain` — str
 `pages_crawled` — int
 `total_internal_links` — int
 `unique_pages_found` — int
 `max_depth_reached` — int
-`pages.https://www.plerdy.com/.outgoing_links` — int
-`pages.https://www.plerdy.com/.incoming_links` — int
-`pages.https://www.plerdy.com/ab-testing-tool.outgoing_links` — int
-`pages.https://www.plerdy.com/ab-testing-tool.incoming_links` — int
-`pages.https://www.plerdy.com/user-session-recordings.outgoing_links` — int
-`pages.https://www.plerdy.com/user-session-recordings.incoming_links` — int
-`pages.https://www.plerdy.com/heatmap.outgoing_links` — int
-`pages.https://www.plerdy.com/heatmap.incoming_links` — int
-`pages.https://www.plerdy.com/smart-forms.outgoing_links` — int
-`pages.https://www.plerdy.com/smart-forms.incoming_links` — int
-`pages.https://www.plerdy.com/seo-checklist/.outgoing_links` — int
-`pages.https://www.plerdy.com/seo-checklist/.incoming_links` — int
-`anchor_texts.Website Heatmap Tool` — int
-`anchor_texts.Session Replay Software` — int
-`anchor_texts.Pop-Up Software` — int
-`anchor_texts.A/B Testing Tool` — int
-`anchor_texts.Website Feedback Tool` — int
-`anchor_texts.Event Tracking Tools` — int
-`anchor_texts.Website Funnel Analysis` — int
-`anchor_texts.Ecommerce Analytics` — int
-`anchor_texts.SEO Checker` — int
-`anchor_texts.Error Tracking Tool` — int
-`anchor_texts.SERP Checker` — int
-`anchor_texts.Chrome SEO Analyzer` — int
-`anchor_texts.Conversion Accelerator` — int
-`anchor_texts.Pricing & Plans` — int
-`anchor_texts.Digital marketing` — int
-`anchor_texts.Content Marketing` — int
-`anchor_texts.Ecommerce` — int
-`anchor_texts.Business` — int
-`anchor_texts.SEO` — int
-`anchor_texts.Web Design` — int
-`link_distribution.min` — int
-`link_distribution.max` — int
+`pages.<url>.outgoing_links` — int (distinct internal targets)
+`pages.<url>.incoming_links` — int (distinct pages linking here)
+`anchor_texts.<anchor>` — int (top 20)
+`link_distribution.min` / `.max` — int
+`link_distribution.avg` — float
+`orphan_candidates[]` — array
+  - item keys: url, incoming_links
+`nofollow_links[]` — array
+  - item keys: url, anchor_text, nofollow, source
+`internal_redirects[]` — array — AR-149's subject
+  - item keys: url, to, hops, linked_from
+`summary.pages` — int
+`summary.internal_links` — int
+`summary.internal_redirects` — int — read by AR-149
+`summary.orphan_candidates` — int
+`summary.nofollow_internal_links` — int
+`summary.links_without_anchor_text` — int
+`summary.pages_under_three_links` — int
+`summary.pages_over_hundred_links` — int
+`issues[]` — array of str
+`recommendations[]` — array of str
+`error` — NoneType
 
 ### javascript_render_audit.py
 
@@ -787,13 +806,18 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 
 ### link_profile.py
 
+Reads `--inventory` (see `site_crawl.py`). `total_internal_links` counts every `<a>`,
+not distinct targets — link equity divides among links.
+
+`fetch_error` — NoneType or str
 `pages_crawled` — int
 `total_internal_links` — int
 `total_external_links` — int
 `unique_internal_targets` — int
 `unique_external_domains` — int
 `avg_internal_links_per_page` — float
-`orphan_pages.count` — int
+`robots_refused[]` — array (kept out of the orphan arithmetic on purpose)
+`orphan_pages.count` — int — read by CI-008
 `orphan_pages.urls[]` — array
 `dead_end_pages.count` — int
 `dead_end_pages.urls[]` — array
@@ -801,7 +825,8 @@ script predates the `issues[].severity` + `message` convention the rest follow.
   - item keys: url, inbound_links
 `top_external_domains[]` — array
   - item keys: domain, links
-`issues[]` — array
+`issues[]` — array — read by AR-162
+  - item keys: type, severity, count, finding, pages, fix
 `site_url` — str
 
 ### llms_txt_checker.py
@@ -826,6 +851,7 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 `source` — str
 `final_url` — str
 `status` — int
+`fetch_error` — NoneType or str (the page could not be read; LO-198 and LO-200 are `high`)
 `local_business_nodes` — int
 `phones_detected[]` — array
 `map_embeds` — int
@@ -877,15 +903,24 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 
 ### orphan_pages_from_sitemap.py
 
+Reads `--inventory` (see `site_crawl.py`). **Reachable means linked-to**, not fetched:
+the shared crawl seeds from the sitemap, so "we got a status for it" would make every
+sitemap URL reachable and this check vacuous.
+
 `site` — str
+`fetch_error` — NoneType or str
 `summary.sitemaps_checked` — int
 `summary.sitemap_urls` — int
 `summary.reachable_pages` — int
-`summary.orphan_pages` — int
+`summary.orphan_pages` — int — read by GO-137
 `summary.discovered_not_in_sitemap` — int
+`summary.robots_skipped` — int
+`summary.sitemap_urls_blocked_by_robots` — int
 `sitemaps_checked[]` — array
 `orphan_pages[]` — array
 `discovered_not_in_sitemap[]` — array
+`robots_skipped[]` — array
+`sitemap_urls_blocked_by_robots[]` — array
 `reachable_pages[]` — array
   - item keys: url, status, final_url, depth, in_sitemap
 `issues[]` — array
@@ -953,8 +988,11 @@ script predates the `issues[].severity` + `message` convention the rest follow.
   - item keys: href, text, rel
 `links.external[]` — array
   - item keys: href, text, rel
-`pagination.prev` — NoneType
-`pagination.next` — NoneType
+`pagination.prev` — NoneType or str
+`pagination.next` — NoneType or str
+`pagination.paginated` — bool
+`pagination.issues[]` — array — read by AR-146
+  - item keys: severity, type, message
 `resource_hints.preload[]` — array
 `resource_hints.preconnect[]` — array
 `resource_hints.dns-prefetch[]` — array
@@ -1114,6 +1152,47 @@ to walk `rows[].decisions` directly; there is no aggregate to assert against.
 `issues[]` — array
 `recommendations[]` — array
 `error` — NoneType
+
+### site_crawl.py
+
+Not a registry item's script — the runner runs it once before it builds the plan and
+hands the file to the ten site-wide checks. Written down here because those checks'
+output contracts derive from it, so a change here moves ten items at once.
+
+`inventory_version` — int (a reader refuses a version it does not know)
+`site` / `entry` — str
+`crawled_at` — str (ISO 8601, UTC)
+`depth` / `max_pages` — int
+`signatures` — bool
+`fetch_error` — NoneType or str — copied through by every reader
+`summary.requests` — int — what the crawl cost, which is the point of it existing
+`summary.pages_fetched` / `.pages_html` / `.pages_broken` / `.pages_redirected` — int
+`summary.robots_blocked` — int
+`summary.internal_links` / `.external_links` — int (every `<a>`, not distinct targets)
+`summary.unique_internal_targets` / `.unique_external_targets` — int
+`summary.unchecked_internal_targets` — int (beyond depth or budget: counted neither way)
+`summary.sitemaps_checked` / `.sitemap_urls` / `.sitemap_urls_off_host` — int
+`summary.reachable_pages` — int (linked-to, not fetched)
+`summary.truncated` — bool
+`pages.<key>` — object, one per fetched URL
+  - `url`, `final_url`, `status`, `content_type`, `redirect_chain[]`, `redirected`,
+    `bytes`, `error`, `robots_blocked`, `html`, `depth`, `discovered_by`
+    (`entry`/`sitemap`/`link`), `in_sitemap`
+  - `title`, `meta_description`, `meta_robots`, `canonical`, `noindex`
+    (meta **and** `X-Robots-Tag`)
+  - `content_words`, `text_hash`, `signature[]` (MinHash, 100 values)
+  - `internal_out`, `unique_internal_out`, `external_out`
+  - `links[]` — item keys: target, anchor, rel, nofollow, internal
+`reachable[]` — array of page keys
+`unchecked_internal_targets[]` — array
+`robots_blocked.<key>` — str
+`sitemap.urls[]` / `.off_host[]` / `.sitemaps_checked[]` / `.errors[]`
+`broken[]` — array — item keys: url, status, error, linked_from
+`redirected[]` — array — item keys: url, to, hops, linked_from
+`external_targets.<url>[]` — array — item keys: source, anchor, nofollow
+
+A page key is `scheme://host/path`: query dropped, trailing slash kept only on the
+root. `--out PATH` writes the inventory to a file and prints the summary instead.
 
 ### sitemap_checker.py
 

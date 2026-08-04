@@ -198,6 +198,36 @@ class HtmlValidator(unittest.TestCase):
         for item in self.items_for():
             self.assertEqual(verdict(item["id"], out), NO_DATA, item["id"])
 
+    def test_the_validator_failing_to_fetch_the_page_is_not_a_clean_document(self):
+        """The same failure one step further in, and it needs no outage to happen.
+
+        Nu answers 200 with a `non-document-error` when *it* could not read the URL —
+        a 403 aimed at its user agent, a timeout, a TLS problem, a host it cannot
+        reach. That is not a document error, so `errors` was 0 and two items reported
+        "your HTML validates" about a page the validator never saw. Found by pointing
+        the dead-origin sweep at a real validator by accident, which is also why that
+        sweep now leaves the API scripts alone.
+        """
+        self.serve([{"type": "non-document-error", "subType": "io",
+                     "message": "HTTP resource not retrievable. "
+                                "The HTTP status from the remote server was: 403."}])
+        out = self.mod.validate("https://example.com/")
+        self.assertIn("could not read the page", out.get("error") or "")
+        self.assertEqual(out["summary"], {})
+        for item in self.items_for():
+            self.assertEqual(verdict(item["id"], out), NO_DATA, item["id"])
+
+    def test_a_warning_alongside_a_fetch_problem_is_still_read(self):
+        """Only an answer that is *entirely* non-document errors means the document
+        was not seen. A page that validated and also produced one odd transport
+        message is a page that validated."""
+        self.serve([{"type": "non-document-error", "subType": "warning",
+                     "message": "The Content-Type was text/html with no charset."},
+                    {"type": "error", "message": "Stray end tag div.", "lastLine": 3}])
+        out = self.mod.validate("https://example.com/")
+        self.assertIsNone(out.get("error"))
+        self.assertEqual(out["summary"]["errors"], 1)
+
 
 # ---------------------------------------------------------------------------
 # Search Console

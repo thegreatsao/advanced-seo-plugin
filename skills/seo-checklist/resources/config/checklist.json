@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "f949859fabd1",
+  "registry_version": "18b1b372a6ed",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -247,7 +247,9 @@
       "check": {
         "script": "link_profile.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -577,7 +579,9 @@
       "check": {
         "script": "duplicate_content.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -723,7 +727,9 @@
       "check": {
         "script": "duplicate_content.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -945,7 +951,9 @@
       "check": {
         "script": "duplicate_content.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -993,7 +1001,9 @@
       "check": {
         "script": "duplicate_content.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -1218,20 +1228,8 @@
       "category_label": "Content",
       "title": "Make Infinite Scroll Crawlable (Paginated URLs)",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "parse_html.py",
-        "args": [
-          "{html}",
-          "--url",
-          "{url}"
-        ],
-        "requires": "offline",
-        "assert": {
-          "path": "pagination.next",
-          "truthy": true
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "high",
       "fix": "Make infinite scroll crawlable via paginated URLs"
     },
@@ -1630,7 +1628,9 @@
       "check": {
         "script": "anchor_text_audit.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -2826,7 +2826,9 @@
       "check": {
         "script": "orphan_pages_from_sitemap.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -3006,12 +3008,15 @@
         ],
         "requires": "offline",
         "assert": {
-          "path": "pagination",
-          "truthy": true
+          "path": "pagination.issues",
+          "none_severity": [
+            "critical",
+            "high"
+          ]
         }
       },
       "effort": "high",
-      "fix": "Verify pagination is correct"
+      "fix": "Fix rel=next/prev: same host, and never pointing at the page itself"
     },
     {
       "id": "AR-147",
@@ -3057,16 +3062,22 @@
       "check": {
         "script": "internal_links.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
-          "path": "pages",
-          "truthy": true
+          "path": "summary.internal_redirects",
+          "eq": 0
+        },
+        "warn": {
+          "path": "summary.internal_redirects",
+          "lte": 3
         }
       },
       "effort": "high",
-      "fix": "Remove internal links that pass through a redirect"
+      "fix": "Point internal links at the final URL instead of a redirect"
     },
     {
       "id": "AR-150",
@@ -3303,7 +3314,9 @@
       "check": {
         "script": "link_profile.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {
@@ -3431,7 +3444,9 @@
       "check": {
         "script": "broken_links.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
         "requires": "crawl",
         "assert": {

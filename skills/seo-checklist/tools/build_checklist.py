@@ -120,6 +120,13 @@ def RATING_WARN(metric):
 
 PAGE = ["{url}"]
 HTMLARG = ["{html}", "--url", "{url}"]
+# The site-wide checks read one crawl instead of running six of their own.
+# `{inventory_json}` is produced by the runner before the plan is built (see
+# `checklist_runner.main`), so unlike the browser artifacts nobody has to supply it —
+# but it can be missing for the same reasons any input can, and then these items are
+# NO_DATA carrying the crawl's own reason rather than a verdict about a site nothing
+# read.
+CRAWLARG = ["{url}", "--inventory", "{inventory_json}"]
 # GSC scripts address a Search Console property, not the audited URL — the two
 # differ whenever you audit a page on a property you access by domain.
 GSCARG = ["{gsc_property}", "--credentials", "{gsc_credentials}"]
@@ -242,7 +249,7 @@ item(6, "medium", S, "robots_checker.py", PAGE,
      {"path": "sitemaps", "len_gte": 1},
      "Add a Sitemap: https://example.com/sitemap.xml line to robots.txt")
 item(7, "medium", M, fix="Submit the sitemap in Google Search Console and Bing Webmaster Tools")
-item(8, "high", S, "link_profile.py", PAGE,
+item(8, "high", S, "link_profile.py", CRAWLARG,
      {"path": "orphan_pages.count", "eq": 0},
      "Eliminate orphan pages: add 1-2 contextual internal links to each")
 # canonical_checker.py never emits a `critical` or `high` issue — it says
@@ -317,7 +324,7 @@ item(20, "high", S, "parse_html.py", HTMLARG,
 item(21, "medium", S, "parse_html.py", HTMLARG,
      {"path": "title", "len_gte": 30},
      "Titles under 30 characters are usually too vague to match intent")
-item(22, "high", S, "duplicate_content.py", PAGE,
+item(22, "high", S, "duplicate_content.py", CRAWLARG,
      {"path": "exact_duplicates", "len_eq": 0},
      "Crawl for duplicate titles, then differentiate or canonicalize them")
 item(23, "high", S, "gsc_cannibalization.py", GSCARG,
@@ -335,7 +342,7 @@ item(27, "high", S, "parse_html.py", HTMLARG,
 item(28, "medium", S, "parse_html.py", HTMLARG,
      {"path": "meta_description", "truthy": True},
      "Fill in meta descriptions, high-value pages first")
-item(29, "medium", S, "duplicate_content.py", PAGE,
+item(29, "medium", S, "duplicate_content.py", CRAWLARG,
      {"path": "summary.exact_duplicate_groups", "eq": 0},
      "Remove duplicate meta descriptions")
 item(30, "low", S, "parse_html.py", HTMLARG,
@@ -376,7 +383,7 @@ item(37, "low", L, fix="Separate primary from supplementary content visually and
 item(38, "medium", S, "freshness_checker.py", PAGE,
      {"path": "score", "gte": 70},
      "Refresh evergreen material and balance it with new content")
-item(39, "high", S, "duplicate_content.py", PAGE,
+item(39, "high", S, "duplicate_content.py", CRAWLARG,
      {"path": "summary.thin_pages", "eq": 0},
      "Consolidate or expand thin pages",
      {"path": "summary.thin_pages", "lte": 5})
@@ -390,7 +397,7 @@ item(39, "high", S, "duplicate_content.py", PAGE,
 item(40, "medium", S, "eeat_signal_checker.py", PAGE,
      {"path": "signals.privacy_links", "len_gte": 1},
      "Publish an up-to-date privacy policy and link to it")
-item(41, "high", S, "duplicate_content.py", PAGE,
+item(41, "high", S, "duplicate_content.py", CRAWLARG,
      {"path": "summary.exact_duplicate_groups", "eq": 0},
      "Eliminate internal duplicates: consolidate or canonicalize")
 item(42, "medium", L, fix="Review external duplicates and syndication, agree on a canonical to the source")
@@ -423,9 +430,17 @@ item(54, "high", S, "image_inventory.py", PAGE,
      # the flag the script already computes needs no wording at all.
      {"path": "summary.lazy_lcp_candidates", "eq": 0},
      "Lazy-loaded content must remain discoverable by crawlers")
-item(55, "medium", S, "parse_html.py", HTMLARG,
-     {"path": "pagination.next", "truthy": True},
-     "Make infinite scroll crawlable via paginated URLs")
+# This asserted `pagination.next` was truthy, so every page that is not itself part
+# of a paginated series — which is nearly every page ever audited — was told to "make
+# infinite scroll crawlable". A `medium` accusation, in the content category, on
+# almost every site, and its twin AR-146 had the opposite defect (see below).
+#
+# LLM rather than script: the item is about whether a page loads more content on
+# scroll *without* offering paginated URLs. Nothing here observes scroll behaviour,
+# and `rel=next` being absent is not evidence of infinite scroll — it is the normal
+# state of an unpaginated page.
+item(55, "medium", L,
+     fix="Make infinite scroll crawlable via paginated URLs")
 item(56, "medium", S, "freshness_checker.py", PAGE,
      {"path": "dates", "len_gte": 1},
      "Show publication and updated dates")
@@ -483,7 +498,7 @@ item(77, "medium", L, fix="Include the primary keyword in the opening paragraph"
 item(78, "high", M, fix="Assess backlink quality and authority (needs an external service or a GSC CSV export)")
 item(79, "high", M, fix="Identify spammy referring domains")
 item(80, "medium", M, fix="Disavow only on clear spam - not as routine hygiene")
-item(81, "medium", S, "anchor_text_audit.py", PAGE,
+item(81, "medium", S, "anchor_text_audit.py", CRAWLARG,
      {"path": "summary.overused_exact_match_targets", "eq": 0},
      "Diversify anchors, remove exact-match over-optimization",
      {"path": "summary.overused_exact_match_targets", "lte": 10})
@@ -649,7 +664,7 @@ item(135, "medium", S, "gsc_url_inspection.py", INSPECTARG,
 item(136, "high", S, "sitemap_checker.py", PAGE,
      ISSUES_ANY(),
      "Keep XML sitemaps clean", warn=NOTHING_SERIOUS())
-item(137, "medium", S, "orphan_pages_from_sitemap.py", PAGE,
+item(137, "medium", S, "orphan_pages_from_sitemap.py", CRAWLARG,
      {"path": "summary.orphan_pages", "eq": 0},
      "Reconcile indexed pages against sitemap contents",
      {"path": "summary.orphan_pages", "lte": 50})
@@ -682,16 +697,37 @@ item(145, "high", S, "citation_readiness.py", PAGE,
      "Optimize for AI Overviews and zero-click: citability, facts, sources")
 
 # --- 11. Website Architecture ----------------------------------------------
+# The mirror image of CN-055's defect. This asserted `pagination` was truthy, and
+# `pagination` is a dict that always contains both keys — `{"prev": None, "next":
+# None}` is a *non-empty dict*, so it is truthy on every page in existence and the
+# item could not fail. Its exemption in the contract pair said "neither fixture
+# paginates", which is true and was not the reason it passed.
+#
+# What is checkable without judgement: a `rel=next` or `rel=prev` that points at
+# another host, or at the page itself. A page with no pagination has no pagination
+# defect, so it passes — that is the honest answer rather than a manufactured one.
 item(146, "medium", S, "parse_html.py", HTMLARG,
-     {"path": "pagination", "truthy": True},
-     "Verify pagination is correct")
+     NOTHING_SERIOUS("pagination.issues"),
+     "Fix rel=next/prev: same host, and never pointing at the page itself")
 item(147, "medium", S, "url_quality.py", PAGE,
      {"path": "rows.0.param_count", "lte": 2},
      "Short descriptive URLs without excess parameters")
 item(148, "low", M, fix="Visualize the site architecture")
-item(149, "medium", S, "internal_links.py", PAGE,
-     {"path": "pages", "truthy": True},
-     "Remove internal links that pass through a redirect")
+# This asserted `pages` was non-empty — satisfied by any site that answers at all,
+# so an item titled "Eliminate Internal Redirects" could not fail, and its exemption
+# in the contract pair blamed a fixture that "does not redirect" for a rule that
+# never looked. It also hid a real defect for a release: `internal_links.py` set
+# `fetch_error` unconditionally, so the item was NO_DATA everywhere, and "same on
+# both fixtures" stayed true through the change.
+#
+# The shared crawl records where every internal target actually landed, so the item
+# can now be asked its own question. `warn` because a redirected internal link is a
+# wasted hop rather than a broken page: three is untidy, thirty is a migration nobody
+# finished.
+item(149, "medium", S, "internal_links.py", CRAWLARG,
+     {"path": "summary.internal_redirects", "eq": 0},
+     "Point internal links at the final URL instead of a redirect",
+     warn={"path": "summary.internal_redirects", "lte": 3})
 item(150, "high", S, "redirect_checker.py", PAGE,
      {"path": "total_hops", "lte": 1},
      "Remove redirect chains and loops")
@@ -724,7 +760,7 @@ item(158, "medium", S, "schema_required_props.py", PAGE,
 item(159, "low", L, fix="Simplify primary navigation")
 item(160, "low", L, fix="Optimize footer navigation")
 item(161, "medium", L, fix="Clear header and mobile menus")
-item(162, "high", S, "link_profile.py", PAGE,
+item(162, "high", S, "link_profile.py", CRAWLARG,
      {"path": "issues", "none_severity": ["critical", "high"]},
      "Strengthen internal linking, remove orphans")
 # `--from-page`, not the bare URL. A crawl trap is a property of a set of URLs —
@@ -746,7 +782,7 @@ item(166, "low", S, "parse_html.py", HTMLARG,
 item(167, "medium", S, "domain_safety_check.py", PAGE,
      {"path": "uptime.reachable", "truthy": True},
      "Set up uptime monitoring")
-item(168, "high", S, "broken_links.py", PAGE,
+item(168, "high", S, "broken_links.py", CRAWLARG,
      {"path": "summary.broken", "eq": 0},
      "Fix broken and redirected links",
      {"path": "summary.broken", "lte": 3})
@@ -932,8 +968,8 @@ LENS = {
     "copy": ["MS-024", "MS-025", "CN-037", "CN-042", "CN-043", "CN-046",
              "CN-047", "CN-049", "CN-050", "CN-058", "CN-064", "CN-067",
              "KW-072", "KW-073", "KW-074", "KW-075", "KW-077", "MD-188"],
-    "layout": ["CN-052", "CN-059", "CN-060", "CN-061", "CN-062", "CN-063",
-               "MB-101", "AR-157", "AR-159", "AR-160", "AR-161"],
+    "layout": ["CN-052", "CN-055", "CN-059", "CN-060", "CN-061", "CN-062",
+               "CN-063", "MB-101", "AR-157", "AR-159", "AR-160", "AR-161"],
     # TE-165 (subdomain vs subdirectory) is filed under technical, but the
     # decision is almost always driven by language/region targeting.
     "locale": ["IN-126", "IN-130", "TE-165"],

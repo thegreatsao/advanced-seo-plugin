@@ -38,6 +38,9 @@ python3 <SKILL_DIR>/scripts/checklist_runner.py <url> --diff
 # narrow the registry to what this kind of site can be judged on
 python3 <SKILL_DIR>/scripts/checklist_runner.py <url> --profile ecommerce
 
+# the shared crawl on its own: which URLs exist, which are broken, what links to them
+python3 <SKILL_DIR>/scripts/site_crawl.py <url> --out inventory.json
+
 # judge page-level checks across several pages instead of one
 python3 <SKILL_DIR>/scripts/checklist_runner.py <url> --sample 10
 
@@ -420,10 +423,19 @@ to audit: a block on that URL is a `critical` finding to report, not a reason to
 audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
 configured rate.
 
-What this does not fix: five scripts still crawl independently, so one audit can
-fetch the same pages around 275 times. Pacing bounds the rate, not the volume. If
-a site owner asks about load, that is the honest answer. `KNOWN-ISSUES.md` in the
-plugin root ranks this and the rest of what is still wrong — read it before
+**One crawl, kept.** Before the plan is built, the runner runs `site_crawl.py` once
+and hands the inventory to the ten site-wide checks — status, canonical, noindex, word
+count, content hash and every link for each URL it reached. Six scripts used to crawl
+independently; on a seven-page fixture that was 97 requests for one audited page and is
+now 72. The inventory is written beside the results (`*-crawl.json`, or
+`--crawl-json PATH`), because it is the audit's record of which URLs exist and which
+are broken. `--crawl-depth` (3) and `--crawl-max-pages` (100) are the whole crawl
+budget now, not one of six.
+
+What this does not fix: the 36 single-page scripts each re-fetch the entry URL, with no
+HTTP cache between them — 37 of those 72 requests. Pacing bounds the rate, not the
+volume. If a site owner asks about load, that is the honest answer. `KNOWN-ISSUES.md`
+in the plugin root ranks this and the rest of what is still wrong — read it before
 defending a number.
 
 ## Secrets

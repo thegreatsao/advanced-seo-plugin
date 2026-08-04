@@ -124,6 +124,8 @@ def parse_html(
         "pagination": {
             "prev": None,
             "next": None,
+            "paginated": False,
+            "issues": [],
         },
         "resource_hints": {
             "preload": [],
@@ -208,6 +210,29 @@ def parse_html(
         if page_link and page_link.get("href"):
             href = page_link.get("href")
             result["pagination"][rel_name] = urljoin(base_url, href) if base_url else href
+
+    # Whether this page paginates at all, and what is wrong with it if it does.
+    #
+    # AR-146 used to assert that `pagination` was truthy — and `pagination` is a dict
+    # that always holds both keys, so `{"prev": None, "next": None}` is a non-empty
+    # dict and the item could not fail on any page ever audited. A page with no
+    # `rel=next`/`rel=prev` has no pagination defect and passes; a page that does
+    # paginate can now be wrong about it.
+    result["pagination"]["paginated"] = any(
+        result["pagination"].get(rel) for rel in ("prev", "next"))
+    for rel_name in ("prev", "next"):
+        href = result["pagination"].get(rel_name)
+        if not href:
+            continue
+        if base_url and urlparse(href).netloc and (
+                urlparse(href).netloc != urlparse(base_url).netloc):
+            result["pagination"]["issues"].append({
+                "severity": "error", "type": f"pagination_{rel_name}_offsite",
+                "message": f"rel={rel_name} points at another host: {href}"})
+        if base_url and href.rstrip("/") == base_url.rstrip("/"):
+            result["pagination"]["issues"].append({
+                "severity": "error", "type": f"pagination_{rel_name}_self",
+                "message": f"rel={rel_name} points at this page"})
 
     for rel_name in result["resource_hints"]:
         for link in soup.find_all("link", rel=rel_name):

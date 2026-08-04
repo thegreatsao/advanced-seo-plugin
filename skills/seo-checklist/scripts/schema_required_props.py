@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -30,7 +31,13 @@ REQUIRED_PROPS: dict[str, set[str]] = {
 RECOMMENDED_PROPS: dict[str, set[str]] = {
     "Article": {"image", "dateModified", "publisher", "mainEntityOfPage"},
     "BlogPosting": {"image", "dateModified", "publisher", "mainEntityOfPage"},
-    "BreadcrumbList": {"name", "position", "item"},
+    # `name`, `position` and `item` belong to each ListItem, not to the list. They
+    # were filed under BreadcrumbList, where they never appear on any correct markup
+    # in existence — so every site with a working breadcrumb collected three
+    # "missing recommended property" warnings, and AR-158 (which matches the string
+    # "BreadcrumbList") failed all of them. `iter_schema_nodes` already walks into
+    # `itemListElement`, so the entries are checked where they live.
+    "ListItem": {"name", "position", "item"},
     "LocalBusiness": {"url", "image", "geo", "openingHoursSpecification", "sameAs", "aggregateRating"},
     "Organization": {"logo", "sameAs", "contactPoint"},
     "Product": {"image", "description", "sku", "brand", "aggregateRating", "review"},
@@ -40,7 +47,15 @@ RECOMMENDED_PROPS: dict[str, set[str]] = {
     "WebSite": {"potentialAction"},
 }
 
-PLACEHOLDER_MARKERS = ("[", "REPLACE", "TODO", "INSERT", "example.com")
+PLACEHOLDER_MARKERS = ("REPLACE", "TODO", "INSERT", "example.com", "lorem ipsum")
+
+# `[SHOUTED TEXT IN BRACKETS]` is what an unfilled template looks like. The marker
+# list used to contain a bare `"["`, tested against `json.dumps` of the property
+# value — so **every property whose value is a list or an object** was reported as
+# placeholder text. A correct `itemListElement` was "placeholder text", and AR-158
+# (which matches the string "BreadcrumbList") failed every site with a working
+# breadcrumb. Two accuse-everybody defects in the same six lines.
+PLACEHOLDER_BRACKETS = re.compile(r"\[[A-Z][A-Z0-9 _/-]{2,}\]")
 
 
 def as_list(value: Any) -> list[Any]:
@@ -144,9 +159,20 @@ def has_value(node: dict[str, Any], prop: str) -> bool:
 
 
 def contains_placeholder(value: Any) -> bool:
-    text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
-    upper = text.upper()
-    return any(marker.upper() in upper for marker in PLACEHOLDER_MARKERS)
+    """Whether a property value looks like an unfilled template.
+
+    Strings only, walked into lists and objects. Serialising the whole value and
+    searching that is what made a JSON array match a `"["` marker.
+    """
+    if isinstance(value, str):
+        upper = value.upper()
+        return (any(marker.upper() in upper for marker in PLACEHOLDER_MARKERS)
+                or bool(PLACEHOLDER_BRACKETS.search(value)))
+    if isinstance(value, dict):
+        return any(contains_placeholder(item) for item in value.values())
+    if isinstance(value, list):
+        return any(contains_placeholder(item) for item in value)
+    return False
 
 
 def validate_schema_required_props(documents: list[Any], schema_type: str | None = None,

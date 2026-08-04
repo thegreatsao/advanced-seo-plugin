@@ -49,7 +49,17 @@ def check_canonicals(urls: list[str], timeout: int = 15, check_targets: bool = F
                         issues.append(issue("warning", "Canonical target points elsewhere", row["url"], target_html["canonical"]))
         rows.append(row)
     duplicates = {canonical: pages for canonical, pages in canonical_to_pages.items() if len(pages) > 1}
-    return {"count": len(rows), "rows": rows, "duplicate_canonical_targets": duplicates, "issues": issues}
+    return {
+        "count": len(rows),
+        "rows": rows,
+        "duplicate_canonical_targets": duplicates,
+        "issues": issues,
+        # A page with no canonical and a page nobody could fetch are not the same
+        # finding, and "missing canonical" was reported for both — a `critical` verdict
+        # (CI-009) about a host that answered nothing.
+        "fetch_error": (None if any(row.get("status") == 200 for row in rows)
+                        else "no URL could be read"),
+    }
 
 
 def main() -> None:

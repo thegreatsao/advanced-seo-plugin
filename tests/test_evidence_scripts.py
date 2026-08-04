@@ -525,6 +525,10 @@ RUNS = [
     ("images_bad", "image_inventory.py", ["{bad}"]),
     ("images_lazy", "image_inventory.py", ["{good}lazy.html"]),
     ("intlinks", "internal_links.py", ["{good}"]),
+    ("orphans", "orphan_pages_from_sitemap.py", ["{good}"]),
+    ("orphans_bad", "orphan_pages_from_sitemap.py", ["{bad}"]),
+    ("crawl", "site_crawl.py", ["{good}"]),
+    ("crawl_bad", "site_crawl.py", ["{bad}"]),
     ("jsrender", "javascript_render_audit.py", ["{good}"]),
     ("jsrender_bad", "javascript_render_audit.py", ["{bad}"]),
     ("lcp", "lcp_subparts.py", ["{good}"]),
@@ -1335,6 +1339,91 @@ class SocialMeta(unittest.TestCase):
         self.assertEqual(verdict("MS-033", out("social_bad")), FAIL)
 
 
+class OneCrawlForEveryoneWhoNeedsTheWholeSite(unittest.TestCase):
+    """`site_crawl.py`, and GO-137 which reads it through the orphan check.
+
+    The inventory is the one artifact this tool produces for itself rather than being
+    handed, so unlike the browser traces it can be verified by re-running the thing
+    that wrote it — which is what these do.
+    """
+
+    def test_the_crawl_records_a_status_for_every_page_it_reached(self):
+        crawl = out("crawl")
+        self.assertGreater(crawl["summary"]["pages_fetched"], 3)
+        for key, row in crawl["pages"].items():
+            self.assertIsNotNone(row["status"], key)
+            self.assertIn("links", row)
+
+    def test_the_request_count_is_reported_because_it_is_the_point(self):
+        """Six scripts used to crawl independently — ~275 fetches, measured at 181
+        against a seven-page fixture. A shared crawl that does not say what it cost
+        cannot be checked against the thing it replaced."""
+        crawl = out("crawl")
+        self.assertGreater(crawl["summary"]["requests"], 0)
+        self.assertLess(crawl["summary"]["requests"],
+                        crawl["summary"]["pages_fetched"] + 10,
+                        "the crawl is making requests it does not account for")
+
+    def test_a_broken_page_is_named_with_the_pages_that_link_to_it(self):
+        """The thing the report could never give anyone: which URL is broken, and
+        which page to edit. A verdict about the site is not an address."""
+        broken = out("crawl_bad")["broken"]
+        self.assertTrue(broken, "the broken fixture's dead internal link was missed")
+        dead = next(row for row in broken if row["url"].endswith("/gone"))
+        self.assertEqual(dead["status"], 404)
+        self.assertTrue(dead["linked_from"])
+
+    def test_a_page_only_the_sitemap_mentions_is_not_reachable(self):
+        """The distinction GO-137 is made of. The shared crawl *fetches* sitemap URLs,
+        so "we got a status for it" cannot be what reachable means, or seeding from
+        the sitemap would satisfy the orphan check by construction."""
+        crawl = out("crawl_bad")
+        orphan = f"{BAD.base}/unlinked-a.html"
+        self.assertIn(orphan, crawl["pages"], "the sitemap URL was never fetched")
+        self.assertNotIn(orphan, crawl["reachable"])
+        self.assertGreaterEqual(out("orphans_bad")["summary"]["orphan_pages"], 1)
+        self.assertEqual(verdict("GO-137", out("orphans_bad")), WARN)
+
+    def test_a_site_whose_sitemap_matches_its_links_has_no_orphans(self):
+        self.assertEqual(verdict("GO-137", out("orphans")), PASS)
+
+
+class NothingIsUndecidedAboutASiteThatAnswered(unittest.TestCase):
+    """The other direction, and it cost an item on every audit for a whole release.
+
+    `NothingIsDecidedAboutASiteThatCannotBeRead` below made twelve scripts report
+    "I read nothing" so the runner could turn that into NO_DATA. This asserts the
+    converse: a script that *did* read a site must not say so. Get it backwards and
+    the fix for a site scoring 61/100 while unreachable becomes an item that can
+    never be decided about any site at all — which is what happened to AR-149.
+
+    The reason 462 tests missed it is worth keeping in view: every other test in this
+    file grades through `evaluate()`, which never looks at `fetch_error`. Only the
+    runner's `grade()` reads it, so a spurious one is invisible to all of them. This
+    test checks the field directly, over every run in `RUNS`, which is why it is four
+    lines and covers 75 of them.
+    """
+
+    # No exemptions, deliberately. The first draft of this test excused the two
+    # `sitemap_checker` runs against the broken fixture, on the assumption that a
+    # site with no sitemap has nothing to read — and the exemption was wrong twice
+    # over: a 404 *is* an answer, and `sitemap_checker` already distinguishes "no
+    # sitemap here" from "no location responded". Both runs pass without it.
+    def test_no_script_reports_a_site_it_read_as_unread(self):
+        from checklist_runner import unread_reason
+        wrong = []
+        for key, payload in OUT.items():
+            if "__failed__" in payload:
+                continue
+            reason = unread_reason(payload)
+            if reason:
+                wrong.append(f"{key} = {reason!r}")
+        self.assertEqual(wrong, [],
+                         "these runs read a served fixture and told the runner they "
+                         "read nothing, so every item behind them is NO_DATA on "
+                         "every site:\n" + "\n".join(f"  {w}" for w in wrong))
+
+
 class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):
     """The single most valuable test in this file, and the last one written.
 
@@ -1350,9 +1439,45 @@ class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):
     value*, and an empty `issues` list that `none_severity` reads as "nothing wrong".
     Both are verdicts invented out of a service being unavailable, in opposite
     directions.
+
+    **The script list comes from the registry, not from `RUNS`.** It came from `RUNS`
+    for a release, and that is how it missed `orphan_pages_from_sitemap.py`: the one
+    crawler with no entry in that hand-maintained table, and therefore the one script
+    this sweep could not see. GO-137 reported "no orphan pages" about a host that
+    refused every connection — `sitemap(∅) - reachable(∅)` is no orphans, and no
+    orphans is a PASS. A sweep whose coverage is a list somebody maintains has the
+    same blind spot as the thing it is checking.
     """
 
     DEAD = None
+
+    @classmethod
+    def url_taking_scripts(cls) -> set:
+        """Every script the registry hands a URL as its first argument.
+
+        Derived, so a script cannot be added to the registry and stay out of this
+        sweep. Scripts whose first argument is an HTML file, a Search Console
+        property or an artifact are excluded — they are not being asked about a
+        host, so a dead host is not their subject.
+
+        Scripts whose capability is `api` are left out too, and that is a constraint
+        rather than a judgement: they ask a third party about the URL, so pointing
+        them at a dead host makes this suite call `validator.w3.org` and a WHOIS
+        server. The suite is offline — loopback only, no DNS, no keys — and staying
+        offline outranks the extra coverage. Their "the third party did not answer"
+        path is stubbed in test_evidence_apis.py, which is the part of it that can be
+        tested without a network.
+        """
+        out = set()
+        for item in ITEMS.values():
+            check = item.get("check") or {}
+            args = check.get("args") or []
+            if not check.get("script") or not args or args[0] != "{url}":
+                continue
+            if check.get("requires") == "api":
+                continue
+            out.add(check["script"])
+        return out
 
     @classmethod
     def setUpClass(cls):
@@ -1366,8 +1491,7 @@ class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):
         cls.DEAD = f"http://127.0.0.1:{port}/"
 
         env = script_env()
-        scripts = sorted({script for _, script, template in RUNS
-                          if any("{good}" in a or "{bad}" in a for a in template)})
+        scripts = sorted(cls.url_taking_scripts())
 
         def run(script):
             proc = subprocess.run(

@@ -19,6 +19,14 @@
 {"@context":"https://schema.org","@type":"Product","name":"A loaf",
  "image":"/assets/huge.png"}
 </script>
+<!-- A BreadcrumbList with no itemListElement — the one property it must have, and
+     the only thing about a breadcrumb this script can check. It used to also demand
+     `name`, `position` and `item` *on the list itself*, where no correct markup ever
+     puts them (they belong to each ListItem), so AR-158 failed every site with a
+     working breadcrumb and could not fail this. -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList"}
+</script>
 <!-- The *same* measurement ID configured twice, which is what double-counts a
      pageview and what GO-132 is about. Two different IDs are a legitimate setup, not
      a duplicate, and the check is right not to flag them — the first version of this
@@ -58,6 +66,24 @@ check does not have to resolve a stylesheet to find it.</p>
 <p>Read the same post twice:
 <a href="/blog/duplicate-a.html">first copy</a> and
 <a href="/blog/duplicate-b.html">second copy</a>.</p>
+<!-- Anchor stuffing: the same exact-match anchor five times from one page to one
+     target. Five links from one page rather than one link from five pages, because
+     that is the distinction BL-081 has to make — repetition across pages is a
+     navigation bar, and while each script ran its own small crawl the check could
+     not tell the two apart. It reported the *good* fixture's five "home" nav links
+     as exact-match overuse and found nothing here. -->
+<p>More on <a href="/blog/thin.html">best sourdough bread vilnius</a>, our guide to
+<a href="/blog/thin.html">best sourdough bread vilnius</a>, the definitive
+<a href="/blog/thin.html">best sourdough bread vilnius</a>, everything about
+<a href="/blog/thin.html">best sourdough bread vilnius</a>, and finally
+<a href="/blog/thin.html">best sourdough bread vilnius</a>.</p>
+<!-- A large image, first in document order, lazy-loaded: the LCP candidate deferred,
+     which is what CN-054 and MD-185 are for. The size is declared because the
+     candidate test ignores anything under 100×100 — a 64px logo is never the largest
+     paint, and treating the first `<img>` as the LCP regardless made those two items
+     report the good fixture's correctly lazy-loaded loaf mark. -->
+<img src="/assets/huge.png" alt="A wide hero image, deferred" width="1200"
+     height="600" loading="lazy">
 <img src="/assets/huge.png">
 <img src="/assets/huge.png" alt="">
 <!-- No width/height, so the layout-shift and dimension checks have something; and a

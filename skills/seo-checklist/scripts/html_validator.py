@@ -76,6 +76,20 @@ def validate(url: str, timeout: int = 45) -> dict:
         return result
 
     messages = payload.get("messages", [])
+    # Nu answered, about nothing. `non-document-error` is how it reports that *it*
+    # could not fetch or decode the URL — a 403 aimed at its user agent, a timeout, a
+    # TLS problem, a host it cannot reach. None of those is a document error, so
+    # `errors` came out 0 and CI-017 and TE-181 reported "your HTML validates" about a
+    # page the validator never saw. The same shape as the outage guarded against
+    # above, one step further in: the service answered, and the answer was not about
+    # the page.
+    blocked = [m for m in messages if m.get("type") == "non-document-error"]
+    if blocked and len(blocked) == len(messages):
+        detail = (blocked[0].get("message") or blocked[0].get("subType")
+                  or "no detail given")
+        result["error"] = f"validator could not read the page: {detail[:160]}"
+        return result
+
     counts = {"error": 0, "warning": 0, "info": 0}
     for m in messages:
         kind = m.get("type", "info")

@@ -9,168 +9,64 @@ text patterns.
 For backlink data from external sources, integrates with GSC API
 (if credentials available) or outputs instructions for manual enrichment.
 
+Reads the shared crawl inventory (`site_crawl.py`); crawls one for itself when not
+given one, so the CLI still works alone.
+
 Usage:
     python link_profile.py https://example.com --json
-    python link_profile.py https://example.com --max-pages 100 --json
+    python link_profile.py https://example.com --inventory inventory.json --json
     python link_profile.py https://example.com --gsc-credentials creds.json
 """
 
 import argparse
 import json
-import re
 import sys
-import time
 from collections import Counter, defaultdict
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 
-try:
-    from bs4 import BeautifulSoup
-except ImportError:
-    print("Error: beautifulsoup4 required. Install with: pip install beautifulsoup4",
-          file=sys.stderr)
-    sys.exit(1)
-
-try:
-    from lib.safe_http import RobotsDisallowed, safe_get
-except ImportError:
-    from scripts.lib.safe_http import RobotsDisallowed, safe_get
+import site_crawl
 
 
 # ---------------------------------------------------------------------------
-# Fetch helpers
+# Build the graph from the inventory
 # ---------------------------------------------------------------------------
 
-def fetch_page(url: str, timeout: int = 10, respect_robots: bool = False) -> tuple:
-    """Return (final_url, html, refused) — `refused` is True for a robots.txt block.
+def graph_from_inventory(inventory: dict) -> tuple:
+    """(graph, crawled, base_domain, robots_refused) — no requests.
 
-    The comment that used to sit here claimed a refusal "cannot be reported as an
-    orphan" because an uncrawled page never enters the link graph. It was wrong, and
-    wrong in the direction that costs a client: the caller adds the URL to `crawled`
-    *before* fetching it, and orphans are computed over `crawled`. So a page we
-    politely declined to fetch was reported as a page the site failed to link — the
-    third time this exact mistake has been found in this tree (see the 0.4.0 and
-    0.5.0 notes), and the first time in a script whose comment asserted it was safe.
+    `crawled` is what the crawl actually fetched, and `robots_refused` is what it
+    was told not to. Keeping them apart is load-bearing: orphans are computed over
+    `crawled`, so a page we politely declined to open used to be reported as a page
+    the site failed to link — our own restraint arriving in a client's report as
+    their defect, three times in this tree before it stayed fixed.
     """
-    try:
-        resp = safe_get(url, timeout=timeout, respect_robots=respect_robots)
-        return resp.url, resp.text, False
-    except RobotsDisallowed:
-        return url, "", True
-    except Exception:
-        return url, "", False
-
-
-def get_sitemap_urls(site_url: str, limit: int = 200) -> list:
-    """Extract URLs from sitemap.xml."""
-    parsed = urlparse(site_url)
-    sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
-    _, body, _ = fetch_page(sitemap_url)
-    if not body:
-        return []
-    urls = re.findall(r"<loc>([^<]+)</loc>", body)
-    # Expand sitemap index
-    if any("sitemap" in u.lower() and u.endswith(".xml") for u in urls[:5]):
-        expanded = []
-        for sub in urls[:10]:
-            time.sleep(0.3)
-            _, sub_body, _ = fetch_page(sub)
-            if sub_body:
-                expanded.extend(re.findall(r"<loc>([^<]+)</loc>", sub_body))
-        urls = expanded
-    return urls[:limit]
-
-
-# ---------------------------------------------------------------------------
-# Link extraction
-# ---------------------------------------------------------------------------
-
-def extract_links(html: str, page_url: str, base_domain: str) -> dict:
-    """Extract internal and external links from a page."""
-    soup = BeautifulSoup(html, "html.parser")
-    internal = []
-    external = []
-
-    for a in soup.find_all("a", href=True):
-        href = a["href"].strip()
-        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
-            continue
-
-        full_url = urljoin(page_url, href)
-        parsed = urlparse(full_url)
-        anchor_text = a.get_text(strip=True)[:100]
-        nofollow = "nofollow" in (a.get("rel") or [])
-
-        link_data = {
-            "url": f"{parsed.scheme}://{parsed.netloc}{parsed.path}",
-            "anchor": anchor_text,
-            "nofollow": nofollow,
-        }
-
-        if parsed.netloc == base_domain or parsed.netloc.endswith(f".{base_domain}"):
-            internal.append(link_data)
-        else:
-            external.append(link_data)
-
-    return {"internal": internal, "external": external}
-
-
-# ---------------------------------------------------------------------------
-# Crawl & build graph
-# ---------------------------------------------------------------------------
-
-def crawl_site(site_url: str, max_pages: int = 50) -> dict:
-    """Crawl site and build link graph."""
-    parsed = urlparse(site_url)
-    base_domain = parsed.netloc
-
-    # Seed URLs from sitemap + homepage
-    seed_urls = get_sitemap_urls(site_url, limit=max_pages)
-    if site_url not in seed_urls:
-        seed_urls.insert(0, site_url)
-    seed_urls = seed_urls[:max_pages]
-
-    # Link graph
     graph = {
-        "pages": {},          # url -> {internal_links, external_links, inbound_count}
-        "all_internal_targets": Counter(),  # url -> inbound link count
+        "pages": {},
+        "all_internal_targets": Counter(),
         "all_external_targets": Counter(),
-        "anchor_texts": defaultdict(list),   # url -> [anchor_texts pointing to it]
+        "anchor_texts": defaultdict(list),
     }
-
-    crawled = set()
-    robots_refused = set()
-    for url in seed_urls:
-        if url in crawled:
+    pages = inventory.get("pages") or {}
+    for key, row in sorted(pages.items()):
+        if not row.get("html"):
             continue
-        crawled.add(url)
-
-        time.sleep(0.3)
-        # Only `site_url` was supplied by the operator; the rest of the seed list
-        # came out of the sitemap, which makes it discovered.
-        final_url, html, refused = fetch_page(url, respect_robots=url != site_url)
-        if refused:
-            # Tracked apart from `crawled`, because an orphan is a page the site
-            # forgot to link and this is a page we chose not to open.
-            robots_refused.add(url)
-        if not html:
-            continue
-
-        links = extract_links(html, final_url, base_domain)
-
-        graph["pages"][url] = {
-            "internal_out": len(links["internal"]),
-            "external_out": len(links["external"]),
-            "internal_links": [link["url"] for link in links["internal"][:20]],
+        internal = [link for link in row.get("links") or [] if link.get("internal")]
+        external = [link for link in row.get("links") or [] if not link.get("internal")]
+        graph["pages"][key] = {
+            "internal_out": len(internal),
+            "external_out": len(external),
+            "internal_links": [link["target"] for link in internal[:20]],
         }
+        for link in internal:
+            graph["all_internal_targets"][link["target"]] += 1
+            if link.get("anchor"):
+                graph["anchor_texts"][link["target"]].append(link["anchor"])
+        for link in external:
+            graph["all_external_targets"][link["target"]] += 1
 
-        for link in links["internal"]:
-            graph["all_internal_targets"][link["url"]] += 1
-            if link["anchor"]:
-                graph["anchor_texts"][link["url"]].append(link["anchor"])
-
-        for link in links["external"]:
-            graph["all_external_targets"][link["url"]] += 1
-
+    crawled = set(pages)
+    base_domain = urlparse(inventory.get("site") or "").netloc
+    robots_refused = set(inventory.get("robots_blocked") or ())
     return graph, crawled, base_domain, robots_refused
 
 
@@ -180,7 +76,7 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
 
 def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
                          robots_refused: set | None = None,
-                         entry_url: str = "") -> dict:
+                         entry_url: str = "", fetch_error: str | None = None) -> dict:
     """Produce analysis from the crawled link graph."""
     pages = graph["pages"]
     internal_targets = graph["all_internal_targets"]
@@ -263,8 +159,10 @@ def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
         })
 
     return {
-        # Zero orphans out of zero crawled pages is not a healthy link graph.
-        "fetch_error": None if total_pages else "no page could be read",
+        # Zero orphans out of zero crawled pages is not a healthy link graph. The
+        # crawl's own reason wins when it has one: it knows why nothing was read.
+        "fetch_error": fetch_error or (None if total_pages
+                                      else "no page could be read"),
         "pages_crawled": total_pages,
         "total_internal_links": sum(d["internal_out"] for d in pages.values()),
         "total_external_links": sum(d["external_out"] for d in pages.values()),
@@ -331,8 +229,11 @@ def main():
         description="Link Profile Analyzer — crawls site, builds link graph, identifies issues"
     )
     parser.add_argument("url", help="Site URL to analyze")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory from site_crawl.py; crawled here when "
+                             "not supplied")
     parser.add_argument("--max-pages", type=int, default=50,
-                        help="Max pages to crawl (default: 50)")
+                        help="Max pages to crawl here (default: 50)")
     parser.add_argument("--gsc-credentials", default="",
                         help="Path to GSC service account credentials (optional). Falls back to GSC_CREDENTIALS_PATH env var or .env file.")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -341,13 +242,14 @@ def main():
     from env_loader import get_env
     gsc_credentials = args.gsc_credentials or get_env("GSC_CREDENTIALS_PATH")
 
-    print(f"Crawling {args.url}...", file=sys.stderr)
-    graph, crawled, base_domain, robots_refused = crawl_site(
-        args.url, max_pages=args.max_pages)
+    inventory = site_crawl.inventory_for(args.url, args.inventory,
+                                         max_pages=args.max_pages, signatures=False)
+    graph, crawled, base_domain, robots_refused = graph_from_inventory(inventory)
 
     print("Analyzing link profile...", file=sys.stderr)
     report = analyze_link_profile(graph, crawled, base_domain, robots_refused,
-                                  entry_url=args.url)
+                                  entry_url=inventory.get("entry") or args.url,
+                                  fetch_error=inventory.get("fetch_error"))
     report["site_url"] = args.url
 
     # Optional GSC backlinks

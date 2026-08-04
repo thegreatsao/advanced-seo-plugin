@@ -1403,8 +1403,13 @@ def stride(urls: list[str], limit: int) -> list[str]:
     return picked
 
 
-def discover_urls(base_url: str, limit: int) -> list[str]:
+def discover_urls(base_url: str, limit: int, inventory: dict | None = None) -> list[str]:
     """Pick up to `limit` same-host URLs, sitemap first, on-page links second.
+
+    With an `inventory` from the shared crawl, the candidates come out of it and this
+    costs nothing: the crawl already fetched the sitemap, followed the links and
+    honoured robots.txt, so re-doing all three here was the same site answering the
+    same questions twice.
 
     The picks are spread across the whole list by `stride()` rather than taken from
     the top, so the set spans the site instead of its newest corner, and stays the
@@ -1427,7 +1432,14 @@ def discover_urls(base_url: str, limit: int) -> list[str]:
     def same_host(u: str) -> bool:
         return urlparse(u).netloc == host
 
-    for path in SITEMAP_PATHS:
+    if inventory:
+        # 200-only: a sampled URL that turns out to be a 404 fails every page-level
+        # check, and the worst page decides the verdict.
+        found = [key for key, row in sorted((inventory.get("pages") or {}).items())
+                 if row.get("html") and row.get("status") == 200
+                 and same_host(key) and looks_like_a_page(key)]
+
+    for path in SITEMAP_PATHS if not found else ():
         if found:
             break
         try:
@@ -1812,6 +1824,17 @@ def main() -> int:
                          "(chrome-devtools MCP). Answers font size, link "
                          "distinctness, overlays and — from a mobile render — tap "
                          "targets. Without it those items report NO_DATA.")
+    ap.add_argument("--crawl-json", default="", metavar="PATH",
+                    help="where to write the crawl inventory the site-wide checks "
+                         "read (default: alongside --json, as *-crawl.json). It is "
+                         "the audit's record of which URLs exist and which are "
+                         "broken, so it is kept rather than discarded.")
+    ap.add_argument("--crawl-depth", type=int, default=3, metavar="N",
+                    help="link depth for the shared crawl (default: 3)")
+    ap.add_argument("--crawl-max-pages", type=int, default=100, metavar="N",
+                    help="page budget for the shared crawl (default: 100). It is "
+                         "one crawl for all the site-wide checks now, so this is "
+                         "the audit's whole crawl budget rather than one of six.")
     ap.add_argument("--links-csv", default="",
                     help="Search Console Links report export (ZIP or CSV). The "
                          "Links report has no API, so incoming-link items stay "
@@ -2074,6 +2097,57 @@ def main() -> int:
                   f"it describes, so it cannot be checked against this audit",
                   file=sys.stderr)
 
+    # One crawl, before the plan, for every check that needs the whole site.
+    #
+    # Six scripts used to walk the same pages independently — issue 1 in
+    # KNOWN-ISSUES.md, measured at 181 requests against a seven-page fixture. They
+    # read this instead. It runs here rather than as one of the planned jobs because
+    # its output is another job's *input*, which is a thing the plan has no way to
+    # express: `run_script` returns a dict, and what the six need is a file.
+    crawl = None
+    crawl_path = ""
+    crawl_pages = None
+    if "crawl" in caps and not entry_error:
+        crawl_path = a.crawl_json or (
+            os.path.splitext(a.json_out)[0] + "-crawl.json")
+        if not a.quiet:
+            print(f"  crawling once for the site-wide checks "
+                  f"(depth {a.crawl_depth}, up to {a.crawl_max_pages} pages)",
+                  file=sys.stderr)
+        # Its own timeout: a 100-page crawl at the default 4 rps takes longer than a
+        # single-page script has any business taking, and being killed for that would
+        # take all ten site-wide items down with it.
+        crawl = run_script("site_crawl.py",
+                           [audit_url, "--out", crawl_path,
+                            "--depth", str(a.crawl_depth),
+                            "--max-pages", str(a.crawl_max_pages)],
+                           timeout=max(a.timeout * 3, 300))
+        why = crawl.get("error") or crawl.get("fetch_error")
+        if why:
+            # NO_DATA with this reason for all ten items, rather than ten verdicts
+            # about a site nothing read.
+            rejected["inventory_json"] = f"the shared crawl read nothing: {why}"
+            print(f"  crawl failed: {why}\n"
+                  f"  the ten site-wide checks report NO_DATA", file=sys.stderr)
+        else:
+            ctx["inventory_json"] = crawl_path
+            # Read back for `--sample`: the crawl already knows which URLs exist and
+            # which of them are pages, so discovering them again is a request the
+            # site should not have to answer twice.
+            try:
+                with open(crawl_path, encoding="utf-8") as f:
+                    crawl_pages = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                crawl_pages = None
+            s = crawl.get("summary") or {}
+            if not a.quiet:
+                print(f"  crawled {s.get('pages_fetched')} page(s) in "
+                      f"{s.get('requests')} request(s); "
+                      f"{s.get('pages_broken')} broken, "
+                      f"{s.get('pages_redirected')} redirecting"
+                      + (f"; truncated at --crawl-max-pages {a.crawl_max_pages}"
+                         if s.get("truncated") else ""), file=sys.stderr)
+
     plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path),
                                rejected)
     if not a.quiet:
@@ -2097,7 +2171,7 @@ def main() -> int:
             print("  --sample skipped: the entry page could not be read, so there "
                   "is nothing to discover URLs from", file=sys.stderr)
         else:
-            sampled_urls = discover_urls(audit_url, a.sample)
+            sampled_urls = discover_urls(audit_url, a.sample, inventory=crawl_pages)
             if len(sampled_urls) < 2:
                 print("  --sample found no other URLs (no sitemap, no internal "
                       "links); auditing the single page", file=sys.stderr)
@@ -2149,6 +2223,19 @@ def main() -> int:
         # from numbers a browser took at some other time is not the same document
         # as one decided entirely from what these scripts observed.
         "artifacts": artifacts or None,
+        # The shared crawl: what it cost, what it found, and where the record is.
+        # `broken` is the thing the report could never give anyone before — which
+        # URLs are broken and which pages link to them, rather than a verdict about
+        # the site.
+        "crawl": None if not crawl else {
+            "inventory": crawl_path,
+            "depth": a.crawl_depth,
+            "max_pages": a.crawl_max_pages,
+            "error": crawl.get("error") or crawl.get("fetch_error"),
+            "summary": crawl.get("summary"),
+            "broken": crawl.get("broken"),
+            "redirected": crawl.get("redirected"),
+        },
         "started_at": datetime.now(timezone.utc).isoformat(),
         "registry_schema": registry.get("version"),
         "registry_version": registry_version,
@@ -2252,7 +2339,20 @@ def main() -> int:
         print(f"Script failures: {parts}"
               + ("  — timeouts are retryable: raise --timeout or lower --workers"
                  if "timeout" in payload["script_failures"] else ""))
+    c = payload.get("crawl")
+    if c and c.get("broken"):
+        print(f"\nBroken URLs ({len(c['broken'])}):")
+        for row in c["broken"][:10]:
+            where = (f" — linked from {row['linked_from'][0]}"
+                     + (f" and {len(row['linked_from']) - 1} other page(s)"
+                        if len(row["linked_from"]) > 1 else "")
+                     if row.get("linked_from") else " — in the sitemap only")
+            print(f"  [{row['status'] or 'no response'}] {row['url']}{where}")
+        if len(c["broken"]) > 10:
+            print(f"  … {len(c['broken']) - 10} more in {c['inventory']}")
     print(f"\nResults: {os.path.abspath(a.json_out)}")
+    if crawl_path and os.path.exists(crawl_path):
+        print(f"Crawl:   {os.path.abspath(crawl_path)}")
     if hist:
         print(f"History: {hist}")
     if a.diff:

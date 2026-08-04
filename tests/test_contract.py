@@ -355,6 +355,71 @@ class EveryCheckCanTellTheSitesApart(unittest.TestCase):
         self.assertEqual(sorted(set(SAME_ON_BOTH) - known), [])
 
 
+class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):
+    """Difference is not direction, and this file could not tell them apart.
+
+    `test_every_item_that_answers_the_same_has_a_stated_reason` is satisfied by any
+    difference — including a check that fails the good site and passes the broken
+    one, which is worse than a check that cannot tell them apart at all. BL-081 was
+    in exactly that state: five navigation links carrying the anchor "home" made the
+    well-built fixture "exact-match anchor overuse", the broken fixture had no
+    repeated anchors to find, and the pair recorded a difference and called it
+    working.
+
+    So: no script-backed item may FAIL or WARN on the good site unless this list says
+    why. The list is long because the fixture is served by `http.server` over plain
+    HTTP and carries a few defects on purpose — every entry is a statement about the
+    fixture, and a wrong one shows up as a test that will not go green.
+    """
+
+    # Short, and it was longer: the first draft copied the deliberate-defect table out
+    # of tests/fixtures/good/README.md, and six of those entries were stale — the
+    # orphan and the duplicate description moved to the broken fixture two releases
+    # ago and the README still described them. This test found the documentation drift
+    # by refusing to accept an exemption nothing needs.
+    ACCUSED_ON_PURPOSE = {
+        "SE-117": "served over plain HTTP by http.server: HSTS cannot be present",
+        "SE-118": "served over plain HTTP by http.server: no mixed-content story",
+        "SE-120": "http.server sends no security headers at all",
+        "TE-170": "http.server sends no cache headers and no gzip",
+        "TE-175": "http.server sends no cache headers and no gzip",
+        "SP-110": "the fixture blocks rendering on one stylesheet in the head, which "
+                  "is the defect SP-110 exists to find and it has to be somewhere",
+        "GEO-006": "entity_checker verifies sameAs targets by fetching them, so a "
+                   "fixture with real Wikidata links would take this suite online — "
+                   "see PLACEHOLDER_EXTERNAL in harness.py",
+    }
+
+    def setUp(self):
+        self.good = items("good")
+        self.script_backed = [i for i in RESULTS["good"]["items"]
+                              if REG[i["id"]].get("source") == "script"]
+
+    def test_no_item_accuses_the_good_fixture_without_a_written_reason(self):
+        accused = []
+        for item in self.script_backed:
+            item_id = item["id"]
+            if item_id in self.ACCUSED_ON_PURPOSE:
+                continue
+            status = self.good[item_id]["status"]
+            if status in (FAIL, WARN):
+                accused.append(f"{item_id} ({item['severity']}, "
+                               f"{script_of(item_id)}) {status} — "
+                               f"{(self.good[item_id].get('evidence') or '')[:90]}")
+        self.assertEqual(accused, [],
+                         "these items report a defect in the fixture the pair calls "
+                         "good. Either the check answers backwards, or the fixture "
+                         "really is wrong and this list should say so:\n"
+                         + "\n".join(f"  {a}" for a in accused))
+
+    def test_every_reason_still_describes_something(self):
+        """An accusation that stops happening leaves a reason nobody is checking."""
+        stale = sorted(item_id for item_id, _ in self.ACCUSED_ON_PURPOSE.items()
+                       if self.good.get(item_id, {}).get("status") not in (FAIL, WARN))
+        self.assertEqual(stale, [], "these no longer report anything on the good "
+                                    "fixture; drop them from ACCUSED_ON_PURPOSE")
+
+
 class TheBrokenSiteFailsWhatItWasBuiltToFail(unittest.TestCase):
     """Direction, not just difference.
 

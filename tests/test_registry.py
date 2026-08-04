@@ -333,6 +333,25 @@ class RegistryDocs(unittest.TestCase):
         undocumented = sorted(s for s in scripts if f"### {s}" not in doc)
         self.assertEqual(undocumented, [], f"undocumented: {undocumented}")
 
+    def test_a_script_the_runner_runs_itself_is_documented_too(self):
+        """`site_crawl.py` is named by no registry item — the runner runs it before
+        it builds the plan and hands the result to ten items that are. A gate derived
+        only from the registry cannot see it, and that shape of blind spot has cost
+        this tree twice: `probe_shapes.py` had no input for the one item it could not
+        probe, and the dead-origin sweep took its script list from a table that was
+        missing the one crawler nobody had listed.
+        """
+        with open(SHAPES, encoding="utf-8") as f:
+            doc = f.read()
+        with open(os.path.join(SKILL, "scripts", "checklist_runner.py"),
+                  encoding="utf-8") as f:
+            runner = f.read()
+        named = set(re.findall(r'run_script\(\s*"([^"]+\.py)"', runner))
+        self.assertTrue(named, "run_script is no longer called with a literal name; "
+                               "this test needs rewriting rather than deleting")
+        undocumented = sorted(s for s in named if f"### {s}" not in doc)
+        self.assertEqual(undocumented, [], f"undocumented: {undocumented}")
+
 
 class Profiles(unittest.TestCase):
     def setUp(self):
@@ -486,7 +505,7 @@ class ProbeCoversWhatTheRegistryReads(unittest.TestCase):
                 "gsc_property": "sc-domain:example.com",
                 "gsc_credentials": "/tmp/k.json", "cwv_json": "/tmp/cwv.json",
                 "rendered_json": "/tmp/r.json", "links_csv": "/tmp/l.csv",
-                "indexnow_key": "k"}
+                "indexnow_key": "k", "inventory_json": "/tmp/inv.json"}
 
     def test_every_script_the_registry_names_is_probed(self):
         probed = {script for script, _ in self.jobs(self.FULL_CTX)}

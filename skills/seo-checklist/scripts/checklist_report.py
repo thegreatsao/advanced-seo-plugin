@@ -320,6 +320,59 @@ def plain_summary(data: dict, L: "Lang | None" = None) -> list[str]:
     return out
 
 
+def broken_url_section(data: dict, L: "Lang | None" = None) -> list[str]:
+    """Which URLs are broken, and which pages link to them.
+
+    The one thing a checklist could never give anybody. TE-168 said "3 broken links"
+    and every reader's next question was "which ones?", to which the answer was
+    "re-run the script yourself". The shared crawl records a status per URL and the
+    pages that point at it, so the fix is an address and an edit rather than an
+    investigation.
+
+    Only what the crawl actually checked. A URL beyond the crawl's depth or budget is
+    in `unchecked_internal_targets` in the inventory and is not listed here as broken,
+    because nobody looked.
+    """
+    L = L or Lang()
+    crawl = data.get("crawl") or {}
+    broken = crawl.get("broken") or []
+    redirected = crawl.get("redirected") or []
+    if not broken and not redirected:
+        return []
+    out = ["", f"## {L.t('broken_urls', 'Broken and redirecting URLs')}", "",
+           L.t("broken_urls_note",
+               "From one crawl of the site, so these are addresses rather than "
+               "counts. Only URLs the crawl reached are listed: {pages} page(s) "
+               "checked.").format(pages=(crawl.get("summary") or {})
+                                  .get("pages_fetched", "?")), ""]
+    if broken:
+        out += [f"### {L.t('broken', 'Broken')} ({len(broken)})", "",
+                f"| URL | {L.t('status', 'Status')} | "
+                f"{L.t('linked_from', 'Linked from')} |", "|---|---|---|"]
+        for row in broken[:50]:
+            where = (", ".join(row["linked_from"][:3])
+                     + (f" +{len(row['linked_from']) - 3}"
+                        if len(row["linked_from"]) > 3 else "")
+                     if row.get("linked_from")
+                     else L.t("sitemap_only", "the sitemap only"))
+            status = row.get("status") or esc_md(str(row.get("error") or "no response"))[:60]
+            out.append(f"| {esc_md(row['url'])} | {status} | {esc_md(where)} |")
+        out.append("")
+    if redirected:
+        out += [f"### {L.t('redirecting', 'Reached through a redirect')} "
+                f"({len(redirected)})", "",
+                L.t("redirect_note",
+                    "Each of these costs a hop on every visit and every crawl. "
+                    "Point the links at the destination."), "",
+                f"| URL | → | {L.t('hops', 'Hops')} | "
+                f"{L.t('linked_from', 'Linked from')} |", "|---|---|---|---|"]
+        for row in redirected[:50]:
+            out.append(f"| {esc_md(row['url'])} | {esc_md(row.get('to') or '')} | "
+                       f"{row.get('hops', 1)} | {len(row.get('linked_from') or [])} |")
+        out.append("")
+    return out
+
+
 def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
     """What the reader has to know about *what was audited*, before the verdicts.
 
@@ -492,6 +545,8 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                     f"`{badges}`  ",
                     f"{phrase_measure(i, L)}  ",
                     f"{L.t('what_to_do', 'What to do')}: {L.fix(i)}", ""]
+
+    out += broken_url_section(data, L)
 
     out += ["", f"## {L.t('full_checklist', 'Full checklist')}", ""]
     by_cat: dict[str, list] = {}
@@ -863,6 +918,40 @@ def render_html(data: dict, L: Lang | None = None) -> str:
                                        "work it is — {quick} of the {total} are quick.")
                                    .format(quick=len(quick), total=len(todo)))
                      + "</p>" + "".join(_card(i, L) for i in todo) + "</section>")
+
+    # -- The addresses, not the counts -------------------------------------------
+    # Above the folded machine layer, because "which URL" is what a reader does
+    # something about. One crawl produced it; before that the report could only say
+    # how many links were broken.
+    crawl = data.get("crawl") or {}
+    if crawl.get("broken") or crawl.get("redirected"):
+        rows = []
+        for row in (crawl.get("broken") or [])[:50]:
+            where = (", ".join(row["linked_from"][:2]) if row.get("linked_from")
+                     else L.t("sitemap_only", "the sitemap only"))
+            status = row.get("status") or (row.get("error") or "no response")[:60]
+            rows.append(f"<tr><td><code>{html.escape(row['url'])}</code></td>"
+                        f"<td>{html.escape(str(status))}</td>"
+                        f"<td>{html.escape(where)}</td></tr>")
+        for row in (crawl.get("redirected") or [])[:50]:
+            rows.append(f"<tr><td><code>{html.escape(row['url'])}</code></td>"
+                        f"<td>→ {html.escape(row.get('to') or '')} "
+                        f"({row.get('hops', 1)})</td>"
+                        f"<td>{len(row.get('linked_from') or [])}</td></tr>")
+        parts.append(
+            f'<section><h2>'
+            f'{html.escape(L.t("broken_urls", "Broken and redirecting URLs"))}</h2>'
+            f'<p class="note">'
+            + html.escape(L.t("broken_urls_note",
+                              "From one crawl of the site, so these are addresses "
+                              "rather than counts. Only URLs the crawl reached are "
+                              "listed: {pages} page(s) checked.")
+                          .format(pages=(crawl.get("summary") or {})
+                                  .get("pages_fetched", "?")))
+            + "</p><table><thead><tr><th>URL</th>"
+            + f'<th>{html.escape(L.t("status", "Status"))}</th>'
+            + f'<th>{html.escape(L.t("linked_from", "Linked from"))}</th></tr></thead>'
+            + f'<tbody>{"".join(rows)}</tbody></table></section>')
 
     # -- Layer 4: the machine layer, folded --------------------------------------
     def fold(title: str, body: str, count: int) -> str:

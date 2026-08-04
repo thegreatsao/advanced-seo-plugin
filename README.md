@@ -4,13 +4,16 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.8.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.9.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
-measured rather than suspected. The largest is that five scripts crawl
-independently, so one audit fetches the same pages around 275 times.
+measured rather than suspected. The largest was six scripts crawling independently;
+0.9.0 replaced them with one crawl whose record the audit keeps, which is also what
+lets the report name the broken URLs rather than count them. What remains of it is
+36 single-page scripts each re-fetching the entry URL with no HTTP cache between
+them — now the dominant cost of an audit, measured at 37 of 72 requests.
 
 ## Why it exists
 
@@ -503,12 +506,21 @@ names but nobody shipped, an LLM item with no lens, a profile that hides a criti
 check, and the boundary between "failed", "could not be decided" and "out of scope"
 that every metric here depends on.
 
-42 of them are tests of the evidence layer, which had none until 0.5.0: the seven
-scripts that decide the nineteen `critical` items, each test asserting the field the
-registry actually reads and re-checking that the rules those tests retired still
-misbehave, plus the image audit in 0.7.0. Writing them is how 0.5.0's eighteen
-unfirable assertions were found, and how 0.7.0 found two items that failed a site for
-serving images the recommended way.
+Every one of the 55 evidence scripts has tests, and each asserts *the field the
+registry actually reads*, named in the test. That is how three releases running found
+defects at about one per three tests: 0.5.0's eighteen assertions that had never
+fired, 0.7.0's two items that failed a site for serving images the recommended way,
+0.8.0's sixty-two items grading a site that answered nothing, and 0.9.0's twelve more
+of the same family plus five checks that accused every site on the internet.
+
+Two sweeps carry most of that weight, and both are four lines over a list derived
+from the registry rather than hand-maintained:
+
+- **nothing is decided about a site that answered nothing** — every URL-taking script
+  pointed at a closed port, and no item may come back PASS, FAIL or WARN;
+- **nothing accuses the site the fixture pair calls good** — because "the two sites
+  answered differently" was satisfied by a check that failed the good one and passed
+  the broken one, which is worse than a check that cannot tell them apart.
 
 Several guard documentation rather than code, because a document that has gone stale
 beside working code is its own kind of silent failure: the manifest version must have

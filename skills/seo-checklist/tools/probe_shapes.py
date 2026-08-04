@@ -13,12 +13,15 @@ asks for. It used to hold one, and it had gone stale in both directions at once.
 
 Environment: PROBE_ONLY narrows to named scripts, PROBE_GSC_PROPERTY adds the
 Search Console jobs, PROBE_CWV_JSON / PROBE_RENDERED_JSON / PROBE_LINKS_CSV supply
-the artifacts. Anything not supplied is skipped and named on stderr rather than
-probed with a literal "{gsc_property}" on the command line.
+the artifacts, PROBE_INVENTORY_JSON supplies a crawl inventory instead of taking one,
+and PROBE_CRAWL=0 skips the crawl (the ten site-wide items are then unprobeable and
+said so on stderr). Anything not supplied is skipped and named rather than probed
+with a literal "{gsc_property}" on the command line.
 
-A full probe crawls the target about as hard as a real audit does, for the reason
-recorded as issue 1 in KNOWN-ISSUES.md: five scripts each run their own crawl. Use
-PROBE_ONLY when only one output contract changed.
+A full probe crawls the target once and hands the inventory to the ten site-wide
+checks, the same way an audit does — so it costs roughly what one audit costs rather
+than what six independent crawls cost. Use PROBE_ONLY when only one output contract
+changed.
 """
 import json
 import os
@@ -52,9 +55,35 @@ CTX = {"url": URL}
 if HTML:
     CTX["html"] = HTML
 for key, env in (("cwv_json", "PROBE_CWV_JSON"), ("rendered_json", "PROBE_RENDERED_JSON"),
-                 ("links_csv", "PROBE_LINKS_CSV"), ("indexnow_key", "INDEXNOW_KEY")):
+                 ("links_csv", "PROBE_LINKS_CSV"), ("indexnow_key", "INDEXNOW_KEY"),
+                 ("inventory_json", "PROBE_INVENTORY_JSON")):
     if os.environ.get(env):
         CTX[key] = os.environ[env]
+
+
+def build_inventory(path="probe-inventory.json"):
+    """Crawl once, the way the runner does before it builds its plan.
+
+    Without this the ten site-wide items are unprobeable — `{inventory_json}` has no
+    value, so they are dropped and named on stderr, and a tool that exists to check
+    asserted paths against real output would be silent about exactly the paths a
+    release changed. That is how GEO-007 kept reading a field nothing emitted: the
+    item needed an input the probe had no way to supply.
+    """
+    proc = subprocess.run([PY, os.path.join(SCRIPT_DIR, "site_crawl.py"), URL,
+                           "--out", path, "--json"],
+                          capture_output=True, text=True, timeout=600, cwd=SCRIPT_DIR)
+    if proc.returncode != 0:
+        print(f"[skip] crawl failed, so the site-wide items cannot be probed: "
+              f"{(proc.stderr or '').strip()[-300:]}", file=sys.stderr)
+        return ""
+    return path
+
+
+if "inventory_json" not in CTX and os.environ.get("PROBE_CRAWL", "1") != "0":
+    inventory = build_inventory()
+    if inventory:
+        CTX["inventory_json"] = inventory
 
 # Search Console addresses a property the caller has access to, which is not
 # derivable from the audited URL — probe those only when one is named.

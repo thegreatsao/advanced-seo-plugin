@@ -115,6 +115,46 @@ def picture_sources(img, base_url: str = "") -> list[dict]:
     return out
 
 
+# Below this many declared pixels an image is not what the Largest Contentful Paint
+# measures — it is an icon. A threshold, not a law: 100×100 is the smallest thing that
+# could plausibly be the largest paint on a page with any content at all, and Chrome's
+# own LCP heuristics discard low-entropy images for the same reason. Written down here
+# because it is one of the numbers KNOWN-ISSUES §2 is about.
+LCP_MIN_AREA = 100 * 100
+
+
+def _declared_area(img: dict) -> int | None:
+    """Pixels the markup claims, or None when it does not say."""
+    try:
+        width, height = int(str(img.get("width"))), int(str(img.get("height")))
+    except (TypeError, ValueError):
+        return None
+    return width * height if width > 0 and height > 0 else None
+
+
+def likely_lcp_candidate(img: dict, index: int) -> bool:
+    """Whether this image could be the Largest Contentful Paint.
+
+    One definition, because there were two: `image_inventory.py` and
+    `image_weight_audit.py` each held `index == 0 or fetchpriority == "high" or
+    loading == "eager"`, and two copies of a heuristic drift.
+
+    Document order is the signal available without a browser, and it is a weak one —
+    the first `<img>` in the source is often a logo. So an image that *declares* a
+    size too small to be the largest paint is excluded: the good fixture is a page
+    whose only image is a 64px loaf mark inside a `<figure>` halfway down, correctly
+    lazy-loaded, and two items reported it as a lazy-loaded LCP image. A real
+    measurement is `cwv_metrics.py`'s job and it names the element; this is the
+    fallback for a run with no browser trace.
+    """
+    area = _declared_area(img)
+    if area is not None and area < LCP_MIN_AREA:
+        return False
+    return (index == 0
+            or img.get("fetchpriority") == "high"
+            or img.get("loading") == "eager")
+
+
 def origin(url: str) -> str:
     parsed = urlparse(normalize_url(url))
     return f"{parsed.scheme}://{parsed.netloc}"

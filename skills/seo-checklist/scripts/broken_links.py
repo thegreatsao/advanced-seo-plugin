@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-Check for broken links on a web page.
+Check for broken links.
 
-Crawls all links (internal + external) on a page, checks HTTP status.
-Reports broken (4xx/5xx), redirected (3xx), and timeout links.
+With `--inventory` the whole site's **internal** links are read out of the shared
+crawl (`site_crawl.py`), which already has a status for every URL it fetched: no
+requests, and TE-168 covers the site rather than one page. External link rot is
+`external_link_quality.py`'s finding (BL-083) and is not counted twice — a second
+script requesting the same third-party URLs is the duplication this shared crawl
+exists to remove.
+
+Without an inventory it does what it always did: fetch one page and check every link
+on it, internal and external, up to `--max-links`.
 
 Usage:
     python broken_links.py https://example.com
-    python broken_links.py https://example.com --json
+    python broken_links.py https://example.com --inventory inventory.json --json
     python broken_links.py https://example.com --internal-only
 """
 
@@ -16,6 +23,8 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
+
+import site_crawl
 
 try:
     import requests
@@ -227,9 +236,95 @@ def check_broken_links(url: str, internal_only: bool = False,
     return result
 
 
+def links_from_inventory(inventory: dict) -> dict:
+    """Every internal link in the crawl, with the status the crawl already saw.
+
+    Same output shape as `check_broken_links`, so the item reading it does not have
+    to know which path produced the answer — `scope` says which one did.
+    """
+    pages = inventory.get("pages") or {}
+    inbound = site_crawl.inbound_map(inventory)
+    result = {
+        "page_url": inventory.get("site") or "",
+        "scope": "internal",
+        "total_links": inventory.get("summary", {}).get("unique_internal_targets", 0),
+        "checked": 0,
+        "truncated": bool(inventory.get("summary", {}).get("truncated")),
+        "broken": [],
+        "redirected": [],
+        "timeout": [],
+        "unchecked": [],
+        "healthy": 0,
+        "summary": {},
+        "issues": [],
+        "error": None,
+        "fetch_error": inventory.get("fetch_error"),
+    }
+
+    def anchor_for(target: str) -> str:
+        for source in inbound.get(target, []):
+            if source.get("anchor"):
+                return source["anchor"][:80]
+        return "[no text]"
+
+    for target in sorted(inbound):
+        row = pages.get(target)
+        entry = {"url": target, "anchor_text": anchor_for(target),
+                 "is_internal": True, "status": None, "error": None,
+                 "redirect": None, "response_time_ms": None,
+                 "linked_from": sorted({s["source"] for s in inbound[target]})}
+        if row is None:
+            # Beyond the crawl's depth or budget. Counted apart from healthy and
+            # apart from broken: this run does not know, and `summary.broken` must
+            # only ever hold what was actually checked.
+            result["unchecked"].append(entry)
+            continue
+        result["checked"] += 1
+        entry["status"] = row.get("status")
+        entry["error"] = row.get("error")
+        if row.get("redirect_chain"):
+            entry["redirect"] = {"from": target, "to": row.get("final_url"),
+                                 "hops": len(row["redirect_chain"]),
+                                 "codes": []}
+        if row.get("robots_blocked"):
+            result["unchecked"].append(entry)
+            result["checked"] -= 1
+        elif entry["error"]:
+            result["broken"].append(entry)
+        elif (entry["status"] or 0) >= 400:
+            result["broken"].append(entry)
+        elif entry["redirect"]:
+            result["redirected"].append(entry)
+        else:
+            result["healthy"] += 1
+
+    result["summary"] = {
+        "total": result["total_links"],
+        "healthy": result["healthy"],
+        "broken": len(result["broken"]),
+        "redirected": len(result["redirected"]),
+        "timeout": 0,
+        "unchecked": len(result["unchecked"]),
+    }
+    if result["broken"]:
+        result["issues"].append(f"🔴 {len(result['broken'])} broken internal link(s) "
+                                f"found across {result['checked']} checked")
+    if result["redirected"]:
+        result["issues"].append(f"⚠️ {len(result['redirected'])} internal link(s) "
+                                f"point at a URL that redirects")
+    if result["unchecked"]:
+        result["issues"].append(f"⚠️ {len(result['unchecked'])} internal link "
+                                f"target(s) were not reached by the crawl and are "
+                                f"not counted either way")
+    return result
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Check for broken links on a page")
+    parser = argparse.ArgumentParser(description="Check for broken links")
     parser.add_argument("url", help="Page URL to check")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory from site_crawl.py: check the whole "
+                             "site's internal links instead of one page's links")
     parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     parser.add_argument("--internal-only", "-i", action="store_true",
                         help="Only check internal links")
@@ -242,9 +337,13 @@ def main():
                              f"limit (default: {DEFAULT_MAX_LINKS})")
 
     args = parser.parse_args()
-    result = check_broken_links(args.url, internal_only=args.internal_only,
-                                max_workers=args.workers, timeout=args.timeout,
-                                max_links=args.max_links)
+    if args.inventory:
+        result = links_from_inventory(site_crawl.inventory_for(args.url,
+                                                               args.inventory))
+    else:
+        result = check_broken_links(args.url, internal_only=args.internal_only,
+                                    max_workers=args.workers, timeout=args.timeout,
+                                    max_links=args.max_links)
 
     if args.json:
         print(json.dumps(result, indent=2))

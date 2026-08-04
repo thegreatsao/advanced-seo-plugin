@@ -68,7 +68,20 @@ def evaluate(urls: list[str], site: str | None = None, timeout: int = 15) -> dic
             "blockers": blockers,
             "error": fetched.get("error"),
         })
-    return {"site": normalize_url(base) if base else None, "count": len(rows), "rows": rows}
+    return {
+        "site": normalize_url(base) if base else None,
+        "count": len(rows),
+        # No URL answered at all. Three `critical` items read `rows.0` — is this page
+        # indexable, does it return 200, does robots.txt allow it — and against a host
+        # that refused every connection they reported "not indexable" and "robots.txt
+        # allows it" as *verdicts*. Not indexable is a claim about a page; nothing was
+        # read here. This script was outside the dead-origin sweep because the sweep
+        # took its list from one test file's run table and the seven scripts behind the
+        # nineteen critical items are tested in another.
+        "fetch_error": (None if any(row["status"] == 200 for row in rows)
+                        else "no URL could be read"),
+        "rows": rows,
+    }
 
 
 def main() -> None:

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Find sitemap URLs that are not reachable from an internal crawl."""
+"""Find sitemap URLs that are not reachable from an internal crawl.
+
+Reads the shared crawl inventory (`site_crawl.py`); crawls one for itself when not
+given one, so the CLI still works alone.
+
+**Reachable means linked-to.** The shared crawl seeds from the sitemap as well as
+from the entry URL, so "we managed to fetch it" would make every sitemap URL
+reachable by construction and this whole check vacuous. A page is reachable here when
+some other crawled page links to it, which is the question GO-137 asks.
+"""
 
 from __future__ import annotations
 
 import argparse
-from collections import deque
-from urllib.parse import urlparse
 
-from seo_common import (
-    discover_sitemap_urls,
-    fetch_url,
-    normalize_url,
-    parse_html,
-    parse_sitemap_xml,
-    print_json_or_text,
-    same_host,
-)
+import site_crawl
+from seo_common import normalize_url, print_json_or_text
 
 try:
     from lib.safe_http import robots_allows
@@ -23,104 +23,50 @@ except ImportError:
     from scripts.lib.safe_http import robots_allows
 
 
-def _page_key(url: str) -> str:
-    parsed = urlparse(normalize_url(url))
-    path = parsed.path or "/"
-    if path != "/":
-        path = path.rstrip("/")
-    return f"{parsed.scheme}://{parsed.netloc}{path}"
-
-
-def load_sitemap_urls(site_url: str, sitemap_urls: list[str] | None = None, timeout: int = 15, max_sitemaps: int = 25) -> dict:
-    queue = list(dict.fromkeys(sitemap_urls or discover_sitemap_urls(site_url, timeout=timeout)))
-    seen_sitemaps = set()
-    urls = []
-    errors = []
-
-    while queue and len(seen_sitemaps) < max_sitemaps:
-        sitemap_url = normalize_url(queue.pop(0), site_url)
-        if sitemap_url in seen_sitemaps:
+def reachable_from_inventory(inventory: dict) -> dict:
+    """The pages some other page links to, plus the entry."""
+    pages = inventory.get("pages") or {}
+    inbound = site_crawl.inbound_map(inventory)
+    entry = inventory.get("entry") or ""
+    reachable, errors = {}, []
+    for key, row in sorted(pages.items()):
+        if key != entry and not inbound.get(key):
             continue
-        seen_sitemaps.add(sitemap_url)
-        fetched = fetch_url(sitemap_url, timeout=timeout, max_bytes=8_000_000)
-        if fetched.get("status") != 200 or not fetched.get("text"):
-            errors.append({"url": sitemap_url, "status": fetched.get("status"), "error": fetched.get("error")})
-            continue
-        parsed = parse_sitemap_xml(fetched["text"], sitemap_url)
-        if parsed.get("error"):
-            errors.append({"url": sitemap_url, "error": parsed["error"]})
-            continue
-        queue.extend(item["loc"] for item in parsed.get("sitemaps", []))
-        urls.extend(item["loc"] for item in parsed.get("urls", []))
-
-    deduped = []
-    seen = set()
-    for url in urls:
-        key = _page_key(url)
-        if key not in seen:
-            seen.add(key)
-            deduped.append(key)
-    return {"sitemaps_checked": sorted(seen_sitemaps), "urls": deduped, "errors": errors}
-
-
-def crawl_reachable_pages(start_url: str, depth: int = 2, max_pages: int = 100, timeout: int = 15) -> dict:
-    start_url = normalize_url(start_url)
-    queue = deque([(start_url, 0)])
-    reachable = {}
-    errors = []
-    robots_skipped: set[str] = set()
-
-    while queue and len(reachable) < max_pages:
-        url, current_depth = queue.popleft()
-        key = _page_key(url)
-        if key in reachable or key in robots_skipped or current_depth > depth:
-            continue
-        # Depth 0 is the URL the operator asked about and is always fetched.
-        # Anything deeper we discovered ourselves, so robots.txt governs it.
-        fetched = fetch_url(url, timeout=timeout, max_bytes=2_000_000,
-                            respect_robots=current_depth > 0)
-        if fetched.get("robots_blocked"):
+        reachable[key] = {
+            "url": key,
+            "status": row.get("status"),
+            "final_url": row.get("final_url"),
+            "depth": row.get("depth"),
+            "in_sitemap": bool(row.get("in_sitemap")),
+        }
+        if row.get("status") != 200 or not row.get("html"):
+            errors.append({"url": key, "status": row.get("status"),
+                           "error": row.get("error")})
+    return {"pages": reachable, "errors": errors,
             # Kept out of `reachable` **and** out of the orphan arithmetic below.
             # Orphans are `sitemap - reachable`, so letting a page we chose not to
             # fetch drop out of `reachable` would manufacture a site defect from
             # our own politeness — and GO-137 fails on a single orphan. Reported
             # separately: a sitemap listing a robots-blocked URL is a real finding,
             # just not this one.
-            robots_skipped.add(key)
-            continue
-        reachable[key] = {
-            "url": key,
-            "status": fetched.get("status"),
-            "final_url": fetched.get("url"),
-            "depth": current_depth,
-            "in_sitemap": False,
-        }
-        if fetched.get("status") != 200 or not fetched.get("text"):
-            errors.append({"url": url, "status": fetched.get("status"), "error": fetched.get("error")})
-            continue
-        if current_depth >= depth:
-            continue
-        html = parse_html(fetched["text"], fetched.get("url") or url)
-        for link in html.get("links", []):
-            href = link.get("href") or ""
-            if href and same_host(start_url, href):
-                target = _page_key(href)
-                if target not in reachable and len(reachable) + len(queue) < max_pages:
-                    queue.append((target, current_depth + 1))
-
-    return {"pages": reachable, "errors": errors,
-            "robots_skipped": sorted(robots_skipped)}
+            "robots_skipped": sorted(inventory.get("robots_blocked") or ())}
 
 
-def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, depth: int = 2, max_pages: int = 100, timeout: int = 15) -> dict:
+def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None,
+                      depth: int = 2, max_pages: int = 100, timeout: int = 15,
+                      inventory: dict | None = None,
+                      inventory_path: str = "") -> dict:
     site_url = normalize_url(site_url)
-    sitemap = load_sitemap_urls(site_url, sitemap_urls=sitemap_urls, timeout=timeout)
-    crawl = crawl_reachable_pages(site_url, depth=depth, max_pages=max_pages, timeout=timeout)
+    if inventory is None:
+        inventory = site_crawl.inventory_for(
+            site_url, inventory_path, depth=depth, max_pages=max_pages,
+            timeout=timeout, sitemap_urls=sitemap_urls, signatures=False)
+    sitemap = inventory.get("sitemap") or {"sitemaps_checked": [], "urls": [],
+                                           "errors": []}
+    crawl = reachable_from_inventory(inventory)
     sitemap_set = set(sitemap["urls"])
     reachable_set = set(crawl["pages"])
     robots_set = set(crawl.get("robots_skipped") or ())
-    for page in crawl["pages"].values():
-        page["in_sitemap"] = page["url"] in sitemap_set
 
     # The crawl can only record a refusal for a URL it actually tried, and it tries
     # what the site links to. A sitemap URL that nothing links to is never attempted,
@@ -158,6 +104,13 @@ def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, dept
 
     return {
         "site": site_url,
+        # Zero orphans out of zero pages is not a well-linked site. GO-137 reads
+        # `summary.orphan_pages`, and against a host that refused every connection
+        # the arithmetic gave `sitemap(∅) - reachable(∅)` = no orphans = PASS. This
+        # script was the one crawler with no entry in the test suite's run list, and
+        # the dead-origin sweep took its script list from that list — so the item
+        # that reports "no orphans" about nothing was the one the sweep could not see.
+        "fetch_error": inventory.get("fetch_error"),
         "summary": {
             "sitemaps_checked": len(sitemap["sitemaps_checked"]),
             "sitemap_urls": len(sitemap_set),
@@ -181,6 +134,9 @@ def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None, dept
 def main() -> None:
     parser = argparse.ArgumentParser(description="Find sitemap URLs not reachable from an internal crawl")
     parser.add_argument("site", help="Website URL")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory from site_crawl.py; crawled here when "
+                             "not supplied")
     parser.add_argument("--sitemap", action="append", help="Explicit sitemap URL; can be repeated")
     parser.add_argument("--depth", type=int, default=2, help="Internal crawl depth (default: 2)")
     parser.add_argument("--max-pages", type=int, default=100, help="Maximum crawl pages (default: 100)")
@@ -188,7 +144,9 @@ def main() -> None:
     parser.add_argument("--json", "-j", action="store_true", help="Output JSON")
     args = parser.parse_args()
 
-    result = find_orphan_pages(args.site, sitemap_urls=args.sitemap, depth=args.depth, max_pages=args.max_pages, timeout=args.timeout)
+    result = find_orphan_pages(args.site, sitemap_urls=args.sitemap, depth=args.depth,
+                               max_pages=args.max_pages, timeout=args.timeout,
+                               inventory_path=args.inventory)
     lines = [
         f"Orphan page check for {result['site']}",
         (

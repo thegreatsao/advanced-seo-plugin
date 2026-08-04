@@ -208,11 +208,18 @@ jobs:
           grep -q "SEO Score" live.log || {
             echo "no score"; cat live.log; tail -40 server.log; exit 1; }
           # Not decoration: this is the size of the request fan-out, and the number
-          # the shared-crawl work exists to bring down. Five crawlers walk the same
-          # pages independently and 36 scripts each re-fetch the entry URL, with no
-          # HTTP cache anywhere. Printing it means a change that makes it worse is
-          # visible in the build log rather than only on somebody else's server.
-          echo "one audit of a 6-page site made $(grep -c '"GET' server.log) requests"
+          # the shared crawl exists to bring down. It is a *ceiling* rather than a
+          # printed figure now, because a printed number in a green build is a number
+          # nobody reads — the count went 97 -> 72 for one page audited, and what
+          # remains is 36 single-page scripts each re-fetching the entry URL with no
+          # HTTP cache between them. Raise the ceiling deliberately or not at all.
+          REQUESTS=$(grep -c '"GET' server.log)
+          echo "one audit of a 6-page site, 3 pages sampled, made $REQUESTS requests"
+          if [ "$REQUESTS" -gt 230 ]; then
+            echo "the request fan-out grew past its ceiling (230); see KNOWN-ISSUES 1"
+            grep -o '"GET [^ ]*' server.log | sort | uniq -c | sort -rn | head
+            exit 1
+          fi
           python skills/seo-checklist/scripts/checklist_report.py live.json \
               --markdown live.md --html live.html --llm-queue live-queue.md > report.log 2>&1
           python - <<'PY'
@@ -225,6 +232,20 @@ jobs:
               f"scripts failed against the fixture site: {d['script_failures']}\n"
               + "\n".join(f"  {k}: {v['error']}" for k, v in d["runs"].items()
                           if v.get("error")))
+
+          # One crawl, and the ten site-wide checks read it. Before this the same
+          # pages were walked six times over and no item could name a broken URL.
+          crawl = d.get("crawl")
+          assert crawl and not crawl.get("error"), f"the shared crawl did not run: {crawl}"
+          assert crawl["summary"]["pages_fetched"] >= 5, crawl["summary"]
+          assert crawl["summary"]["requests"] <= crawl["summary"]["pages_fetched"] + 10, (
+              f"the crawl made requests it does not account for: {crawl['summary']}")
+          undecided = [i["id"] for i in d["items"]
+                       if i["id"] in {"CI-008", "MS-022", "MS-029", "CN-039", "CN-041",
+                                      "BL-081", "GO-137", "AR-149", "AR-162", "TE-168"}
+                       and i["status"] == "NO_DATA"]
+          assert not undecided, (
+              f"items reading the shared crawl came back NO_DATA: {undecided}")
 
           assert d["allow_private"] is True, "the flag is not in the artifact"
           assert d["entry_private"] is True, "a loopback host was not recognised as private"

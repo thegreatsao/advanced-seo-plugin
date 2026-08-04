@@ -8,7 +8,8 @@ import json
 import os
 from urllib.parse import urlparse
 
-from seo_common import fetch_url, load_html, parse_html
+from seo_common import (fetch_url, likely_lcp_candidate, load_html,
+                        parse_html)
 
 
 def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
@@ -30,7 +31,7 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
             "srcset": bool(img.get("srcset")),
             "sizes": bool(img.get("sizes")),
             "format": ext,
-            "likely_lcp_candidate": idx == 0 or img.get("fetchpriority") == "high" or img.get("loading") == "eager",
+            "likely_lcp_candidate": likely_lcp_candidate(img, idx),
         }
         if not row["has_alt"]:
             issues.append({"severity": "warning", "message": "Image missing alt text", "url": src})

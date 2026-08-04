@@ -587,19 +587,38 @@ class Robots(unittest.TestCase):
         self.assertTrue(out["robots_blocked"])
         self.assertIn("robots.txt", out["error"])
 
+    def inventory(self, sitemap_urls, pages, robots_blocked=()):
+        """A crawl inventory in the shape `site_crawl.py` writes one.
+
+        Hand-built rather than crawled, and for the same reason these two tests used
+        to stub the per-script crawl: what they are about is the *arithmetic* that
+        turns a page set into a list of orphans, which is where the mistake keeps
+        being made. `pages` maps a page key to whatever it needs beyond the defaults.
+        """
+        return {
+            "inventory_version": 1,
+            "site": "https://e.com/",
+            "entry": "https://e.com/",
+            "fetch_error": None,
+            "pages": {key: dict({"url": key, "status": 200, "html": True,
+                                 "final_url": key, "depth": 0, "links": [],
+                                 "in_sitemap": key in sitemap_urls}, **extra)
+                      for key, extra in pages.items()},
+            "robots_blocked": {key: "robots.txt" for key in robots_blocked},
+            "sitemap": {"urls": list(sitemap_urls), "off_host": [],
+                        "sitemaps_checked": ["https://e.com/sitemap.xml"],
+                        "errors": []},
+            "summary": {},
+        }
+
     def test_a_robots_skipped_sitemap_url_is_not_an_orphan(self):
         import orphan_pages_from_sitemap as ops
-        crawl = {"pages": {"https://e.com/a": {"url": "https://e.com/a"}},
-                 "errors": [], "robots_skipped": ["https://e.com/blocked"]}
-        saved_crawl, saved_sitemap = ops.crawl_reachable_pages, ops.load_sitemap_urls
-        ops.crawl_reachable_pages = lambda *a, **k: crawl
-        ops.load_sitemap_urls = lambda *a, **k: {
-            "urls": ["https://e.com/a", "https://e.com/blocked"],
-            "sitemaps_checked": ["https://e.com/sitemap.xml"], "errors": []}
-        try:
-            out = ops.find_orphan_pages("https://e.com")
-        finally:
-            ops.crawl_reachable_pages, ops.load_sitemap_urls = saved_crawl, saved_sitemap
+        # The entry is reachable without an inbound link — a visitor and a crawler
+        # both start there.
+        inv = self.inventory(["https://e.com/", "https://e.com/blocked"],
+                             {"https://e.com/": {}},
+                             robots_blocked=["https://e.com/blocked"])
+        out = ops.find_orphan_pages("https://e.com", inventory=inv)
         self.assertEqual(out["summary"]["orphan_pages"], 0)
         self.assertEqual(out["sitemap_urls_blocked_by_robots"],
                          ["https://e.com/blocked"])
@@ -616,20 +635,19 @@ class Robots(unittest.TestCase):
         against the fixture site the first time the live path could be run at all.
         """
         import orphan_pages_from_sitemap as ops
-        crawl = {"pages": {"https://e.com/a": {"url": "https://e.com/a"}},
-                 "errors": [], "robots_skipped": []}     # nothing linked to it
-        saved = (ops.crawl_reachable_pages, ops.load_sitemap_urls, ops.robots_allows)
-        ops.crawl_reachable_pages = lambda *a, **k: crawl
-        ops.load_sitemap_urls = lambda *a, **k: {
-            "urls": ["https://e.com/a", "https://e.com/private/x",
-                     "https://e.com/real-orphan"],
-            "sitemaps_checked": ["https://e.com/sitemap.xml"], "errors": []}
+        # Both `/private/x` and `/real-orphan` are in the sitemap and nothing links
+        # to either. The crawl never refused them because it never tried them, so the
+        # refusal has to be established here, against robots.txt, or the disallowed
+        # one arrives in a client's report as a page the site forgot to link.
+        inv = self.inventory(["https://e.com/", "https://e.com/private/x",
+                              "https://e.com/real-orphan"],
+                             {"https://e.com/": {}})
+        saved = ops.robots_allows
         ops.robots_allows = lambda url: ("/private/" not in url, 0.0)
         try:
-            out = ops.find_orphan_pages("https://e.com")
+            out = ops.find_orphan_pages("https://e.com", inventory=inv)
         finally:
-            (ops.crawl_reachable_pages, ops.load_sitemap_urls,
-             ops.robots_allows) = saved
+            ops.robots_allows = saved
         self.assertEqual(out["orphan_pages"], ["https://e.com/real-orphan"])
         self.assertEqual(out["sitemap_urls_blocked_by_robots"],
                          ["https://e.com/private/x"])

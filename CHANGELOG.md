@@ -10,6 +10,148 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.9.0 — 4 August 2026
+
+**Registry `f949859fabd1` → `18b1b372a6ed`** (214 items, unchanged in number; ten
+items' arguments changed, three items' assertions replaced, one item moved from script
+to LLM). Tests 462 → 473.
+
+**One crawl instead of six.** This is issue 1 in KNOWN-ISSUES.md, the largest open item
+since the file was written, and it pays three ways: the site is walked once,
+`robots.txt` is honoured in one place, and the report can finally name the broken URLs
+instead of counting them.
+
+### Changed — the shared crawl
+
+`site_crawl.py` crawls once into an inventory — status, redirect chain, title,
+description, canonical, noindex (meta *and* `X-Robots-Tag`), word count, content hash,
+MinHash signature, every link with its anchor, depth, and how the URL was discovered.
+The runner runs it before it builds the plan and hands the file to the ten site-wide
+items. Six scripts stopped crawling: `duplicate_content.py`, `link_profile.py`,
+`internal_links.py`, `orphan_pages_from_sitemap.py`, `anchor_text_audit.py` and
+`broken_links.py`.
+
+Measured on the seven-page fixture, one audited page: **97 → 72 requests**, and the
+site's inner pages went from six fetches each to two. CI asserts a ceiling instead of
+printing the number, because a number in a green build is a number nobody reads.
+
+What did *not* change is the other half of issue 1, which is now the dominant cost: 37
+of those 72 requests are the entry URL, fetched again by each of the 36 single-page
+scripts. There is no HTTP cache between them.
+
+Two consequences worth knowing about before you diff a report:
+
+- **`TE-168` is site-wide and internal-only.** It used to check every link on the entry
+  page, internal and external, and now checks every internal link on the site.
+  External link rot is BL-083's job (`external_link_quality.py`) and is no longer
+  counted twice. `scope` in the output says which path produced the answer.
+- **The ten site-wide items now describe the same page set.** They had six different
+  ideas of what the site was — 25 pages at depth 1 for the anchor audit, 100 from the
+  sitemap for the orphan check — so two items could disagree about a site and both be
+  right about what they read.
+
+### Added — the report names the URLs
+
+`checklist-results.json` carries a `crawl` block, the inventory is written beside it
+(`*-crawl.json`), and both the Markdown and HTML reports list broken and redirecting
+URLs with the pages that link to each. A reader's next question after "3 broken links"
+was always "which ones?", and the answer was "run the script yourself".
+
+### Fixed — two items that could not fail, and one that had stopped answering
+
+- **AR-149 "Eliminate Internal Redirects" asserted that `internal_links.pages` was
+  non-empty** — true of any site that answers at all. Worse, 0.8.0 gave that script a
+  `fetch_error` set unconditionally (the emptiness check ran before the field it tested
+  was filled), so for one whole release the item was NO_DATA on every site, including
+  sites it had crawled perfectly. Its contract-pair exemption read "no internal
+  redirects to find without a server that redirects" — true, unrelated to the
+  assertion, and it kept both defects invisible. It now reads
+  `summary.internal_redirects`, which one crawl can measure.
+- **AR-146 "Verify pagination is correct" asserted `pagination` was truthy**, and
+  `pagination` is a dict that always holds both keys: `{"prev": None, "next": None}` is
+  a non-empty dict, so the item passed every page in existence. It now reads a
+  pagination `issues` list — a `rel=next`/`rel=prev` pointing off-host or at the page
+  itself.
+- **CN-055 had the mirror-image defect** and accused nearly every page audited:
+  `pagination.next` truthy means "this page is part of a paginated series", and its
+  absence is the normal state of an unpaginated page, not evidence of infinite scroll.
+  It is an LLM item now, because nothing here observes scroll behaviour.
+
+### Fixed — twelve more items grading a site that answered nothing
+
+0.8.0's dead-origin sweep took its script list from a table maintained by hand in one
+test file. So it could not see `orphan_pages_from_sitemap.py` (the one crawler with no
+entry in that table) or the seven scripts tested in a *different* file — which are the
+scripts deciding the nineteen `critical` items. The sweep is derived from the registry
+now, and it immediately found:
+
+- **`indexability_matrix.py`** — CI-001 "not indexable" and CI-005 "robots.txt allows
+  it" as *verdicts* about a host that refused every connection. Three `critical` items.
+- **`canonical_checker.py`** — CI-009 (`critical`) "missing canonical" for a page
+  nobody could fetch. A page with no canonical and a page nobody read are not the same
+  finding.
+- **`local_seo_checker.py`** — LO-198 and LO-200 (both `high`) reporting a business
+  with no local signals.
+- **`orphan_pages_from_sitemap.py`** — GO-137 "no orphan pages", because
+  `sitemap(∅) - reachable(∅)` is no orphans and no orphans is a PASS.
+
+The API scripts are deliberately left out of that sweep, and the reason is written into
+it: pointing them at a dead host makes the suite call `validator.w3.org` and a WHOIS
+server, and this suite is offline.
+
+### Fixed — five checks that accused every correct site
+
+- **`schema_required_props.py` wanted `name`, `position` and `item` on the
+  BreadcrumbList itself**, where no correct markup puts them — they belong to each
+  `ListItem`. Every site with a working breadcrumb collected three "missing recommended
+  property" warnings and AR-158 failed it.
+- **The same file's placeholder detector tested `"["` against a JSON dump of the
+  property value**, so every property whose value was a list or an object was reported
+  as placeholder text. AR-158 failed correct breadcrumbs twice over, by two independent
+  routes, in six lines of code.
+- **`image_inventory.py` and `image_weight_audit.py` treated the first `<img>` in
+  document order as the LCP candidate regardless of size.** CN-054 and MD-185 reported
+  a correctly lazy-loaded 64px logo in a `<figure>` halfway down the page as a deferred
+  LCP image. One definition now, in `seo_common.likely_lcp_candidate`, and it ignores
+  images whose *declared* size is under 100×100.
+- **`html_validator.py` read "the validator could not fetch your page" as "your page
+  has no errors".** Nu answers 200 with `type: non-document-error` when it is blocked
+  by a 403, a timeout or a TLS problem, and none of those messages is a document error
+  — so CI-017 and TE-181 said the HTML validated. Same family as the outage 0.8.0
+  fixed, one step deeper: the service answered, and the answer was not about the page.
+
+### Added — the sweep that catches a check answering backwards
+
+`test_contract.py` demanded that every script-backed item answer the good fixture and
+the broken one *differently*. Difference is not direction: a check that fails the good
+site and passes the broken one satisfied that test, and BL-081 had been doing exactly
+that for two releases — five navigation links carrying the anchor "home" were
+"exact-match anchor overuse", and the broken fixture had no repeated anchors to find.
+
+So no script-backed item may FAIL or WARN on the good fixture without a written reason.
+The list of reasons came out at six entries; the first draft had sixteen, copied from
+the fixture's own README, and six of those were describing defects that had moved to
+the broken fixture two releases earlier. The test found the documentation drift by
+refusing to accept an exemption nothing needed.
+
+BL-081's own fix is a distinction its threshold could not express: repetition *across*
+pages is a navigation bar, repetition *within* a page is anchor stuffing. Only the
+shared crawl makes that measurable — it needs to know what the whole site looks like.
+
+### Fixed — smaller
+
+- **The good fixture had a dead internal link on purpose.** It predates the good/broken
+  pair and was invisible while TE-168 checked one page; a site-wide check found it and
+  warned about the fixture the pair calls good. Planted defects belong in the broken
+  one.
+- **`--sample` re-read the sitemap** to find pages the crawl had already found, and
+  re-checked `robots.txt` for URLs the crawl had already checked. It reads the inventory
+  now — which is also why `--sample 3` on the fixture audits three pages where it used
+  to find two.
+- **`probe_shapes.py` crawls once and hands the inventory to the ten site-wide items.**
+  Without it those ten are unprobeable, and an unprobeable item is how GEO-007 kept
+  reading a field nothing emitted for three releases.
+
 ## 0.8.0 — 4 August 2026
 
 **Registry `6e3cca477308` → `f949859fabd1`** (214 items, unchanged in number; one

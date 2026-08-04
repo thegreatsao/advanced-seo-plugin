@@ -27,9 +27,16 @@ failure paths:
 | `/orphan.html` is in `sitemap.xml` and linked from nowhere | the orphan check has a real orphan |
 | `/private/secret.html` is in the sitemap **and** disallowed in `robots.txt` | the sitemap/robots conflict is reported as itself, and our own politeness is not counted as the site's defect |
 | `/blog/second-post.html` is linked everywhere and absent from the sitemap | the reverse of an orphan, which the orphan check must not report |
-| `/blog/first-post.html` links to `/gone.html` | `broken_links.py` has a 404 to find |
 | the two blog posts share a meta description | `duplicate_content.py` has a duplicate |
 | `/about.html` has a one-word title | a sampled page disagrees with the entry page, so aggregation is exercised rather than assumed |
+
+One planted defect was removed in 0.9.0: `/blog/first-post.html` used to link to
+`/gone.html` so `broken_links.py` had a 404 to find. That predates the good/broken
+pair, and it was invisible while TE-168 checked only the entry page's links. One
+shared crawl made the check site-wide, it found the dead link immediately, and the
+fixture the pair calls *good* started warning about broken links — which weakens
+every claim the pair makes. Planted defects belong in `../broken/`, which has its own
+dead link. This side has to be able to pass.
 
 The URLs inside `sitemap.xml` and the canonicals are hard-coded to
 `http://127.0.0.1:8000`, so serve it on that port or the canonical and sitemap

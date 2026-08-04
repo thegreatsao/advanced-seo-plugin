@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Audit internal anchor text quality and diversity."""
+"""Audit internal anchor text quality and diversity.
+
+Reads the shared crawl inventory (`site_crawl.py`); crawls one for itself when not
+given one, so the CLI still works alone.
+"""
 
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict, deque
-from urllib.parse import urlparse
+from collections import Counter, defaultdict
 
-from seo_common import fetch_url, normalize_url, parse_html, print_json_or_text, same_host
+import site_crawl
+from seo_common import normalize_url, print_json_or_text
 
 
 GENERIC_ANCHORS = {
@@ -25,77 +29,74 @@ GENERIC_ANCHORS = {
 }
 
 
-def _canonical_page(url: str) -> str:
-    parsed = urlparse(normalize_url(url))
-    path = parsed.path or "/"
-    if path != "/":
-        path = path.rstrip("/")
-    return f"{parsed.scheme}://{parsed.netloc}{path}"
-
-
-def extract_internal_anchors(html: str, page_url: str, site_url: str) -> list[dict]:
-    parsed = parse_html(html, page_url)
-    links = []
-    for link in parsed.get("links", []):
-        href = link.get("href") or ""
-        if not href or not same_host(site_url, href):
-            continue
-        rel = [str(v).lower() for v in (link.get("rel") or [])]
-        text = (link.get("text") or "").strip()
-        links.append(
-            {
-                "source": _canonical_page(page_url),
-                "target": _canonical_page(href),
-                "anchor": text,
-                "rel": rel,
-                "nofollow": "nofollow" in rel,
-            }
-        )
-    return links
-
-
-def crawl_internal_anchors(start_url: str, depth: int = 1, max_pages: int = 25, timeout: int = 15) -> dict:
-    start_url = normalize_url(start_url)
-    queue = deque([(start_url, 0)])
-    seen = set()
-    pages = {}
-    links = []
-    fetch_errors = []
-
-    while queue and len(seen) < max_pages:
-        url, current_depth = queue.popleft()
-        page_key = _canonical_page(url)
-        if page_key in seen or current_depth > depth:
-            continue
-        seen.add(page_key)
-        # Depth 0 is the operator's own URL; deeper pages we discovered ourselves,
-        # so robots.txt governs them. A refusal here only means fewer anchors were
-        # read — it cannot invent an overused-anchor finding.
-        fetched = fetch_url(url, timeout=timeout, max_bytes=2_000_000,
-                            respect_robots=current_depth > 0)
-        pages[page_key] = {
-            "url": page_key,
-            "status": fetched.get("status"),
-            "final_url": fetched.get("url"),
-            "error": fetched.get("error"),
-            "depth": current_depth,
+def anchors_from_inventory(inventory: dict) -> dict:
+    """Every internal link the crawl saw, as (source, target, anchor, rel)."""
+    pages, links, fetch_errors = {}, [], []
+    for key, row in sorted((inventory.get("pages") or {}).items()):
+        pages[key] = {
+            "url": key,
+            "status": row.get("status"),
+            "final_url": row.get("final_url"),
+            "error": row.get("error"),
+            "depth": row.get("depth"),
         }
-        if fetched.get("error") or fetched.get("status") != 200 or not fetched.get("text"):
-            fetch_errors.append({"url": url, "status": fetched.get("status"), "error": fetched.get("error")})
+        if row.get("error") or row.get("status") != 200 or not row.get("html"):
+            fetch_errors.append({"url": key, "status": row.get("status"),
+                                 "error": row.get("error")})
             continue
-        page_links = extract_internal_anchors(fetched["text"], fetched.get("url") or url, start_url)
-        links.extend(page_links)
-        if current_depth < depth:
-            for link in page_links:
-                if link["target"] not in seen and len(seen) + len(queue) < max_pages:
-                    queue.append((link["target"], current_depth + 1))
-
+        for link in row.get("links") or []:
+            if not link.get("internal"):
+                continue
+            links.append({
+                "source": key,
+                "target": link["target"],
+                "anchor": link.get("anchor") or "",
+                "rel": link.get("rel") or [],
+                "nofollow": bool(link.get("nofollow")),
+            })
     return {"pages": pages, "links": links, "fetch_errors": fetch_errors}
 
 
-def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeout: int = 15) -> dict:
-    crawl = crawl_internal_anchors(start_url, depth=depth, max_pages=max_pages, timeout=timeout)
+def _pair(link: dict) -> tuple:
+    return (link["target"], " ".join((link.get("anchor") or "").lower().split()))
+
+
+def navigation_links(links: list[dict], pages: dict) -> set:
+    """The (target, anchor) pairs that are site chrome rather than editorial links.
+
+    A pair carried by most of the crawled pages is a navigation bar or a footer. The
+    distinction did not exist while each script ran its own small crawl, and the
+    shared crawl is what forced it: reading the whole site instead of 25 pages at
+    depth 1 made every navigation entry look like exact-match anchor spam, so BL-081
+    warned about the header on a site whose links were fine. Repetition across pages
+    is a menu; repetition within one page is stuffing, and that is what this item is
+    for.
+
+    Deliberately requires a crawl worth generalising from. On two pages "most pages"
+    means nothing, and a link on both of them is as likely to be editorial.
+    """
+    html_pages = [key for key, row in pages.items() if row.get("status") == 200]
+    if len(html_pages) < 4:
+        return set()
+    sources: dict[tuple, set] = defaultdict(set)
+    for link in links:
+        sources[_pair(link)].add(link["source"])
+    threshold = len(html_pages) / 2
+    return {pair for pair, srcs in sources.items() if len(srcs) > threshold}
+
+
+def audit_anchor_text(start_url: str, inventory: dict | None = None, depth: int = 1,
+                      max_pages: int = 25, timeout: int = 15,
+                      inventory_path: str = "") -> dict:
+    if inventory is None:
+        inventory = site_crawl.inventory_for(
+            start_url, inventory_path, depth=depth, max_pages=max_pages,
+            timeout=timeout, signatures=False)
+    crawl = anchors_from_inventory(inventory)
     links = crawl["links"]
+    navigation = navigation_links(links, crawl["pages"])
+    editorial = [link for link in links
+                 if _pair(link) not in navigation]
     by_target: dict[str, list[str]] = defaultdict(list)
     text_counter = Counter()
     generic = []
@@ -115,11 +116,20 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
         if link.get("nofollow"):
             nofollow.append(link)
 
+    # Repetition *within* a page is anchor stuffing; repetition *across* pages is a
+    # navigation bar. The two look identical in a link count and they are not the same
+    # finding, so the repetition checks run over editorial links only.
+    editorial_by_target: dict[str, list[str]] = defaultdict(list)
+    for link in editorial:
+        editorial_by_target[link["target"]].append((link.get("anchor") or "").strip())
+
     target_rows = []
     overused_exact = []
     low_diversity = []
     for target, anchors in sorted(by_target.items()):
-        normalized = [" ".join(a.lower().split()) for a in anchors if a.strip()]
+        editorial_anchors = editorial_by_target.get(target, [])
+        normalized = [" ".join(a.lower().split()) for a in editorial_anchors
+                      if a.strip()]
         total = len(anchors)
         unique = len(set(normalized))
         diversity_ratio = round(unique / max(1, len(normalized)), 2) if normalized else 0
@@ -129,6 +139,7 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
         row = {
             "target": target,
             "total_internal_links": total,
+            "editorial_links": len(editorial_anchors),
             "unique_anchor_texts": unique,
             "diversity_ratio": diversity_ratio,
             "top_anchor": top_anchor,
@@ -137,7 +148,7 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
         target_rows.append(row)
         if top_count >= 5 and top_count / max(1, len(normalized)) >= 0.8:
             overused_exact.append(row)
-        if total >= 3 and diversity_ratio < 0.34:
+        if len(editorial_anchors) >= 3 and diversity_ratio < 0.34:
             low_diversity.append(row)
 
     issues = []
@@ -155,12 +166,12 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
     return {
         # Zero overused anchors across zero crawled pages is not a clean link
         # profile. `fetch_errors` (plural) stays per-URL; this is the whole-crawl
-        # verdict the runner needs to tell silence from a pass.
-        # Every crawled page having errored is the same as no page at all: the seed
-        # counts as "crawled" whether or not it answered, so counting pages was not
-        # enough and BL-081 reported "no overused anchors" for a refused connection.
-        "fetch_error": (None if len(crawl["fetch_errors"]) < len(crawl["pages"])
-                        else "no page could be read"),
+        # verdict the runner needs to tell silence from a pass, and it now comes
+        # from the crawl rather than being re-derived — one place decides whether
+        # the site was read at all.
+        "fetch_error": inventory.get("fetch_error") or (
+            None if len(crawl["fetch_errors"]) < len(crawl["pages"])
+            else "no page could be read"),
         "start_url": normalize_url(start_url),
         "pages_crawled": len(crawl["pages"]),
         "links_analyzed": len(links),
@@ -169,6 +180,10 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
             "empty_anchors": len(empty),
             "generic_anchors": len(generic),
             "nofollow_internal_links": len(nofollow),
+            # What was set aside as site chrome, so a reader can see the
+            # subtraction rather than wonder where the nav went.
+            "navigation_links": len(links) - len(editorial),
+            "editorial_links": len(editorial),
             "overused_exact_match_targets": len(overused_exact),
             "low_diversity_targets": len(low_diversity),
         },
@@ -189,13 +204,17 @@ def audit_anchor_text(start_url: str, depth: int = 1, max_pages: int = 25, timeo
 def main() -> None:
     parser = argparse.ArgumentParser(description="Audit internal anchor text diversity and quality")
     parser.add_argument("url", help="Website URL to crawl")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory from site_crawl.py; crawled here when "
+                             "not supplied")
     parser.add_argument("--depth", type=int, default=1, help="Internal crawl depth (default: 1)")
     parser.add_argument("--max-pages", type=int, default=25, help="Maximum pages to crawl (default: 25)")
     parser.add_argument("--timeout", type=int, default=15, help="Request timeout in seconds")
     parser.add_argument("--json", "-j", action="store_true", help="Output JSON")
     args = parser.parse_args()
 
-    result = audit_anchor_text(args.url, depth=args.depth, max_pages=args.max_pages, timeout=args.timeout)
+    result = audit_anchor_text(args.url, depth=args.depth, max_pages=args.max_pages,
+                              timeout=args.timeout, inventory_path=args.inventory)
     lines = [
         f"Anchor text audit for {result['start_url']}",
         f"Pages crawled: {result['pages_crawled']}  Links analyzed: {result['links_analyzed']}",

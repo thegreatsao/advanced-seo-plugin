@@ -110,6 +110,12 @@ def check_local_seo(source: str, timeout: int = 15) -> dict[str, Any]:
         "source": source,
         "final_url": final_url or source,
         "status": fetch.get("status"),
+        # A page nobody could read has no LocalBusiness markup and no phone number,
+        # and reporting that as a finding is how LO-198 and LO-200 — both `high` —
+        # described a host that refused every connection as a business with no local
+        # signals.
+        "fetch_error": (fetch.get("error")
+                        or (None if html else "the page could not be read")),
         "local_business_nodes": len(local_nodes),
         "phones_detected": phones,
         "map_embeds": map_embeds,
