@@ -138,10 +138,18 @@ def minhash_signature(shingles: set, num_hashes: int = 100) -> list:
 
 
 def jaccard_from_minhash(sig1: list, sig2: list) -> float:
-    """Estimate Jaccard similarity from two MinHash signatures."""
+    """Estimate Jaccard similarity from two MinHash signatures.
+
+    `strict=True` because the estimate is only valid over signatures of the same
+    length: `zip` stops at the shorter one while the denominator stays `len(sig1)`,
+    so a short signature does not raise — it returns a similarity biased downwards,
+    and a pair of duplicate pages quietly falls under the threshold. Every signature
+    here comes from the same fixed number of hash functions, so a length mismatch is
+    a defect rather than an input, and this is where it should be heard about.
+    """
     if not sig1 or not sig2:
         return 0.0
-    matches = sum(1 for a, b in zip(sig1, sig2) if a == b)
+    matches = sum(1 for a, b in zip(sig1, sig2, strict=True) if a == b)
     return matches / len(sig1)
 
 
@@ -263,7 +271,7 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85) -> dict:
             signatures[url] = minhash_signature(s)
 
     exact_dupes = []
-    for h, urls in hash_groups.items():
+    for _digest, urls in hash_groups.items():
         if len(urls) > 1:
             indexable_urls = [url for url in urls if not page_is_noindex(pages[url])]
             noindex_urls = [url for url in urls if page_is_noindex(pages[url])]
@@ -386,7 +394,7 @@ def main():
         print(json.dumps(report, indent=2))
         return
 
-    print(f"\nDuplicate & Thin Content Report")
+    print("\nDuplicate & Thin Content Report")
     print("=" * 60)
     print(f"Pages Analyzed    : {report['pages_analyzed']}")
     print(f"Avg Word Count    : {report['summary']['avg_word_count']}")

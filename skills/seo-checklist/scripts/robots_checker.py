@@ -10,7 +10,7 @@ Usage:
 import argparse
 import json
 import sys
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -212,11 +212,11 @@ def main():
         print(f"  {agent}: {disallow_count} disallow, {allow_count} allow")
 
     if result["crawl_delays"]:
-        print(f"\nCrawl Delays:")
+        print("\nCrawl Delays:")
         for agent, delay in result["crawl_delays"].items():
             print(f"  {agent}: {delay}s")
 
-    print(f"\nAI Crawler Management:")
+    print("\nAI Crawler Management:")
     for crawler, status in result["ai_crawler_status"].items():
         icon = "✅" if "blocked" in status else "⚠️" if "not managed" in status else "ℹ️"
         print(f"  {icon} {crawler}: {status}")

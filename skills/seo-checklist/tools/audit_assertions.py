@@ -112,7 +112,7 @@ def emittable_strings(script: str) -> list[str]:
         # said nothing when the keyword was genuinely absent. This tool cleared
         # them, which is why the exclusion is here and not only in the registry.
         if isinstance(node, ast.Dict):
-            for key, value in zip(node.keys, node.values):
+            for key, value in zip(node.keys, node.values, strict=True):
                 if (isinstance(key, ast.Constant)
                         and str(key.value).lower() in ("fix", "recommendation",
                                                        "remediation", "suggestion",
@@ -155,7 +155,7 @@ def severity_literals(script: str) -> set[str]:
     out: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
-            for key, value in zip(node.keys, node.values):
+            for key, value in zip(node.keys, node.values, strict=True):
                 if (isinstance(key, ast.Constant) and str(key.value).lower() == "severity"
                         and isinstance(value, ast.Constant) and isinstance(value.value, str)):
                     out.add(value.value.lower())

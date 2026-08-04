@@ -4,6 +4,21 @@
 Runs each script exactly the way checklist_runner.run_script() does
 (argv + --json), then emits a compact structural skeleton so the
 checklist assert rules can be written against reality, not guesses.
+
+The jobs come from the registry itself — same scripts, same argv, same
+deduplication — so this tool cannot hold an out-of-date idea of what the registry
+asks for. It used to hold one, and it had gone stale in both directions at once.
+
+    python3 probe_shapes.py https://example.com [page.html]
+
+Environment: PROBE_ONLY narrows to named scripts, PROBE_GSC_PROPERTY adds the
+Search Console jobs, PROBE_CWV_JSON / PROBE_RENDERED_JSON / PROBE_LINKS_CSV supply
+the artifacts. Anything not supplied is skipped and named on stderr rather than
+probed with a literal "{gsc_property}" on the command line.
+
+A full probe crawls the target about as hard as a real audit does, for the reason
+recorded as issue 1 in KNOWN-ISSUES.md: five scripts each run their own crawl. Use
+PROBE_ONLY when only one output contract changed.
 """
 import json
 import os
@@ -18,82 +33,79 @@ PY = os.environ.get("PROBE_PYTHON", sys.executable)
 URL = sys.argv[1] if len(sys.argv) > 1 else "https://www.plerdy.com/seo-checklist/"
 HTML = sys.argv[2] if len(sys.argv) > 2 else ""
 
-# (script, args) — mirrors what the checklist registry will need.
-JOBS = [
-    ("robots_checker.py", [URL]),
-    ("robots_path_tester.py", [URL]),
-    ("x_robots_header_checker.py", [URL]),
-    ("security_headers.py", [URL]),
-    ("social_meta.py", [URL]),
-    ("redirect_checker.py", [URL]),
-    ("canonical_checker.py", [URL]),
-    ("indexability_matrix.py", [URL]),
-    ("sitemap_checker.py", [URL]),
-    ("url_quality.py", [URL]),
-    ("llms_txt_checker.py", [URL]),
-    ("indexnow_checker.py", [URL]),
-    ("ai_crawler_policy_matrix.py", [URL]),
-    ("entity_checker.py", [URL]),
-    ("hreflang_checker.py", [URL]),
-    ("duplicate_content.py", [URL]),
-    ("eeat_signal_checker.py", [URL]),
-    ("freshness_checker.py", [URL]),
-    ("answer_block_scanner.py", [URL]),
-    ("citation_readiness.py", [URL]),
-    ("local_seo_checker.py", [URL]),
-    ("image_inventory.py", [URL]),
-    ("image_weight_audit.py", [URL]),
-    ("a11y_seo_checker.py", [URL]),
-    ("font_audit.py", [URL]),
-    ("third_party_script_audit.py", [URL]),
-    ("cache_compression_checker.py", [URL]),
-    ("javascript_render_audit.py", [URL]),
-    ("mobile_render_checker.py", [URL]),
-    ("faceted_nav_audit.py", [URL]),
-    ("collection_page_checker.py", [URL]),
-    ("external_link_quality.py", [URL]),
-    ("anchor_text_audit.py", [URL]),
-    ("link_profile.py", [URL, "--max-pages", "5"]),
-    ("internal_links.py", [URL, "--depth", "1", "--max-pages", "5"]),
-    ("broken_links.py", [URL, "--workers", "5", "--timeout", "8"]),
-    ("orphan_pages_from_sitemap.py", [URL]),
-    ("article_seo.py", [URL]),
-    ("pagespeed.py", [URL, "--strategy", "mobile"]),
-    ("lcp_subparts.py", [URL]),
-    ("critical_request_chain.py", [URL]),
-    ("content_decay_detector.py", [URL]),
-    ("topical_cluster_mapper.py", [URL]),
-    ("competitor_gap.py", [URL]),
-    ("schema_required_props.py", [URL]),
-    ("rich_results_guard.py", [URL]),
-    ("product_schema_checker.py", [URL]),
-    ("review_schema_checker.py", [URL]),
-    ("video_schema_checker.py", [URL]),
-    ("html_validator.py", [URL]),
-    ("ga4_tag_checker.py", [URL]),
-    ("css_minify_check.py", [URL]),
-    ("domain_safety_check.py", [URL]),
-]
-if HTML:
-    JOBS += [
-        ("parse_html.py", [HTML, "--url", URL]),
-        ("readability.py", [HTML]),
-        ("validate_schema.py", [HTML]),
-    ]
+# The job list is built from the registry, not held here by hand.
+#
+# It used to be a literal list, and it had drifted exactly as far as an unchecked
+# copy does: it named seven scripts that no longer exist and missed three the
+# registry reads — including `cwv_metrics.py` and `rendered_audit.py`, whose output
+# shapes this tool exists to verify. A tool that checks the registry against
+# reality cannot hold its own private idea of what the registry contains.
+#
+# `check.args` carries the same `{placeholder}` names the runner fills, so filling
+# them the same way is all it takes. A job whose placeholder we have no value for
+# is dropped and said out loud, rather than probed with a literal "{gsc_property}"
+# on the command line.
+REGISTRY = os.path.join(os.path.dirname(SCRIPT_DIR), "resources", "config",
+                        "checklist.json")
 
-# Search Console scripts address a property the caller has access to, which is
-# not derivable from the audited URL — probe them only when one is named.
+CTX = {"url": URL}
+if HTML:
+    CTX["html"] = HTML
+for key, env in (("cwv_json", "PROBE_CWV_JSON"), ("rendered_json", "PROBE_RENDERED_JSON"),
+                 ("links_csv", "PROBE_LINKS_CSV"), ("indexnow_key", "INDEXNOW_KEY")):
+    if os.environ.get(env):
+        CTX[key] = os.environ[env]
+
+# Search Console addresses a property the caller has access to, which is not
+# derivable from the audited URL — probe those only when one is named.
 GSC_PROPERTY = os.environ.get("PROBE_GSC_PROPERTY", "")
 GSC_CREDENTIALS = (os.environ.get("GSC_CREDENTIALS_PATH")
                    or os.environ.get("GV_SA_KEY")
                    or os.path.expanduser("~/.config/gcloud/gsc-service-account.json"))
 if GSC_PROPERTY:
-    _creds = ["--credentials", GSC_CREDENTIALS]
-    JOBS += [
-        ("gsc_checker.py", [GSC_PROPERTY] + _creds),
-        ("gsc_cannibalization.py", [GSC_PROPERTY] + _creds),
-        ("gsc_url_inspection.py", [URL, "--property", GSC_PROPERTY] + _creds),
-    ]
+    CTX["gsc_property"] = GSC_PROPERTY
+    CTX["gsc_credentials"] = GSC_CREDENTIALS
+
+
+def registry_jobs(ctx):
+    """(script, args) for every registry check we can supply the inputs for.
+
+    Deduplicated by (script, args) the way `checklist_runner.build_plan` does, so
+    the 214 items collapse to the same handful of runs a real audit performs — and
+    the shapes come back from the same command lines.
+    """
+    with open(REGISTRY, encoding="utf-8") as f:
+        items = json.load(f)["items"]
+
+    jobs, seen, unfillable = [], set(), {}
+    for item in items:
+        check = item.get("check") or {}
+        script = check.get("script")
+        if not script:
+            continue
+        args, missing = [], ""
+        for arg in check.get("args") or []:
+            if isinstance(arg, str) and arg.startswith("{") and arg.endswith("}"):
+                key = arg[1:-1]
+                if key not in ctx:
+                    missing = key
+                    break
+                args.append(str(ctx[key]))
+            else:
+                args.append(str(arg))
+        if missing:
+            unfillable.setdefault(missing, set()).add(script)
+            continue
+        key = (script, tuple(args))
+        if key not in seen:
+            seen.add(key)
+            jobs.append((script, args))
+    for name, scripts in sorted(unfillable.items()):
+        print(f"[skip] no {{{name}}}: {', '.join(sorted(scripts))}", file=sys.stderr)
+    return jobs
+
+
+JOBS = registry_jobs(CTX)
 
 # Probing every script costs a minute of wall clock and a lot of traffic, so
 # allow narrowing to the ones whose output contract actually changed.

@@ -19,6 +19,7 @@ Offline: no fixture site, no network, no API key. The HTTP layer is stubbed at
 import json
 import os
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +28,7 @@ REGISTRY = os.path.join(ROOT, "skills", "seo-checklist", "resources", "config",
                         "checklist.json")
 sys.path.insert(0, SCRIPTS)
 
-from checklist_runner import NO_DATA, PASS, FAIL, WARN, evaluate, resolve  # noqa: E402
+from checklist_runner import NO_DATA, PASS, FAIL, WARN, evaluate  # noqa: E402
 
 
 def registry_rule(item_id: str) -> dict:
@@ -266,7 +267,7 @@ class CanonicalChecker(unittest.TestCase):
 
     def test_an_unreadable_page_is_undecided(self):
         self.serve("https://example.com/page", status=500)
-        out = self.check()
+        self.check()          # asserts only that a 500 does not raise
         # No text is parsed on a 500 here, so the verdict is `missing`; what matters
         # is that `unknown` — which the script emits when it has nothing at all —
         # stays out of the map and lands on NO_DATA.
@@ -529,6 +530,118 @@ class DomainSafety(unittest.TestCase):
             "https://example.com/", "key", 10)}
         self.assertIs(out["safe_browsing"]["checked"], False)
         self.assertEqual(verdict("SE-116", out), NO_DATA)
+
+
+class ImageWeightAudit(unittest.TestCase):
+    """MB-096 (`responsive_count`) and MB-097 (`modern_format_count`).
+
+    Neither is critical, and both were wrong in the same direction, which is the
+    interesting part: they failed sites for using the pattern the documentation
+    recommends. The audit read `<img>` attributes only, and the recommended way to
+    ship webp puts it in a `<source>` and leaves a png in the `<img>` as the
+    fallback for browsers that cannot decode it — so the one thing guaranteed to be
+    an old format was the only thing ever inspected.
+    """
+
+    def audit(self, body: str) -> dict:
+        from image_weight_audit import audit as run
+        path = os.path.join(tempfile.mkdtemp(), "page.html")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"<!doctype html><html><body>{body}</body></html>")
+        return run(path)
+
+    PICTURE = """<picture>
+      <source type="image/avif" srcset="/i/logo.avif">
+      <source type="image/webp" srcset="/i/logo@2x.webp 2x, /i/logo.webp 1x">
+      <img src="/i/logo.png" alt="a mark" width="64" height="64">
+    </picture>"""
+
+    def test_a_picture_serving_webp_counts_as_a_modern_format(self):
+        out = self.audit(self.PICTURE)
+        self.assertEqual(out["modern_format_count"], 1,
+                         "MB-097 fails a site doing exactly what it asks for")
+        self.assertEqual(verdict("MB-097", out), PASS)
+
+    def test_a_source_srcset_counts_as_responsive(self):
+        out = self.audit(self.PICTURE)
+        self.assertEqual(out["responsive_count"], 1)
+        self.assertEqual(verdict("MB-096", out), PASS)
+
+    def test_the_fallback_is_still_reported_as_a_png(self):
+        """Both facts, kept apart. The browser gets webp and the `img` is a png,
+        and a fix list that conflated them would tell somebody to change the one
+        line that is deliberately old."""
+        out = self.audit(self.PICTURE)
+        self.assertEqual(out["images"][0]["format"], "png")
+        self.assertEqual(out["modern_format_on_img_count"], 0)
+        self.assertEqual(out["picture_count"], 1)
+        self.assertEqual(out["images"][0]["picture_modern_formats"], ["avif", "webp"])
+
+    def test_a_bare_old_format_image_still_fails_both(self):
+        """The other direction, which is what stops this being a fix that
+        can only ever say yes."""
+        out = self.audit('<img src="/i/logo.png" alt="a mark">')
+        self.assertEqual(out["modern_format_count"], 0)
+        self.assertEqual(out["responsive_count"], 0)
+        self.assertEqual(verdict("MB-097", out), FAIL)
+        self.assertEqual(verdict("MB-096", out), FAIL)
+
+    def test_no_modern_source_means_the_raster_advice_still_stands(self):
+        out = self.audit("""<picture>
+          <source media="(max-width: 600px)" srcset="/i/small.png">
+          <img src="/i/logo.png" alt="a mark">
+        </picture>""")
+        self.assertEqual(out["modern_format_count"], 0)
+        self.assertEqual(out["responsive_count"], 1, "a source srcset is a srcset "
+                                                     "whatever format it offers")
+        self.assertIn("Consider AVIF/WebP for raster image",
+                      [i["message"] for i in out["issues"]])
+
+    def test_a_source_with_no_type_is_read_from_its_urls(self):
+        """`type` is optional, and a CDN URL is often all there is to go on."""
+        out = self.audit("""<picture>
+          <source srcset="/i/logo.webp 1x, /i/logo@2x.webp 2x">
+          <img src="/i/logo.jpg" alt="a mark">
+        </picture>""")
+        self.assertEqual(out["modern_format_count"], 1)
+
+    def test_the_sources_are_found_under_either_html_parser(self):
+        """The bug inside the bug, and the reason this fix nearly shipped broken.
+
+        `seo_common` prefers `lxml`, and libxml2 predates `<picture>`: it does not
+        know `<source>` is a void element, so it makes the `<img>` a *child* of the
+        first `<source>`. `html.parser` gives the `img` the `<picture>` as its
+        parent, as the spec does. The first version of this checked `img.parent`,
+        passed nothing under the parser that actually runs, and would have left
+        MB-096/MB-097 exactly as broken as before while looking fixed.
+
+        Which parser gets used is itself decided by whether `lxml` happens to be in
+        `sys.modules`, so this is not a hypothetical second branch — it is import
+        order deciding how a page is read. Recorded in KNOWN-ISSUES.md.
+        """
+        from bs4 import BeautifulSoup
+        from seo_common import picture_sources
+        markup = self.PICTURE
+        parents = {}
+        for parser in ("lxml", "html.parser"):
+            soup = BeautifulSoup(markup, parser)
+            img = soup.find("img")
+            parents[parser] = img.parent.name
+            found = picture_sources(img, "https://example.com/")
+            self.assertEqual([s["type"] for s in found],
+                             ["image/avif", "image/webp"], parser)
+        self.assertEqual(parents, {"lxml": "source", "html.parser": "picture"},
+                         "the parsers have stopped disagreeing; if lxml has learned "
+                         "about <picture>, this test is the place to find out")
+
+    def test_a_video_source_is_not_an_image_source(self):
+        """`<source>` means something else inside `<video>`, and the `img` next to
+        one is not part of it."""
+        out = self.audit("""<video controls>
+          <source src="/v/clip.webm" type="video/webm">
+        </video><img src="/i/logo.png" alt="a mark">""")
+        self.assertEqual(out["images"][0]["picture_source_count"], 0)
+        self.assertEqual(out["modern_format_count"], 0)
 
 
 class EveryCriticalItemIsCovered(unittest.TestCase):

@@ -973,7 +973,7 @@ def build() -> list[dict]:
         eid, cat, title, sev, source, script, args, rule, fix = row[:9]
         warn = row[9] if len(row) > 9 else None
         label = "GEO / AI Search" if cat == "geo_ai" else next(
-            (l for k, _p, l, _r in CATEGORIES if k == cat), "Beyond Plerdy")
+            (known for k, _p, known, _r in CATEGORIES if k == cat), "Beyond Plerdy")
         entry = {
             "id": eid,
             "plerdy_ref": None,
@@ -1025,7 +1025,8 @@ def main() -> int:
         "registry_version": registry_version,
         "item_count": len(items),
         "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
-        "categories": [{"key": k, "prefix": p, "label": l} for k, p, l, _ in CATEGORIES]
+        "categories": [{"key": k, "prefix": p, "label": label}
+                       for k, p, label, _ in CATEGORIES]
                       + [{"key": "geo_ai", "prefix": "GEO", "label": "GEO / AI Search"}],
         "items": items,
     }

@@ -5,13 +5,11 @@ from __future__ import annotations
 
 import gzip
 import json
-import os
 import re
 import sys
 import xml.etree.ElementTree as ET
-from html.parser import HTMLParser
 from typing import Iterable
-from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 try:
     import requests
@@ -68,6 +66,53 @@ def is_responsive_fill_image(img) -> bool:
         return True
     style = re.sub(r"\s+", "", (img.get("style") or "").lower())
     return "position:absolute" in style and "width:100%" in style and "height:100%" in style
+
+
+# `srcset` is a comma-separated candidate list where each entry is a URL plus an
+# optional descriptor: "logo.avif 1x, logo@2x.avif 2x". Only the URL carries the
+# format, so the descriptor has to be dropped before an extension means anything.
+def srcset_urls(srcset: str, base_url: str = "") -> list[str]:
+    out = []
+    for candidate in (srcset or "").split(","):
+        url = candidate.strip().split()[0] if candidate.strip() else ""
+        if url:
+            out.append(normalize_url(url, base_url) if base_url else url)
+    return out
+
+
+def picture_sources(img, base_url: str = "") -> list[dict]:
+    """The `<source>` alternatives a `<picture>` offers for this `<img>`.
+
+    Empty for an `img` that stands alone, which is most of them. It has to be a
+    `<picture>` specifically: `<source>` also appears inside `<video>` and
+    `<audio>`, where it means something else entirely, and the `img` is the only
+    thing tying a set of sources to a still image.
+
+    **Any ancestor, not the parent.** libxml2 — which is what `lxml` is, and lxml
+    is the parser this module prefers — predates `<picture>` and does not know
+    `<source>` is void, so it nests the `<img>` *inside* the first `<source>`
+    instead of beside it. Under `html.parser` the same markup gives the `img` the
+    `<picture>` as its parent. Walking up finds the same element either way, which
+    is the only reason this function does not silently return nothing in production
+    while passing its tests. See KNOWN-ISSUES.md — the divergence is wider than
+    this function and nothing else structural relies on it yet.
+    """
+    picture = img.find_parent("picture") if hasattr(img, "find_parent") else None
+    if picture is None:
+        return []
+    out = []
+    # Recursive on purpose: under lxml the second `<source>` is a child of the
+    # first rather than its sibling, so a non-recursive scan would find one.
+    for source in picture.find_all("source"):
+        srcset = source.get("srcset") or ""
+        out.append({
+            "type": (source.get("type") or "").strip().lower() or None,
+            "media": source.get("media"),
+            "srcset": srcset or None,
+            "sizes": source.get("sizes"),
+            "urls": srcset_urls(srcset, base_url),
+        })
+    return out
 
 
 def origin(url: str) -> str:
@@ -232,6 +277,13 @@ def parse_html(html: str, base_url: str = "") -> dict:
             "sizes": img.get("sizes"),
             "fetchpriority": img.get("fetchpriority"),
             "decoding": img.get("decoding"),
+            # What the browser may pick *instead* of `src`. Reading only the `img`
+            # made a site doing this right look like a site doing nothing: the
+            # recommended way to serve webp is a `<picture>` whose `<source>`
+            # offers the modern format and whose `<img>` keeps a png fallback for
+            # old browsers — so the fallback was the only thing the audit ever
+            # saw, and MB-096/MB-097 failed the pattern they exist to encourage.
+            "picture_sources": picture_sources(img, base_url),
         })
 
     schema = []

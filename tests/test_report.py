@@ -14,7 +14,7 @@ SKILL = os.path.join(ROOT, "skills", "seo-checklist")
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
 
 from checklist_report import (  # noqa: E402
-    FAIL, LLM_PENDING, NA, NO_DATA, PASS, WARN, Lang, apply_llm_review,
+    FAIL, LLM_PENDING, NA, NO_DATA, PASS, Lang, apply_llm_review,
     merge_llm_answers, priority_of, render_llm_queue, render_markdown,
 )
 
@@ -129,8 +129,32 @@ class Localisation(unittest.TestCase):
     def test_a_partly_translated_language_names_what_is_still_english(self):
         """A reader cannot tell a layer that was left in English from a layer that
         was considered and kept. The report has to say which."""
-        self.assertEqual(Lang("ru").untranslated(),
-                         ["item titles", "recommendations"])
+        reported = Lang("ru").untranslated()
+        self.assertIn("item titles", reported)
+        self.assertIn("recommendations", reported)
+
+    def test_the_report_chrome_is_counted_rather_than_declared_complete(self):
+        """This claim was wrong, and wrong in the flattering direction.
+
+        `untranslated()` named the two opt-in layers and said nothing about the
+        report's own wording, on the assumption that it was complete. Six of the
+        fifty-one strings had no Russian at all — the whole "what was audited"
+        block, which is the highest-stakes prose in the document — and `t()` falls
+        back to English silently, so nothing showed. The count now comes from the
+        file, so the next string added is reported the day it is added.
+        """
+        missing = Lang("ru").missing_strings()
+        self.assertTrue(missing, "if ru.json is now complete, so much the better — "
+                                 "but then this test needs a different fixture, not "
+                                 "deleting")
+        self.assertTrue(any("report string" in w for w in Lang("ru").untranslated()))
+        # And the count has to be real: every key it names must be one the report
+        # actually asks for, or the warning is noise.
+        with open(os.path.join(SKILL, "scripts", "checklist_report.py"),
+                  encoding="utf-8") as f:
+            source = f.read()
+        for key in missing:
+            self.assertIn(f'"{key}"', source)
 
     def test_english_reports_nothing_untranslated(self):
         self.assertEqual(Lang("en").untranslated(), [])
@@ -138,9 +162,9 @@ class Localisation(unittest.TestCase):
     def test_a_filled_block_drops_out_of_the_warning(self):
         lang = Lang("ru")
         lang.data["item_titles"] = {"A": "Заголовок"}
-        self.assertEqual(lang.untranslated(), ["recommendations"])
+        self.assertNotIn("item titles", lang.untranslated())
         lang.data["item_fixes"] = {"A": "Сделать"}
-        self.assertEqual(lang.untranslated(), [])
+        self.assertNotIn("recommendations", lang.untranslated())
 
     def test_every_category_in_the_registry_has_a_translated_explanation(self):
         """The category explanation is the layer a non-specialist reads. A missing
@@ -270,13 +294,14 @@ class NoScoreSurvivesEveryRenderer(unittest.TestCase):
 
 
 class WhatWasAudited(unittest.TestCase):
-    """Three facts the runner records and prints, and the report never mentioned.
+    """Four facts the runner records and prints, and the report never mentioned.
 
     Each one says the numbers may not describe the page a visitor gets: the run was
     allowed off the public internet, the entry page looked like an interstitial and
-    was scored anyway, or the page carried almost no text. The report is the file
-    that gets handed to somebody, so an omission here is the same failure as
-    printing a score for a site that was never read — one surface further along.
+    was scored anyway, the page carried almost no text, or some verdicts came from a
+    file the operator measured elsewhere. The report is what gets handed to
+    somebody, so an omission here is the same failure as printing a score for a site
+    that was never read — one surface further along.
     """
 
     def _scored(self, **extra):
@@ -316,6 +341,27 @@ class WhatWasAudited(unittest.TestCase):
         self.assertTrue(any("bot challenge" in w for w in provenance_warnings(data)))
         self.assertIn("bot challenge", render_html(data))
         self.assertIn("bot challenge", render_markdown(data))
+
+    def test_a_verdict_from_a_supplied_measurement_says_where_it_came_from(self):
+        """"LCP 820 ms — PASS" looks identical whether the tool measured it or was
+        handed it in a file, and eight items can be decided the second way."""
+        from checklist_report import provenance_warnings, render_html
+        data = self._scored(artifacts={
+            "cwv_json": {"path": "/t/cwv.json", "describes": "https://example.com/",
+                         "matches_audited_url": True}})
+        self.assertTrue(any("supplied with the run" in w
+                            for w in provenance_warnings(data)))
+        for out in (render_markdown(data), render_html(data)):
+            self.assertIn("cwv", out)
+
+    def test_a_rejected_artifact_is_not_advertised_as_evidence(self):
+        """It decided nothing — its items are NO_DATA with the reason — so naming it
+        here would tell the reader a measurement was used when it was refused."""
+        from checklist_report import provenance_warnings
+        data = self._scored(artifacts={
+            "cwv_json": {"path": "/t/cwv.json", "describes": "https://other.example/",
+                         "matches_audited_url": False}})
+        self.assertEqual(provenance_warnings(data), [])
 
     def test_an_enforced_guard_is_not_a_caveat(self):
         """When the guard stopped the run there is no score to qualify, and the

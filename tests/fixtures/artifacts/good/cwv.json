@@ -1,0 +1,7 @@
+{
+  "url": "http://127.0.0.1:8000/",
+  "source": "hand-written test fixture, not a browser trace: every metric inside Google's 'good' threshold so SP-214/215/216 can be observed passing",
+  "lcp_ms": 820,
+  "cls": 0.01,
+  "tbt_ms": 40
+}

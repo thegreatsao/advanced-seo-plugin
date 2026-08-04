@@ -266,7 +266,7 @@ def get_pagespeed(url: str, strategy: str = "mobile", api_key: str = None) -> di
 
         except requests.exceptions.Timeout:
             if attempt < max_retries - 1:
-                print(f"  [pagespeed] Timeout. Retrying...", file=sys.stderr)
+                print("  [pagespeed] Timeout. Retrying...", file=sys.stderr)
                 time.sleep(2)
                 continue
             result["error"] = "API request timed out (60s) — try again later"
@@ -315,7 +315,7 @@ def print_result(result: dict):
     print(f"Data Source: {data_source}")
 
     if result["metrics"]:
-        print(f"\nCore Web Vitals:")
+        print("\nCore Web Vitals:")
         for name, metric in result["metrics"].items():
             rating = metric["rating"]
             if "good" in rating.lower() or "fast" in rating.lower():
@@ -343,7 +343,7 @@ def print_result(result: dict):
             print(f"  {icon} {metric['label']}: {display} {threshold_str}")
 
     if result["opportunities"]:
-        print(f"\nTop Opportunities:")
+        print("\nTop Opportunities:")
         for opp in result["opportunities"][:5]:
             savings = opp["savings_ms"]
             if savings >= 1000:
@@ -353,7 +353,7 @@ def print_result(result: dict):
             print(f"  💡 {opp['title']} (save ~{display})")
 
     if result["diagnostics"]:
-        print(f"\nDiagnostics:")
+        print("\nDiagnostics:")
         for diag in result["diagnostics"]:
             print(f"  ⚠️ {diag['title']}: {diag['display']}")
 

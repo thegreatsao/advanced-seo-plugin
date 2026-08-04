@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.5.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.7.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -503,24 +503,32 @@ names but nobody shipped, an LLM item with no lens, a profile that hides a criti
 check, and the boundary between "failed", "could not be decided" and "out of scope"
 that every metric here depends on.
 
-34 of them are the first tests the evidence layer has had: the seven scripts that
-decide the nineteen `critical` items, each test asserting the field the registry
-actually reads and re-checking that the rules those tests retired still misbehave.
-Writing them is how 0.5.0's eighteen unfirable assertions were found.
+42 of them are tests of the evidence layer, which had none until 0.5.0: the seven
+scripts that decide the nineteen `critical` items, each test asserting the field the
+registry actually reads and re-checking that the rules those tests retired still
+misbehave, plus the image audit in 0.7.0. Writing them is how 0.5.0's eighteen
+unfirable assertions were found, and how 0.7.0 found two items that failed a site for
+serving images the recommended way.
 
-Three of them guard documentation rather than code, because a document that has
-gone stale beside working code is its own kind of silent failure: the manifest
-version must have a `CHANGELOG.md` entry naming the shipped `registry_version`, the
-200 borrowed titles must record their source in the file that holds them, and every
-category in the registry must have a plain-language explanation in every shipped
-language. CI runs the suite on Python 3.11 and 3.13 along with the gates and four
-offline end-to-end audits.
+Several guard documentation rather than code, because a document that has gone stale
+beside working code is its own kind of silent failure: the manifest version must have
+a `CHANGELOG.md` entry naming the shipped `registry_version` and must match
+`pyproject.toml`, the 200 borrowed titles must record their source in the file that
+holds them, every category must have a plain-language explanation in every shipped
+language, and the lowest Python in the CI matrix must be the floor `pyproject.toml`
+declares. CI runs the suite on 3.10, 3.11 and 3.13, along with `ruff`, the gates and
+four offline end-to-end audits.
 
-**And one live one.** CI serves `tests/fixtures/site/` — six pages, a sitemap, a
-robots.txt and planted defects — and audits it over real HTTP with `--allow-private`:
-crawl, sample, pace, aggregate, render. The job fails if *any* evidence script
-crashes, and separately asserts the fixture's planted orphan and its
-robots-disallowed sitemap URL come out as the two different findings they are.
+**And the pair.** The whole registry is run against two served fixture sites — one
+satisfying as much of it as a static site can, one engineered to fail — and every
+script-backed item must answer them differently or carry a written reason why it
+cannot. A check can only be verified by disagreeing with something, and 33 assertions
+in this tool's history reported the same verdict on every site ever audited. CI also
+serves `tests/fixtures/good/` and audits it over real HTTP with `--allow-private`:
+crawl, sample, pace, aggregate, render. That job fails if *any* evidence script
+crashes, and separately asserts the fixture's robots-disallowed sitemap URL comes out
+as a robots conflict and **not** as an orphan, which is the arithmetic that was wrong
+in 0.3.0.
 
 That job exists because of what its absence cost. The 0.2.0 rate limiter crashed 36
 of 56 scripts on its first live run while every offline test passed: a single process

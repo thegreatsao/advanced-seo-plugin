@@ -309,6 +309,17 @@ def check_nap_consistency(soup: BeautifulSoup, entities: list) -> list:
             "finding": "No phone number detected on page for LocalBusiness entity.",
             "fix": "Display phone number visibly and include 'telephone' in LocalBusiness schema.",
         })
+    # The address half of "check for visible phone/address" was computed and then
+    # thrown away, so half this function did nothing. Found by putting a linter in
+    # CI, which is the argument for having one: a NAP block missing its A is the
+    # same defect as one missing its P, and only the P was ever reported.
+    if not has_address and local_entities:
+        issues.append({
+            "severity": "Info",
+            "finding": "No street address detected on page for LocalBusiness entity.",
+            "fix": "Display the street address visibly and include 'address' "
+                   "(PostalAddress) in LocalBusiness schema.",
+        })
 
     return issues
 

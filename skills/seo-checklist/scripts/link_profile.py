@@ -160,7 +160,7 @@ def crawl_site(site_url: str, max_pages: int = 50) -> dict:
         graph["pages"][url] = {
             "internal_out": len(links["internal"]),
             "external_out": len(links["external"]),
-            "internal_links": [l["url"] for l in links["internal"][:20]],
+            "internal_links": [link["url"] for link in links["internal"][:20]],
         }
 
         for link in links["internal"]:
@@ -379,7 +379,7 @@ def main():
             print(f"  - {u}")
 
     if report["top_linked_pages"]:
-        print(f"\nTop Linked Pages:")
+        print("\nTop Linked Pages:")
         for p in report["top_linked_pages"][:10]:
             print(f"  [{p['inbound_links']:>3}] {p['url']}")
 

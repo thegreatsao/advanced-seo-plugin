@@ -702,14 +702,20 @@ def measurement(rule: dict, data: dict) -> dict:
 
 def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                preskip: dict[str, tuple[str, str]] | None = None,
-               has_gsc: bool = False
+               has_gsc: bool = False,
+               rejected: dict[str, str] | None = None
                ) -> tuple[dict[tuple, list[str]], dict[str, tuple[str, str]]]:
     """Map each unique (script, args) to the item ids that depend on it.
 
     Returns (plan, skipped) where skipped maps item id -> (status, reason) for
     checks this run cannot perform. Capability gaps become N/A; missing inputs
     become NO_DATA — the difference decides whether an item counts against
-    coverage or is simply out of scope for the mode."""
+    coverage or is simply out of scope for the mode.
+
+    `rejected` maps a ctx key to why the input we were handed cannot be used.
+    "Not supplied" and "supplied and refused" are both NO_DATA and are not the
+    same sentence: the first tells the operator to produce the file, the second
+    tells them the file they produced is about something else."""
     plan: dict[tuple, list[str]] = {}
     skipped: dict[str, tuple[str, str]] = dict(preskip or {})
     for it in items:
@@ -738,18 +744,21 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
             skipped[it["id"]] = (NA, f"needs '{need}'; not available in {mode} mode")
             continue
         args = []
-        missing_key = ""
+        no_input = ""
         for a in (chk.get("args") or []):
             if isinstance(a, str) and a.startswith("{") and a.endswith("}"):
                 key = a[1:-1]
+                if key in (rejected or {}):
+                    no_input = rejected[key]
+                    break
                 if key not in ctx:
-                    missing_key = key
+                    no_input = f"missing input '{key}'"
                     break
                 args.append(ctx[key])
             else:
                 args.append(a)
-        if missing_key:
-            skipped[it["id"]] = (NO_DATA, f"missing input '{missing_key}'")
+        if no_input:
+            skipped[it["id"]] = (NO_DATA, no_input)
             continue
         plan.setdefault((chk["script"], tuple(args)), []).append(it["id"])
     return plan, skipped
@@ -1452,6 +1461,59 @@ def is_page_level(item: dict) -> bool:
     return (item.get("check") or {}).get("requires", "fetch") in PAGE_LEVEL
 
 
+# Inputs the operator hands us rather than ones we collect: a browser trace, a
+# rendered-page measurement, a Search Console export. Each describes one URL, at
+# one moment, and the file cannot be re-taken for another page — which is what
+# separates them from every other `requires: offline` check.
+ARTIFACT_CTX_KEYS = ("cwv_json", "rendered_json", "links_csv")
+
+
+def ctx_keys_of(item: dict) -> set[str]:
+    """The `{placeholder}` names an item's argv asks for."""
+    return {a[1:-1] for a in ((item.get("check") or {}).get("args") or [])
+            if isinstance(a, str) and a.startswith("{") and a.endswith("}")}
+
+
+def reads_artifact(item: dict) -> bool:
+    return bool(ctx_keys_of(item) & set(ARTIFACT_CTX_KEYS))
+
+
+def artifact_subject(path: str) -> str | None:
+    """The URL an artifact claims to describe, or None when it does not say.
+
+    Read leniently and on purpose: this is a guard, not a parser. The scripts
+    that consume these files do their own validation and report their own
+    errors, so an unreadable artifact must not raise here — it has to reach
+    `cwv_metrics.py` and be refused there, where the message names the field.
+    """
+    try:
+        with open(os.path.expanduser(path), encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    nested = raw.get("metrics") if isinstance(raw.get("metrics"), dict) else {}
+    url = raw.get("url") or nested.get("url")
+    return url if isinstance(url, str) and url.strip() else None
+
+
+def same_page(a: str, b: str) -> bool:
+    """Whether two URLs name the same page, for the purpose of trusting a file.
+
+    Deliberately narrow. Scheme, a bare trailing slash and a `www.` prefix are
+    noise — nobody traces `https://example.com` and means something other than
+    `https://example.com/`, and the two hosts redirect to each other on nearly
+    every site there is. A different host or a different path is a different
+    page, and a measurement taken there is not evidence about this one.
+    """
+    def key(u: str) -> tuple[str, str, str, str]:
+        p = urlparse(u.strip())
+        return (p.netloc.lower().removeprefix("www."), p.path.rstrip("/"),
+                p.params, p.query)
+    return key(a) == key(b)
+
+
 STATUS_RANK = {FAIL: 3, WARN: 2, PASS: 1}
 
 
@@ -1619,7 +1681,7 @@ def registrable_domain(host: str) -> str:
         return ""
     except ValueError:
         pass
-    labels = [l for l in bare.split(".") if l]
+    labels = [part for part in bare.split(".") if part]
     if len(labels) <= 2:
         return ".".join(labels)
 
@@ -1950,7 +2012,34 @@ def main() -> int:
         if os.environ.get(env):
             ctx[k] = os.environ[env]
 
-    plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path))
+    # An artifact is the one input nothing in this run can verify by re-measuring,
+    # so the only check available is whether it says which page it describes. A
+    # trace of a different page decides seven items — two of them `high` — from
+    # numbers nobody took here, which is the exact failure this tool exists to
+    # refuse. Rejected means NO_DATA with the reason, not a quiet pass.
+    artifacts, rejected = {}, {}
+    for key in ("cwv_json", "rendered_json"):
+        if key not in ctx:
+            continue
+        claimed = artifact_subject(ctx[key])
+        matches = None if not claimed else same_page(claimed, audit_url)
+        artifacts[key] = {"path": ctx[key], "describes": claimed,
+                          "matches_audited_url": matches}
+        if matches is False:
+            rejected[key] = (f"the artifact describes {claimed}, not {audit_url} — "
+                             f"re-measure the page being audited")
+            print(f"  --{key.replace('_', '-')} ignored: it describes {claimed}, "
+                  f"not {audit_url}", file=sys.stderr)
+        elif matches is None:
+            # Allowed, because a file with no `url` predates this check and is
+            # more likely careless than wrong. Recorded, because a reader of the
+            # report is then the only one who can judge it.
+            print(f"  --{key.replace('_', '-')}: the file does not say which URL "
+                  f"it describes, so it cannot be checked against this audit",
+                  file=sys.stderr)
+
+    plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path),
+                               rejected)
     if not a.quiet:
         script_backed = sum(1 for i in items if i["source"] == "script")
         print(f"  {script_backed} script-backed items -> {len(plan)} unique runs"
@@ -1979,7 +2068,13 @@ def main() -> int:
                 sampled_urls = []
 
     if sampled_urls:
-        page_items = [i for i in items if is_page_level(i)]
+        # Artifact-backed items are page-level and still must not be sampled. The
+        # file describes one URL; re-running the same reader against four other
+        # pages produces four more copies of the same numbers, and the aggregate
+        # then reports "4/4 pages" about pages nobody measured. Excluded here, so
+        # those items keep the primary run's verdict about the page the artifact
+        # is actually about.
+        page_items = [i for i in items if is_page_level(i) and not reads_artifact(i)]
         per_page = []
         if not a.quiet:
             print(f"  sampling {len(sampled_urls)} pages for "
@@ -2012,6 +2107,12 @@ def main() -> int:
         "archive": os.path.expanduser(a.archive) if mode == "archive" else None,
         "gsc_credentials_found": bool(gsc_path),
         "gsc_property": gsc_property if gsc_path else None,
+        # Which measured-elsewhere files this run was handed, what page each one
+        # claims to describe, and whether that is the page we audited. Belongs in
+        # the artifact for the same reason `entry_guard` does: a run decided partly
+        # from numbers a browser took at some other time is not the same document
+        # as one decided entirely from what these scripts observed.
+        "artifacts": artifacts or None,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "registry_schema": registry.get("version"),
         "registry_version": registry_version,

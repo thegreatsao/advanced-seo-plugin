@@ -59,12 +59,24 @@ def tearDownModule():
 
 
 def audit(url: str, label: str) -> dict:
-    """One full audit, through the runner, as an operator would get it."""
+    """One full audit, through the runner, as an operator would get it.
+
+    The two browser-measured artifacts are supplied, so the eight items that read
+    them are exercised in both directions rather than reporting NO_DATA on both.
+    They are hand-written and say so in their own `source` field — see
+    tests/fixtures/artifacts/README.md for what that does and does not verify.
+    """
     out = os.path.join(SITE.dir, f"{label}.json")
+    artifacts = []
+    for flag, filename in (("--cwv-json", "cwv.json"),
+                           ("--rendered-json", "rendered.json")):
+        path = SITE.artifact(label, filename)
+        if path:
+            artifacts += [flag, path]
     proc = subprocess.run(
         [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
          "--allow-private", "--max-rps", "0", "--no-history", "--no-prompt",
-         "--quiet", "--timeout", "120", "--json", out],
+         "--quiet", "--timeout", "120", "--json", out, *artifacts],
         capture_output=True, text=True, timeout=900, env=offline_env(), cwd=SITE.dir)
     if proc.returncode != 0:
         raise AssertionError(f"the {label} audit exited {proc.returncode}\n"
@@ -73,6 +85,26 @@ def audit(url: str, label: str) -> dict:
         payload = json.load(f)
     payload["_stdout"] = proc.stdout
     return payload
+
+
+def partial_audit(label: str, url: str, *extra: str) -> dict:
+    """One `--only speed` run, for the questions a full audit cannot answer twice.
+
+    Two of the artifact tests need a run configured differently from the two the
+    module already did — a crossed artifact, and a sampled run. One category keeps
+    that to seconds instead of the ten a full registry pass costs.
+    """
+    out = os.path.join(SITE.dir, f"{label}.json")
+    proc = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
+         "--allow-private", "--max-rps", "0", "--no-history", "--no-prompt",
+         "--quiet", "--only", "speed", "--timeout", "120", "--json", out, *extra],
+        capture_output=True, text=True, timeout=600, env=offline_env(), cwd=SITE.dir)
+    if proc.returncode != 0:
+        raise AssertionError(f"the {label} run exited {proc.returncode}\n"
+                             f"{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
+    with open(out, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def items(label: str) -> dict:
@@ -119,7 +151,6 @@ UNREACHABLE_REQUIRES = {"api", "gsc"}
 SAME_ON_BOTH = {
     # The two sites are the same shape by design: both are small, static, and
     # hand-written, so what they share is not something a fixture can vary.
-    "CN-034": "both fixtures are short-form static pages; depth is a judgement",
     "AR-146": "neither fixture paginates",
     "CN-055": "neither fixture paginates",
     "IN-121": "neither fixture is multilingual",
@@ -209,17 +240,12 @@ SAME_ON_BOTH = {
               "both fixture images are 64px placeholders",
 
     # --- Needs an artifact this audit does not produce -----------------------
-    # cwv_metrics and rendered_audit read numbers a browser measured; gsc_links_csv
-    # reads a Search Console export. The runner has flags for all three and the
-    # contract audit passes none, so they are NO_DATA on both — correctly, and
-    # test_evidence.py covers each reader directly.
-    "SP-214": "needs --cwv-json, which no fixture audit supplies",
-    "SP-215": "needs --cwv-json, which no fixture audit supplies",
-    "SP-216": "needs --cwv-json, which no fixture audit supplies",
-    "CN-035": "needs --rendered-json, which no fixture audit supplies",
-    "CN-051": "needs --rendered-json, which no fixture audit supplies",
-    "MB-094": "needs --rendered-json, which no fixture audit supplies",
-    "MB-103": "needs --rendered-json, which no fixture audit supplies",
+    # The `--cwv-json` and `--rendered-json` exemptions used to live here and are
+    # gone: both files are supplied now (see `audit()` above), so the eight items
+    # that read them differ. What is left is the export a human clicks in the
+    # Search Console UI, which cannot be reduced to a file in this repository
+    # without inventing somebody's backlink profile — a fabricated link graph is
+    # the one thing worse than NO_DATA — and the IndexNow key, which is a secret.
     "BL-086": "needs --links-csv, a Search Console UI export",
     "BL-087": "needs --links-csv, a Search Console UI export",
     "GEO-007": "needs an IndexNow key, which is a secret and not a fixture",
@@ -377,6 +403,25 @@ class TheBrokenSiteFailsWhatItWasBuiltToFail(unittest.TestCase):
     def test_a_sitemap_full_of_problems_is_reported(self):
         self.assertMoved("GO-136", PASS, (FAIL, WARN))
 
+    def test_the_lab_vitals_face_the_right_way(self):
+        """820ms passes LCP and 5200ms fails it.
+
+        Which sounds too obvious to test until you remember what 0.5.0 found:
+        SP-107/113 and SE-119 compared a rating to `"fast"`, so a fast page with no
+        CrUX sample *failed*. Three assertions read a real measurement and reached
+        the opposite verdict, and nothing noticed because no test ever gave them a
+        good number and a bad one.
+        """
+        for item_id in ("SP-214", "SP-215", "SP-216"):
+            self.assertMoved(item_id, PASS, (FAIL, WARN))
+
+    def test_the_rendered_page_measurements_are_read_in_both_directions(self):
+        """Including MB-094, whose count is derived rather than supplied: neither
+        artifact carries `mobile_overlays_covering_content`, so this is also the
+        assertion that the derivation from a phone-width viewport happens at all."""
+        for item_id in ("CN-034", "CN-035", "CN-051", "MB-094", "MB-103"):
+            self.assertMoved(item_id, PASS, (FAIL, WARN))
+
 
 class UnreachableCapabilitiesSayWhy(unittest.TestCase):
     """PageSpeed, Safe Browsing, the W3C validator and Search Console cannot reach a
@@ -396,6 +441,88 @@ class UnreachableCapabilitiesSayWhy(unittest.TestCase):
                                   item.get("evidence") or "",
                                   f"{label} {item['id']} is undecided for the wrong "
                                   f"stated reason")
+
+
+class ArtifactsMustDescribeTheAuditedPage(unittest.TestCase):
+    """A browser artifact is the one input this run cannot verify by re-measuring.
+
+    Nothing else in an audit is like it: every other verdict comes from a request
+    this process made, and can be checked by making it again. A trace is a file
+    somebody hands over, and the only question available is whether it says which
+    page it is about. Eight items are decided from these two files, two of them
+    `high`, so an artifact from the wrong page is eight fabricated verdicts — and
+    it would look exactly like a clean result.
+    """
+
+    def test_both_audits_recorded_what_they_were_handed(self):
+        for label in ("good", "broken"):
+            recorded = RESULTS[label]["artifacts"] or {}
+            self.assertEqual(sorted(recorded), ["cwv_json", "rendered_json"], label)
+            for key, entry in recorded.items():
+                self.assertTrue(entry["matches_audited_url"],
+                                f"{label} {key}: {entry}")
+
+    def test_the_fixture_artifacts_keep_admitting_they_were_written_by_hand(self):
+        """`source` is the only thing standing between a fixture and a fabrication.
+
+        These files hold numbers no browser produced. That is defensible for a test
+        and indefensible silently, and `source` is where the script, the results and
+        the report all read it from — so if this string ever quietly becomes
+        "chrome-devtools MCP trace", the fixture has started lying about itself.
+        """
+        for label in ("good", "broken"):
+            for entry in (RESULTS[label]["artifacts"] or {}).values():
+                with open(entry["path"], encoding="utf-8") as f:
+                    self.assertIn("hand-written", json.load(f)["source"],
+                                  f"{label}: {entry['path']}")
+
+    def test_an_artifact_from_the_other_site_is_refused_with_the_reason(self):
+        """The end-to-end half of the guard, through the real runner.
+
+        Deliberately a whole run rather than a unit test of `same_page`: the failure
+        this prevents is not a comparison returning the wrong boolean, it is three
+        passing items in a delivered report. `--only speed` keeps the cost to a few
+        seconds.
+        """
+        crossed = partial_audit("crossed", SITE.good, "--cwv-json",
+                                SITE.artifact("broken", "cwv.json"))
+        self.assertFalse(crossed["artifacts"]["cwv_json"]["matches_audited_url"],
+                         crossed["artifacts"])
+
+        rows = {i["id"]: i for i in crossed["items"]}
+        for item_id in ("SP-214", "SP-215", "SP-216"):
+            row = rows[item_id]
+            self.assertEqual(row["status"], NO_DATA,
+                             f"{item_id} was decided from a trace of another page: "
+                             f"{row.get('evidence')}")
+            # The reason has to name the other page. "missing input" would send the
+            # operator off to produce a file they have already produced.
+            self.assertIn("describes", row.get("evidence") or "")
+            self.assertIn(SITE.origin("broken"), row.get("evidence") or "")
+
+    def test_one_measured_page_does_not_become_a_verdict_about_four_others(self):
+        """A sampled run must leave the artifact items alone.
+
+        Every sampled page inherits the run's context, so the same trace used to be
+        read once per URL — and because the reader returns the same numbers every
+        time, the aggregate reported "4/4 pages" about pages no browser had opened.
+        The assertion is the absence of a page count on those items, next to its
+        presence on the others: without the second half this test would also pass
+        if sampling had silently stopped happening.
+        """
+        sampled = partial_audit("sampled", SITE.good, "--sample", "3",
+                                "--cwv-json", SITE.artifact("good", "cwv.json"))
+        rows = {i["id"]: i for i in sampled["items"]}
+        self.assertGreater(len(sampled["sampled_urls"]), 1, sampled["sampled_urls"])
+
+        counted = [i["id"] for i in sampled["items"] if "pages_checked" in i]
+        self.assertTrue(counted, "no item carried a page count, so this run did not "
+                                 "sample anything and proves nothing")
+        for item_id in ("SP-214", "SP-215", "SP-216"):
+            self.assertEqual(rows[item_id]["status"], PASS, rows[item_id])
+            self.assertNotIn("pages_checked", rows[item_id],
+                             f"{item_id} claims a page count, but one trace of one "
+                             f"page is all that was measured")
 
 
 class NothingIsDecidedWithoutEvidence(unittest.TestCase):

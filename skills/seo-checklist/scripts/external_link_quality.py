@@ -83,11 +83,13 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
             row["error"] = fetched.get("error")
         checked.append(row)
 
-    broken = [l for l in checked if l.get("status") and l["status"] >= 400]
-    redirects = [l for l in checked if l.get("redirect_chain")]
-    low_trust = [l for l in checked if l.get("low_trust_pattern")]
-    commercial_without_rel = [l for l in checked if not (l.get("nofollow") or l.get("sponsored") or l.get("ugc")) and _looks_commercial(l)]
-    hosts = Counter(l["host"] for l in checked if l.get("host"))
+    broken = [link for link in checked if link.get("status") and link["status"] >= 400]
+    redirects = [link for link in checked if link.get("redirect_chain")]
+    low_trust = [link for link in checked if link.get("low_trust_pattern")]
+    commercial_without_rel = [link for link in checked
+                              if not (link.get("nofollow") or link.get("sponsored")
+                                      or link.get("ugc")) and _looks_commercial(link)]
+    hosts = Counter(link["host"] for link in checked if link.get("host"))
     issues = []
     if broken:
         issues.append({"severity": "error", "type": "broken_external_links", "count": len(broken), "message": "External links return 4xx/5xx"})

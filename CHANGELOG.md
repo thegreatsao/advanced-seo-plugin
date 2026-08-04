@@ -10,6 +10,100 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.7.0 — 4 August 2026
+
+**Registry `6e3cca477308`, unchanged.** No item changed what it asserts; what
+changed is whether eight of them could produce a verdict at all, and whether two
+more produced the right one. Tests 325 → 356.
+
+Two threads. The fixture pair now supplies the browser-measured artifacts, so the
+eight items that read them are exercised in both directions instead of reporting
+NO_DATA on both. And the four defects still open in `KNOWN-ISSUES.md` §6 are fixed —
+one of which was a check that failed sites for doing exactly what it recommends.
+
+### Fixed — an artifact could decide items about a page nobody measured
+
+- **A `--cwv-json` or `--rendered-json` file was accepted without asking which page
+  it describes.** These are the only inputs an audit cannot verify by re-measuring:
+  every other verdict comes from a request this process made. A trace of some other
+  page — a staging copy, yesterday's URL, a colleague's file — decided **eight
+  items, two of them `high`**, from numbers nobody took here, and the result looked
+  exactly like a clean one. A mismatch is now NO_DATA with the reason naming both
+  pages, which is a different instruction to the operator than "missing input": one
+  says go and measure, the other says the file you made is about somewhere else. A
+  file with no `url` is still accepted, and said out loud, because it predates the
+  check and is more likely careless than wrong.
+- **One measured page became a verdict about every sampled page.** Sampled runs
+  inherit the whole run context, so the same trace was read once per URL, returned
+  the same numbers each time, and the aggregate reported "4/4 pages" about four
+  pages no browser had opened. Artifact-backed items are excluded from sampling and
+  keep the primary run's verdict about the page the file is actually about.
+- **The report never said a verdict came from a file rather than from a
+  measurement.** "LCP 820 ms — PASS" reads identically either way. It now appears in
+  the same "what was audited" block as a scored interstitial or a private host, and
+  a *rejected* artifact is deliberately not listed there — it decided nothing.
+
+### Fixed — the four open defects in KNOWN-ISSUES §6
+
+- **MB-096 and MB-097 failed sites for following the recommendation.**
+  `image_weight_audit.py` read `<img>` attributes only, and the recommended way to
+  ship a modern format is a `<picture>` whose `<source>` offers webp or avif and
+  whose `<img>` keeps a png fallback for browsers that cannot decode it — so the
+  fallback was the only thing ever inspected, and "Use Responsive Images" and
+  "Optimize Image Formats" both failed a site already doing it right. Both counts
+  now consider what the browser can actually obtain, and the narrower `img`-only
+  counts stay in the output, because "the browser gets webp and the fallback is a
+  png" is two facts and a fix list must not conflate them.
+  - Found while fixing it: **`lxml` mis-nests every `<picture>`.** libxml2 predates
+    the element and does not know `<source>` is void, so it makes the `<img>` a
+    *child* of the first `<source>`; `html.parser` gives it the `<picture>` as its
+    parent, as the spec does. The first version of the fix checked `img.parent`,
+    passed its tests, and would have changed nothing in production. Both parsers are
+    now pinned by a test, and which one gets used still depends on whether `lxml`
+    happens to be in `sys.modules` — recorded in `KNOWN-ISSUES.md`.
+- **`tools/probe_shapes.py` held its own list of scripts.** The tool that verifies
+  the registry's asserted paths against real output had drifted from the registry in
+  both directions at once: it named seven scripts that no longer exist and missed
+  three the registry reads — including `cwv_metrics.py` and `rendered_audit.py`,
+  whose shapes this release changes. Jobs are now derived from `check.script` and
+  `check.args`, deduplicated the way the runner deduplicates, and a job whose input
+  is not available is skipped by name instead of probed with a literal
+  `{gsc_property}` on the command line.
+- **No declared Python floor.** `pyproject.toml` states `>=3.10`, and CI now runs
+  3.10 — a floor nothing exercises is a guess. It is a real floor: three scripts
+  annotate with PEP 604 unions without `from __future__ import annotations`, so on
+  3.9 they raise `TypeError` at import, before any check runs and with nothing in
+  the message about SEO. A test ties the CI matrix, `requires-python` and ruff's
+  `target-version` together, and measures the claim against the tree's own syntax.
+- **`ruff` was a listed development dependency that never ran.** It runs in CI now,
+  and running it found two half-implemented checks: `entity_checker.py` computed
+  whether a street address is visible on the page and then dropped it, so half of
+  "check for visible phone/address" did nothing and only the phone was ever
+  reported; `hreflang_checker.py` computed an `xhtml:link` flag it never returned.
+  76 findings in total, 74 of them cosmetic, and the two that were not are the same
+  family as everything else in this file — code that looks like it decides something
+  and does not.
+
+### Fixed — the report overstated its own translation coverage
+
+- **`untranslated()` declared the report's own wording complete.** It was not: 6 of
+  51 strings had no Russian, and they were the entire "what was audited" block —
+  the highest-stakes prose in the document. `t()` falls back to English silently, so
+  nothing showed. The count is now derived from the source rather than asserted, so
+  a string added without a translation is reported the day it is added. The six are
+  still English, deliberately: this release makes the claim honest, not the
+  translation complete.
+
+### Changed
+
+- The fixture pair gained `tests/fixtures/artifacts/`, and the good site's image
+  markup is now a real `<picture>` rather than the shape the old check could see.
+  Those files carry hand-written numbers, and every one says so in its own `source`
+  field — a test fails if that stops being true.
+- `checklist-results.json` gained `artifacts`: which measured-elsewhere files a run
+  was handed, what page each claims to describe, and whether that is the page
+  audited.
+
 ## 0.6.0 — 3 August 2026
 
 **Registry `8a66be60b820` → `6e3cca477308`** (214 items, unchanged in number).

@@ -1,12 +1,18 @@
 # Known issues
 
-What is wrong with this plugin as of **0.5.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.7.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.7.0**: the four defects that used to be §6's first four bullets — the
+`<picture>` blind spot that failed sites for following the recommendation, a
+shape-probing tool that had drifted from the registry it verifies, an undeclared
+Python floor, and a linter that never ran — plus an artifact being trusted without
+being asked which page it describes.
 
 **Fixed in 0.5.0**, below the line: eighteen items — five of them `critical` —
 that were reporting a verdict nothing could have produced, and the two audits that
@@ -37,10 +43,16 @@ throw the result away:
 | `internal_links.py` | 50 |
 | `anchor_text_audit.py` | 25 |
 
-That is **~275 fetches of the same pages per audit**, plus 36 more scripts each
-re-fetching the entry URL, with no shared HTTP cache anywhere. At the default
-4 rps/host that is over a minute of pure pacing, and the audited site absorbs five
-crawls where one would do.
+That is **~275 fetches of the same pages per audit** on a site large enough to fill
+those budgets, plus 36 more scripts each re-fetching the entry URL, with no shared
+HTTP cache anywhere. At the default 4 rps/host that is over a minute of pure pacing,
+and the audited site absorbs five crawls where one would do.
+
+Measured rather than budgeted: the CI live step counts the requests its own server
+receives, and **a seven-page fixture with `--sample 3` absorbs 181** — for a site
+whose entire content is seven pages. The count is printed in the build log on every
+run, so a change that makes it worse is visible here rather than only on somebody
+else's server.
 
 The fix is the pattern this plugin already uses for `cwv_metrics.py` and
 `rendered_audit.py`: crawl once into an inventory artifact (URL, status, title,
@@ -55,25 +67,30 @@ Note what fixing 1 also fixes: robots.txt is honoured once in the shared crawler
 instead of five times, and the request volume stops being a property of how many
 scripts happen to want a crawl.
 
-## 2. 44 of the 55 evidence scripts have no unit test
+## 2. 43 of the 55 evidence scripts have no unit test
 
 Counted as "no test imports this module", read from the test files' AST. The looser
-count — "the script's name appears somewhere in tests/" — says 40, and it is wrong in
-the flattering direction: four scripts are named only inside a registry audit or a
-docstring, which exercises nothing. The number in this file before 0.5.0 was arrived
-at the loose way too.
+count — "the script's name appears somewhere in tests/" — is wrong in the flattering
+direction: several scripts are named only inside a registry audit or a docstring,
+which exercises nothing.
 
-11 are covered: the seven that decide the nineteen `critical` items, plus
-`cwv_metrics.py`, `rendered_audit.py`, `orphan_pages_from_sitemap.py` and part of
-`local_seo_checker.py`. The seven `critical` ones got 34 tests in 0.5.0, each
-asserting the field the registry actually reads, and writing them found five critical
-items whose rule could not produce the verdict it claimed — see the 0.5.0 list below.
-That yield is the argument for doing the other 44.
+12 are covered: the seven that decide the nineteen `critical` items, plus
+`cwv_metrics.py`, `rendered_audit.py`, `orphan_pages_from_sitemap.py`,
+`image_weight_audit.py` (0.7.0) and part of `local_seo_checker.py`. The seven
+`critical` ones got 34 tests in 0.5.0, each asserting the field the registry actually
+reads, and writing them found five critical items whose rule could not produce the
+verdict it claimed. `image_weight_audit.py` got eight in 0.7.0 and they found two
+items that failed sites for following the recommendation. That yield — two releases
+running, one defect per two or three tests — is the argument for doing the other 43.
 
-They are also *executed* end to end as of 0.4.0: CI serves `tests/fixtures/site/`
-and fails if any of them crashes. That is a smoke test, not coverage — it proves a
-script runs and returns usable output against one small site, and says nothing about
-whether its verdict is right.
+**The whole registry is also run against two fixture sites as of 0.6.0**, and every
+script-backed item has to answer them differently or carry a written exemption. That
+is a stronger guarantee than the end-to-end smoke run 0.4.0 added, and still not unit
+coverage: it proves a check can tell a good site from a bad one, not that its
+threshold is the right one or that its output survives a shape a fixture does not
+contain. As of 0.7.0, 77 of 144 script-backed items differ across the pair; of the 67
+that do not, 21 are external APIs no loopback host can reach and the rest carry
+reasons.
 
 The rest of the tests defend the *frame* — registry, runner, report. Every verdict
 from those 44 is the output of an untested script read by a well-tested interpreter.
@@ -135,32 +152,73 @@ be a few lines.
 
 ## 6. Smaller, but they will bite
 
-- **`image_weight_audit.py` reads only `<img>` attributes.** A site serving webp
-  through `<picture><source type="image/webp">` with a png fallback in the `<img>` —
-  which is the recommended pattern — counts as having **no modern format at all**, so
-  MB-097 fails a site that is already doing it right. Same for `srcset` declared on a
-  `<source>` rather than the `<img>` (MB-096). Found while building the fixture pair
-  in 0.6.0 and deliberately not worked around: the fixture uses the form the check
-  can see, and the gap is written here instead of hidden behind a fixture that
-  flatters it.
-- **`tools/probe_shapes.py` holds its job list by hand.** The tool used to verify
-  script output shapes is not itself tied to the registry, so it can drift from the
-  thing it verifies and nothing notices.
-- **No `pyproject.toml` and no declared Python floor.** The code needs 3.10+
-  (`str | None`, `dict[int, str]`); CI tests 3.11 and 3.13; nothing states it.
-- **No linter in CI.** `ruff` is listed in `requirements.txt` as a development
-  dependency and never runs.
+- **Which HTML parser reads a page depends on import order.** `seo_common.parse_html`
+  picks `lxml` if and only if `"lxml" in sys.modules` at the moment it runs — not on
+  whether lxml is installed. So a page can be parsed two different ways on the same
+  machine, and the two are not equivalent: libxml2 predates `<picture>` and does not
+  know `<source>` is void, so it nests the `<img>` *inside* the first `<source>` while
+  `html.parser` follows the spec. Nothing structural depended on this until 0.7.0,
+  when the `<picture>` fix nearly shipped broken because of it — `picture_sources()`
+  copes with both and a test pins the divergence. The real fix is to decide the parser
+  deliberately, and it is not a one-liner: choosing lxml everywhere spreads the
+  mis-nesting, choosing `html.parser` everywhere gives up its tolerance of broken
+  markup, and both change the substrate under every verdict. It needs measuring on
+  real sites, not a default.
+- **The rendered-page artifacts are the one input that cannot be checked by
+  re-measuring.** 0.7.0 closed the part that could be: an artifact naming a different
+  page is refused with the reason. What remains unverifiable is *when* — a trace from
+  six months ago describing today's URL is accepted, because a timestamp in the file
+  is the operator's claim too. The report says which verdicts came from a supplied
+  measurement, so a reader can weigh it; nothing can make that automatic.
 - **The page guard is fingerprint-based**, so an interstitial from a vendor it does
   not recognise still gets through. Deliberate: an unknown interstitial and a
   client-rendered shell are indistinguishable from the HTML, and the second is a
   real finding, so the run warns with the visible word count instead of refusing to
   score.
-- **Client-facing reports are English-only.** `--lang ru` translates the report's
-  own wording and all 16 category explanations; `item_titles` and `item_fixes` are
-  empty, so item titles and recommendations come out in the registry's English. The
-  report says which layers are untranslated on stderr.
+- **Client-facing reports are English-only.** `--lang ru` translates 45 of the
+  report's 51 own strings and all 16 category explanations. The six it does not are
+  the "what was audited" block — the caveats — and `item_titles` and `item_fixes` are
+  empty, so item titles and recommendations come out in the registry's English. As of
+  0.7.0 the stderr warning *counts* what is missing rather than asserting the chrome
+  is complete, which is how those six were found; it had been claiming otherwise
+  since the translation shipped.
 
 ---
+
+## Fixed in 0.7.0
+
+Two of these were found by supplying the fixture pair with the artifacts it had been
+withholding, and two by turning on a linter that had been sitting in
+`requirements.txt` unused. Both are the same lesson as every other release here:
+the defects are not where anybody was looking.
+
+- **An artifact was trusted without being asked which page it describes.** A
+  `--cwv-json` or `--rendered-json` file decides eight items, two of them `high`, and
+  it is the only evidence in an audit that cannot be checked by measuring again. A
+  trace of a staging copy, or of yesterday's URL, produced eight confident verdicts
+  about a page nobody measured — and looked like a clean result. Now refused with the
+  reason, which is a different sentence from "missing input": one tells the operator
+  to measure, the other tells them the file they made is about somewhere else.
+- **A single measured page became a verdict about every sampled page.** `--sample`
+  runs inherit the run context, so the same file was read once per URL and the
+  aggregate said "4/4 pages" about pages no browser had opened.
+- **MB-096 and MB-097 failed sites for following the recommendation.** The image
+  audit read `<img>` attributes only, so a `<picture>` offering webp through
+  `<source>` with a png fallback in the `<img>` — the recommended pattern — counted
+  as having no modern format and no `srcset`. The one guaranteed-old thing in that
+  markup was the only thing inspected.
+- **The tool that finds drift had drifted.** `probe_shapes.py` held its job list by
+  hand and named seven scripts that no longer exist while missing three the registry
+  reads. Jobs now come from the registry.
+- **The Python floor was undeclared, and then unexercised.** `>=3.10` is now stated
+  and CI runs it, tied together by a test that also measures the claim against the
+  tree's syntax.
+- **Two half-implemented checks, found by the linter's first run.**
+  `entity_checker.py` computed whether a street address is visible and dropped it, so
+  only the phone half of "visible phone/address" was ever reported;
+  `hreflang_checker.py` computed an `xhtml:link` flag it never returned.
+- **The report claimed its own wording was fully translated.** Six of 51 strings were
+  not, and they were the caveat block. The warning now counts instead of asserting.
 
 ## Fixed in 0.5.0
 

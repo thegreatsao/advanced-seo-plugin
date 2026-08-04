@@ -59,6 +59,26 @@ PLACEHOLDER_EXTERNAL = "http://127.0.0.1:8001"
 
 TEXTUAL = (".html", ".xml", ".txt", ".css", ".json", ".md")
 
+# Files the operator measures in a browser and hands to the run, rather than
+# anything the tool fetches: a performance trace and a rendered-page measurement.
+# They live outside both document roots on purpose — an artifact is an input to
+# the audit, not a page of the site, and serving one would put it in the crawl.
+ARTIFACTS = "artifacts"
+
+
+def substitute(root: str, needle: str, replacement: str) -> None:
+    """Rewrite `needle` in every textual file under `root`."""
+    for folder, _dirs, files in os.walk(root):
+        for name in files:
+            if not name.endswith(TEXTUAL):
+                continue
+            path = os.path.join(folder, name)
+            with open(path, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            if needle in text:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text.replace(needle, replacement))
+
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
     """SimpleHTTPRequestHandler with a fixed document root and no access log."""
@@ -98,25 +118,13 @@ class _Site:
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
-    def _substitute(self, needle: str, replacement: str) -> None:
-        for folder, _dirs, files in os.walk(self.dir):
-            for name in files:
-                if not name.endswith(TEXTUAL):
-                    continue
-                path = os.path.join(folder, name)
-                with open(path, encoding="utf-8", errors="replace") as f:
-                    text = f.read()
-                if needle in text:
-                    with open(path, "w", encoding="utf-8") as f:
-                        f.write(text.replace(needle, replacement))
-
     def _rewrite(self) -> None:
         """Point every absolute URL in this tree at the port we actually got."""
-        self._substitute(PLACEHOLDER, self.base)
+        substitute(self.dir, PLACEHOLDER, self.base)
 
     def link_external(self, other_base: str) -> None:
         """Point this tree's external-link placeholder at the neighbouring origin."""
-        self._substitute(PLACEHOLDER_EXTERNAL, other_base)
+        substitute(self.dir, PLACEHOLDER_EXTERNAL, other_base)
 
     def stop(self) -> None:
         self.server.shutdown()
@@ -135,6 +143,7 @@ class FixtureSite:
         self.source = source
         self.dir = ""
         self._sites: dict[str, _Site] = {}
+        self._artifacts: dict[str, str] = {}
 
     def start(self) -> "FixtureSite":
         self.dir = tempfile.mkdtemp(prefix="seo-fixture-")
@@ -142,6 +151,7 @@ class FixtureSite:
             src = os.path.join(self.source, name)
             if os.path.isdir(src):
                 self._sites[name] = _Site(src, os.path.join(self.dir, name))
+                self._copy_artifacts(name)
         # Each site's external links point at the other, once both ports are known.
         # A site served alone keeps pointing at the unbound placeholder, which fails
         # loudly rather than silently reaching the internet.
@@ -150,6 +160,27 @@ class FixtureSite:
             good.link_external(broken.base)
             broken.link_external(good.base)
         return self
+
+    def _copy_artifacts(self, name: str) -> None:
+        """Stage this site's browser-measured artifacts, outside its document root.
+
+        The `url` inside each one is rewritten to the port the site actually bound,
+        and that is load-bearing rather than tidy: the runner refuses an artifact
+        describing a different page than the one being audited, so an unrewritten
+        file would arrive as NO_DATA with a reason instead of as evidence.
+        """
+        src = os.path.join(self.source, ARTIFACTS, name)
+        if not os.path.isdir(src):
+            return
+        dest = shutil.copytree(src, os.path.join(self.dir, f"{ARTIFACTS}-{name}"))
+        substitute(dest, PLACEHOLDER, self._sites[name].base)
+        self._artifacts[name] = dest
+
+    def artifact(self, name: str, filename: str) -> str:
+        """Path to one staged artifact, or "" when this fixture has none."""
+        folder = self._artifacts.get(name, "")
+        path = os.path.join(folder, filename) if folder else ""
+        return path if path and os.path.exists(path) else ""
 
     def origin(self, name: str) -> str:
         return self._sites[name].base

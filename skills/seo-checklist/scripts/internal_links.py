@@ -234,7 +234,7 @@ def crawl_site(start_url: str, max_depth: int = 2, max_pages: int = 50,
         )
 
     # Check anchor text issues
-    no_text_links = sum(1 for l in all_links if l["anchor_text"] == "[no text]")
+    no_text_links = sum(1 for link in all_links if link["anchor_text"] == "[no text]")
     if no_text_links:
         result["issues"].append(
             f"⚠️ {no_text_links} link(s) have no anchor text"
@@ -295,7 +295,7 @@ def main():
             print(f"  • {orphan['url']} ({orphan['incoming_links']} incoming)")
 
     if result["anchor_texts"]:
-        print(f"\nTop Anchor Texts:")
+        print("\nTop Anchor Texts:")
         for text, count in list(result["anchor_texts"].items())[:10]:
             print(f"  [{count}x] \"{text}\"")
 
@@ -305,12 +305,12 @@ def main():
             print(f"  • {link['url']} (from {link['source']})")
 
     if result["issues"]:
-        print(f"\nIssues:")
+        print("\nIssues:")
         for issue in result["issues"]:
             print(f"  {issue}")
 
     if result["recommendations"]:
-        print(f"\nRecommendations:")
+        print("\nRecommendations:")
         for rec in result["recommendations"]:
             print(f"  💡 {rec}")
 

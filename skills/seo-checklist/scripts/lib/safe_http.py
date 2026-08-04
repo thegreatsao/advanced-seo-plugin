@@ -141,7 +141,7 @@ def pace(host: str, rps: float | None = None) -> float:
         # of the file whatever seek() and truncate() say, so two updates
         # concatenated into "153761.19671379115376.196978791" and float() raised —
         # out of `pace`, through safe_get, and into 36 evidence scripts at once.
-        fd = os.open(path := _slot_path(host), os.O_RDWR | os.O_CREAT, 0o600)
+        fd = os.open(_slot_path(host), os.O_RDWR | os.O_CREAT, 0o600)
         fcntl.flock(fd, fcntl.LOCK_EX)
         try:
             raw = os.read(fd, 64).decode("ascii", "replace").strip()

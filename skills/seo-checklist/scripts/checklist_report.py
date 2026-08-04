@@ -20,6 +20,7 @@ import argparse
 import html
 import json
 import os
+import re
 import sys
 
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
@@ -99,15 +100,39 @@ class Lang:
         """Which layers of a non-English report will still come out in English.
 
         A half-translated document is worse than an English one, because the reader
-        cannot tell which parts were considered and which were merely left. The
-        report chrome and the category explanations are complete for every shipped
-        language; the per-item titles and fixes are opt-in and currently empty. Say
-        so on stderr rather than letting the reader discover it in the output."""
+        cannot tell which parts were considered and which were merely left.
+
+        The chrome layer is **counted, not assumed**. This function used to name
+        only the two opt-in layers and state that the report's own wording was
+        complete — and it was not: 6 of the 51 strings had no translation, and they
+        were the whole "what was audited" block, which is the highest-stakes prose in
+        the document. `t()` falls back to English for any missing key, silently, so a
+        claim about coverage that is not derived from the file is a claim that goes
+        stale the next time a string is added. This one is derived.
+        """
         if not self.data:
             return []
-        return [name for name, key in (("item titles", "item_titles"),
-                                       ("recommendations", "item_fixes"))
-                if not self.data.get(key)]
+        out = [name for name, key in (("item titles", "item_titles"),
+                                      ("recommendations", "item_fixes"))
+               if not self.data.get(key)]
+        missing = self.missing_strings()
+        if missing:
+            out.append(f"{len(missing)} report string(s): {', '.join(missing[:4])}"
+                       + (" …" if len(missing) > 4 else ""))
+        return out
+
+    def missing_strings(self) -> list[str]:
+        """Keys the report asks `t()` for that this language does not carry.
+
+        Read out of this module's own source, because the alternative is a
+        hand-kept list of 51 keys — and a hand-kept list of what a file should
+        contain is the thing that just turned out to be wrong.
+        """
+        if not self.data:
+            return []
+        with open(os.path.abspath(__file__), encoding="utf-8") as f:
+            asked = set(re.findall(r'\bL\.t\(\n?\s*"([a-z_0-9]+)"', f.read()))
+        return sorted(asked - set(self.data.get("strings", {})))
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +363,19 @@ def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
                        "client-rendered, or behind bot protection this tool does not "
                        "recognise, the page-level verdicts describe an empty shell.")
                    .format(words=data.get("entry_visible_words")))
+    # Eight items can be decided from a file the operator measured in a browser
+    # instead of from anything this run observed. The verdict is only as good as
+    # that file, and a reader looking at "LCP 820 ms — PASS" has no way to tell it
+    # apart from a measurement the tool took — so the report says which.
+    supplied = sorted(key.replace("_", " ").replace(" json", "")
+                      for key, entry in (data.get("artifacts") or {}).items()
+                      if entry.get("matches_audited_url") is not False)
+    if supplied:
+        out.append(L.t("w_artifacts",
+                       "Some verdicts come from measurements supplied with the run "
+                       "({kinds}) rather than from anything it observed itself. They "
+                       "describe the page and the moment they were taken, and are "
+                       "only as current as that.").format(kinds=", ".join(supplied)))
     return out
 
 
@@ -842,7 +880,7 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             f'<div class="fix">{html.escape(L.fix(i))}</div></div></div>'
             for i in sorted(manual, key=lambda x: SEVERITY_ORDER.get(x["severity"], 9)))
         parts.append(fold(L.t("requires_human", "Needs a person"),
-                          f'<p class="note">'
+                          '<p class="note">'
                           + html.escape(L.t("manual_note",
                                             "These cannot be scripted. Nothing here counts "
                                             "against the score. Tick them off as you go — "
@@ -857,7 +895,7 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             f'<div class="sev">{html.escape(L.sev(i["severity"]))}<br>{i["id"]}</div>'
             f'<div class="ttl">{html.escape(L.title(i))}</div></div>' for i in pending)
         parts.append(fold(L.t("awaiting_judgement", "Awaiting a reading of the page"),
-                          f'<p class="note">'
+                          '<p class="note">'
                           + html.escape(L.t("pending_note",
                                             "Questions no script can settle — wording, "
                                             "layout, intent. They lower coverage until "
@@ -873,7 +911,7 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             f'<div class="ev">{html.escape(i.get("evidence", ""))}</div></div></div>'
             for i in blocked)
         parts.append(fold(L.t("undetermined", "Could not be determined"),
-                          f'<p class="note">'
+                          '<p class="note">'
                           + html.escape(L.t("undetermined_note",
                                             "Checks that ran and could not reach a verdict. "
                                             "Each lowers coverage; none lowers the score. "

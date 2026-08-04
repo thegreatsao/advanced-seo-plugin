@@ -157,7 +157,7 @@ def check_broken_links(url: str, internal_only: bool = False,
     # Extract links
     links = extract_links(html, url)
     if internal_only:
-        links = [l for l in links if l["is_internal"]]
+        links = [link for link in links if link["is_internal"]]
 
     result["total_links"] = len(links)
 
@@ -168,7 +168,7 @@ def check_broken_links(url: str, internal_only: bool = False,
     if max_links and len(links) > max_links:
         # Internal links first: they are the ones this site can actually fix, and a
         # truncated check should spend its budget where the findings are actionable.
-        links = sorted(links, key=lambda l: not l["is_internal"])[:max_links]
+        links = sorted(links, key=lambda link: not link["is_internal"])[:max_links]
         result["truncated"] = True
         result["issues"].append(
             f"⚠️ Page has {result['total_links']} links; checked the first "
@@ -217,8 +217,8 @@ def check_broken_links(url: str, internal_only: bool = False,
             f"⚠️ {len(result['timeout'])} link(s) timed out"
         )
     if result["redirected"]:
-        chains = [l for l in result["redirected"]
-                  if l.get("redirect", {}).get("hops", 0) > 1]
+        chains = [link for link in result["redirected"]
+                  if link.get("redirect", {}).get("hops", 0) > 1]
         if chains:
             result["issues"].append(
                 f"⚠️ {len(chains)} redirect chain(s) detected (>1 hop)"
@@ -262,7 +262,7 @@ def main():
           f"⏱️ Timeout: {s['timeout']}")
 
     if result["broken"]:
-        print(f"\n🔴 Broken Links:")
+        print("\n🔴 Broken Links:")
         for link in result["broken"]:
             status = link["status"] or link["error"]
             loc = "internal" if link["is_internal"] else "external"
@@ -270,22 +270,22 @@ def main():
             print(f"         anchor: \"{link['anchor_text']}\"")
 
     if result["redirected"]:
-        chains = [l for l in result["redirected"]
-                  if l.get("redirect", {}).get("hops", 0) > 1]
+        chains = [link for link in result["redirected"]
+                  if link.get("redirect", {}).get("hops", 0) > 1]
         if chains:
-            print(f"\n⚠️ Redirect Chains (>1 hop):")
+            print("\n⚠️ Redirect Chains (>1 hop):")
             for link in chains:
                 r = link["redirect"]
                 print(f"  {link['url']}")
                 print(f"    → {r['to']} ({r['hops']} hops: {r['codes']})")
 
     if result["timeout"]:
-        print(f"\n⏱️ Timed Out:")
+        print("\n⏱️ Timed Out:")
         for link in result["timeout"]:
             print(f"  {link['url']}")
 
     if result["issues"]:
-        print(f"\nIssues:")
+        print("\nIssues:")
         for issue in result["issues"]:
             print(f"  {issue}")
 

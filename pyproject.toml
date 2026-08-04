@@ -1,0 +1,49 @@
+# Not a distributable package — this is a Claude Code plugin, installed by copying
+# the directory. The file exists for the two things nothing else was stating:
+# which Python versions the code actually runs on, and how the linter is configured.
+[project]
+name = "seo-checklist"
+version = "0.7.0"
+description = "Deterministic SEO audit against a fixed 214-item registry"
+license = "MIT"
+# Measured, not guessed. `duplicate_content.py`, `link_profile.py` and
+# `pagespeed.py` annotate with PEP 604 unions and do *not* carry
+# `from __future__ import annotations`, so their annotations are evaluated when the
+# module loads and a 3.9 interpreter raises TypeError at import — before any check
+# runs and with nothing in the message about SEO. Another dozen files use PEP 585
+# generics the same way, which puts the same floor one version lower.
+#
+# The lowest version in the CI matrix is tied to this string by a test, because the
+# usual way this claim goes stale is a floor that nothing ever exercises.
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# Script families that only some runs need. Search Console items report NO_DATA
+# without the google packages rather than failing, which is the point of keeping
+# them out of the base set.
+gsc = ["google-auth>=2.29", "google-api-python-client>=2.125"]
+dev = ["ruff>=0.5"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv", "plugin-snapshot"]
+
+[tool.ruff.lint]
+# Deliberately narrow, and chosen by what has actually gone wrong here rather than
+# by what a linter can say. `F` is the one that would have caught real defects: an
+# undefined name, a shadowed import, a variable assigned and never read. `E`
+# without the whitespace rules keeps the diff to things a reader would also call
+# wrong. Style beyond that is not the failure mode this project has — the failures
+# have all been assertions that could not fire, and no linter finds those.
+select = ["F", "E4", "E7", "E9", "W6", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# The tests reach into module internals on purpose — that is what testing a
+# 55-script surface through its real seams looks like.
+"tests/*" = ["E402"]

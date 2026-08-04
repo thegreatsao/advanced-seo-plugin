@@ -106,7 +106,7 @@ def fetch_html(url: str, timeout: int = 10) -> tuple[str, str]:
     try:
         resp = safe_get(url, timeout=timeout)
         return resp.text, resp.url
-    except Exception as exc:
+    except Exception:
         return "", url
 
 
@@ -178,11 +178,13 @@ def check_sitemap_hreflang(base_url: str) -> dict:
     if not html:
         return {"found": False, "url": sitemap_url}
 
-    # Check for xhtml:link in sitemap (hreflang sitemap pattern)
-    has_xhtml_link = "xhtml:link" in html or 'rel="alternate"' in html
     lang_matches = re.findall(r'hreflang="([^"]+)"', html)
 
     return {
+        # `found` is hreflang attributes, not the `xhtml:link` wrapper. A separate
+        # `has_xhtml_link` was computed here and never returned; it would have said
+        # nothing `has_xhtml_namespace` does not, because an `xhtml:link` element
+        # cannot appear without the namespace that declares it.
         "found": bool(lang_matches),
         "url": sitemap_url,
         "has_xhtml_namespace": "xmlns:xhtml" in html,

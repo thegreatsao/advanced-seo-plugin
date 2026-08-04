@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from typing import Any
 
 from schema_required_props import extract_schema_documents, find_schema_nodes, schema_type_names

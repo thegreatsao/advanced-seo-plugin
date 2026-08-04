@@ -1,0 +1,9 @@
+{
+  "url": "http://127.0.0.1:8000/",
+  "source": "hand-written test fixture, not a browser measurement: all four counts zero so CN-034/CN-035/CN-051/MB-094/MB-103 can be observed passing",
+  "viewport": {"width": 390, "height": 844},
+  "text_nodes_below_12px": 0,
+  "links_indistinct": 0,
+  "overlays_covering_content": 0,
+  "tap_targets_below_48px": 0
+}

@@ -233,17 +233,17 @@ def main():
         print(f"Status: 🔴 Not found (HTTP {result['status']})")
 
     if result["full_exists"]:
-        print(f"\nllms-full.txt: ✅ Found")
+        print("\nllms-full.txt: ✅ Found")
     else:
-        print(f"\nllms-full.txt: ❌ Not found")
+        print("\nllms-full.txt: ❌ Not found")
 
     if result["quality"]["issues"]:
-        print(f"\nIssues:")
+        print("\nIssues:")
         for issue in result["quality"]["issues"]:
             print(f"  {issue}")
 
     if result["quality"]["suggestions"]:
-        print(f"\nSuggestions:")
+        print("\nSuggestions:")
         for sug in result["quality"]["suggestions"]:
             print(f"  💡 {sug}")
 

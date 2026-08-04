@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from seo_common import fetch_url, load_html, parse_html
+from seo_common import load_html, parse_html
 
 
 def summarize(html: str, url: str) -> dict:
@@ -16,7 +16,9 @@ def summarize(html: str, url: str) -> dict:
         "meta_description": parsed["meta_description"],
         "canonical": parsed["canonical"],
         "h1_count": len(parsed["headings"]["h1"]),
-        "internal_link_count": len([l for l in parsed["links"] if url and l["href"].startswith(url.split("/", 3)[0] + "//" + url.split("/")[2])]) if url.startswith("http") else len(parsed["links"]),
+        "internal_link_count": len([link for link in parsed["links"]
+              if url and link["href"].startswith(url.split("/", 3)[0] + "//"
+                                                 + url.split("/")[2])]) if url.startswith("http") else len(parsed["links"]),
         "schema_count": len(parsed["schema"]),
         "word_count": parsed["word_count"],
     }

@@ -641,12 +641,22 @@ one — the script refuses the file instead.
   be worse still — an equality assertion reads it as a failure.
 `broken_images[]` — array of str — absent under the same condition
 `known_image_bytes` — NoneType
-`modern_format_count` — int
-`responsive_count` — int
+`modern_format_count` — int — images the browser can obtain in avif or webp, counting
+  a `<picture><source type="image/webp">` as well as an `img` whose own src is one.
+  MB-097 reads this. Until 0.7.0 only the `img` was read, so the recommended pattern
+  — modern format in a `<source>`, png fallback in the `<img>` — counted as no modern
+  format at all and failed the item it exists to satisfy.
+`responsive_count` — int — images with a `srcset`, on the `img` or on a `<source>`
+  beside it. MB-096 reads this, and it was wrong in the same direction.
+`modern_format_on_img_count` — int — the narrow count: `img` src only
+`srcset_on_img_count` — int — the narrow count: `img` attribute only
+`picture_count` — int — images wrapped in a `<picture>` carrying a `<source>`
 `issues[]` — array
   - item keys: severity, message, url
 `images[]` — array
-  - item keys: src, format, width, height, loading, fetchpriority, srcset, sizes, likely_lcp_candidate, status, content_length, content_type
+  - item keys: src, format, width, height, loading, fetchpriority, srcset, sizes,
+    picture_source_count, picture_srcset, picture_modern_formats, responsive,
+    modern_format, likely_lcp_candidate, status, content_length, content_type
 `fetch_error` — NoneType
 
 ### indexability_matrix.py

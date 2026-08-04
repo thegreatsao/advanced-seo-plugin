@@ -28,7 +28,6 @@ import io
 import json
 import os
 import re
-import sys
 import zipfile
 
 # Google localises the export, so match on shape rather than on English headers.

@@ -5,6 +5,8 @@ JSON path no script emits reports NO_DATA forever and looks like a site problem;
 an item whose script was never shipped does the same. Nothing surfaces unless
 something checks.
 """
+import ast
+import importlib.util
 import json
 import os
 import re
@@ -178,6 +180,110 @@ class VersionAndChangelog(unittest.TestCase):
                       f"registry is {DATA['registry_version']}; the newest "
                       f"CHANGELOG entry does not mention it")
 
+    def test_pyproject_states_the_same_version_as_the_manifest(self):
+        """Two files naming a version is one more chance for them to disagree, and
+        the manifest is the one a plugin host reads."""
+        self.assertEqual(pyproject_value(r'^version = "([^"]+)"'),
+                         self.manifest["version"])
+
+    def test_the_readme_names_the_shipped_version(self):
+        """It said 0.5.0 while 0.7.0 shipped — two releases behind, in the first
+        paragraph a reader sees, because nothing checked. The version in the manifest
+        is a fact about the code; the one in the README is a promise to the reader,
+        and only one of them was being kept."""
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
+            stated = re.search(r"^Version (\d+\.\d+\.\d+)", f.read(), re.M)
+        self.assertTrue(stated, "README.md no longer states a version")
+        self.assertEqual(stated.group(1), self.manifest["version"])
+
+
+def pyproject_value(pattern: str) -> str:
+    """One value out of pyproject.toml, by regex.
+
+    Not `tomllib`: that arrived in 3.11 and the floor this very file asserts is
+    3.10, so parsing the file properly would make the test unrunnable on the
+    version it exists to defend.
+    """
+    with open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8") as f:
+        found = re.search(pattern, f.read(), re.M)
+    assert found, f"pyproject.toml has no {pattern}"
+    return found.group(1)
+
+
+class TheDeclaredPythonFloorIsExercised(unittest.TestCase):
+    """A `requires-python` nothing runs is a guess with a colon in it.
+
+    The floor is real and the failure it prevents is ugly: `duplicate_content.py`,
+    `link_profile.py` and `pagespeed.py` annotate with PEP 604 unions without
+    `from __future__ import annotations`, so on 3.9 the annotation is evaluated at
+    import and raises `TypeError: unsupported operand type(s) for |`. That happens
+    before a single check runs, and the message says nothing about SEO or about a
+    Python version being too old.
+    """
+
+    def matrix_versions(self):
+        with open(os.path.join(ROOT, ".github", "workflows", "ci.yml"),
+                  encoding="utf-8") as f:
+            line = re.search(r"python-version: \[([^\]]+)\]", f.read())
+        self.assertTrue(line, "the CI matrix no longer lists python versions")
+        return [v.strip().strip('"') for v in line.group(1).split(",")]
+
+    def test_ci_runs_the_lowest_version_the_project_claims_to_support(self):
+        floor = pyproject_value(r'requires-python = ">=([\d.]+)"')
+        versions = sorted(self.matrix_versions(),
+                          key=lambda v: tuple(int(p) for p in v.split(".")))
+        self.assertEqual(versions[0], floor,
+                         f"pyproject.toml claims >={floor} and CI's lowest is "
+                         f"{versions[0]}; one of the two is wrong")
+
+    def test_ruff_targets_the_same_floor(self):
+        floor = pyproject_value(r'requires-python = ">=([\d.]+)"')
+        target = pyproject_value(r'target-version = "py(\d+)"')
+        self.assertEqual(target, floor.replace(".", ""),
+                         "ruff would suggest rewrites for a version this project "
+                         "does not require, or miss ones it does")
+
+    def test_the_floor_is_not_lower_than_the_syntax_in_the_tree(self):
+        """Measured from the source rather than trusted, because the way this claim
+        breaks is somebody using a newer feature in a script nobody re-reads."""
+        floor = tuple(int(p) for p in
+                      pyproject_value(r'requires-python = ">=([\d.]+)"').split("."))
+        offenders = []
+        for folder in (SCRIPTS, os.path.join(SKILL, "tools"),
+                       os.path.dirname(os.path.abspath(__file__))):
+            for name in sorted(os.listdir(folder)):
+                if not name.endswith(".py"):
+                    continue
+                path = os.path.join(folder, name)
+                with open(path, encoding="utf-8") as f:
+                    source = f.read()
+                tree = ast.parse(source, path)
+                future = any(isinstance(n, ast.ImportFrom) and n.module == "__future__"
+                             and any(a.name == "annotations" for a in n.names)
+                             for n in tree.body)
+                for node in ast.walk(tree):
+                    # 3.10: `X | Y` evaluated at runtime, which an annotation is
+                    # unless the __future__ import postpones it.
+                    annotation = None
+                    if isinstance(node, (ast.AnnAssign, ast.arg)):
+                        annotation = getattr(node, "annotation", None)
+                    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        annotation = node.returns
+                    if annotation is not None and not future:
+                        for sub in ast.walk(annotation):
+                            if isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.BitOr):
+                                if floor < (3, 10):
+                                    offenders.append(f"{name}:{node.lineno} PEP 604")
+                                break
+                    # 3.10: zip(strict=), and the match statement.
+                    if isinstance(node, ast.Match) and floor < (3, 10):
+                        offenders.append(f"{name}:{node.lineno} match")
+                    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                            and node.func.id == "zip" and floor < (3, 10)
+                            and any(k.arg == "strict" for k in node.keywords)):
+                        offenders.append(f"{name}:{node.lineno} zip(strict=)")
+        self.assertEqual(offenders, [], "these need a higher floor than declared")
+
 
 class ChecklistProvenance(unittest.TestCase):
     """The 200 borrowed titles have to say where they came from, in the file that
@@ -334,6 +440,86 @@ class GeneratorIsInStep(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+class ProbeCoversWhatTheRegistryReads(unittest.TestCase):
+    """`tools/probe_shapes.py` is how the asserted paths get checked against real
+    output. It used to hold its own list of scripts, and an unchecked copy of a
+    list is a list that is wrong: it named seven scripts that no longer exist and
+    missed three the registry reads — `cwv_metrics.py`, `rendered_audit.py` and
+    `gsc_links_csv.py`, which between them decide eleven items. The tool for
+    finding drift had drifted, in both directions, and nothing said so.
+
+    Now the jobs are derived from the registry, and these tests are what keeps that
+    true rather than merely true today."""
+
+    def jobs(self, ctx):
+        spec = importlib.util.spec_from_file_location(
+            "probe_shapes", os.path.join(SKILL, "tools", "probe_shapes.py"))
+        # Not imported: importing it *runs* the probe, against the network. Only the
+        # one definition is taken, compiled out of the shipped source, which keeps
+        # this test offline while still reading the code that ships.
+        with open(spec.origin, encoding="utf-8") as f:
+            source = f.read()
+        start = source.index("def registry_jobs(")
+        end = source.index("\nJOBS = registry_jobs")
+        namespace = {"json": json, "os": os, "sys": sys,
+                     "REGISTRY": os.path.join(SKILL, "resources", "config",
+                                              "checklist.json")}
+        exec(compile(source[start:end], spec.origin, "exec"), namespace)
+        return namespace["registry_jobs"](ctx)
+
+    def registry_scripts(self, placeholders_available):
+        with open(os.path.join(SKILL, "resources", "config", "checklist.json"),
+                  encoding="utf-8") as f:
+            items = json.load(f)["items"]
+        out = set()
+        for item in items:
+            check = item.get("check") or {}
+            if not check.get("script"):
+                continue
+            needed = {a[1:-1] for a in check.get("args") or []
+                      if isinstance(a, str) and a.startswith("{") and a.endswith("}")}
+            if needed <= placeholders_available:
+                out.add(check["script"])
+        return out
+
+    FULL_CTX = {"url": "https://example.com/", "html": "/tmp/p.html",
+                "gsc_property": "sc-domain:example.com",
+                "gsc_credentials": "/tmp/k.json", "cwv_json": "/tmp/cwv.json",
+                "rendered_json": "/tmp/r.json", "links_csv": "/tmp/l.csv",
+                "indexnow_key": "k"}
+
+    def test_every_script_the_registry_names_is_probed(self):
+        probed = {script for script, _ in self.jobs(self.FULL_CTX)}
+        expected = self.registry_scripts(set(self.FULL_CTX))
+        self.assertEqual(expected - probed, set())
+
+    def test_every_probed_script_exists_on_disk(self):
+        missing = sorted({script for script, _ in self.jobs(self.FULL_CTX)
+                          if not os.path.exists(os.path.join(SKILL, "scripts", script))})
+        self.assertEqual(missing, [], "the probe would report these as __missing__ "
+                                      "and nothing else would notice")
+
+    def test_a_job_whose_input_is_absent_is_dropped_not_probed_with_a_placeholder(self):
+        """The old list hard-coded a `[URL]` argv per script, so a check needing a
+        credential path had no way to be skipped — it was simply not listed, which
+        is why three of them never were."""
+        jobs = self.jobs({"url": "https://example.com/"})
+        for script, args in jobs:
+            for arg in args:
+                self.assertFalse(arg.startswith("{") and arg.endswith("}"),
+                                 f"{script} would be probed with {arg} as a literal")
+        scripts = {script for script, _ in jobs}
+        self.assertNotIn("gsc_checker.py", scripts)
+        self.assertNotIn("cwv_metrics.py", scripts)
+
+    def test_the_jobs_are_deduplicated_the_way_the_runner_deduplicates(self):
+        """17 items read one `parse_html.py` run. A probe that ran it 17 times would
+        be reporting on a different workload than the one it is meant to describe."""
+        jobs = self.jobs(self.FULL_CTX)
+        self.assertEqual(len(jobs), len({(s, tuple(a)) for s, a in jobs}))
+        self.assertEqual(sum(1 for s, _ in jobs if s == "parse_html.py"), 1)
+
+
 class NoAssertionThatCanNeverFire(unittest.TestCase):
     """`none_matching` passes when nothing matches, so a pattern aimed at wording
     its script cannot emit reports PASS for every site, silently, forever.
@@ -390,7 +576,7 @@ class NoAssertionThatCanNeverFire(unittest.TestCase):
         sys.path.insert(0, os.path.join(SKILL, "tools"))
         from audit_assertions import PAGE_DERIVED
         self.assertLessEqual(len(PAGE_DERIVED), 5)
-        for script, path in PAGE_DERIVED:
+        for script, _path in PAGE_DERIVED:
             self.assertTrue(os.path.exists(os.path.join(SCRIPTS, script)), script)
 
 

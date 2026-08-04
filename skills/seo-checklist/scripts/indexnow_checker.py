@@ -21,9 +21,7 @@ Usage:
 
 import argparse
 import json
-import os
 import sys
-import time
 from urllib.parse import urlparse
 
 try:

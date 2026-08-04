@@ -108,16 +108,19 @@ site</a></cite>, our standing reference on staling</footer>
 crumb</a> and <a href="http://127.0.0.1:8001/orphan.html">the milling
 tables</a>.</p>
 <figure>
-<!-- webp as the `img` src, with a srcset, because image_weight_audit reads only
-     `<img>` attributes: it never looks inside `<picture>`, so a site serving webp
-     through `<source type="image/webp">` with a png fallback — the recommended
-     pattern — counts as having no modern format at all. Recorded in
-     KNOWN-ISSUES.md; the fixture uses the form the check can actually see rather
-     than pretending the blind spot is not there. -->
-<img src="/assets/logo@2x.webp" alt="The Fixture Bakery loaf mark"
-     width="64" height="64" loading="lazy" decoding="async"
-     srcset="/assets/logo.png 64w, /assets/logo@2x.webp 128w"
-     sizes="(max-width: 600px) 64px, 128px">
+<!-- The recommended way to serve a modern format, and until 0.7.0 the audit read
+     it as a site serving no modern format at all: webp offered through
+     `<source>`, png left in the `<img>` for anything that cannot take it. Only
+     the fallback was ever inspected, so MB-096 and MB-097 failed the page for
+     following the recommendation. The fixture now carries the real pattern rather
+     than the one shaped to suit the check — a png `img` here, so both items are
+     answered from the `<source>` or not at all. -->
+<picture>
+<source type="image/webp" srcset="/assets/logo@2x.webp 128w, /assets/logo@2x.webp 64w"
+        sizes="(max-width: 600px) 64px, 128px">
+<img src="/assets/logo.png" alt="The Fixture Bakery loaf mark"
+     width="64" height="64" loading="lazy" decoding="async">
+</picture>
 <figcaption>The loaf mark, in two sizes and a modern format.</figcaption>
 </figure>
 </main>

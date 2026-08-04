@@ -13,7 +13,6 @@ Usage:
 import argparse
 import json
 import sys
-from urllib.parse import urlparse
 
 try:
     import requests
@@ -252,18 +251,18 @@ def main():
     # Preview
     p = result["preview"]
     if p["title"]:
-        print(f"\nSocial Preview:")
+        print("\nSocial Preview:")
         print(f"  Title: {p['title']}")
         print(f"  Description: {(p['description'] or 'None')[:80]}")
         print(f"  Image: {p['image'] or 'None'}")
 
     if result["issues"]:
-        print(f"\nIssues:")
+        print("\nIssues:")
         for issue in result["issues"]:
             print(f"  {issue}")
 
     if result["recommendations"]:
-        print(f"\nRecommendations:")
+        print("\nRecommendations:")
         for rec in result["recommendations"]:
             print(f"  💡 {rec}")
 

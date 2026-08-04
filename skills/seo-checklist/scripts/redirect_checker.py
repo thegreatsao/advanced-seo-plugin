@@ -191,7 +191,7 @@ def main():
         print(f"\nTotal hops: {result['total_hops']} | Total time: {result['total_time_ms']}ms")
 
         if result["issues"]:
-            print(f"\nIssues:")
+            print("\nIssues:")
             for issue in result["issues"]:
                 print(f"  {issue}")
         print()

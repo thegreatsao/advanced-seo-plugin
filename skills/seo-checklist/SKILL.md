@@ -279,6 +279,18 @@ SP-214, SP-215 and SP-216 then decide from it; without the file they are
 `NO_DATA` naming the missing input. Say which mode and viewport you traced in
 `source`, because a desktop trace on a fast connection is not what a phone sees.
 
+**`url` must be the page being audited.** Both artifacts are the only evidence in a
+run that nothing here can verify by measuring again — every other verdict comes from
+a request this process made. So the run checks the one thing it can: an artifact
+describing a different page is refused, and its items report `NO_DATA` naming both
+URLs rather than deciding eight items from numbers taken somewhere else. Trailing
+slash, scheme and `www.` are treated as noise; a different path is a different page.
+Trace the page you are auditing, and re-trace it when you audit another one.
+
+For the same reason a `--sample` run does **not** apply these files to the sampled
+pages: one measured page cannot become a verdict about four unmeasured ones. The
+artifact items describe the entry URL and say so.
+
 **Do not report these as field data and do not merge them with SP-108 or SP-113.**
 They are separate items because they are separate claims: one controlled run on
 your machine versus what visitors actually got. TBT is named as a lab stand-in for

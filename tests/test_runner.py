@@ -22,13 +22,14 @@ sys.path.insert(0, SCRIPTS)
 
 from checklist_runner import (  # noqa: E402
     ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
-    NEEDS_THE_OUTSIDE_WORLD, NO_DATA, PASS, WARN, aggregate_pages, audit_target,
+    NEEDS_THE_OUTSIDE_WORLD, NO_DATA, PASS, WARN, aggregate_pages, artifact_subject,
+    audit_target,
     build_plan, choose_profile, diff_runs, evaluate, grade, is_page_level,
-    private_host_skips,
+    private_host_skips, reads_artifact, same_page,
     looks_like_a_page, page_guard, profile_excludes, redact, registrable_domain,
     THIN_ENTRY_WORDS, history_path, load_public_suffixes, previous_run,
     psl_snapshot_date, psl_staleness, resolve, run_script,
-    run_stamp, run_time, score, stride, suffix_label_count, unreachable_skips,
+    run_stamp, score, stride, suffix_label_count, unreachable_skips,
     visible_words,
 )
 from cwv_metrics import read as cwv_read  # noqa: E402
@@ -660,6 +661,101 @@ class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
         primary = [self._row(PASS, 52)]
         out = aggregate_pages(primary, [[self._row(PASS, 52)]])[0]
         self.assertEqual(out["measure"]["got"], 52)
+
+
+class BrowserArtifacts(unittest.TestCase):
+    """A trace is the only evidence in an audit that this process cannot re-take.
+
+    Everything else a verdict rests on came from a request made here and can be
+    checked by making it again. A performance trace and a rendered-page measurement
+    are files handed over from outside, deciding eight items between them — so the
+    one question available, whether the file says which page it describes, is worth
+    asking carefully. The contract suite covers the end of this path; these cover
+    the judgements the comparison itself makes.
+    """
+
+    def _artifact(self, payload) -> str:
+        path = os.path.join(tempfile.mkdtemp(), "cwv.json")
+        with open(path, "w", encoding="utf-8") as f:
+            if isinstance(payload, str):
+                f.write(payload)
+            else:
+                json.dump(payload, f)
+        return path
+
+    def test_the_noise_a_url_carries_is_not_a_different_page(self):
+        for a, b in (("https://example.com", "https://example.com/"),
+                     ("http://example.com/", "https://example.com/"),
+                     ("https://www.example.com/", "https://example.com/"),
+                     ("https://example.com/about", "https://example.com/about/")):
+            self.assertTrue(same_page(a, b), f"{a} vs {b}")
+
+    def test_a_different_page_is_a_different_page(self):
+        for a, b in (("https://example.com/", "https://example.org/"),
+                     ("https://example.com/", "https://example.com/about"),
+                     ("https://example.com/?v=2", "https://example.com/"),
+                     ("https://example.com/", "https://staging.example.com/")):
+            self.assertFalse(same_page(a, b), f"{a} vs {b}")
+
+    def test_an_unreadable_artifact_does_not_raise_here(self):
+        """It has to reach the script that reads it.
+
+        Refusing a malformed file in the runner would replace `cwv_metrics.py`'s
+        message — which names the offending field and its units — with a generic
+        one, and units are the whole reason that script is strict.
+        """
+        self.assertIsNone(artifact_subject(self._artifact("{not json")))
+        self.assertIsNone(artifact_subject(self._artifact([1, 2, 3])))
+        self.assertIsNone(artifact_subject("/nonexistent/trace.json"))
+
+    def test_a_url_is_found_whether_or_not_the_exporter_nested_it(self):
+        self.assertEqual(artifact_subject(self._artifact({"url": "https://a/"})),
+                         "https://a/")
+        self.assertEqual(
+            artifact_subject(self._artifact({"metrics": {"url": "https://b/"}})),
+            "https://b/")
+        self.assertIsNone(artifact_subject(self._artifact({"lcp_ms": 1})))
+        self.assertIsNone(artifact_subject(self._artifact({"url": "   "})))
+
+    def test_a_refused_input_says_something_other_than_missing(self):
+        """Two NO_DATA verdicts, two different instructions to the operator.
+
+        "Missing input" tells them to go and measure the page. That is the wrong
+        advice when they already did and the file is about somewhere else — and it
+        is the advice the generic branch would give, because a rejected key and an
+        absent one look identical from inside `build_plan`.
+        """
+        item = {"id": "SP-214", "source": "script",
+                "check": {"script": "cwv_metrics.py", "args": ["{cwv_json}"],
+                          "requires": "offline"}}
+        plan, skipped = build_plan([item], {"cwv_json": "/t.json"}, {"offline"},
+                                  "page", None, False,
+                                  {"cwv_json": "the artifact describes https://b/"})
+        self.assertEqual(plan, {})
+        status, reason = skipped["SP-214"]
+        self.assertEqual(status, NO_DATA)
+        self.assertIn("describes", reason)
+        self.assertNotIn("missing input", reason)
+
+        _, absent = build_plan([item], {}, {"offline"}, "page")
+        self.assertIn("missing input", absent["SP-214"][1])
+
+    def test_the_items_that_read_an_artifact_are_the_ones_we_think(self):
+        """Named by placeholder, not by script, so a new artifact-backed item is
+        covered the day it is added rather than the day somebody remembers."""
+        with open(os.path.join(ROOT, "skills", "seo-checklist", "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            registry = json.load(f)["items"]
+        found = {i["id"] for i in registry if reads_artifact(i)}
+        self.assertEqual(found, {"SP-214", "SP-215", "SP-216", "CN-034", "CN-035",
+                                 "CN-051", "MB-094", "MB-103", "BL-084", "BL-086",
+                                 "BL-087"})
+        # Every one of them is page-level, which is exactly why they had to be
+        # excluded from sampling by hand: nothing about `requires` distinguishes a
+        # check that reads a file from one that reads the page.
+        for item in registry:
+            if reads_artifact(item):
+                self.assertTrue(is_page_level(item), item["id"])
 
 
 class ValueMap(unittest.TestCase):

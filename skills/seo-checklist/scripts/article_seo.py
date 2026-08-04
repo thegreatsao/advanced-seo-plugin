@@ -22,8 +22,6 @@ import argparse
 import json
 import re
 import sys
-import math
-import time
 import urllib.parse
 from collections import Counter
 
@@ -52,8 +50,8 @@ STOP_WORDS = {
     "both", "each", "few", "more", "most", "other", "some", "such", "no",
     "nor", "not", "only", "own", "same", "so", "than", "too", "very", "can",
     "will", "just", "should", "have", "has", "had", "do", "does", "did",
-    "get", "got", "make", "use", "used", "also", "its", "about", "into",
-    "than", "then", "there", "their", "they", "would", "could", "here",
+    "get", "got", "make", "use", "used", "also", "about", "into",
+    "then", "there", "would", "could", "here",
 }
 
 # Deprecated / restricted schema types (as of Feb 2026)
@@ -641,7 +639,7 @@ def main():
 
     fre = readability.get('flesch_reading_ease')
     fkgl = readability.get('fkgl')
-    print(f"\nReadability")
+    print("\nReadability")
     print(f"  Flesch Reading Ease : {fre}  ({readability.get('grade_label', '')})")
     print(f"  FK Grade Level      : {fkgl}")
 

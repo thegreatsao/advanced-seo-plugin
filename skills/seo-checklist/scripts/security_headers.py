@@ -187,12 +187,12 @@ def main():
             print(f"    → {desc}")
 
     if result["issues"]:
-        print(f"\nIssues:")
+        print("\nIssues:")
         for issue in result["issues"]:
             print(f"  {issue}")
 
     if result["recommendations"]:
-        print(f"\nRecommendations:")
+        print("\nRecommendations:")
         for rec in result["recommendations"][:5]:
             print(f"  💡 {rec}")
 

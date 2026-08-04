@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Audit image weight, responsive image usage, and likely LCP image risk."""
+"""Audit image weight, responsive image usage, and likely LCP image risk.
+
+An image is judged by everything the browser could choose for it, not by the
+`<img>` tag alone. The distinction is the whole of MB-096 and MB-097: the way
+this is supposed to be done is a `<picture>` that offers avif or webp through
+`<source>` and keeps a png in the `<img>` for browsers that cannot take either,
+so reading only the `<img>` sees the fallback, misses the modern format, and
+fails the site precisely for following the recommendation.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +22,10 @@ from seo_common import fetch_url, load_html, parse_html
 
 MODERN_FORMATS = {"avif", "webp"}
 RASTER_FORMATS = {"jpg", "jpeg", "png", "gif"}
+# A `<source>` declares its format twice over, in `type` and in its URLs, and the
+# two disagree often enough to be worth reading both: `type` is what the browser
+# actually dispatches on, and a CDN URL with no extension has nothing else.
+MODERN_MIME = {f"image/{fmt}" for fmt in MODERN_FORMATS}
 
 
 def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
@@ -25,6 +37,21 @@ def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
 
 def _extension(src: str) -> str:
     return os.path.splitext(urlparse(src).path)[1].lower().lstrip(".")
+
+
+def _modern_sources(sources: list[dict]) -> list[str]:
+    """The `<source>` formats in this `<picture>` that count as modern."""
+    found = []
+    for source in sources or []:
+        if source.get("type") in MODERN_MIME:
+            found.append(source["type"].split("/", 1)[1])
+            continue
+        for url in source.get("urls") or []:
+            ext = _extension(url)
+            if ext in MODERN_FORMATS:
+                found.append(ext)
+                break
+    return found
 
 
 def _local_size(src: str, html_source: str) -> int | None:
@@ -49,6 +76,8 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     for index, img in enumerate(parsed["images"]):
         src = img.get("src") or ""
         ext = _extension(src)
+        sources = img.get("picture_sources") or []
+        modern_sources = _modern_sources(sources)
         likely_lcp = index == 0 or img.get("fetchpriority") == "high" or img.get("loading") == "eager"
         row = {
             "src": src,
@@ -59,11 +88,22 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
             "fetchpriority": img.get("fetchpriority"),
             "srcset": bool(img.get("srcset")),
             "sizes": bool(img.get("sizes")),
+            # Kept apart from `srcset` and `format` rather than folded into them.
+            # "This img declares a srcset" and "a sibling source does" are different
+            # facts about the markup, and a reader handed a fix list needs to know
+            # which one is true before editing anything.
+            "picture_source_count": len(sources),
+            "picture_srcset": any(s.get("srcset") for s in sources),
+            "picture_modern_formats": modern_sources,
             "likely_lcp_candidate": likely_lcp,
             "status": None,
             "content_length": _local_size(src, source),
             "content_type": None,
         }
+        # What the browser can actually end up with, which is what both items are
+        # about. The `img` is the fallback in a `<picture>`, not the answer.
+        row["responsive"] = row["srcset"] or row["picture_srcset"]
+        row["modern_format"] = ext in MODERN_FORMATS or bool(modern_sources)
         if fetch_images and src.startswith(("http://", "https://")):
             head = fetch_url(src, method="HEAD", timeout=timeout)
             row["status"] = head.get("status")
@@ -76,9 +116,9 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
             issues.append({"severity": "warning", "message": "Likely LCP image is lazy-loaded", "url": src})
         if likely_lcp and row["fetchpriority"] != "high":
             issues.append({"severity": "info", "message": "Likely LCP image lacks fetchpriority=high", "url": src})
-        if ext in RASTER_FORMATS:
+        if ext in RASTER_FORMATS and not modern_sources:
             issues.append({"severity": "info", "message": "Consider AVIF/WebP for raster image", "url": src, "evidence": ext})
-        if not row["srcset"]:
+        if not row["responsive"]:
             issues.append({"severity": "info", "message": "Image has no srcset", "url": src})
         if row["srcset"] and not row["sizes"]:
             issues.append({"severity": "info", "message": "Responsive image has srcset but no sizes", "url": src})
@@ -98,8 +138,16 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         "image_count": len(images),
         "images_status_checked": len(checked),
         "known_image_bytes": known_bytes if fetch_images or any(row["content_length"] for row in images) else None,
-        "modern_format_count": sum(1 for row in images if row["format"] in MODERN_FORMATS),
-        "responsive_count": sum(1 for row in images if row["srcset"]),
+        "modern_format_count": sum(1 for row in images if row["modern_format"]),
+        "responsive_count": sum(1 for row in images if row["responsive"]),
+        # The same two counts restricted to the `<img>` tag, which is what these
+        # used to mean. Kept because they are the honest way to say "the fallback
+        # is a png and that is fine": dropping them would leave no way to tell a
+        # `<picture>` serving webp from an `<img src="x.webp">`.
+        "modern_format_on_img_count": sum(1 for row in images
+                                          if row["format"] in MODERN_FORMATS),
+        "srcset_on_img_count": sum(1 for row in images if row["srcset"]),
+        "picture_count": sum(1 for row in images if row["picture_source_count"]),
         "issues": issues,
         "images": images,
         "fetch_error": fetched.get("error"),
