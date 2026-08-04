@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import html
 import json
 import os
@@ -320,6 +321,160 @@ def plain_summary(data: dict, L: "Lang | None" = None) -> list[str]:
     return out
 
 
+# The three buckets a status change falls into, and the third is why this is not
+# merely "what changed". `PASS` → `NO_DATA` is not the site getting worse; it is the
+# run losing the ability to tell, usually because a third-party service was down or a
+# supplied file stopped being supplied. Reporting that as a regression would tell a
+# client their site broke when the measurement broke, and the reverse would take
+# credit for a fix nobody made.
+DIRECTION_HEADING = {
+    "improved": ("fixed", "Fixed since then"),
+    "regressed": ("regressed", "Got worse"),
+    "evidence": ("evidence_changed", "Changed for want of evidence, not on the site"),
+}
+DIRECTION_NOTE = {
+    "improved": ("fixed_note", "These pass now and did not last time."),
+    "regressed": ("regressed_note",
+                  "These passed last time and do not now — worth looking at first, "
+                  "because something changed since the previous audit."),
+    "evidence": ("evidence_changed_note",
+                 "Neither a fix nor a regression. One run could decide the item and "
+                 "the other could not: a service that was unavailable, a "
+                 "measurement file supplied to one run and not the other, or a check "
+                 "that now declines to answer. The site may not have changed at all."),
+}
+
+
+# What belongs on a task list, and what only looks like it does.
+#
+# FAIL and WARN are findings somebody fixes. MANUAL is a task for a person and is the
+# classic row to assign, so it is here too, carrying its status. NO_DATA and
+# LLM_PENDING are **not** fixes: the first is a question this run could not answer —
+# usually work for whoever runs the audit, not for whoever owns the site — and the
+# second is an item still waiting for a judgement. Putting either in a tracker would
+# fill a sprint with the auditor's own unfinished business.
+FIX_STATUSES = (FAIL, WARN, MANUAL)
+
+FIX_COLUMNS = ("id", "status", "severity", "effort", "priority", "category",
+               "title", "what_to_do", "evidence", "audited_url")
+
+
+def fix_rows(data: dict) -> list[dict]:
+    """The actionable items, flat, ordered the way the report orders them.
+
+    `checklist-results.json` is the full audit log — every item, decided or not, with
+    the raw measurement. Getting the actionable part of it into a tracker meant
+    parsing the report or filtering the log by hand, so this is the same list the
+    report's "What to do first" section shows, in a shape a spreadsheet or an importer
+    can read.
+
+    **`audited_url` is the URL the audit was pointed at, not the page with the
+    problem.** Most items do not record a page: a page-level check run over a sample
+    reports the worst page's verdict without carrying its address, and a site-level
+    check has no single page to name. Calling the column what it actually is beats a
+    `url` column a reader would reasonably misread as "fix this page".
+    """
+    rows = []
+    for item in data.get("items", []):
+        if item["status"] not in FIX_STATUSES:
+            continue
+        rows.append({
+            "id": item["id"],
+            "status": item["status"],
+            "severity": item.get("severity", ""),
+            "effort": item.get("effort", ""),
+            "priority": priority_of(item),
+            "category": item.get("category_label", ""),
+            "title": item.get("title", ""),
+            "what_to_do": item.get("fix", ""),
+            "evidence": str(item.get("evidence") or "").replace("\n", " ").strip(),
+            "audited_url": data.get("url", ""),
+        })
+    rows.sort(key=lambda r: (-r["priority"], SEVERITY_ORDER.get(r["severity"], 9),
+                             r["id"]))
+    return rows
+
+
+def write_fixes(path: str, data: dict) -> str:
+    """Write the fix list as CSV or JSON, chosen by the filename's suffix."""
+    rows = fix_rows(data)
+    if path.lower().endswith(".json"):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+        return path
+    # `utf-8-sig` and CRLF, because the overwhelmingly likely destination is
+    # somebody's spreadsheet: Excel reads a plain UTF-8 CSV as Latin-1 and turns
+    # every non-ASCII character in an item title into mojibake.
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=FIX_COLUMNS, dialect="excel")
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def history_section(data: dict, L: "Lang | None" = None) -> list[str]:
+    """What moved since the previous audit of this domain.
+
+    A checklist is a thing people re-run, and until now the report could not say
+    whether the last round of fixes worked. `.seo-runs/` held every run, the runner
+    computed the comparison only if asked, printed it to a terminal, and it was gone
+    when the terminal closed. Nothing here is measured: it is data that was already
+    on disk, put where the reader is.
+
+    The baseline is named rather than implied. "Since the previous run" is not a date,
+    and a comparison whose other half is anonymous cannot be checked by the person
+    being shown it.
+    """
+    L = L or Lang()
+    base = data.get("compared_with")
+    diff = data.get("diff")
+    if not base or diff is None:
+        return []
+
+    when = str(base.get("started_at") or "")[:16]
+    out = ["", f"## {L.t('since_last', 'Since the previous audit')}", ""]
+    now = data.get("scores") or {}
+    score_then, score_now = base.get("seo_score"), now.get("seo_score")
+    if score_then is not None and score_now is not None:
+        move = score_now - score_then
+        arrow = "→" if move == 0 else ("↑" if move > 0 else "↓")
+        out += [L.t("since_scores",
+                    "Compared with the run of {when}: score {then} {arrow} {now}, "
+                    "coverage {cov_then}% {arrow} {cov_now}%.").format(
+                        when=when or "?", then=score_then, now=score_now,
+                        arrow=arrow, cov_then=base.get("coverage_pct"),
+                        cov_now=now.get("coverage_pct")), ""]
+    else:
+        out += [L.t("since_baseline",
+                    "Compared with the run of {when}.").format(when=when or "?"), ""]
+
+    # A score that moved because the checklist changed is not a site that moved, and
+    # a reader cannot know that without being told.
+    if data.get("diff_note"):
+        out += [f"*{esc_md(str(data['diff_note']))}*", ""]
+
+    if not diff:
+        out += [L.t("since_nothing",
+                    "No item changed status."), ""]
+        return out
+
+    for kind in ("improved", "regressed", "evidence"):
+        rows = [c for c in diff if c.get("direction") == kind]
+        if not rows:
+            continue
+        key, default = DIRECTION_HEADING[kind]
+        nkey, ndefault = DIRECTION_NOTE[kind]
+        out += [f"### {L.t(key, default)} ({len(rows)})", "",
+                f"*{L.t(nkey, ndefault)}*", "",
+                f"| ID | {L.t('item', 'Item')} | {L.t('was', 'Was')} | "
+                f"{L.t('now', 'Now')} |", "|---|---|---|---|"]
+        for c in sorted(rows, key=lambda r: SEVERITY_ORDER.get(r.get("severity"), 9)):
+            out.append(f"| {c['id']} | {esc_md(str(c.get('title', '')))} | "
+                       f"{c['from']} | {c['to']} |")
+        out.append("")
+    return out
+
+
 def broken_url_section(data: dict, L: "Lang | None" = None) -> list[str]:
     """Which URLs are broken, and which pages link to them.
 
@@ -546,6 +701,10 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                     f"{phrase_measure(i, L)}  ",
                     f"{L.t('what_to_do', 'What to do')}: {L.fix(i)}", ""]
 
+    # After the fix list and before the broken URLs: "did last month's work land" is
+    # the second question a returning reader has, and the first is always "what do I
+    # do now".
+    out += history_section(data, L)
     out += broken_url_section(data, L)
 
     out += ["", f"## {L.t('full_checklist', 'Full checklist')}", ""]
@@ -919,6 +1078,65 @@ def render_html(data: dict, L: Lang | None = None) -> str:
                                    .format(quick=len(quick), total=len(todo)))
                      + "</p>" + "".join(_card(i, L) for i in todo) + "</section>")
 
+    # -- Did the last round of work land? ----------------------------------------
+    # The data was in `.seo-runs/` all along and reached a terminal at best. A
+    # checklist is a thing people re-run, and a report that cannot say whether
+    # anything improved makes the reader diff two PDFs by eye.
+    base, diff = data.get("compared_with"), data.get("diff")
+    if base and diff is not None:
+        when = html.escape(str(base.get("started_at") or "?")[:16])
+        then, cur = base.get("seo_score"), s.get("seo_score")
+        head = [f'<section><h2>'
+                f'{html.escape(L.t("since_last", "Since the previous audit"))}</h2>']
+        if then is not None and cur is not None:
+            arrow = "→" if cur == then else ("↑" if cur > then else "↓")
+            tone = "pass" if cur > then else ("fail" if cur < then else "")
+            head.append('<p class="note">'
+                        + html.escape(L.t("since_scores",
+                            "Compared with the run of {when}: score {then} {arrow} "
+                            "{now}, coverage {cov_then}% {arrow} {cov_now}%.").format(
+                                when=when, then=then, now=cur, arrow=arrow,
+                                cov_then=base.get("coverage_pct"),
+                                cov_now=s.get("coverage_pct")))
+                        + f'</p><div class="metrics"><div class="metric {tone}">'
+                        f'<b>{cur - then:+d}</b><span>'
+                        + html.escape(L.t("m_score_move",
+                                          "Score movement since that run"))
+                        + '</span></div></div>')
+        else:
+            head.append('<p class="note">'
+                        + html.escape(L.t("since_baseline",
+                            "Compared with the run of {when}.").format(when=when))
+                        + '</p>')
+        if data.get("diff_note"):
+            head.append(f'<p class="caveat">{html.escape(str(data["diff_note"]))}</p>')
+        body = []
+        for kind in ("improved", "regressed", "evidence"):
+            rows = [c for c in diff if c.get("direction") == kind]
+            if not rows:
+                continue
+            key, default = DIRECTION_HEADING[kind]
+            nkey, ndefault = DIRECTION_NOTE[kind]
+            cells = "".join(
+                f'<tr><td>{c["id"]}</td>'
+                f'<td>{html.escape(str(c.get("title", "")))}</td>'
+                f'<td>{html.escape(c["from"])} → {html.escape(c["to"])}</td></tr>'
+                for c in sorted(rows,
+                                key=lambda r: SEVERITY_ORDER.get(r.get("severity"), 9)))
+            body.append(
+                f'<h3>{html.escape(L.t(key, default))} '
+                f'<span class="count">{len(rows)}</span></h3>'
+                f'<p class="note">{html.escape(L.t(nkey, ndefault))}</p>'
+                f'<table><thead><tr><th>ID</th>'
+                f'<th>{html.escape(L.t("item", "Item"))}</th>'
+                f'<th>{html.escape(L.t("change", "Change"))}</th></tr></thead>'
+                f'<tbody>{cells}</tbody></table>')
+        if not diff:
+            body.append('<p class="note">'
+                        + html.escape(L.t("since_nothing", "No item changed status."))
+                        + '</p>')
+        parts.append("".join(head) + "".join(body) + "</section>")
+
     # -- The addresses, not the counts -------------------------------------------
     # Above the folded machine layer, because "which URL" is what a reader does
     # something about. One crawl produced it; before that the report could only say
@@ -1148,6 +1366,11 @@ def main() -> int:
                          "returns the item to NO_DATA carrying both readings. The "
                          "reviewer cannot overwrite a verdict or answer an "
                          "unanswered item.")
+    ap.add_argument("--fixes", default="",
+                    help="write just the actionable items — id, severity, effort, "
+                         "priority, what to do — to this path. `.json` gives JSON, "
+                         "anything else CSV. For a tracker, so nobody has to parse "
+                         "the report or filter the full audit log by hand.")
     ap.add_argument("--no-html", action="store_true")
     ap.add_argument("--lang", default="en",
                     help="language for the report chrome (en, ru); item titles "
@@ -1191,6 +1414,9 @@ def main() -> int:
     written = [("Report", write(a.markdown, render_markdown(data, lang)))]
     if not a.no_html:
         written.append(("HTML", write(a.html, render_html(data, lang))))
+    if a.fixes:
+        rows = fix_rows(data)
+        written.append((f"Fix list ({len(rows)})", write_fixes(a.fixes, data)))
 
     pending_items = [i for i in data["items"] if i["status"] == LLM_PENDING]
     pending = len(pending_items)

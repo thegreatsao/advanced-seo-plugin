@@ -423,6 +423,13 @@ to audit: a block on that URL is a `critical` finding to report, not a reason to
 audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
 configured rate.
 
+**The deliverable carries history and a task list.** A second audit of the same domain
+gets a "Since the previous audit" section — score movement and the items that changed,
+split into fixed, worse, and changed-for-want-of-evidence. The third split is the one to
+keep straight when explaining a report: `PASS` → `NO_DATA` means this run could not tell,
+not that the site regressed. `--fixes PATH` writes the failing, warning and manual items as
+CSV or JSON for a tracker.
+
 **Server logs, if the operator has one.** `--server-log PATH` is the only evidence here
 about what crawlers *did*; everything else asks what the site offers them, and that fact
 is in the past. It decides CI-018 — crawl budget spent on non-200s, parameters multiplying

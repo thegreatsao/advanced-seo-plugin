@@ -14,8 +14,9 @@ SKILL = os.path.join(ROOT, "skills", "seo-checklist")
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
 
 from checklist_report import (  # noqa: E402
-    FAIL, LLM_PENDING, NA, NO_DATA, PASS, Lang, apply_llm_review,
-    merge_llm_answers, priority_of, render_llm_queue, render_markdown,
+    FAIL, LLM_PENDING, MANUAL, NA, NO_DATA, PASS, WARN, Lang, apply_llm_review,
+    fix_rows, history_section, merge_llm_answers, priority_of, render_html,
+    render_llm_queue, render_markdown, write_fixes,
 )
 
 I18N = os.path.join(SKILL, "resources", "i18n")
@@ -381,6 +382,157 @@ class WhatWasAudited(unittest.TestCase):
     def test_a_clean_public_run_carries_no_caveat(self):
         from checklist_report import provenance_warnings
         self.assertEqual(provenance_warnings(self._scored()), [])
+
+
+class HistoryReachesTheFile(unittest.TestCase):
+    """`.seo-runs/` held every run and the comparison reached a terminal at best.
+
+    A checklist is a thing people re-run, so the question "did last month's fixes
+    work" is the second one a returning reader has — and the report could not answer
+    it from data that was already on disk.
+    """
+
+    def _data(self, *changes, **extra):
+        from checklist_runner import score
+        data = results(item("CN-047", FAIL), item("CN-048", PASS))
+        # A real `scores` block, because both renderers read more of it than the
+        # history section does and a hand-made stub would only test this test.
+        data["scores"] = dict(score(data["items"]), seo_score=71, coverage_pct=55)
+        data["entry_reachable"] = True
+        data["compared_with"] = {"started_at": "2026-07-01T09:30:00+00:00",
+                                 "seo_score": 64, "coverage_pct": 50,
+                                 "registry_version": "test"}
+        data["diff"] = list(changes)
+        data.update(extra)
+        return data
+
+    def _change(self, item_id, was, now, direction, severity="high"):
+        return {"id": item_id, "title": f"{item_id} title", "from": was, "to": now,
+                "direction": direction, "severity": severity, "evidence": ""}
+
+    def test_no_baseline_means_no_section(self):
+        """A first audit has nothing to compare with, and an empty "since last time"
+        heading would imply there was a last time."""
+        from checklist_runner import score
+        data = results(item("CN-047", FAIL))
+        data["scores"] = score(data["items"])
+        data["entry_reachable"] = True
+        data["compared_with"] = None
+        data["diff"] = None
+        self.assertEqual(history_section(data), [])
+        self.assertNotIn("Since the previous audit", render_markdown(data, Lang()))
+
+    def test_the_baseline_is_named_not_implied(self):
+        """"Since the previous run" is not a date. A comparison whose other half is
+        anonymous cannot be checked by the person being shown it."""
+        text = "\n".join(history_section(self._data()))
+        self.assertIn("2026-07-01T09:30", text)
+        self.assertIn("64", text)
+        self.assertIn("71", text)
+
+    def test_a_fix_and_a_regression_are_told_apart(self):
+        text = "\n".join(history_section(self._data(
+            self._change("CN-047", FAIL, PASS, "improved"),
+            self._change("CN-048", PASS, FAIL, "regressed"))))
+        fixed = text.index("Fixed since then")
+        worse = text.index("Got worse")
+        self.assertLess(fixed, worse, "the good news should not bury the bad")
+        self.assertIn("| CN-047 |", text)
+        self.assertIn("| CN-048 |", text)
+
+    def test_losing_the_evidence_is_not_reported_as_a_regression(self):
+        """PASS -> NO_DATA is the run losing the ability to tell, not the site
+        getting worse. Filing it under regressions would tell a client their site
+        broke when the measurement broke."""
+        text = "\n".join(history_section(self._data(
+            self._change("CN-047", PASS, NO_DATA, "evidence"))))
+        self.assertNotIn("Got worse", text)
+        self.assertIn("not on the site", text)
+
+    def test_a_changed_registry_is_said_out_loud(self):
+        """A score that moved because the checklist changed is not a site that
+        moved, and a reader cannot know that unless told."""
+        data = self._data(self._change("CN-047", FAIL, PASS, "improved"),
+                          diff_note="previous run used registry abc, this one def")
+        self.assertIn("registry abc", "\n".join(history_section(data)))
+
+    def test_both_renderers_carry_it(self):
+        data = self._data(self._change("CN-047", FAIL, PASS, "improved"))
+        self.assertIn("Since the previous audit", render_markdown(data, Lang()))
+        html = render_html(data, Lang())
+        self.assertIn("Since the previous audit", html)
+        self.assertIn("+7", html, "the score movement is not shown")
+
+
+class TheFixListIsMachineReadable(unittest.TestCase):
+    """`checklist-results.json` is the audit log, not a task list. Getting the
+    actionable part into a tracker meant parsing the report or filtering the log."""
+
+    def _data(self):
+        return results(
+            item("A-001", FAIL, severity="critical", effort="low"),
+            item("A-002", WARN, severity="medium", effort="high"),
+            item("A-003", MANUAL, severity="high"),
+            item("A-004", PASS),
+            item("A-005", NO_DATA),
+            item("A-006", LLM_PENDING, source="llm"),
+            item("A-007", NA),
+        )
+
+    def test_only_the_actionable_items_are_in_it(self):
+        """NO_DATA is not a fix — it is usually work for whoever runs the audit, not
+        for whoever owns the site — and LLM_PENDING is a question still waiting for
+        an answer. Either one would fill a sprint with the auditor's own business."""
+        ids = [r["id"] for r in fix_rows(self._data())]
+        self.assertEqual(set(ids), {"A-001", "A-002", "A-003"})
+
+    def test_it_is_ordered_the_way_the_report_orders_it(self):
+        rows = fix_rows(self._data())
+        self.assertEqual([r["id"] for r in rows][0], "A-001")
+        self.assertEqual([r["priority"] for r in rows],
+                         sorted((r["priority"] for r in rows), reverse=True))
+
+    def test_the_status_travels_with_the_row(self):
+        """A tracker importing these has to be able to tell a failing check from a
+        task nobody could automate."""
+        by_id = {r["id"]: r for r in fix_rows(self._data())}
+        self.assertEqual(by_id["A-003"]["status"], MANUAL)
+        self.assertEqual(by_id["A-001"]["status"], FAIL)
+
+    def test_the_url_column_says_what_it_actually_is(self):
+        """Most items record no page: a page-level check over a sample reports the
+        worst page's verdict without its address, and a site-level check has no page
+        to name. A column called `url` would be read as "fix this page"."""
+        row = fix_rows(self._data())[0]
+        self.assertIn("audited_url", row)
+        self.assertNotIn("url", set(row) - {"audited_url"})
+
+    def test_csv_and_json_hold_the_same_rows(self):
+        import csv as _csv
+        import tempfile
+        data = self._data()
+        with tempfile.TemporaryDirectory() as d:
+            csv_path = write_fixes(os.path.join(d, "f.csv"), data)
+            json_path = write_fixes(os.path.join(d, "f.json"), data)
+            with open(csv_path, encoding="utf-8-sig", newline="") as f:
+                from_csv = [r["id"] for r in _csv.DictReader(f)]
+            with open(json_path, encoding="utf-8") as f:
+                from_json = [r["id"] for r in json.load(f)]
+        self.assertEqual(from_csv, from_json)
+        self.assertEqual(from_csv, [r["id"] for r in fix_rows(data)])
+
+    def test_the_csv_opens_in_a_spreadsheet_without_mojibake(self):
+        """Excel reads a plain UTF-8 CSV as Latin-1, so a BOM is the difference
+        between an item title and a row of garbage. The destination for this file is
+        overwhelmingly likely to be somebody's spreadsheet."""
+        import tempfile
+        data = results(item("A-001", FAIL, title="Заголовок с не-ASCII"))
+        with tempfile.TemporaryDirectory() as d:
+            path = write_fixes(os.path.join(d, "f.csv"), data)
+            with open(path, "rb") as f:
+                raw = f.read()
+        self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), "no UTF-8 BOM")
+        self.assertIn("Заголовок".encode(), raw)
 
 
 if __name__ == "__main__":

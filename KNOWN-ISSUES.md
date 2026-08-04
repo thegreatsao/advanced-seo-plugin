@@ -1,12 +1,21 @@
 # Known issues
 
-What is wrong with this plugin as of **0.11.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.12.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.12.0**: issues 4 and 5 — the report says what changed since the previous
+audit, and `--fixes` writes the actionable items where a tracker can read them. Both were
+data the audit already had and did not hand over.
+
+**Fixed in 0.11.0**: nothing on this list; CI-018 stopped being `manual` and became the
+first item answered from a server log. On the way, a robots-refused URL reported as a page
+nobody crawled — the 0.4.0 orphan bug written a second time in a new script — and a
+robots.txt token counted as a search crawler because of a substring.
 
 **Fixed in 0.10.0**: the rest of issue 1 — a run-scoped response cache means one fetch
 per URL, and the fixture audit went from 76 requests to 16 with all 214 verdicts
@@ -190,19 +199,46 @@ Console property with enough history for the cannibalization items.
 The fixture is also HTTP, so nothing exercises TLS, HSTS, or a certificate problem —
 `security_headers.py` and the HTTPS items get their verdicts from offline tests only.
 
-## 4. The deliverable has no history
+## 4. Closed in 0.12.0 — the deliverable has history
 
-`.seo-runs/` stores every run, and the runner prints a diff against the previous
-one — to the terminal, for one previous run, gone when the terminal closes. The
-report a client receives cannot say whether anything improved. A checklist is a
-thing people re-run; the data exists and does not reach the file.
+`.seo-runs/` always stored every run. The comparison was computed only when somebody
+passed `--diff`, printed to a terminal, and gone when the terminal closed — so the
+report a client received could not say whether the last round of fixes worked, from
+data that was already on disk. It is computed whenever a previous run exists now, and
+both renderers carry a "Since the previous audit" section: score and coverage
+movement, and the items that changed.
 
-## 5. There is no machine-readable fix list
+The part worth keeping is the third bucket. A change is `improved`, `regressed`, or
+**`evidence`** — because `PASS` → `NO_DATA` is not the site getting worse, it is the
+run losing the ability to tell, usually a third-party service that was down or a
+supplied file that stopped being supplied. Filing that under regressions would tell a
+client their site broke when the measurement broke, and the reverse would take credit
+for a fix nobody made.
 
-`checklist-results.json` is the full audit log, not a task list. Getting the
-actionable items into a tracker means parsing the report or filtering the log by
-hand. A CSV or JSON of just the fixes (id, severity, effort, URL, what to do) would
-be a few lines.
+The baseline is named rather than implied: the artifact carries `compared_with` with
+the other run's timestamp, registry version, mode, profile and scores. "Since the
+previous run" is not a date, and a comparison whose other half is anonymous cannot be
+checked by the person being shown it.
+
+**Still one previous run, not a series.** A trend over six months is a different
+feature and is not written.
+
+## 5. Closed in 0.12.0 — there is a machine-readable fix list
+
+`--fixes PATH` writes just the actionable items — id, status, severity, effort,
+priority, category, title, what to do, evidence — as CSV or JSON, chosen by the
+suffix. Ordered the way the report orders them, so a tracker and the report agree
+about what to do first.
+
+`FAIL`, `WARN` and `MANUAL` only. `NO_DATA` is not a fix — it is usually work for
+whoever runs the audit rather than whoever owns the site — and `LLM_PENDING` is a
+question still waiting for an answer; either one would fill somebody's sprint with the
+auditor's own unfinished business.
+
+The URL column is called `audited_url` and not `url`, because that is what it is: most
+items record no page. A page-level check run over a sample reports the worst page's
+verdict without carrying its address, and a site-level check has no single page to
+name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 

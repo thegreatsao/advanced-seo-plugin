@@ -10,6 +10,68 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.12.0 — 4 August 2026
+
+**Registry unchanged** (`1c4b3697cc1f`, 214 items). Tests 508 → 520. Phase 4 of the plan:
+two things the audit already knew and did not hand over.
+
+### Added — the report says what changed since the previous audit
+
+`.seo-runs/` has stored every run since 0.2.0. The comparison against the previous one was
+computed only when somebody passed `--diff`, printed to a terminal, and gone when the
+terminal closed — so a report a client received could not say whether the last round of
+fixes worked, from data already on disk. A checklist is a thing people re-run.
+
+It is computed whenever a previous run exists now, and both renderers carry a **Since the
+previous audit** section: score and coverage movement, then the items that changed.
+`--diff` still decides whether it is printed to the terminal, which is what it was always
+for.
+
+**Three buckets, not two.** A change is `improved`, `regressed`, or **`evidence`** — and
+the third is the reason this is not just "what changed". `PASS` → `NO_DATA` is not the site
+getting worse; it is the run losing the ability to tell, usually a third-party service that
+was down or a supplied file that stopped being supplied. Filing that under regressions
+would tell a client their site broke when the measurement broke, and the reverse would take
+credit for a fix nobody made.
+
+**The baseline is named rather than implied.** The artifact carries `compared_with`: the
+other run's timestamp, registry version, mode, profile and scores. "Since the previous run"
+is not a date, and a comparison whose other half is anonymous cannot be checked by the
+person being shown it. The existing scope warning — a different registry version, mode or
+profile — is rendered with it, because a score that moved because the checklist changed is
+not a site that moved.
+
+### Added — `--fixes`, the actionable items where a tracker can read them
+
+`checklist-results.json` is the full audit log: every item, decided or not, with the raw
+measurement. Getting the actionable part into a tracker meant parsing the report or
+filtering the log by hand. `--fixes PATH` writes id, status, severity, effort, priority,
+category, title, what to do and evidence — CSV or JSON, chosen by the suffix — ordered the
+way the report's "What to do first" orders them, so the two agree.
+
+`FAIL`, `WARN` and `MANUAL` only. `NO_DATA` is not a fix; it is usually work for whoever
+runs the audit rather than whoever owns the site. `LLM_PENDING` is a question still waiting
+for an answer. Either one would fill somebody's sprint with the auditor's own unfinished
+business.
+
+Two details that are decisions rather than defaults. The column is **`audited_url`, not
+`url`**: most items record no page — a page-level check over a sample reports the worst
+page's verdict without carrying its address, and a site-level check has no single page to
+name — so a column called `url` would be read as "fix this page". And the CSV is written
+with a UTF-8 BOM and CRLF, because the overwhelmingly likely destination is somebody's
+spreadsheet and Excel reads a plain UTF-8 CSV as Latin-1, turning every non-ASCII character
+in an item title into mojibake.
+
+### Tests — 508 → 520
+
+Six for the history section: no baseline means no section (an empty "since last time"
+heading implies there was a last time), the baseline is named, a fix and a regression are
+told apart and the good news does not come after the bad, **losing the evidence is not
+reported as a regression**, a changed registry is said out loud, and both renderers carry
+it. Six for the fix list: only the actionable statuses, the report's ordering, the status
+travelling with the row, the column named for what it is, CSV and JSON holding the same
+rows, and a BOM so a non-ASCII title survives a spreadsheet.
+
 ## 0.11.0 — 4 August 2026
 
 **Registry `18b1b372a6ed` → `1c4b3697cc1f`** (214 items, unchanged in number; one item

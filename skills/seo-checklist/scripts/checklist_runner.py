@@ -1231,6 +1231,28 @@ def previous_run(domain: str, exclude: str) -> dict | None:
     return best
 
 
+# Where a status sits on the pass/fail scale, for saying whether a change was an
+# improvement. Only these three are on it: NO_DATA, MANUAL, LLM_PENDING and N/A are
+# not worse or better verdicts, they are the absence of one.
+VERDICT_RANK = {FAIL: 0, WARN: 1, PASS: 2}
+
+
+def direction(was: str, now: str) -> str:
+    """`improved`, `regressed` or `evidence` for one status change.
+
+    The third is the one worth having. `PASS` becoming `NO_DATA` is not the site
+    getting worse — it is the run losing the ability to tell, usually because a
+    third-party service was down or a file stopped being supplied. Filing that under
+    "regressed" would make a client's report say their site broke when what broke was
+    the measurement, and the reverse — `NO_DATA` becoming `PASS` — would take credit
+    for a fix nobody made.
+    """
+    before, after = VERDICT_RANK.get(was), VERDICT_RANK.get(now)
+    if before is None or after is None:
+        return "evidence"
+    return "improved" if after > before else "regressed"
+
+
 def diff_runs(prev: dict, cur: dict) -> tuple[list[dict], str]:
     """Status changes between two runs, plus a warning when the runs are not
     comparable. Only the intersection of the two item sets can be compared, so
@@ -1243,7 +1265,10 @@ def diff_runs(prev: dict, cur: dict) -> tuple[list[dict], str]:
         was = old.get(i["id"])
         if was and was != i["status"]:
             out.append({"id": i["id"], "title": i["title"], "from": was,
-                        "to": i["status"], "evidence": i.get("evidence", "")})
+                        "to": i["status"], "direction": direction(was, i["status"]),
+                        "severity": i.get("severity", "medium"),
+                        "category_label": i.get("category_label", ""),
+                        "evidence": i.get("evidence", "")})
 
     note = ""
     pv, cv = prev.get("registry_version"), cur.get("registry_version")
@@ -2393,14 +2418,36 @@ def main() -> int:
         with open(hist, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
+    # Computed whenever there is a previous run, not only under `--diff`.
+    #
+    # `--diff` used to gate the comparison itself, so the answer to "did anything
+    # improve" existed only if somebody had asked for it in advance, was printed to a
+    # terminal, and was gone when the terminal closed. A checklist is a thing people
+    # re-run, and the report a client receives could not say whether their last round
+    # of fixes worked. The data was already on disk in `.seo-runs/`; nothing had to be
+    # measured again to answer it. `--diff` now decides whether it is *printed* here,
+    # which is what it was always for.
     diff_note = ""
-    if a.diff:
-        prev = previous_run(domain, hist)
-        if prev:
-            payload["diff"], diff_note = diff_runs(prev, payload)
-            payload["diff_note"] = diff_note
-        else:
-            payload["diff"] = None
+    prev = previous_run(domain, hist)
+    if prev:
+        payload["diff"], diff_note = diff_runs(prev, payload)
+        payload["diff_note"] = diff_note
+        ps = prev.get("scores") or {}
+        # What it was compared against, named in the artifact. A diff whose baseline
+        # is anonymous cannot be checked by the person reading it, and "since the
+        # previous run" is not a date.
+        payload["compared_with"] = {
+            "started_at": prev.get("started_at"),
+            "registry_version": prev.get("registry_version"),
+            "mode": prev.get("mode"),
+            "profile": prev.get("profile"),
+            "seo_score": ps.get("seo_score"),
+            "coverage_pct": ps.get("coverage_pct"),
+            "decided": ps.get("decided"),
+        }
+    else:
+        payload["diff"] = None
+        payload["compared_with"] = None
 
     with open(a.json_out, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)

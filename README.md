@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.11.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.12.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -360,6 +360,19 @@ refuses every one of the 40-odd checks that fetch it, collapsing the audit to
 `NO_DATA` and burying the finding that matters — "this page is blocked from
 crawling" is a `critical` checklist item, a result rather than a prohibition. You
 asked for that URL; robots.txt governs what a crawler discovers on its own.
+
+**The report says what changed since last time, and hands over a task list.** Every run
+is filed under `.seo-runs/`, and a report now opens a **Since the previous audit** section
+with the score and coverage movement and the items that changed — split into what was
+fixed, what got worse, and what changed only because one run could decide it and the other
+could not. That third bucket matters: `PASS` becoming `NO_DATA` is the measurement losing
+its footing, not the site breaking, and it must not be reported as a regression. The
+baseline is named, with its date and registry version, so the comparison can be checked.
+
+`--fixes fixes.csv` (or `.json`) writes just the actionable items — id, status, severity,
+effort, priority, what to do, evidence — ordered the way the report orders them, for a
+tracker. Failing, warning and manual items only: an item nobody could decide is usually
+work for whoever runs the audit, not for whoever owns the site.
 
 **Server logs answer the one question fetching cannot.** `--server-log PATH` reads an
 access log — combined format, Common Log Format or JSON lines, `.gz` fine — and CI-018
