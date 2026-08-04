@@ -120,6 +120,10 @@ def picture_sources(img, base_url: str = "") -> list[dict]:
 # could plausibly be the largest paint on a page with any content at all, and Chrome's
 # own LCP heuristics discard low-entropy images for the same reason. Written down here
 # because it is one of the numbers KNOWN-ISSUES §2 is about.
+# basis: convention — 100x100 declared pixels. Chrome's own LCP algorithm discards
+#  low-entropy images for the same reason, but the number is ours: decided in 0.9.0
+#  after CN-054 and MD-185 called a correctly lazy-loaded 64px logo a deferred LCP image
+#  on every site that had one
 LCP_MIN_AREA = 100 * 100
 
 

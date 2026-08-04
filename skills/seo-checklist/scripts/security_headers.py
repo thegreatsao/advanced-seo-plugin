@@ -27,6 +27,9 @@ except ImportError:
     from scripts.lib.safe_http import default_headers, safe_get
 
 
+# basis: inherited — per-header weights present at import, summing to a 0-100 score. The
+#  weights are one project's opinion about which header matters most, and the registry
+#  reads the score
 SECURITY_HEADERS = {
     "strict-transport-security": {
         "label": "HSTS (Strict-Transport-Security)",

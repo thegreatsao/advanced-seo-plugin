@@ -24,6 +24,10 @@ from collections import defaultdict
 import site_crawl
 
 # Quality gates from resources/references/quality-gates.md
+# basis: inherited — 300 words for a default page, present at import from
+#  Agentic-SEO-Skill. One of the five numbers KNOWN-ISSUES §2 names, and its provenance
+#  is exactly what §2 suspected: the figure is conventional in SEO writing and has no
+#  source anybody here can point at
 THIN_CONTENT_THRESHOLDS = {
     "blog_post": 1500,
     "landing_page": 800,

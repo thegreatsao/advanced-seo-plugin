@@ -287,18 +287,24 @@ WASTED = ("gone", "client_error", "server_error", "rate_limited")
 # they are stated here, and every figure they judge is in the output beside them —
 # so a reader who disagrees can see the measurement and substitute their own number
 # instead of arguing with a verdict whose basis is invisible.
+# basis: convention — a fifth of the crawl returning nothing indexable. Round, and not
+#  calibrated against a corpus of real logs, because none was available
 WASTE_HIGH_PCT = 20.0      # a fifth of the crawl returning nothing indexable
+# basis: convention — 5%, the point below which a handful of 404s is ordinary rather
+#  than a pattern. Same standing as WASTE_HIGH_PCT above
 WASTE_WARN_PCT = 5.0
+# basis: convention — a fifth of the crawl spent on hops rather than pages
 REDIRECT_WARN_PCT = 20.0   # a fifth of the crawl spent on hops
+# basis: convention — 1%. Deliberately low, because a page that answers 5xx to a crawler
+#  often enough gets dropped from the index — but any 5xx at all is still reported, at
+#  medium, so the low bar does not become the only bar
 SERVER_ERROR_HIGH_PCT = 1.0
-# Below this many search-bot requests, a percentage is arithmetic rather than
-# evidence: three requests, one 404, is not "33% waste".
+# basis: convention — 50 requests. Below it a percentage is arithmetic rather than
+#  evidence: three requests and one 404 is not '33% waste'
 MIN_REQUESTS_FOR_RATES = 50
-# "Never crawled" needs a window long enough for absence to mean something. Google
-# revisits an important page within days and a deep one within weeks, so a log
-# covering less than a week cannot distinguish "not crawled" from "not crawled
-# yet". Seven days is a convention like the rest; what is not a convention is the
-# refusal to answer below it.
+# basis: convention — 7 days. Google revisits an important page within days and a deep
+#  one within weeks, so below a week 'never crawled' and 'not crawled yet' are the same
+#  observation. The number is a convention; the refusal to answer below it is not
 MIN_DAYS_FOR_COVERAGE = 7
 TOP_N = 20
 

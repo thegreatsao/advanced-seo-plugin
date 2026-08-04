@@ -43,6 +43,9 @@ import sys
 # Google's "good" thresholds. TBT is a lab stand-in for INP: INP needs a real
 # interaction and cannot be measured from a page load at all, so it is named for
 # what it is rather than reported as INP.
+# basis: standard — Google's published Core Web Vitals bands (LCP 2.5s/4s, CLS
+#  0.1/0.25). TBT is a lab stand-in for INP and its 200ms/600ms come from Lighthouse's
+#  own scoring, not from a field metric — named as TBT for that reason
 THRESHOLDS = {
     "lcp_ms": {"good": 2500, "poor": 4000},
     "cls": {"good": 0.1, "poor": 0.25},

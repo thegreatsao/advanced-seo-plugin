@@ -33,7 +33,11 @@ except ImportError:
     sys.exit(1)
 
 ROW_LIMIT = 5000
+# basis: inherited — 10 impressions, present at import. Below it two pages sharing a
+#  query is noise rather than cannibalisation, but the number was not measured
 MIN_IMPRESSIONS = 10       # below this, page-splitting is noise, not a pattern
+# basis: inherited — present at import, and definitional rather than calibratable: one
+#  page cannot compete with itself
 MIN_PAGES = 2
 
 

@@ -170,6 +170,9 @@ CHALLENGE_TITLES = (
 
 # Above this many words of visible prose, a page has content and is not an
 # interstitial no matter what strings it contains.
+# basis: convention — 120 words. An interstitial is a sentence and a button; above this
+#  a page has content whatever vendor strings it carries. Not calibrated against a
+#  corpus of challenge pages, because no such corpus was collected
 CHALLENGE_MAX_WORDS = 120
 
 # A soft 404 is a 200 response whose own title says it is an error page. Matched
@@ -291,6 +294,9 @@ def audit_target(requested: str, final_url: str) -> str:
 # the JS-rendering items exist to report it. Refusing to score would hide that
 # finding behind a guess. So this warns, names the number, and lets the registry
 # do its job.
+# basis: convention — 40 words, roughly a headline and a paragraph. Chosen to notice a
+#  client-rendered shell, not to judge content: the registry's own thin-content items
+#  decide that, at their own threshold
 THIN_ENTRY_WORDS = 40
 
 
@@ -368,6 +374,11 @@ def fetch_page(url: str, enforce_guard: bool = True) -> Fetch:
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
 
+# basis: inherited — critical 10 / high 6 / medium 3 / low 1, present at import from
+#  Agentic-SEO-Skill. **These weights decide the SEO Score itself** — the single most
+#  consequential unexamined number in this tree. Nobody here has asked whether a
+#  critical item is ten low items or three, and the score has been reported to two
+#  significant figures the whole time
 SEVERITY_WEIGHT = {"critical": 10, "high": 6, "medium": 3, "low": 1}
 
 # Two severity vocabularies exist in this tree and only one of them is the
@@ -1234,6 +1245,9 @@ def previous_run(domain: str, exclude: str) -> dict | None:
 # Where a status sits on the pass/fail scale, for saying whether a change was an
 # improvement. Only these three are on it: NO_DATA, MANUAL, LLM_PENDING and N/A are
 # not worse or better verdicts, they are the absence of one.
+# basis: convention — definitional rather than calibratable: FAIL < WARN < PASS is the
+#  only ordering those three can have. NO_DATA and MANUAL are deliberately absent — they
+#  are the absence of a verdict, not a worse one
 VERDICT_RANK = {FAIL: 0, WARN: 1, PASS: 2}
 
 
@@ -1657,6 +1671,8 @@ def same_page(a: str, b: str) -> bool:
     return key(a) == key(b)
 
 
+# basis: convention — definitional: aggregating a page-level check across sampled pages
+#  takes the worst verdict, so FAIL must outrank WARM and WARN outrank PASS
 STATUS_RANK = {FAIL: 3, WARN: 2, PASS: 1}
 
 
@@ -1731,6 +1747,9 @@ def load_public_suffixes(path: str = ""):
     return frozenset(exact), frozenset(wildcard), frozenset(exception)
 
 
+# basis: convention — the Public Suffix List changes continuously, so any staleness line
+#  is arbitrary. A year is long enough that the warning means the snapshot was forgotten
+#  rather than merely not refreshed this week
 PSL_STALE_DAYS = 365
 
 

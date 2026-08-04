@@ -423,6 +423,12 @@ to audit: a block on that URL is a `critical` finding to report, not a reason to
 audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
 configured rate.
 
+**When a threshold comes up, the basis is beside it.** Every number a verdict depends on
+carries a `# basis:` line saying whether it is an external standard, a measurement, a
+convention, or inherited from the borrowed code unexamined. If a client argues with a
+verdict, that line is the answer — and if the line says `inherited`, the honest answer is
+that nobody here chose the number. None of them is `measured`.
+
 **The deliverable carries history and a task list.** A second audit of the same domain
 gets a "Since the previous audit" section — score movement and the items that changed,
 split into fixed, worse, and changed-for-want-of-evidence. The third split is the one to

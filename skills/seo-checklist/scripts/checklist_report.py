@@ -27,6 +27,9 @@ import sys
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
 
+# basis: inherited — present at import. Only a sort order, so a wrong answer changes
+#  what is listed first rather than any verdict — which is why it is the least urgent of
+#  the inherited numbers
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 STATUS_ICON = {PASS: "PASS", FAIL: "FAIL", WARN: "WARN",
                NO_DATA: "NO DATA", MANUAL: "MANUAL", LLM_PENDING: "LLM", NA: "N/A"}
@@ -143,6 +146,9 @@ class Lang:
 # Ranking a fix list by severity alone puts a week of content rewriting above a
 # one-line meta tag. Dividing by effort answers the question people actually ask
 # first — what is worth doing this afternoon.
+# basis: inherited — low 1 / medium 2 / high 4, present at import. Divides
+#  SEVERITY_WEIGHT to rank what to do first, so the ratio between the two tables is
+#  doing real work that neither was measured for
 EFFORT_COST = {"low": 1, "medium": 2, "high": 4}
 
 

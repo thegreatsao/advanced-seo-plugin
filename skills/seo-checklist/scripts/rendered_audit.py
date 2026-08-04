@@ -41,9 +41,9 @@ import json
 import os
 import sys
 
-# Anything at or below this width is treated as a phone. 480 is the common
-# breakpoint; the exact number matters less than refusing to answer mobile
-# questions from a desktop render at all.
+# basis: convention — 480px, a common CSS breakpoint. The exact number matters less than
+#  refusing to answer tap-target and mobile-interstitial questions from a desktop render
+#  at all
 MOBILE_MAX_WIDTH = 480
 
 # Metrics that describe the page at any viewport.

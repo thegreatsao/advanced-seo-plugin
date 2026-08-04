@@ -36,6 +36,8 @@ except ImportError:
     from scripts.lib.safe_http import safe_get
 
 MAX_SHEETS = 12
+# basis: inherited — 2KB, present at import. Below it the minified/unminified ratio is
+#  dominated by the licence header
 SMALL_FILE_BYTES = 2048  # too small for the ratio to mean anything
 RE_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 

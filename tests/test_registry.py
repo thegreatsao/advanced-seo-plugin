@@ -152,6 +152,90 @@ class DocsPointAtThingsThatExist(unittest.TestCase):
             self.assertNotIn("is not a sample", text, f"{rel} is out of date")
 
 
+class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
+    """§2 of KNOWN-ISSUES.md, made checkable.
+
+    Four layers of tests prove a named field answers a named question, that a check
+    can tell two sites apart, that nothing is decided about a site which answered
+    nothing. **None of them argues with the numbers.** A site audited at the wrong
+    threshold gets a confident verdict about the wrong question, which is what this
+    suite is worst at seeing, and calibration is not more tests — it is deciding what
+    each number rests on and writing it beside the number.
+
+    This is the gate that keeps "beside the number" true. It does not check that a
+    threshold is *right*; nothing automatic can. It checks that the basis is stated,
+    so a reader who disagrees argues with a claim instead of with a bare integer.
+    """
+
+    # The unnamed count is a ceiling rather than a list, for the same reason the
+    # request count in CI is: a printed number in a green build is a number nobody
+    # reads. It may fall freely and may not rise without somebody deciding to raise
+    # it here. 77 at 0.13.0.
+    UNNAMED_CEILING = 77
+
+    def _tool(self):
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        import audit_thresholds
+        return audit_thresholds
+
+    def test_no_named_threshold_is_bare(self):
+        at = self._tool()
+        named, _ = at.scan()
+        self.assertGreater(len(named), 30,
+                           "the scan found almost nothing, so this would pass on "
+                           "an empty inventory")
+        bare = [f"{t['file']}:{t['line']} {t['name']}" for t in named if not t["kind"]]
+        self.assertEqual(bare, [], "add a `# basis: kind — why` line above each")
+
+    def test_the_kinds_are_the_documented_four(self):
+        at = self._tool()
+        named, _ = at.scan()
+        self.assertEqual({t["kind"] for t in named} - set(at.KINDS), set())
+
+    def test_a_basis_says_something(self):
+        """A kind with no reason after it is a label, not a justification."""
+        at = self._tool()
+        named, _ = at.scan()
+        thin = [t["name"] for t in named if len(t["why"]) < 25]
+        self.assertEqual(thin, [], f"these state a kind and no reason: {thin}")
+
+    def test_the_unnamed_count_has_not_grown(self):
+        at = self._tool()
+        _, unnamed = at.scan()
+        self.assertLessEqual(
+            len(unnamed), self.UNNAMED_CEILING,
+            f"{len(unnamed)} comparisons against a bare number, up from "
+            f"{self.UNNAMED_CEILING}. A threshold with no name cannot carry a basis, "
+            f"so name it — or raise this ceiling deliberately and say why")
+
+    def test_the_two_copies_of_googles_cwv_bands_agree(self):
+        """`cwv_metrics` reads a local trace and `pagespeed` reads CrUX, and each
+        holds its own copy of the published bands. Two copies of one standard drift,
+        and the drift would show up as a lab run and a field run disagreeing about a
+        page that had not changed."""
+        sys.path.insert(0, SCRIPTS)
+        import cwv_metrics
+        import pagespeed
+        lab = cwv_metrics.THRESHOLDS
+        field = pagespeed.CWV_THRESHOLDS
+        # Only the two metrics both tables really hold. `tbt_ms` and `INP` are
+        # deliberately not paired: TBT is a lab stand-in for INP measured from a page
+        # load, and asserting they match would be asserting that two different
+        # measurements are the same one.
+        shared = {"LCP": "lcp_ms", "CLS": "cls"}
+        compared = 0
+        for field_key, lab_key in shared.items():
+            self.assertIn(field_key, field, "pagespeed renamed a CWV key")
+            self.assertIn(lab_key, lab, "cwv_metrics renamed a CWV key")
+            for band in ("good", "poor"):
+                a, b = lab[lab_key][band], field[field_key][band]
+                self.assertEqual(a, b, f"{field_key} {band}: lab {a} vs field {b}")
+                compared += 1
+        # The first version of this test used lowercase keys, matched nothing, and
+        # passed — which is the failure it exists to catch, one level up.
+        self.assertEqual(compared, 4)
+
+
 class AnAuditDoesNotCommitItself(unittest.TestCase):
     """Every file a run writes by default must be ignored by git.
 

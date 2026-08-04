@@ -29,6 +29,9 @@ except ImportError:
     from scripts.lib.safe_http import default_headers, pace, retry_after_seconds
 
 NU_ENDPOINT = "https://validator.w3.org/nu/"
+# basis: inherited — 40, present at import. A cap on how much of Nu's answer is carried
+#  forward, not a verdict: a page with more than 40 validation errors is already failing
+#  the item
 MAX_MESSAGES = 40
 
 

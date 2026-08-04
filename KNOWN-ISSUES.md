@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.12.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.13.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -162,13 +162,42 @@ the seven scripts tested in a different file were exactly the scripts it could n
 maintains has the same blind spot as the thing it is checking.
 
 What remains is not coverage but calibration. **A test can show that a threshold
-fires; it cannot show the threshold is right.** MB-095 warns at 250 KB, CN-039 at 300
-words, SP-216 at 200 ms of blocking time, BL-081 at five identical anchors, the LCP
-candidate floor at 100×100 declared pixels — those numbers came from Google's
-published guidance, from the borrowed scripts, and in the last two cases from this
-release deciding them. No test here argues with any of them. A site audited at the
-wrong threshold gets a confident verdict about the wrong question, which is the
-failure this suite is worst at seeing.
+fires; it cannot show the threshold is right.** A site audited at the wrong threshold
+gets a confident verdict about the wrong question, which is the failure this suite is
+worst at seeing, and nothing automatic can close it — a number's correctness is a
+judgement, not an assertion.
+
+**What 0.13.0 did close is the invisibility.** `tools/audit_thresholds.py` finds every
+number a verdict depends on and requires each to carry a stated basis, checked in CI:
+
+| Basis | Count | What it means |
+|---|---|---|
+| `standard` | 4 | an external published authority, named — Google's Core Web Vitals bands, Open Graph's and Twitter's own documented limits |
+| `measured` | **0** | calibrated against something, and the text says what against |
+| `convention` | 18 | a judgement made here, stated as one: a round number because a line had to be somewhere |
+| `inherited` | 14 | arrived with the borrowed code and has not been examined |
+
+**Zero `measured` is the finding.** Not one threshold in this tree was arrived at by
+measurement; every number is either somebody else's standard, a judgement, or an
+inheritance. That was the suspicion §2 has carried since it was written, and it is now
+a figure rather than a worry.
+
+`inherited` is assigned from evidence rather than memory: a constant counts as
+inherited when `git show <initial commit>` finds it already there. The list includes
+the ones that matter most. **`SEVERITY_WEIGHT` — critical 10, high 6, medium 3, low 1
+— decides the SEO Score itself**, and nobody here has asked whether a critical item is
+worth ten low ones or three; the score has been reported to two significant figures
+the whole time. `EFFORT_COST` divides it to rank what to do first, so the ratio between
+two unexamined tables is doing real work. `THIN_CONTENT_THRESHOLDS`'s 300 words is one
+of the numbers this section used to name, and its provenance turned out to be exactly
+what was suspected: conventional in SEO writing, with no source anybody here can point
+at.
+
+**77 thresholds are still unnamed** — comparisons against a bare literal, which cannot
+carry a basis because there is no name to hang one on. MB-095's 250 KB was one of them
+until 0.13.0: an inline `> 250_000` in the middle of a loop, which is why no inventory
+could find it. A number nothing can name is a number nobody can argue with. CI holds
+that count as a ceiling rather than printing it.
 
 0.9.0 is the evidence that this is not theoretical. Sharing one crawl changed *how
 many pages* the anchor-text check reads, and BL-081's threshold — five identical

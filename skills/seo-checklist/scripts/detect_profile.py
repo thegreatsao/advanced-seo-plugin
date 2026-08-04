@@ -33,6 +33,9 @@ except ImportError:
 
 # schema.org @type -> (profile, weight, why). Structured data is the strongest
 # signal available because the site author declared it on purpose.
+# basis: inherited — present at import. Weights for guessing a site's type from its
+#  schema, and the guess is only ever a suggestion the operator confirms — which is the
+#  reason this one can stay unexamined without deciding anything
 SCHEMA_SIGNALS = {
     "product": ("ecommerce", 4, "Product schema"),
     "offer": ("ecommerce", 3, "Offer schema"),
@@ -93,7 +96,11 @@ MARKUP_SIGNALS = [
 
 PROFILES = ("ecommerce", "local", "saas", "blog", "media")
 # Below this the evidence is too thin to suggest narrowing anything.
+# basis: inherited — present at import. With CLEAR_MARGIN it decides whether profile
+#  detection suggests anything at all; tuned against the two fixtures here and nothing
+#  else, which is the weakest evidence any threshold in this tree has
 MIN_SCORE = 4
+# basis: inherited — present at import; see MIN_SCORE above
 CLEAR_MARGIN = 3
 
 

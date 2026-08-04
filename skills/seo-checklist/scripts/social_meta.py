@@ -35,6 +35,8 @@ except ImportError:
 HEADERS = default_headers()
 
 # Required and recommended OG tags
+# basis: standard — Open Graph's own documented limits for title and description, which
+#  are what Facebook and LinkedIn truncate at rather than what Google does
 OG_REQUIREMENTS = {
     "og:title": {"required": True, "max_length": 60, "min_length": 10},
     "og:description": {"required": True, "max_length": 200, "min_length": 50},
@@ -46,6 +48,7 @@ OG_REQUIREMENTS = {
 }
 
 # Twitter Card tags
+# basis: standard — the Twitter/X Cards documentation's stated limits
 TWITTER_REQUIREMENTS = {
     "twitter:card": {"required": True, "valid_values": ["summary", "summary_large_image", "app", "player"]},
     "twitter:title": {"required": False, "max_length": 70},

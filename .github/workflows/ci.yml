@@ -343,6 +343,15 @@ jobs:
       # at all crawls somebody's site against their stated wishes. The signature
       # default is the whole guarantee, so it is asserted here as well as in the
       # test suite — this one runs even if the suite is skipped.
+      # Calibration, from KNOWN-ISSUES 2: a test can show a threshold fires, it
+      # cannot show the threshold is right. This does not try to — it requires every
+      # number a verdict depends on to say what it rests on, so a reader who
+      # disagrees argues with a stated claim instead of a bare integer. The inventory
+      # is printed because the `inherited` count is the honest measure of how much of
+      # this registry rests on numbers nobody here decided, and it should fall.
+      - name: Every threshold says what it rests on
+        run: python skills/seo-checklist/tools/audit_thresholds.py --check
+
       - name: robots.txt applies to discovered URLs, not to the audit target
         run: |
           cd skills/seo-checklist/scripts

@@ -116,9 +116,9 @@ def normalize_url(url: str, default_scheme: str = "https") -> str:
 # it survives a script crashing mid-audit.
 DEFAULT_MAX_RPS = 4.0
 RATE_LIMIT_DIR = os.path.join(tempfile.gettempdir(), "seo-checklist-rate")
-# A server that says "come back in an hour" is not worth waiting for inside an
-# audit; past this the request fails and the item reports NO_DATA with the reason,
-# which is more useful than a run that appears to hang.
+# basis: convention — 30s. A server that says 'come back in an hour' is not worth
+#  waiting for inside an audit; past this the item reports NO_DATA with the reason,
+#  which is more useful than a run that appears to hang
 MAX_RETRY_AFTER_WAIT = 30.0
 
 
@@ -212,7 +212,12 @@ ROBOTS_TOKEN = "AgenticSEOSkill"
 # Cached on disk rather than per process. Every evidence script is its own
 # process, so an in-process cache would fetch /robots.txt 45 times per audit —
 # the same fan-out the pacing slots exist to avoid.
+# basis: convention — 30 minutes, long enough to cover one audit of a large site and
+#  short enough that a rule changed today is picked up today
 ROBOTS_CACHE_TTL = 1800.0
+# basis: convention — 512KB. Google's own documented limit is 500KiB and it stops
+#  parsing there; this is that rounded up, so we never read less of a file than Google
+#  does
 ROBOTS_MAX_BYTES = 512 * 1024
 # The disk cache is not enough on its own, because the scripts do not start one at a
 # time: 45 of them launch inside the same second, all miss a cache nobody has
@@ -631,10 +636,13 @@ def _consume_capped(response, max_response_bytes: int | None):
 #   * **GET and HEAD only.** Never POST: `indexnow_checker` submits URLs, and
 #     replaying a submission from disk would report something that did not happen.
 CACHE_DIR_VAR = "SEO_HTTP_CACHE"
-# Belt to the per-run directory's braces. The directory is removed when the run
-# ends, so nothing should ever be this old; a run killed with SIGKILL leaves one
-# behind, and an entry from it must not be able to answer anything.
+# basis: convention — 15 minutes, and it is belt to the per-run directory's braces: the
+#  directory is deleted when the run ends, so nothing should ever be this old. A run
+#  killed with SIGKILL leaves one behind, and an entry from it must not be able to
+#  answer anything
 CACHE_TTL = 900.0
+# basis: convention — 8MB, above the 5MB response cap, so the cap decides what is
+#  fetched and this only decides what is worth writing to disk
 CACHE_MAX_BODY = 8 * 1024 * 1024
 CACHEABLE_METHODS = ("GET", "HEAD")
 # In the key, so a change to what an entry contains cannot be read by code

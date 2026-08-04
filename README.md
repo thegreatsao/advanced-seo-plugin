@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.12.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.13.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -360,6 +360,15 @@ refuses every one of the 40-odd checks that fetch it, collapsing the audit to
 `NO_DATA` and burying the finding that matters — "this page is blocked from
 crawling" is a `critical` checklist item, a result rather than a prohibition. You
 asked for that URL; robots.txt governs what a crawler discovers on its own.
+
+**Every threshold says what it rests on.** A test can show that a number fires; it
+cannot show the number is right, so `tools/audit_thresholds.py` finds each one a verdict
+depends on and requires a stated basis — an external standard (named, so you can check
+it), something measured, a convention admitted as one, or a number inherited from the
+borrowed code and not yet examined. CI refuses a bare one. The count that matters is
+**zero `measured`**: no threshold here was arrived at by measurement, and 14 of 36 came
+with code from elsewhere — including the severity weights behind the score. That is in
+[KNOWN-ISSUES.md](KNOWN-ISSUES.md) §2 with the numbers.
 
 **The report says what changed since last time, and hands over a task list.** Every run
 is filed under `.seo-runs/`, and a report now opens a **Since the previous audit** section

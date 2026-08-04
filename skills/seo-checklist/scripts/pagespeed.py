@@ -43,6 +43,9 @@ PSI_API = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 VALID_STRATEGIES = ("mobile", "desktop")
 
 # Current CWV thresholds (as of 2026)
+# basis: standard — the same published Core Web Vitals bands as cwv_metrics.THRESHOLDS.
+#  Two copies because one reads a local trace and one reads CrUX; a test asserts they
+#  agree
 CWV_THRESHOLDS = {
     "LCP": {"good": 2500, "poor": 4000, "unit": "ms", "label": "Largest Contentful Paint"},
     "INP": {"good": 200, "poor": 500, "unit": "ms", "label": "Interaction to Next Paint"},

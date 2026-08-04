@@ -10,6 +10,87 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.13.0 — 4 August 2026
+
+**Registry unchanged** (`1c4b3697cc1f`, 214 items). Tests 520 → 525. Calibration —
+KNOWN-ISSUES §2, the largest remaining gap, and the one nothing automatic can close.
+
+**A test can show that a threshold fires; it cannot show the threshold is right.** Four
+layers of tests prove a named field answers a named question, that a check can tell two
+sites apart, that nothing is decided about a site which answered nothing. None of them
+argues with the numbers, and a site audited at the wrong threshold gets a confident
+verdict about the wrong question. That stays true. What this closes is the
+**invisibility** — a number whose basis nobody stated is a number nobody can argue with.
+
+### Added — `tools/audit_thresholds.py`
+
+Finds every number a verdict depends on and requires each to say what it rests on, in a
+form a machine can check:
+
+    # basis: standard | measured | convention | inherited — <why>
+
+The kinds are the point. `standard` is an external published authority, named, so a
+reader can go and check it. `measured` is the only one that is evidence rather than
+judgement. `convention` is a judgement made here, stated as one — a round number
+because a line had to be somewhere, which invites the argument instead of hiding from
+it. `inherited` arrived with the borrowed code and has not been examined: not an excuse,
+a to-do with a name.
+
+Finding the thresholds at all took three passes, and the misses are worth recording. An
+ordering comparison is a threshold; an equality is an **identity** — `inventory_version
+!= INVENTORY_VERSION` asks which format a file is, and no calibration improves that. An
+HTTP status code is likewise not a limit, which is what took the inline count from 138
+to 77. And the first version only looked at bare names inside `Compare` nodes, so it
+reported **Google's Core Web Vitals bands as absent** while they decided six items:
+`cwv_metrics.THRESHOLDS` is read as `limits = THRESHOLDS[metric]` and compared as
+`value <= limits["good"]`, and following a value through a local needs dataflow the AST
+does not give away. Numeric lookup tables now count as thresholds if they are subscripted
+at all.
+
+### The inventory
+
+| Basis | Count |
+|---|---|
+| `standard` | 4 |
+| `measured` | **0** |
+| `convention` | 18 |
+| `inherited` | 14 |
+
+**Zero `measured` is the finding.** Not one threshold in this tree was arrived at by
+measurement: every number is somebody else's standard, a judgement made here, or an
+inheritance. §2 has carried that as a suspicion since it was written; it is a figure now.
+
+`inherited` is assigned from evidence rather than memory — a constant counts as inherited
+when `git show <initial commit>` finds it already present — and the list includes the
+ones that matter most. **`SEVERITY_WEIGHT` (critical 10, high 6, medium 3, low 1) decides
+the SEO Score itself**, and nobody here has asked whether a critical item is worth ten
+low ones or three, while the score has been reported to two significant figures
+throughout. `EFFORT_COST` divides it to rank what to do first, so the ratio between two
+unexamined tables is doing real work that neither was measured for.
+`THIN_CONTENT_THRESHOLDS`'s 300 words is one of the five numbers §2 used to name, and its
+provenance is what §2 suspected: conventional in SEO writing, with no source anybody here
+can point at.
+
+### Fixed — a threshold nothing could find
+
+MB-095's 250 KB was an inline `> 250_000` in the middle of a loop rather than a constant,
+which is why no inventory of thresholds could see it — and it is one of the five numbers
+§2 explicitly named. It is `LARGE_IMAGE_BYTES` now, with its provenance recorded. **77
+comparisons against a bare number remain**; CI holds that as a ceiling rather than
+printing it, for the same reason the request count is a ceiling.
+
+### Tests — 520 → 525
+
+The gate itself: no named threshold is bare, the kinds are the documented four, a basis
+states a reason rather than only a label, and the unnamed count has not grown. Plus one
+that pairs the two copies of Google's CWV bands — `cwv_metrics` reads a local trace and
+`pagespeed` reads CrUX, each holding its own copy, and two copies of one standard drift.
+
+**Its first version compared nothing and passed**, because it used lowercase keys against
+a table keyed `LCP`/`CLS`. It asserts the number of comparisons it made now. `tbt_ms` and
+`INP` are deliberately not paired: TBT is a lab stand-in measured from a page load, and
+asserting the two match would be asserting that two different measurements are one.
+
 ## 0.12.0 — 4 August 2026
 
 **Registry unchanged** (`1c4b3697cc1f`, 214 items). Tests 508 → 520. Phase 4 of the plan:

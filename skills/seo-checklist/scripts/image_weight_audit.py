@@ -28,6 +28,12 @@ RASTER_FORMATS = {"jpg", "jpeg", "png", "gif"}
 # actually dispatches on, and a CDN URL with no extension has nothing else.
 MODERN_MIME = {f"image/{fmt}" for fmt in MODERN_FORMATS}
 
+# basis: inherited — 250KB, present at import from Agentic-SEO-Skill. One of the five
+#  numbers KNOWN-ISSUES §2 names, and until 0.13.0 it was not even a constant: an inline
+#  `> 250_000` in the middle of a loop, which is why no inventory of thresholds could
+#  find it. A number nothing can name is a number nobody can argue with
+LARGE_IMAGE_BYTES = 250_000
+
 
 def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
     path = Path(source)
@@ -123,7 +129,7 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
             issues.append({"severity": "info", "message": "Image has no srcset", "url": src})
         if row["srcset"] and not row["sizes"]:
             issues.append({"severity": "info", "message": "Responsive image has srcset but no sizes", "url": src})
-        if row["content_length"] and row["content_length"] > 250_000:
+        if row["content_length"] and row["content_length"] > LARGE_IMAGE_BYTES:
             issues.append({"severity": "warning", "message": "Large image transfer size", "url": src, "evidence": f"{row['content_length']} bytes"})
         images.append(row)
 

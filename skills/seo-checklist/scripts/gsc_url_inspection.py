@@ -32,6 +32,7 @@ import time
 # run turned one 7-second call into a 13-minute hang. Bound it, and retry once —
 # a single stalled socket should cost seconds, not the whole audit.
 SOCKET_TIMEOUT = 30
+# basis: inherited — present at import. An operational retry count, not a verdict
 RETRIES = 2
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
