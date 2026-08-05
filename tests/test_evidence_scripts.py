@@ -996,10 +996,23 @@ class Sitemap(unittest.TestCase):
     def test_go_138_needs_the_urls_fetched_to_find_anything(self):
         """It could only ever pass without `--fetch-urls`, which the registry did not
         pass until 0.6.0: 404/redirect/noindex issues are produced by fetching the
-        listed URLs, so a run that never fetched them had nothing to match."""
+        listed URLs, so a run that never fetched them had nothing to match.
+
+        The first assertion below failed once on CI, on 3.10, and passed on a re-run
+        of the same commit — 0 failures in 15 local runs of the full suite and of this
+        module alone. Reading the script settles what it *cannot* be: every issue
+        whose text can match `404|redirect|noindex` is inside the `if fetch_urls`
+        branch, and this run does not pass the flag. So the payload is the whole
+        question, and guessing at it twice has already cost more than printing it
+        once. The message carries the issues verbatim rather than a boolean, because
+        a diagnostic that names the wrong cause is worse than no diagnostic — which
+        is the standing lesson of 0.15.0."""
         self.assertIn("--fetch-urls", ITEMS["GO-138"]["check"]["args"])
-        self.assertEqual(verdict("GO-138", out("sitemap_bad")), PASS,
-                         "without fetching, the dead URLs are invisible")
+        unfetched = out("sitemap_bad")
+        self.assertEqual(verdict("GO-138", unfetched), PASS,
+                         "without fetching, the dead URLs are invisible; the issues "
+                         "this run actually produced were "
+                         + json.dumps(unfetched.get("issues"), ensure_ascii=False))
         self.assertEqual(verdict("GO-138", out("sitemap_urls_bad")), FAIL)
 
 

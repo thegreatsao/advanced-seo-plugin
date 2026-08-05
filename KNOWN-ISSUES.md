@@ -351,6 +351,23 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **One test is not deterministic, in a suite whose whole premise is that it is.**
+  `test_go_138_needs_the_urls_fetched_to_find_anything` failed once on CI under 3.10
+  and passed on a re-run of the same commit; 15 local runs of the full suite and of
+  that module alone produced 0 failures. It asserts that a sitemap check run *without*
+  `--fetch-urls` cannot report a 404, a redirect or a noindex, and it saw one.
+  Reading `sitemap_checker.py` settles what it cannot be: all three of those issues
+  are emitted inside the `if fetch_urls` branch, and that run does not pass the flag.
+  The parallel runner was the obvious suspect and is not — `run()` returns its key
+  with its payload and shares no path between the four concurrent `sitemap_checker`
+  runs. **Not diagnosed, and deliberately not guessed at**: the assertion now prints
+  the issues it actually saw, so the next occurrence names its own cause instead of
+  costing another hour of theory. Until then the honest statement is that one verdict
+  in this suite has been observed to depend on something nobody here has identified,
+  which is the same class of defect as the parser divergence 0.14.0 pinned as a fact
+  — and the lesson from that one is that recording the symptom is not the same as
+  understanding it.
+
 - **Closed in 0.15.0 — the answer-block score.** `answer_block_scanner.py` found the
   answer to a heading with `find_next_sibling()`, which asks the parser where the
   heading's parent ends, and that is the one question the two parsers answer
