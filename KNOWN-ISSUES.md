@@ -351,6 +351,39 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **Open — CI-019 fails every site that does not sell anything, and its own fix text
+  cannot satisfy it.** Found on a live audit of a Lithuanian café, 5 August 2026, where
+  it reported `high`/FAIL naming `/cart`, `/checkout`, `/login` and `/search`. All four
+  return **404**. The site has no shop and no login.
+
+  The item runs `robots_path_tester.py {url} /search /cart /checkout /login` and asserts
+  `allowed_urls` is empty. That script fetches **robots.txt and nothing else** — read it:
+  `test_paths` calls `fetch_robots`, then `robots_allowed` per path, and never requests
+  the path itself. So it cannot know whether the URL exists, and a site answering
+  `Allow: /` reports all four as exposed whether they are pages, 404s, or names nobody
+  ever used. This is 0.9.0's "five checks accused every correct site", sixth member, and
+  the blast radius is larger than any of those: **every brochure, local-business and
+  portfolio site on the internet fails a `high` item here.**
+
+  **The second defect is worse than the first and is not fixed by adding a fetch.** The
+  title says *Noindex* System & Search Pages and the `fix` says "Set noindex,follow"; the
+  assertion tests **robots.txt allow/deny**. Those are different mechanisms and the
+  advised one *cannot* satisfy the check — a page carrying `noindex` is still `allowed`
+  in robots.txt, so an operator who does exactly what the item tells them still fails it.
+  Meanwhile the only remediation that *does* satisfy it, `Disallow:` in robots.txt, stops
+  Google fetching the page and therefore from ever seeing the `noindex` — the documented
+  way to leave a URL indexed with no content behind it. **The check rewards the fix that
+  breaks the thing the item is named after.** That is §2's "a check and its own advice
+  disagree", promoted from a recorded inventory item to a verdict shipped against a real
+  site.
+
+  Not yet known: why the good-site sweep does not catch it. The sweep asserts nothing is
+  decided *against* a site that should pass, so either the fixture's robots.txt disallows
+  those four paths — in which case the fixture is the one site on which this item is
+  meaningful, and that is the finding — or the item is exempted somewhere. **Answer that
+  before writing the fix**, because a sweep that cannot see a check accusing every correct
+  site is the defect, and CI-019 is only its first symptom.
+
 - **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
   array without a `field` matches the whole serialised issue, URLs included, so
   GO-138's `404` matched the *port* of a test origin that bound 40455. The

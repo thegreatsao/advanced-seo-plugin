@@ -9,7 +9,7 @@ A version number that does not mean anything is a number nobody can argue with, 
 > it cannot; every number a verdict rests on is either measured or declared unmeasured;
 > and the document says what the code does.**
 
-Three releases reach it. Nothing below adds a check to the registry.
+Four releases reach it. Nothing below adds a check to the registry — 0.20 repairs one.
 
 **Shipped:** 0.16 replaced the coverage percentage with the score's weight share
 and a partition of the registry. 0.17 gave the two groups that could only sit at
@@ -204,6 +204,45 @@ work moved anything, and the data to answer it is already on disk.
 **`item_titles` and `item_fixes` in Russian.** 214 titles and 214 recommendations. Pure
 grind, no design, and the one thing that blocks handing a report to a reader who does
 not work in English. The report's own 100 strings have been translated since 0.15.0.
+
+---
+
+## 0.20 — the check that accuses every correct site, and the sweep that cannot see it
+
+**Open.** CI-019 asserts that robots.txt blocks `/search`, `/cart`, `/checkout` and
+`/login`, at `high` severity, using a script that reads robots.txt and never fetches the
+paths. A café with no shop fails it on four URLs that return 404; so does every brochure
+site on the internet. Full diagnosis in `KNOWN-ISSUES.md` §6.
+
+**Do the sweep first, not the item.** The good-site sweep exists to assert that nothing
+is decided against a site that should pass, and it does not catch this. Until that is
+explained, fixing CI-019 fixes one symptom of a blind spot of unknown size — and this
+tree's own history says the fix found by looking at output beats the fix found by
+reading code, four releases running. Either the fixture's robots.txt disallows those four
+paths, which makes it the one site where the item means anything, or something exempts
+it. Both answers change what gets written next.
+
+**Then the item, and it needs two repairs, not one.** Existence, and mechanism:
+
+- **Existence.** `allowed_urls` must not count a URL that 404s. A path robots.txt permits
+  and the server does not serve is not an indexable system page; it is a name nobody used.
+  This costs four conditional requests on a check that currently makes one.
+- **Mechanism.** The title and the `fix` say `noindex`; the assertion tests robots.txt.
+  A page carrying `noindex` is still `allowed`, so an operator who follows the advice
+  still fails — and the remediation that passes, `Disallow:`, is the one that stops
+  Google seeing the `noindex` at all. **Decide which check this item is** and make the
+  title, the assertion and the fix text agree. If it is about `noindex`, it needs a
+  different script; if it is about robots.txt, the fix text is wrong and has been
+  shipping wrong advice.
+
+The second repair is the one that matters. The first makes a false positive go away; the
+second stops the item recommending the thing that breaks what it is named after. §2 has
+recorded "a check and its own advice disagree" as an inventory finding since 0.15.0 —
+this is the first one caught deciding a real site, and the inventory named `article_seo.py`
+rather than this.
+
+**No registry additions.** 214 stays 214. This repairs one item and, if the sweep turns
+out to be blind, whatever else that reveals.
 
 ---
 
