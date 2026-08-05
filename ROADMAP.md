@@ -207,14 +207,27 @@ not work in English. The report's own 100 strings have been translated since 0.1
 
 ---
 
-## 0.20 — the check that accuses every correct site, and the sweep that cannot see it
+## 0.20 — the registry says one thing and asserts another
 
-**Open.** CI-019 asserts that robots.txt blocks `/search`, `/cart`, `/checkout` and
-`/login`, at `high` severity, using a script that reads robots.txt and never fetches the
-paths. A café with no shop fails it on four URLs that return 404; so does every brochure
-site on the internet. Full diagnosis in `KNOWN-ISSUES.md` §6.
+**Open, and it is a class rather than a bug.** One live audit of a Lithuanian café on
+5 August 2026 produced five registry defects. That is the yield of a single real site
+after four releases of test-writing, which is the argument for this release existing:
+the fixture pair and the two sweeps had all passed. Full diagnosis of each in
+`KNOWN-ISSUES.md` §6.
 
-**Do the sweep first, not the item.** The good-site sweep exists to assert that nothing
+| | What it says | What it asserts |
+|---|---|---|
+| CI-019 `high` | noindex `/search`, `/cart`, `/checkout`, `/login` | robots.txt allows those paths — never fetched, so a 404 counts |
+| CN-053 `medium` | do not hide content in iframes | `raw.word_count >= 300` — it counts words |
+| CI-017 / TE-181 | validate HTML, twice | identical script, arguments and assertion |
+| CI-016 / MD-186 `high` | alt text, twice | identical script, arguments and assertion |
+| TE-179 `low` | review domain reputation | `whois.age_days >= 90` — a new domain, unfixable |
+| GO-134 `high` | resolve Search Console issues | `opportunities` through a severity gate — good news as a failure |
+
+Four repairs, in this order. The first two are audits and will find more than the list
+above; the last two are decisions.
+
+**1. Do the sweep first, not the items.** The good-site sweep exists to assert that nothing
 is decided against a site that should pass, and it does not catch this. Until that is
 explained, fixing CI-019 fixes one symptom of a blind spot of unknown size — and this
 tree's own history says the fix found by looking at output beats the fix found by
@@ -222,27 +235,50 @@ reading code, four releases running. Either the fixture's robots.txt disallows t
 paths, which makes it the one site where the item means anything, or something exempts
 it. Both answers change what gets written next.
 
-**Then the item, and it needs two repairs, not one.** Existence, and mechanism:
+**2. Audit the triple across all 214.** For every item: does the assertion measure what
+the title names, and does the fix text describe the work that would satisfy the
+assertion? CI-019 and CN-053 are two answers of "no" found by accident in one run, and
+nothing looked for a third. This is mechanical and belongs in `tools/` beside
+`audit_assertions.py` and `audit_thresholds.py`. The precedent is exact: naming the
+thresholds moved `inherited` from 14 to 75, because the old count was low only while most
+of them had nowhere to carry a label. §2 has recorded "a check and its own advice
+disagree" as an inventory finding since 0.15.0, and named `article_seo.py` — these are
+the first two caught deciding a real site.
 
-- **Existence.** `allowed_urls` must not count a URL that 404s. A path robots.txt permits
-  and the server does not serve is not an indexable system page; it is a name nobody used.
-  This costs four conditional requests on a check that currently makes one.
-- **Mechanism.** The title and the `fix` say `noindex`; the assertion tests robots.txt.
-  A page carrying `noindex` is still `allowed`, so an operator who follows the advice
-  still fails — and the remediation that passes, `Disallow:`, is the one that stops
-  Google seeing the `noindex` at all. **Decide which check this item is** and make the
-  title, the assertion and the fix text agree. If it is about `noindex`, it needs a
-  different script; if it is about robots.txt, the fix text is wrong and has been
-  shipping wrong advice.
+Add the cheap structural test in the same pass: **no two items may share a script,
+arguments and assertion.** Two pairs do today, and one image missing an `alt` therefore
+produced two `high` FAILs on a real audit. The duplication arrives honestly — the Plerdy
+source lists one requirement under two of its own headings and `plerdy_ref` is
+load-bearing — so the fix is not deleting an id. Either one id decides and its twin
+mirrors the verdict without contributing weight, or they merge and the mapping records
+that two source numbers point at one check. **What must stop is one defect carrying
+double weight in the headline number and two rows in `--fixes`.**
 
-The second repair is the one that matters. The first makes a false positive go away; the
-second stops the item recommending the thing that breaks what it is named after. §2 has
-recorded "a check and its own advice disagree" as an inventory finding since 0.15.0 —
-this is the first one caught deciding a real site, and the inventory named `article_seo.py`
-rather than this.
+**3. Then CI-019 itself, which needs two repairs.** `allowed_urls` must not count a URL
+that 404s — a path robots.txt permits and the server does not serve is a name nobody
+used, and checking costs four conditional requests on a check that currently makes one.
+Then the mechanism: the title and fix say `noindex`, the assertion tests robots.txt, and
+the remediation that passes the check (`Disallow:`) is the one that stops Google seeing
+the `noindex` at all. **Decide which check this item is** and make all three agree.
 
-**No registry additions.** 214 stays 214. This repairs one item and, if the sweep turns
-out to be blind, whatever else that reveals.
+**4. Decide what an item is allowed to report.** Two items report something that is not a
+defect of the site, and the question underneath them is the same:
+
+- `TE-179` fails a domain for being 58 days old. There is no work that closes it; it
+  closes itself in a month. **An item that cannot be acted on does not belong in a
+  prioritised list** — either it becomes informational, or the threshold means something
+  other than what it says.
+- `GO-134` renders "position 4.0 with 115 impressions" as a `high` failure, because
+  `opportunities` is read through a severity gate. This is independent of §2's objection
+  that those thresholds are folklore: even a perfectly calibrated opportunity is still
+  not a defect, and printing one as the top item tells a client to fix their best result.
+
+Both need something the registry does not have — a way for a report to say *worth
+knowing* without the item entering the score or the fix list. That is a design decision
+rather than a repair, which is why it is last.
+
+**No registry additions.** 214 stays 214, and may become fewer if the duplicate pairs
+merge. Everything here repairs, removes or reclassifies what is already there.
 
 ---
 

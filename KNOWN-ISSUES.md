@@ -384,6 +384,54 @@ name. A column called `url` would be read as "fix this page".
   before writing the fix**, because a sweep that cannot see a check accusing every correct
   site is the defect, and CI-019 is only its first symptom.
 
+  **It was not a single case, and the same run proved it.** CN-053 is titled *Avoid
+  Critical Content in iFrames*, its fix text says "Do not hide critical content inside
+  iframes", and its assertion is `raw.word_count >= 300`. **It counts words.** Nothing in
+  it observes an iframe. The café failed it on three of eight pages for a 293-word page
+  and was advised about iframes it does not have. This one is the more dangerous of the
+  two: CI-019's mismatch is visible in the evidence, which lists four URLs a reader can
+  check, while CN-053's FAIL looks entirely sensible until somebody opens
+  `checklist.json`. **Two instances in one audit means 0.20 is about a class, not an
+  item** — the whole registry needs the triple checked: does the assertion measure what
+  the title names, and does the fix text describe the thing that would satisfy it. That
+  is a mechanical audit and belongs in `tools/`.
+
+- **Open — four items are two items, written twice, and both halves score.** `CI-017` and
+  `TE-181` are both titled *Validate HTML (W3C)*, both call `html_validator.py` with the
+  same arguments, and both assert `summary.errors == 0`; they differ in category and in
+  the wording of the fix. `CI-016` and `MD-186` are the same pair for alt text —
+  one `image_inventory.py`, one `missing_alt == 0`, `high` on both. On the café audit two
+  validation errors produced two FAILs and **one image missing an `alt` produced two
+  `high` FAILs.**
+
+  Under `SEVERITY_WEIGHT` that is one defect carrying double weight in the headline
+  number, and in `--fixes` it is two rows for one piece of work. The duplication arrives
+  honestly — the Plerdy source lists the same requirement under two of its own headings,
+  and `plerdy_ref` is load-bearing — so deleting an id is not obviously right. But the
+  score must not double-count: either one id decides and the other mirrors its verdict
+  without contributing weight, or they merge and the mapping records that two source
+  numbers point at one check. **Nothing in the registry currently detects that two items
+  share a script, arguments and assertion**, which is the cheap test to write first; it
+  will find whatever else is paired.
+
+- **Open — two items report something that is not a defect of the site, and one of them
+  cannot be acted on at all.**
+
+  `TE-179` *Review Domain History & Reputation* asserts `whois.age_days >= 90`. The café's
+  domain was 58 days old, so it failed. **A new domain is not a reputation problem and
+  there is no work that closes this item** — it resolves itself in a month, and until then
+  it occupies a line in the fix list. A task nobody can do teaches the reader to skim the
+  list, which is the one thing a prioritised list cannot survive.
+
+  `GO-134` *Resolve Search Console Issues* reads `opportunities` through
+  `none_severity: [critical, high]`, and on this site it fired on **"Position 4.0 with 115
+  impressions — within striking distance"**. Ranking fourth is good news, printed as a
+  `high` failure. §2 already says `gsc_checker.py`'s opportunity rules are SEO folklore
+  stated in numbers, but that is about whether the thresholds are right; this is narrower
+  and does not depend on them. **The field is called `opportunities`. An opportunity is
+  not a failure at any threshold**, and reading one through a severity gate turns the
+  best finding in the report into the item a client is told to fix first.
+
 - **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
   array without a `field` matches the whole serialised issue, URLs included, so
   GO-138's `404` matched the *port* of a test origin that bound 40455. The
