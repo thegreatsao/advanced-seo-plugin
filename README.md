@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.16.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.17.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -287,6 +287,26 @@ to local files. Values from `INDEXNOW_KEY` and `PAGESPEED_API_KEY` are replaced
 with `<redacted>` everywhere in `checklist-results.json` and `.seo-runs/` — the
 run log is built from each script's argv, so a key passed as an argument would
 otherwise be written out verbatim in the file you hand to a client.
+
+## Answering what no script can
+
+`--llm-answers` merges the model's 36 items, `--manual-answers` the 34 a person has
+to look at. Neither can overwrite a verdict a script reached, and neither can answer
+the other's items — one file that could do both would let a person quietly settle the
+questions the queue exists to make somebody read the page for.
+
+A manual answer needs a reason; a `PASS` with nothing beside it is refused by id.
+Every decided item carries `decided_by` (`measured` / `model` / `claimed`), and the
+report discloses the mix whenever it is not all measurement:
+
+```
+SEO Score 70/100 — over 109 items, 57% of the weight in scope
+  of the decided: 3 claimed, 106 measured
+```
+
+That line is the guard. Thirty-four items a person can answer is also thirty-four
+`PASS`es a person can type, and the only thing that keeps a claim and a measurement
+apart in a delivered report is the record of which was which.
 
 ## The LLM queue is not optional
 

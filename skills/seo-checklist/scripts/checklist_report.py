@@ -53,6 +53,24 @@ STATUS_ICON = {PASS: "PASS", FAIL: "FAIL", WARN: "WARN",
 # of the three and go missing from the third.
 STATUS_ORDER = (PASS, WARN, FAIL, NO_DATA, NEEDS_INPUT, LLM_PENDING, MANUAL, NA)
 
+def provenance_line(s: dict, L) -> str:
+    """How much of the score is a measurement and how much is somebody's word.
+
+    Printed only when the answer is not "all of it". A run with no merged answers
+    has nothing to disclose, and a disclosure that is always there is one nobody
+    reads by the third report.
+    """
+    by = s.get("decided_by") or {}
+    if not set(by) - {"measured"}:
+        return ""
+    names = {"measured": L.t("by_measured", "measured here"),
+             "model": L.t("by_model", "read by a language model"),
+             "claimed": L.t("by_claimed", "answered by a person, on their word")}
+    parts = ", ".join(f"{n} {names.get(k, k)}" for k, n in sorted(by.items()))
+    return L.t("provenance", "Of the {decided} decided items: {parts}.").format(
+        decided=s["decided"], parts=parts)
+
+
 PARTITION_NOTE = (
     "Every item is in exactly one row and the rows add up to the registry, so "
     "nothing is hidden in a denominator. There is no single coverage percentage on "
@@ -697,6 +715,7 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                   "over {decided} decided items, {pct}% of the weight in scope")
               .format(decided=s["decided"], pct=s["weight_pct"]),
             "",
+        ] + ([provenance_line(s, L), ""] if provenance_line(s, L) else []) + [
             L.t("score_note",
                 "The share of the weight travels with the score because it is the "
                 "claim you can check: the same 69 over 55% of the registry and over "
@@ -895,11 +914,23 @@ def render_llm_queue(data: dict, lens: str = "") -> str:
         "- `WARN` — partially satisfied",
         "- `N/A` — not applicable to this page, or undecidable from the content",
         "",
-        "Save the verdicts as JSON and merge them back:",
+        "Save the verdicts as JSON and merge them back. Every id below is one this "
+        "file is asking about — fill in the two fields and change nothing else:",
         "",
         "```json",
-        '{ "CN-047": { "status": "PASS", "evidence": "no spelling or grammar errors in body copy" },',
-        '  "CN-060": { "status": "N/A",  "evidence": "cloaking cannot be judged from a single render" } }',
+        "{",
+    ] + [
+        # The real ids, not an example. The example used to name CN-047 and CN-060
+        # whatever the file was for, so a per-lens queue asking about IN-126 and
+        # IN-130 showed a skeleton for two items that were not in it — an invitation
+        # to answer somebody else's slice, or to mistype an id into a merge that
+        # silently applies nothing. A template that cannot be pasted wrong is worth
+        # more than a shorter one.
+        f'  "{i["id"]}": {{ "status": "", "evidence": "" }}'
+        + ("," if n < len(pending) - 1 else "")
+        for n, i in enumerate(pending)
+    ] + [
+        "}",
         "```",
         "",
         "```bash",
@@ -1036,6 +1067,28 @@ document.querySelectorAll('input[type=checkbox][data-id]').forEach(cb => {
     cb.closest('.row').classList.toggle('done', cb.checked);
   });
 });
+const exportBtn = document.getElementById('export-manual');
+if (exportBtn) exportBtn.addEventListener('click', () => {
+  // A tick says "passes" and cannot say anything else, so the evidence field is
+  // seeded rather than invented: it states what actually happened, which is that
+  // somebody ticked a box. Merging refuses an answer whose reason is empty, and
+  // this string is deliberately not good enough to leave as it is.
+  const out = {};
+  document.querySelectorAll('input[type=checkbox][data-id]').forEach(cb => {
+    if (cb.checked) out[cb.dataset.id] = {
+      status: 'PASS',
+      evidence: 'ticked in the HTML report on ' + new Date().toISOString().slice(0, 10)
+                + ' — replace this with what was checked'};
+  });
+  const n = Object.keys(out).length;
+  if (!n) { alert('Nothing is ticked yet.'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)],
+                                        {type: 'application/json'}));
+  a.download = 'manual-answers.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
 document.querySelectorAll('.filters button').forEach(b => {
   b.addEventListener('click', () => {
     const active = b.dataset.f;
@@ -1132,6 +1185,8 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             f'<div class="metric"><b>{s["partition"]["waiting_on_you"]}</b>'
             f'<span>{html.escape(L.t("m_waiting_help", "Waiting on you: {llm} unanswered language-model items, {inp} missing inputs").format(llm=s["waiting_on_you"]["llm_pending"], inp=s["waiting_on_you"]["needs_input"]))}</span></div>',
             "</div>",
+            (f'<p class="note claimed">{html.escape(provenance_line(s, L))}</p>'
+             if provenance_line(s, L) else ""),
             f'<p class="note">{html.escape(L.t("partition_note", PARTITION_NOTE))}</p>',
         ]
     parts.append(f'<div class="bar">{bar}</div><div class="legend">'
@@ -1292,6 +1347,18 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             f'<span>{html.escape(L.title(i))}</span></label></div>'
             f'<div class="fix">{html.escape(L.fix(i))}</div></div></div>'
             for i in sorted(manual, key=lambda x: SEVERITY_ORDER.get(x["severity"], 9)))
+        rows += (f'<div class="row"><div class="st"></div><div class="sev"></div>'
+                 f'<div><button id="export-manual" type="button">'
+                 f'{html.escape(L.t("export_manual", "Export ticked items as answers"))}'
+                 f'</button> <span class="ev">'
+                 + html.escape(L.t("export_manual_note",
+                                   "Writes the ticked items as a --manual-answers "
+                                   "file. A tick is a claim that the item passes and "
+                                   "nothing more: it carries no reason, so add one "
+                                   "per item before merging, and write any FAIL by "
+                                   "hand. The run records these as claimed, never as "
+                                   "measured."))
+                 + '</span></div></div>')
         parts.append(fold(L.t("requires_human", "Needs a person"),
                           '<p class="note">'
                           + html.escape(L.t("manual_note",
@@ -1396,15 +1463,72 @@ def merge_llm_answers(data: dict, answers: dict) -> int:
     applied = 0
     for item in data["items"]:
         a = answers.get(item["id"])
-        if not a or item["status"] != LLM_PENDING:
+        if not a:
+            continue
+        if item["status"] != LLM_PENDING:
+            print(f"  ignoring {item['id']}: it is {item['status']}, and only "
+                  f"{LLM_PENDING} items can be answered here", file=sys.stderr)
             continue
         st = str(a.get("status", "")).upper()
         if st not in valid:
             print(f"  skipping {item['id']}: invalid status {a.get('status')!r}", file=sys.stderr)
             continue
         item["status"] = st
-        item["evidence"] = f"LLM: {a.get('evidence', '').strip() or 'no rationale given'}"
+        item["evidence"] = f"LLM: {str(a.get('evidence') or '').strip() or 'no rationale given'}"
         item["source"] = "llm(answered)"
+        item["decided_by"] = "model"
+        applied += 1
+    if applied:
+        data["scores"] = load_scoring()(data["items"])
+    return applied
+
+
+def merge_manual_answers(data: dict, answers: dict) -> int:
+    """Fold a person's answers into the results and rescore.
+
+    The mirror of `merge_llm_answers`, and deliberately built to the same shape:
+    only `MANUAL` items may be overwritten, so this file cannot flip a verdict a
+    script established any more than an LLM answer file can. Thirty-four items —
+    16% of the registry — were unanswerable by anything before this, not because
+    nobody knew the answer but because there was no way to hand one back.
+
+    Two guards, and they are the point rather than paperwork.
+
+    **Evidence is required.** An LLM answer without a rationale degrades to "no
+    rationale given" and the reader can weigh it; a human `PASS` with nothing beside
+    it is indistinguishable from a tick made to clear the list, and thirty-four of
+    those would move the score with no way to argue. An answer that says nothing is
+    refused with its id.
+
+    **The verdict is stamped `claimed`.** It is not a measurement and the report
+    must never present it as one — see the provenance line in the summary. This is
+    the same asymmetry the adversary reviewer runs on: what a second reader may do
+    to a verdict is bounded by what that reader actually saw.
+    """
+    valid = {PASS, FAIL, WARN, NA}
+    applied = 0
+    for item in data["items"]:
+        a = answers.get(item["id"])
+        if not a:
+            continue
+        if item["status"] != MANUAL:
+            print(f"  ignoring {item['id']}: it is {item['status']}, and only "
+                  f"{MANUAL} items can be answered here", file=sys.stderr)
+            continue
+        st = str(a.get("status", "")).upper()
+        if st not in valid:
+            print(f"  skipping {item['id']}: invalid status {a.get('status')!r}",
+                  file=sys.stderr)
+            continue
+        why = str(a.get("evidence") or "").strip()
+        if not why:
+            print(f"  skipping {item['id']}: a claimed verdict needs a reason beside "
+                  f"it, and this one has none", file=sys.stderr)
+            continue
+        item["status"] = st
+        item["evidence"] = f"answered by a person: {why}"
+        item["source"] = "manual(answered)"
+        item["decided_by"] = "claimed"
         applied += 1
     if applied:
         data["scores"] = load_scoring()(data["items"])
@@ -1462,6 +1586,7 @@ def apply_llm_review(data: dict, review: dict) -> dict:
                                 f"({item['evidence']}); second said {verdict} "
                                 f"({note})")
             item["status"] = NO_DATA
+            item.pop("decided_by", None)
             item["source"] = "llm(contested)"
             stats["contested"] += 1
     if stats["contested"]:
@@ -1485,6 +1610,12 @@ def main() -> int:
     ap.add_argument("--html", default="CHECKLIST.html")
     ap.add_argument("--llm-queue", default="LLM-QUEUE.md")
     ap.add_argument("--llm-answers", default="", help="JSON of LLM verdicts to merge back")
+    ap.add_argument("--manual-answers", default="", metavar="PATH",
+                    help="JSON of verdicts a person reached, {id: {status, "
+                         "evidence}}. Merges into MANUAL items only, and each needs "
+                         "a reason — a claimed verdict with nothing beside it is "
+                         "refused. Export a starting file from the HTML report's "
+                         "'Needs a person' section.")
     ap.add_argument("--llm-review", default="",
                     help="JSON of a second, independent judgement over the same "
                          "items. Agreement corroborates the verdict; disagreement "
@@ -1512,6 +1643,15 @@ def main() -> int:
         with open(a.results, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"Merged {n} LLM verdict(s) into {a.results}")
+
+    if a.manual_answers:
+        with open(a.manual_answers, encoding="utf-8") as f:
+            answered = json.load(f)
+        n = merge_manual_answers(data, answered)
+        with open(a.results, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"Merged {n} answer(s) from a person into {a.results}; "
+              f"each is recorded as claimed rather than measured")
 
     if a.llm_review:
         with open(a.llm_review, encoding="utf-8") as f:
@@ -1568,6 +1708,10 @@ def main() -> int:
     else:
         print(f"\nSEO Score {s['seo_score']}/100 — over {s['decided']} items, "
               f"{s['weight_pct']}% of the weight in scope")
+    by = s.get("decided_by") or {}
+    if set(by) - {"measured"}:
+        print("  of the decided: "
+              + ", ".join(f"{n} {kind}" for kind, n in sorted(by.items())))
     print(f"  decided {p['decided']} · waiting on you {p['waiting_on_you']} · "
           f"needs a person {p['needs_a_person']} · undecided {p['undecided']}"
           + (f" · N/A {p['not_applicable']}" if p["not_applicable"] else ""))

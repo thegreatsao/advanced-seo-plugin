@@ -419,6 +419,38 @@ or when the guard is wrong about yours. The suspicion is still recorded in
 `entry_guard`, and the run says so on every surface: an artifact that scored an
 interstitial without admitting it would be the same lie in a new place.
 
+## Answering the items no script can
+
+Two doors, deliberately separate, and neither can touch a verdict a script reached.
+
+```bash
+# the model's 36, after the lens agents have read the page
+python3 <SKILL_DIR>/scripts/checklist_report.py checklist-results.json \
+    --llm-answers answers.json
+
+# the 34 a person has to look at — Search Console UI, Business Profile, a phone call
+python3 <SKILL_DIR>/scripts/checklist_report.py checklist-results.json \
+    --manual-answers manual.json
+```
+
+Each queue file now carries a **skeleton naming its own item ids**, so an agent fills
+two fields per line instead of building the structure and possibly the ids. Merging an
+id that is not in the right state prints why rather than applying nothing in silence.
+
+`--manual-answers` merges `MANUAL` items only, and **every answer needs a reason**.
+A `PASS` with nothing beside it is refused with its id: thirty-four ticks would move
+the score with nothing for a reader to argue with. The HTML report's "Needs a person"
+section exports the ticked items as a starting file — a tick claims `PASS` and carries
+no reason, so the exported evidence says so and has to be replaced before it merges.
+
+**Every decided item records `decided_by`** — `measured`, `model` or `claimed` — and
+the report prints the breakdown whenever anything was not measured:
+
+> Of the 109 decided items: 3 answered by a person, on their word, 106 measured here.
+
+Say that line when you summarise a run. A score standing partly on somebody's word is
+a different claim from one standing on measurements, and it used to print identically.
+
 ## Statuses
 
 `PASS` · `FAIL` · `WARN` (counts as half) · `NO_DATA` (ran, nothing anybody can
@@ -520,7 +552,7 @@ Two things replace it, and **both must be reported**:
 |---|---|
 | decided | — the score is computed over these |
 | waiting on you | the operator: unanswered `LLM_PENDING`, plus `NEEDS_INPUT` |
-| needs a person | `MANUAL` — answerable, but by a human rather than here |
+| needs a person | `MANUAL` — answerable, but by a human rather than here; `--manual-answers` merges what they answered |
 | undecided | nobody: `NO_DATA` — no such field, service unreachable, check failed |
 | not applicable | `N/A` — out of scope for this mode or profile |
 

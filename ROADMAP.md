@@ -11,6 +11,10 @@ A version number that does not mean anything is a number nobody can argue with, 
 
 Three releases reach it. Nothing below adds a check to the registry.
 
+**Shipped:** 0.16 replaced the coverage percentage with the score's weight share
+and a partition of the registry. 0.17 gave the two groups that could only sit at
+zero a way to be answered.
+
 ---
 
 ## Where the numbers actually are
@@ -117,11 +121,18 @@ keeps finding. Add `NEEDS_INPUT` as a status of its own; the report then reads
 statuses, and "you did not pass `--cwv-json`" stops printing as "the audit could not
 tell".
 
+*Shipped in 0.17.* The queue skeleton, `--manual-answers`, `decided_by` and the
+disclosure line are in; dispatching the lens agents is a skill-level change and is
+described below rather than done.
+
 **Close the model group.** 36 items — 17% of the registry, 116 points of weight — sit
 at `LLM_PENDING` because answering them means running four agents by hand, saving JSON
 by hand, and merging by hand. The runner should dispatch the lens agents and merge
-their answers itself. No new check; the largest single coverage gain available
-anywhere in this plan.
+their answers itself — except it cannot: the runner is a Python CLI that launches
+subprocesses and has no model. The dispatch belongs in `SKILL.md`, which tells Claude
+to run the four lens agents in parallel; the runner's part is making the round trip
+one command, which is what the per-lens skeleton did. No new check; the largest
+single coverage gain available anywhere in this plan.
 
 **Give the human group a way to answer.** `--llm-answers` exists and merges only
 `LLM_PENDING`; `--manual-answers` should mirror it exactly and merge only `MANUAL`.
@@ -143,7 +154,7 @@ never grant it.
 
 ---
 
-## 0.17 — the two tables that produce the headline number
+## 0.18 — the two tables that produce the headline number
 
 `measured` is 0 across 113 thresholds. Do not attack 113. Attack two:
 
@@ -171,7 +182,7 @@ performance on real properties.
 
 ---
 
-## 0.18 — a series, and a report somebody can read
+## 0.19 — a series, and a report somebody can read
 
 **History as a series, not a pair.** `.seo-runs/` has stored every run since 0.1.0;
 `--diff` compares against one. The question a site owner asks is whether six months of

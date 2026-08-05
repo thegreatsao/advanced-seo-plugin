@@ -1068,6 +1068,17 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                                        evidence=f"{ev}; within warn range ({w_ev})")
                         else:
                             row.update(status=FAIL, evidence=ev)
+        # Where the verdict came from, recorded on every item that has one.
+        #
+        # Set here rather than at each branch above so a path added later cannot
+        # produce a verdict with no provenance: everything that reaches this point
+        # with a verdict was produced by this process measuring something. The two
+        # merges in checklist_report.py stamp `model` and `claimed` over it, and
+        # those are the two that matter — a report where 30 of 106 decided items are
+        # somebody's word is a different document from one where all 106 were
+        # measured, and until 0.16 it printed identically.
+        if row["status"] in (PASS, FAIL, WARN):
+            row["decided_by"] = "measured"
         graded.append(row)
     return graded
 
@@ -1163,8 +1174,16 @@ def score(graded: list[dict]) -> dict:
         # Out of scope for this mode or profile, and out of both numbers above.
         "not_applicable": counts.get(NA, 0),
     }
+    # How much of the score is a measurement and how much is somebody's word.
+    # Only meaningful once answers can be merged in — before 0.16 every decided
+    # item was measured because nothing else could decide one.
+    provenance: dict[str, int] = {}
+    for g in scored:
+        provenance[g.get("decided_by") or "measured"] = \
+            provenance.get(g.get("decided_by") or "measured", 0) + 1
     return {
         "seo_score": round(100 * earned / total) if total else None,
+        "decided_by": provenance,
         # How much of the registry the score speaks for. Always printed beside it;
         # a score without it is a fraction with the denominator torn off.
         "weight_pct": round(100 * total / weight_registry) if weight_registry else 0,

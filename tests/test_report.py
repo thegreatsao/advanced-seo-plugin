@@ -16,7 +16,8 @@ sys.path.insert(0, os.path.join(SKILL, "scripts"))
 from checklist_report import (  # noqa: E402
     FAIL, FIX_STATUSES, LLM_PENDING, MANUAL, NA, NEEDS_INPUT, NO_DATA, PASS,
     STATUS_ICON, STATUS_ORDER, WARN, Lang, apply_llm_review,
-    fix_rows, history_section, merge_llm_answers, priority_of, render_html,
+    fix_rows, history_section, merge_llm_answers, merge_manual_answers,
+    priority_of, provenance_line, render_html,
     render_llm_queue, render_markdown, write_fixes,
 )
 
@@ -635,3 +636,98 @@ class EveryStatusReachesEverySurface(unittest.TestCase):
             self.assertNotEqual(ru.t(key, "<english>"), "<english>",
                                 f"{key} falls back to English")
         self.assertNotEqual(ru.status(NEEDS_INPUT, "<english>"), "<english>")
+
+
+class TheQueueAsksForWhatItIsAbout(unittest.TestCase):
+    def test_the_skeleton_names_the_items_in_that_file(self):
+        """A per-lens queue printed a JSON example for two fixed ids whatever it
+        was asking about, so a file about IN-126 and IN-130 showed a skeleton for
+        CN-047 and CN-060. A merge keyed on an id that is not pending applies
+        nothing, and before 0.16 it said nothing either."""
+        data = results(item("IN-126", LLM_PENDING, lens="locale"),
+                       item("CN-047", LLM_PENDING, lens="copy"))
+        queue = render_llm_queue(data, lens="locale")
+        self.assertIn('"IN-126": { "status": "", "evidence": "" }', queue)
+        self.assertNotIn("CN-047", queue)
+
+
+class AnswersFromAPerson(unittest.TestCase):
+    """`--manual-answers`, and the guards that keep it from becoming a score dial.
+
+    Thirty-four items — 16% of the registry — had no way back into a run before
+    0.16, so the number they sat behind could only fall. Giving a person a way to
+    answer them is also giving somebody a way to write PASS thirty-four times, and
+    every test here is about the difference.
+    """
+
+    def answered(self, *answers):
+        data = results(item("LO-199", MANUAL), item("CN-047", FAIL),
+                       item("KW-070", LLM_PENDING))
+        merged = {}
+        for a in answers:
+            merged.update(a)
+        n = merge_manual_answers(data, merged)
+        return data, n, {i["id"]: i for i in data["items"]}
+
+    def test_it_answers_a_manual_item(self):
+        data, n, rows = self.answered(
+            {"LO-199": {"status": PASS, "evidence": "profile claimed, NAP matches"}})
+        self.assertEqual(n, 1)
+        self.assertEqual(rows["LO-199"]["status"], PASS)
+        self.assertIn("NAP matches", rows["LO-199"]["evidence"])
+
+    def test_a_claimed_verdict_is_never_recorded_as_measured(self):
+        """The whole guard. A person's word and a measurement carry the same
+        weight in the score, so the only thing that can keep them apart in a
+        delivered report is the record of which was which."""
+        _, _, rows = self.answered(
+            {"LO-199": {"status": PASS, "evidence": "checked in the UI"}})
+        self.assertEqual(rows["LO-199"]["decided_by"], "claimed")
+
+    def test_an_answer_with_no_reason_is_refused(self):
+        """A PASS with nothing beside it is indistinguishable from a tick made to
+        clear the list, and thirty-four of those would move the score with nothing
+        for the reader to argue with."""
+        for empty in ("", "   ", None):
+            _, n, rows = self.answered({"LO-199": {"status": PASS,
+                                                   "evidence": empty}})
+            self.assertEqual(n, 0, f"accepted evidence {empty!r}")
+            self.assertEqual(rows["LO-199"]["status"], MANUAL)
+
+    def test_it_cannot_touch_a_verdict_a_script_reached(self):
+        _, n, rows = self.answered({"CN-047": {"status": PASS, "evidence": "trust me"}})
+        self.assertEqual(n, 0)
+        self.assertEqual(rows["CN-047"]["status"], FAIL)
+
+    def test_it_cannot_answer_the_language_models_queue(self):
+        """The two merges are deliberately separate doors. One file that could
+        answer both would let a person quietly settle the 36 items the queue
+        exists to make somebody actually read the page for."""
+        _, n, rows = self.answered({"KW-070": {"status": PASS, "evidence": "fine"}})
+        self.assertEqual(n, 0)
+        self.assertEqual(rows["KW-070"]["status"], LLM_PENDING)
+
+    def test_an_invalid_status_is_refused(self):
+        _, n, _ = self.answered({"LO-199": {"status": "DONE", "evidence": "yes"}})
+        self.assertEqual(n, 0)
+
+    def test_the_report_discloses_what_was_not_measured(self):
+        """A run where 3 of 109 decided items are somebody's word is a different
+        document from one where all 109 were measured, and until 0.16 the two
+        printed identically."""
+        L = Lang()
+        self.assertEqual(provenance_line({"decided": 5, "decided_by": {"measured": 5}}, L), "")
+        line = provenance_line({"decided": 5, "decided_by": {"measured": 3, "claimed": 2}}, L)
+        self.assertIn("2", line)
+        self.assertIn("person", line)
+
+    def test_both_renderers_carry_the_disclosure(self):
+        from checklist_runner import score
+        data = results(item("A-1", PASS, decided_by="measured"),
+                       item("A-2", PASS, decided_by="claimed"))
+        data["scores"] = score(data["items"])
+        data["entry_reachable"] = True
+        self.assertEqual(data["scores"]["decided_by"], {"measured": 1, "claimed": 1})
+        for name, text in (("markdown", render_markdown(data)),
+                           ("html", render_html(data))):
+            self.assertIn("on their word", text, f"{name} hides the claimed verdict")

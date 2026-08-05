@@ -7,7 +7,7 @@
     "checklist is genuinely wanted.",
     "item_fixes: переводы рекомендаций по ID пункта. Пустой блок допустим — отчёт возьмёт текст реестра как есть, чтобы читатель мог действовать даже без перевода.",
     "categories: пояснение «о чём эта группа проверок и чем грозит» для нетехнического читателя.",
-    "STATUS as of 0.16.0: chrome (all 121 strings), the eight statuses and the 16 category explanations are complete; item_titles and item_fixes are empty, so --lang ru yields a document whose item titles and recommendations are English. The report says so on stderr."
+    "STATUS as of 0.16.0: chrome (all 122 strings), the eight statuses and the 16 category explanations are complete; item_titles and item_fixes are empty, so --lang ru yields a document whose item titles and recommendations are English. The report says so on stderr."
   ],
   "lang": "ru",
   "strings": {
@@ -126,7 +126,13 @@
     "m_weight_help": "За какую часть реестра отвечает этот балл, по весу: решено {decided} из {total} пунктов",
     "m_waiting_help": "Ждёт вас: {llm} неотвеченных пунктов языковой модели, {inp} непереданных входных данных",
     "needs_input": "Что этому аудиту не дали",
-    "needs_input_note": "Каждый из этих пунктов был бы решён, если бы прогону передали ещё одну вещь. Это работа того, кто запускает аудит, а не того, кому принадлежит сайт, и причина называет аргумент, который её закрывает."
+    "needs_input_note": "Каждый из этих пунктов был бы решён, если бы прогону передали ещё одну вещь. Это работа того, кто запускает аудит, а не того, кому принадлежит сайт, и причина называет аргумент, который её закрывает.",
+    "provenance": "Из {decided} решённых пунктов: {parts}.",
+    "by_measured": "измерено здесь",
+    "by_model": "прочитано языковой моделью",
+    "by_claimed": "отвечено человеком, с его слов",
+    "export_manual": "Выгрузить отмеченное как ответы",
+    "export_manual_note": "Записывает отмеченные пункты в файл для --manual-answers. Галочка — это утверждение, что пункт пройден, и ничего больше: причины в ней нет, поэтому допишите её для каждого пункта перед слиянием, а любой FAIL внесите руками. Прогон запишет их как заявленные, а не как измеренные."
   },
   "statuses": {
     "PASS": "прошло",

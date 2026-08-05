@@ -10,6 +10,68 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.17.0 — 5 August 2026
+
+**The two groups that could only sit at zero can now be answered.**
+
+0.16 made the report say that 49 items were waiting on the operator and 34 needed a
+person. Neither number could move: 34 of them — 16% of the registry, 116 points of
+weight — had no way back into a run at all, and the queue's 36 needed an agent to
+construct JSON by hand.
+
+**`--manual-answers`**, the mirror of `--llm-answers`. Merges `MANUAL` items only, so
+it cannot flip a verdict a script reached, and it cannot answer the language model's
+queue either — one file that could do both would let a person quietly settle the
+questions the queue exists to make somebody read the page for.
+
+**A reason is required.** An LLM answer with no rationale degrades to "no rationale
+given" and a reader can weigh it; a human `PASS` with nothing beside it is
+indistinguishable from a tick made to clear the list, and thirty-four of those move
+the score with nothing to argue with. Refused by id, on stderr.
+
+**`decided_by` on every decided item** — `measured`, `model` or `claimed` — and the
+report prints the mix whenever it is not all measurement:
+
+```
+SEO Score 70/100 — over 109 items, 57% of the weight in scope
+  of the decided: 3 claimed, 106 measured
+```
+
+Set once, at the end of `grade()`, rather than at each branch that produces a verdict,
+so a path added later cannot mint one with no provenance. A contested LLM verdict
+drops its `decided_by` with its status, because it no longer has one.
+
+The HTML report's "Needs a person" section exports the ticked items as a starting
+file. A tick claims `PASS` and carries no reason, so the exported evidence says
+exactly that and is deliberately not good enough to merge as it stands.
+
+**Each queue file's JSON skeleton now names its own items.** It printed `CN-047` and
+`CN-060` whatever the file was asking about, so the locale queue — `IN-126`, `IN-130`,
+`TE-165` — showed a template for two items that were not in it. A merge keyed on an id
+that is not pending applies nothing, and until this release said nothing either.
+
+**Three defects found while building it.**
+
+- **An answer for an item in the wrong state vanished silently.** Both merges read the
+  file, changed nothing, and printed a success line. They now name the id and its
+  actual status. The audit's own rule — nothing is silently skipped — did not apply to
+  the audit's own inputs.
+- **`evidence: null` became the literal reason `"None"`.** `.get("evidence", "")`
+  returns the stored value when the key is present and null, so the default never
+  applies and `str(None)` is a non-empty string that walked through the reason guard.
+  Found by a test parameterised over `("", "   ", None)` rather than over `""` alone.
+- **The same shape crashed the LLM merge.** `None.strip()` raises, so a null rationale
+  killed the merge instead of degrading to "no rationale given" — present since the
+  merge was written, and reachable from any answer file.
+
+Dispatching the four lens agents stays a `SKILL.md` change and is documented rather
+than automated: the runner is a Python CLI that launches subprocesses and has no
+model, so it cannot dispatch anything. `ROADMAP.md` records the correction.
+
+Russian: 6 new strings, 122 in all. 571 -> 580 tests.
+
+Registry unchanged at `1c4b3697cc1f`, 214 items.
+
 ## 0.16.0 — 5 August 2026
 
 **Coverage was one number standing for three things, and it is gone.**
