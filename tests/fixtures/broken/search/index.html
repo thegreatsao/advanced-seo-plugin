@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!--
+  CI-019, and the reason this file exists at all.
+
+  Until 0.20 the item read `allowed_urls` — paths robots.txt does not disallow — and
+  never fetched them. On this fixture that field was full and the item failed, so the
+  pair looked like it was testing something. It was not: nothing here had a system
+  page, and the same reading failed a real café that has no cart either. The item
+  accused every small site in the world and the sweep could not see it, because the
+  good fixture's robots.txt had been written to satisfy the assertion.
+
+  0.20 asserts `indexable_urls`, which needs the path to exist, to be crawlable, and
+  to carry no `noindex`. That immediately left CI-019 passing on both fixtures — a
+  check that cannot tell them apart, which test_contract refuses to accept. So the
+  broken site now has what a broken site would actually have: an internal search
+  results page, reachable, crawlable, and with nothing telling an index to skip it.
+
+  Deliberately absent, and each one on its own would fix the item:
+    - <meta name="robots" content="noindex,follow">
+    - X-Robots-Tag: noindex on the response
+    - Disallow: /search in robots.txt (which is what the good fixture does)
+
+  Served at /search because http.server resolves a directory to its index.html. The
+  probe follows the redirect to /search/ and gets a 200, which is the point.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Search results for "sourdough" — 3 matches</title>
+  <meta name="description" content="Search results.">
+</head>
+<body>
+  <h1>Search results for &quot;sourdough&quot;</h1>
+  <p>3 results.</p>
+  <ul>
+    <li><a href="/blog/duplicate-a.html">Our sourdough method</a></li>
+    <li><a href="/blog/duplicate-b.html">Our sourdough method</a></li>
+    <li><a href="/blog/thin.html">Sourdough notes</a></li>
+  </ul>
+  <p><a href="/index.html">Back to the bakery</a></p>
+</body>
+</html>

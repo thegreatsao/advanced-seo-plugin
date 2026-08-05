@@ -324,6 +324,143 @@ class RobotsPathTester(unittest.TestCase):
         self.assertEqual(verdict("CI-013", out), NO_DATA)
 
 
+class SystemPagesAreNotIndexable(unittest.TestCase):
+    """CI-019 (high): the same script as CI-013, read in the opposite direction.
+
+    The item's history is two opposite defects in the same field. Until 0.13 the rule
+    matched text across a nested dict, `allowed` and `true` never landed in one string,
+    and every site passed. Flattening to `allowed_urls` fixed that and produced the
+    inverse: `allowed_urls` is computed from robots.txt alone, so a café with no cart
+    is accused of exposing `/cart` — nothing disallows a page that does not exist.
+
+    0.20 asserts `indexable_urls` instead, which requires a fetch: the path is there,
+    a crawler may have it, and nothing keeps it out of the index. `noindex` counts,
+    which is what the item's title said all along.
+    """
+
+    def setUp(self):
+        import robots_path_tester as rpt
+        self.rpt = rpt
+        self.saved = (rpt.fetch_robots, rpt.safe_get)
+        self.paths = [a for a in registry_rule("CI-019")["args"][1:]
+                      if a.startswith("/")]
+
+    def tearDown(self):
+        self.rpt.fetch_robots, self.rpt.safe_get = self.saved
+
+    def serve_robots(self, body, status=200):
+        from seo_common import parse_robots_txt
+        self.rpt.fetch_robots = lambda *a, **k: {
+            "url": "https://example.com/robots.txt",
+            "fetch": {"status": status},
+            "parsed": parse_robots_txt(body) if status == 200 else None}
+
+    def serve_pages(self, by_path):
+        """`{path: (status, body, headers)}`; anything unlisted is a 404."""
+        class Resp:
+            def __init__(self, status, body, headers):
+                self.status_code, self.text, self.headers = status, body, headers
+
+        def fake_get(url, **kwargs):
+            path = url[url.index("/", 8):]
+            status, body, headers = by_path.get(path, (404, "", {}))
+            return Resp(status, body, headers)
+        self.rpt.safe_get = fake_get
+
+    def run_test(self):
+        return self.rpt.test_paths("https://example.com/", self.paths,
+                                   ["Googlebot"], probe=True)
+
+    OPEN = "User-agent: *\nDisallow: /admin\n"
+
+    def test_a_site_without_those_pages_is_not_accused(self):
+        """The defect that a live audit found and the fixture could not.
+
+        Every path 404s, robots.txt disallows nothing, and the pre-0.20 assertion
+        counted four permitted URLs and failed a `high` item on a site that has no
+        cart, no checkout and no login.
+        """
+        self.serve_robots(self.OPEN)
+        self.serve_pages({})
+        out = self.run_test()
+        self.assertEqual(len(out["allowed_urls"]), len(self.paths))   # old field
+        self.assertEqual(out["indexable_urls"], [])                   # new one
+        self.assertEqual(verdict("CI-019", out), PASS)
+
+    def test_a_reachable_system_page_with_nothing_stopping_it_fails(self):
+        self.serve_robots(self.OPEN)
+        self.serve_pages({"/cart": (200, "<html><body>Your cart</body></html>", {})})
+        out = self.run_test()
+        self.assertEqual(out["indexable_urls"], ["https://example.com/cart"])
+        self.assertEqual(verdict("CI-019", out), FAIL)
+
+    def test_noindex_satisfies_the_item_in_either_place_it_can_be_written(self):
+        """Meta tag on one page, `X-Robots-Tag` on another. The title has always
+        asked for `noindex`; before 0.20 writing one changed nothing."""
+        self.serve_robots(self.OPEN)
+        self.serve_pages({
+            "/cart": (200, '<html><head><meta name="robots" content="noindex,follow">'
+                           "</head><body>c</body></html>", {}),
+            "/login": (200, "<html><body>l</body></html>",
+                       {"X-Robots-Tag": "noindex"}),
+        })
+        out = self.run_test()
+        self.assertEqual(out["indexable_urls"], [])
+        self.assertEqual(verdict("CI-019", out), PASS)
+
+    def test_a_noindex_written_inside_a_comment_is_not_a_noindex(self):
+        """Markup inside a comment is not markup, and this is not a hypothetical.
+
+        The first version of the probe read `noindex` off a `<meta name="robots">`
+        that a fixture page's comment block quoted while explaining that the page
+        deliberately has no such tag — so the page built to fail CI-019 passed it.
+        The registry's own history of this: the keyword items fired on their own
+        remediation text in 0.5.0, and the soft-404 guard carries the warning that
+        `404` appears in the title of every article ever written about broken links.
+        """
+        self.serve_robots(self.OPEN)
+        self.serve_pages({"/cart": (200,
+                                    '<html><head><!-- deliberately absent: <meta '
+                                    'name="robots" content="noindex"> --></head>'
+                                    "<body>Your cart</body></html>", {})})
+        out = self.run_test()
+        self.assertEqual(out["indexable_urls"], ["https://example.com/cart"])
+        self.assertEqual(verdict("CI-019", out), FAIL)
+
+    def test_a_path_disallowed_in_robots_is_never_fetched(self):
+        """The other accepted mechanism, and a request the run must not spend: a
+        blocked path is out of the index already, and fetching it to confirm that
+        would buy nothing."""
+        fetched = []
+        self.serve_robots("User-agent: *\nDisallow: /cart\n")
+        self.serve_pages({"/cart": (200, "<html><body>c</body></html>", {})})
+        inner = self.rpt.safe_get
+        self.rpt.safe_get = lambda url, **k: (fetched.append(url), inner(url, **k))[1]
+        out = self.run_test()
+        self.assertNotIn("https://example.com/cart", fetched)
+        self.assertNotIn("https://example.com/cart", out["indexable_urls"])
+
+    def test_a_failed_probe_is_not_evidence_of_a_clean_site(self):
+        """A page we could not reach is neither indexable nor proven absent. It goes
+        to `unprobed_urls`, where it cannot be read as either verdict."""
+        self.serve_robots(self.OPEN)
+
+        def explode(url, **kwargs):
+            raise OSError("connection reset")
+        self.serve_pages({})
+        self.rpt.safe_get = explode
+        out = self.run_test()
+        self.assertEqual(out["indexable_urls"], [])
+        self.assertEqual(len(out["unprobed_urls"]), len(self.paths))
+
+    def test_an_unreachable_robots_txt_is_still_undecided(self):
+        self.serve_robots("", status=500)
+        self.serve_pages({})
+        out = self.run_test()
+        self.assertNotIn("indexable_urls", out)
+        self.assertEqual(verdict("CI-019", out), NO_DATA)
+
+
 class SecurityHeaders(unittest.TestCase):
     """SE-117 (critical) reads `https`; TE-175 (high) reads `headers_missing`.
 

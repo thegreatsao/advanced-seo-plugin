@@ -332,13 +332,34 @@ item(18, "medium", S, "server_log_audit.py",
      fix="Stop the crawl waste the log shows: fix or 410 the URLs in top_wasted, "
          "canonicalise or disallow the parameterised ones, and add internal links "
          "to sitemap URLs nothing crawled")
-item(19, "high", S, "robots_path_tester.py", ["{url}", "/search", "/cart", "/checkout", "/login"],
-     # `allowed` and `true` sit in different fields of a nested dict, so they
-     # never appeared in one string and the pattern never fired. The script now
-     # flattens the answer into `allowed_urls`, absent when robots.txt could not
-     # be read at all.
-     {"path": "allowed_urls", "len_lte": 0},
-     "Set noindex,follow on internal search and system pages, exclude them from sitemaps")
+item(19, "high", S, "robots_path_tester.py",
+     ["{url}", "/search", "/cart", "/checkout", "/login", "--probe"],
+     # Two repairs, 0.20. The first was 0.13: `allowed` and `true` sit in different
+     # fields of a nested dict, so they never appeared in one string, the pattern never
+     # fired, and every site passed. That was fixed by flattening to `allowed_urls`.
+     #
+     # Which produced the opposite defect and a worse one. `allowed_urls` is computed
+     # from robots.txt alone — the script never fetched the paths — so a site is
+     # accused of exposing `/cart` when it has no cart, because nothing disallows a
+     # page that does not exist. Every small site fails this, and it took a live audit
+     # to notice: the fixture's robots.txt had been written to satisfy the assertion,
+     # and a fixture built to pass the registry cannot catch an item that accuses
+     # everyone.
+     #
+     # The second repair is the mechanism repair, and it goes the other way round from
+     # how it first looked. Plerdy's title says `noindex` and the fix said `noindex`;
+     # the assertion said robots.txt `Disallow`. Those are not the same instrument and
+     # they conflict — a path blocked in robots.txt is never crawled, so its `noindex`
+     # is never read. The title was not the thing that was wrong: it is inherited
+     # wording (`plerdy-titles.json`, a record of someone else's checklist and not ours
+     # to rewrite) and it described the goal correctly all along. `indexable_urls` is
+     # that goal made checkable — the path exists, a crawler may fetch it, and nothing
+     # keeps it out of the index. Either mechanism satisfies it. Absent when robots.txt
+     # could not be read, and a path whose probe failed lands in `unprobed_urls`
+     # instead, so a network error cannot read as a clean site.
+     {"path": "indexable_urls", "len_lte": 0},
+     "Keep internal search and system pages out of the index: noindex,follow on the "
+     "page, or Disallow in robots.txt, and exclude them from sitemaps")
 
 # --- 2. Meta & Structured Data ---------------------------------------------
 item(20, "high", S, "parse_html.py", HTMLARG,
@@ -863,8 +884,27 @@ item(178, "low", S, "domain_safety_check.py", PAGE,
      {"path": "neighbors.suspicious", "len_eq": 0},
      "Audit neighboring sites on the same server IP")
 item(179, "low", S, "domain_safety_check.py", PAGE,
-     {"path": "whois.age_days", "gte": 90},
-     "Review domain history and reputation")
+     # This asserted `whois.age_days >= 90`, and a café whose domain was 58 days old
+     # failed it. Age is not history and it is not reputation: a new domain is not a
+     # defect, no work closes the item, and it resolves itself in a month while
+     # occupying a line in the fix list. A task nobody can do teaches the reader to
+     # skim the list.
+     #
+     # It was the case for inventing a status meaning "worth knowing but not
+     # actionable" — and the case dissolved on inspection. The item's own script
+     # already reports reputation; age was a proxy reached for because the real signal
+     # needs a key. Asserting the real signal makes the vocabulary sufficient again:
+     # a clean domain passes at any age, a listed one fails at any age, and with no
+     # `GOOGLE_SAFE_BROWSING_KEY` the field is absent, which is NO_DATA — "we could not
+     # look", which the registry has always been able to say.
+     # `threats`, not `matches`: `matches` is the key in Google's raw response and the
+     # script never re-emits it under that name. `audit_assertions.py` caught the
+     # difference, which is what it is for — and it is already in that tool's
+     # PATH_EXEMPT, since a field that needs a key is absent from a keyless probe
+     # without being wrong.
+     {"path": "safe_browsing.threats", "len_lte": 0},
+     "Check the domain against Safe Browsing and review its registration history; "
+     "set GOOGLE_SAFE_BROWSING_KEY so this can be answered")
 item(180, "medium", S, "a11y_seo_checker.py", PAGE,
      {"path": "score", "gte": 80},
      "Meet WCAG accessibility basics")

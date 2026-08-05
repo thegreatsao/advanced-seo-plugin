@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.20.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.21.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -404,6 +404,26 @@ name. A column called `url` would be read as "fix this page".
   the title names, and does the fix text describe the thing that would satisfy it. That
   is a mechanical audit and belongs in `tools/`.
 
+  **CI-019 closed in 0.21.0. CN-053 is still open.** CI-019 gained `--probe` and now
+  asserts `indexable_urls`: the path exists, a crawler may have it, and nothing keeps it
+  out of the index — which accepts `noindex` and `Disallow` alike, so the mechanism
+  mismatch stops being a choice. The title was not the part that was wrong; it is
+  inherited wording and it named the goal correctly the whole time.
+
+  Two things that repair turned up, both about this suite rather than the item:
+
+  - **The fixture pair could not tell CI-019 apart after the fix**, because neither site
+    had a system page at all — it had read as a working test for two releases while
+    testing nothing, and only `test_contract`'s can-it-distinguish rule caught that. The
+    broken fixture now serves `/search/index.html`.
+  - **The first probe read `noindex` off a `<meta name="robots">` written inside that new
+    fixture's own comment block**, where it is listed among the things the page
+    deliberately lacks — so the page built to fail the item passed it. Markup inside a
+    comment is not markup. This is the fourth appearance of one mistake in this tree:
+    the keyword items fired on their own remediation text in 0.5.0, three assert rules
+    matched a port number in 0.19.1, and the runner's soft-404 guard carries the warning
+    in writing. Each time it was found by a test that happened to look, never by a rule.
+
 - **Open — four items are two items, written twice, and both halves score.** `CI-017` and
   `TE-181` are both titled *Validate HTML (W3C)*, both call `html_validator.py` with the
   same arguments, and both assert `summary.errors == 0`; they differ in category and in
@@ -480,6 +500,29 @@ name. A column called `url` would be read as "fix this page".
   and does not depend on them. **The field is called `opportunities`. An opportunity is
   not a failure at any threshold**, and reading one through a severity gate turns the
   best finding in the report into the item a client is told to fix first.
+
+  **TE-179 closed in 0.21.0. GO-134 stays open, and the shared question is answered:
+  this registry does not need a status meaning "worth knowing but not actionable".**
+
+  The two items looked like one missing bucket and are not. TE-179's defect was never
+  that a true fact had nowhere to go — it was that `age_days` is neither history nor
+  reputation. Its own script already reports reputation; age was a proxy reached for
+  because the real signal needs a key. It now asserts `safe_browsing.threats`, so a clean
+  domain passes at any age, a listed one fails at any age, and with no
+  `GOOGLE_SAFE_BROWSING_KEY` the field is absent — `NO_DATA`, "we could not look", which
+  this vocabulary has always been able to say.
+
+  GO-134 fails the premise instead. Every entry in `opportunities[]` carries its own
+  `finding` and `fix`, so that work is real and a person can do it; what is wrong is the
+  name and the weight, and both are inherited. It is left open rather than quietly
+  rewritten, because changing a `high` to something else is a threshold decision and §2
+  is the standing objection to making those by feel.
+
+  So the bucket has no occupants. A new status would have cost the runner, the report,
+  the HTML, the CSV, both translations, the score partition, the diff buckets and the
+  every-status-reaches-every-surface test, in order to make two miscategorised assertions
+  comfortable. **What was missing was not a status. It was a correct assertion.** Reopen
+  this on the evidence of an item that genuinely has nowhere to go — not on these two.
 
 - **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
   array without a `field` matches the whole serialised issue, URLs included, so

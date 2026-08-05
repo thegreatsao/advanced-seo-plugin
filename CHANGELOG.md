@@ -10,6 +10,81 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.21.0 — 6 August 2026
+
+**CI-019 accused every small business on the internet of exposing a shopping cart it
+does not have.**
+
+The item reads `/search`, `/cart`, `/checkout`, `/login` and asserted `allowed_urls` was
+empty — the paths robots.txt does not disallow. The script never fetched them. So a café
+with no cart fails, because nothing disallows a page that does not exist, and the
+accusation is `high`.
+
+This is the *second* defect in one field, in opposite directions. Until 0.13 the rule
+matched text across a nested dict, `allowed` and `true` never landed in one string, the
+pattern never fired, and every site passed. Flattening to `allowed_urls` fixed that and
+produced the inverse.
+
+`--probe` now fetches each path robots permits and the assertion reads `indexable_urls`:
+the path exists, a crawler may have it, and nothing keeps it out of the index. A 404 is
+not an indexable page. A probe that errored lands in `unprobed_urls` rather than either
+verdict, so a network failure cannot read as a clean site. Only permitted paths are
+fetched — spending a request to confirm that a disallowed path is disallowed buys
+nothing.
+
+**And the mechanism repair, which went the opposite way from how it looked.** The title
+says `noindex`; the assertion said robots.txt `Disallow`. Those are different
+instruments and they conflict — a path blocked in robots.txt is never crawled, so its
+`noindex` is never read. The title was not what was wrong. It is inherited wording from
+`plerdy-titles.json`, a record of someone else's checklist, and it described the goal
+correctly the whole time. `indexable_urls` accepts either mechanism, which is what the
+title always asked for.
+
+**Two things found while fixing it, both about this suite rather than the item:**
+
+- After the repair CI-019 passed on *both* fixtures, because neither had a system page
+  at all — a check that cannot tell them apart, which `test_contract` refuses. The
+  broken fixture now has `/search/index.html`: reachable, crawlable, no `noindex`. It
+  had looked like a working test for two releases while testing nothing.
+- The first probe read `noindex` off a `<meta name="robots">` quoted **inside that
+  fixture's comment block**, where it is listed among the things the page deliberately
+  lacks — so the page built to fail the item passed it. Markup inside a comment is not
+  markup. Fourth appearance of one mistake in this tree: the keyword items fired on
+  their own remediation text in 0.5.0, three assert rules matched a port number in
+  0.19.1, and the soft-404 guard carries the warning in writing.
+
+**TE-179, and the answer to whether this registry needs a status meaning "worth knowing
+but not actionable".** It does not, and the case for one dissolved on inspection.
+
+TE-179 *Review Domain History & Reputation* asserted `whois.age_days >= 90`. A café's
+domain was 58 days old, so it failed a `low` item with a fix nobody can perform — it
+resolves itself in a month and until then occupies a line in the fix list, and a task
+nobody can do teaches the reader to skim. That looked like the case for a new bucket.
+But age is neither history nor reputation, and `domain_safety_check.py` already reports
+reputation: age was a proxy reached for because the real signal needs a key. It now
+asserts `safe_browsing.matches`, so a clean domain passes at any age, a listed one fails
+at any age, and with no `GOOGLE_SAFE_BROWSING_KEY` the field is absent — `NO_DATA`, "we
+could not look", which this vocabulary has always been able to say.
+
+GO-134 was the other candidate and fails for a different reason: `opportunities[]` each
+carry their own `finding` and `fix`, so that work is real and doable. What is wrong
+there is the name and the weight, not the actionability, and both are inherited. Left
+open rather than quietly rewritten.
+
+A new status would have cost the runner, the report, the HTML, the CSV, both
+translations, the score partition, the diff buckets and the every-status-reaches-every-
+surface test — to make two miscategorised assertions comfortable. What was missing was
+not a status. It was a correct assertion.
+
+One more thing `audit_assertions.py` caught on the way: TE-179's new rule was first
+written against `safe_browsing.matches`, which is the key in Google's raw response and
+a name the script never re-emits. The tool exists for exactly that and found it before
+a run could.
+
+Registry `a7bb134d42f9` -> `598d714134d9`: CI-019 and TE-179 change assertion, CI-019
+gains `--probe`. No severity and no other item changed. 608 -> 615 tests. `ru.json`
+follows both fix texts.
+
 ## 0.20.0 — 5 August 2026
 
 **The registry said it verified certificates. It never once did.**

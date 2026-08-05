@@ -274,15 +274,33 @@ share no words between what they claim and what they assert. Four carry a writte
 CI yet, deliberately — it exits 1 today, and a required check that is red by default is a
 check nobody reads.
 
-**3. Then CI-019 itself, which needs two repairs.** `allowed_urls` must not count a URL
-that 404s — a path robots.txt permits and the server does not serve is a name nobody
-used, and checking costs four conditional requests on a check that currently makes one.
-Then the mechanism: the title and fix say `noindex`, the assertion tests robots.txt, and
-the remediation that passes the check (`Disallow:`) is the one that stops Google seeing
-the `noindex` at all. **Decide which check this item is** and make all three agree.
+**3. Then CI-019 itself, which needs two repairs.** ✅ **Done in 0.21.0.** `allowed_urls`
+must not count a URL that 404s — a path robots.txt permits and the server does not serve
+is a name nobody used, and checking costs four conditional requests on a check that
+currently makes one. Then the mechanism: the title and fix say `noindex`, the assertion
+tests robots.txt, and the remediation that passes the check (`Disallow:`) is the one that
+stops Google seeing the `noindex` at all. **Decide which check this item is** and make
+all three agree.
 
-**4. Decide what an item is allowed to report.** Two items report something that is not a
-defect of the site, and the question underneath them is the same:
+> Both repairs turned out to be one. `--probe` fetches each permitted path and the
+> assertion reads `indexable_urls` — the path exists, a crawler may have it, nothing
+> keeps it out of the index — which accepts either mechanism and so needs no choice
+> between them. The decision that did have to be made went the other way from how it is
+> framed above: the title was not what was wrong. It is inherited wording from
+> `plerdy-titles.json`, a record of someone else's checklist, and `noindex` described the
+> goal correctly all along. Only the assertion was wrong.
+>
+> Two findings came out of it, both larger than the item. After the repair CI-019 passed
+> on *both* fixtures, because neither had a system page at all — it had looked like a
+> working test for two releases while testing nothing. And the first probe read `noindex`
+> off a `<meta name="robots">` quoted inside the new fixture's own comment block, among
+> the things the page deliberately lacks, so the page built to fail passed. Fourth
+> appearance of one mistake here: 0.5.0's keyword items, 0.19.1's port number, and the
+> soft-404 guard that carries the warning in writing.
+
+**4. Decide what an item is allowed to report.** ✅ **Answered in 0.21.0, and the answer
+is no new status.** Two items report something that is not a defect of the site, and the
+question underneath them is the same:
 
 - `TE-179` fails a domain for being 58 days old. There is no work that closes it; it
   closes itself in a month. **An item that cannot be acted on does not belong in a
@@ -296,6 +314,27 @@ defect of the site, and the question underneath them is the same:
 Both need something the registry does not have — a way for a report to say *worth
 knowing* without the item entering the score or the fix list. That is a design decision
 rather than a repair, which is why it is last.
+
+> **The second horn was the right one, for TE-179 at least: the threshold meant
+> something other than what it says.** Age is neither history nor reputation, and
+> `domain_safety_check.py` already reports reputation — age was a proxy reached for
+> because the real signal needs a key. It now asserts `safe_browsing.threats`: a clean
+> domain passes at any age, a listed one fails at any age, and with no
+> `GOOGLE_SAFE_BROWSING_KEY` the field is absent, which is `NO_DATA` — "we could not
+> look", which this vocabulary has always been able to say.
+>
+> `GO-134` fails the premise rather than the test. Each entry in `opportunities[]`
+> carries its own `finding` and `fix`, so the work is real and doable; what is wrong is
+> the name and the weight, and both are inherited. Left open rather than quietly
+> rewritten — see §2 on thresholds nobody measured.
+>
+> So the bucket has no occupants. A new status would have cost the runner, the report,
+> the HTML, the CSV, both translations, the score partition, the diff buckets and the
+> every-status-reaches-every-surface test, in order to make two miscategorised
+> assertions comfortable. **What was missing was not a status. It was a correct
+> assertion.** If a genuine case turns up later — a true fact, worth printing, that no
+> action closes and no better assertion captures — this decision should be reopened on
+> that item's evidence, not on the two above.
 
 **No registry additions.** 214 stays 214, and may become fewer if the duplicate pairs
 merge. Everything here repairs, removes or reclassifies what is already there.

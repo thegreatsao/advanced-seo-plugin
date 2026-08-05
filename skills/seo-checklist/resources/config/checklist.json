@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "a7bb134d42f9",
+  "registry_version": "598d714134d9",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -535,16 +535,17 @@
           "/search",
           "/cart",
           "/checkout",
-          "/login"
+          "/login",
+          "--probe"
         ],
         "requires": "fetch",
         "assert": {
-          "path": "allowed_urls",
+          "path": "indexable_urls",
           "len_lte": 0
         }
       },
       "effort": "low",
-      "fix": "Set noindex,follow on internal search and system pages, exclude them from sitemaps"
+      "fix": "Keep internal search and system pages out of the index: noindex,follow on the page, or Disallow in robots.txt, and exclude them from sitemaps"
     },
     {
       "id": "MS-020",
@@ -3725,12 +3726,12 @@
         ],
         "requires": "api",
         "assert": {
-          "path": "whois.age_days",
-          "gte": 90
+          "path": "safe_browsing.threats",
+          "len_lte": 0
         }
       },
       "effort": "low",
-      "fix": "Review domain history and reputation"
+      "fix": "Check the domain against Safe Browsing and review its registration history; set GOOGLE_SAFE_BROWSING_KEY so this can be answered"
     },
     {
       "id": "TE-180",

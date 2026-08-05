@@ -1111,10 +1111,13 @@ sitemap URL reachable and this check vacuous.
 
 ### robots_path_tester.py
 
-Takes positional paths after the URL. The registry uses it twice: CI-019 passes
-`/search /cart /checkout /login`, and CI-013 passes representative asset paths
-with `--agent Googlebot` to ask whether rendering resources are reachable. Rules
-are matched, nothing is fetched, so the paths need not exist.
+Takes positional paths after the URL. The registry uses it twice, and since 0.20 the
+two uses need different evidence. CI-013 passes representative asset paths with
+`--agent Googlebot` to ask whether rendering resources are reachable: robots.txt rules
+are matched, nothing is fetched, and the paths need not exist. CI-019 passes
+`/search /cart /checkout /login` **and `--probe`**, because "robots.txt does not
+disallow it" and "it is an indexable page" are different claims and only the second one
+is an accusation.
 
 `site` — str
 `robots_url` — str
@@ -1122,10 +1125,29 @@ are matched, nothing is fetched, so the paths need not exist.
 `allowed_urls[]` — array of str — every tested URL at least one agent may fetch.
   **Absent** when `robots_status` is neither 200 nor 404: a 500 or a timeout says
   nothing about what is allowed, and an empty list would read as "nothing is
-  exposed". CI-019 asserts it is empty, CI-013 that it holds every asset path.
-  Added because the previous assertion matched `allowed.*true` as text, and
-  `allowed` and `true` never land in the same string of a nested dict — so it
-  matched nothing and passed every site.
+  exposed". CI-013 asserts it holds every asset path. Added because the previous
+  assertion matched `allowed.*true` as text, and `allowed` and `true` never land in
+  the same string of a nested dict — so it matched nothing and passed every site.
+  CI-019 asserted it was empty until 0.20 and no longer does: this field is computed
+  from robots.txt alone, so a site with no cart was accused of exposing `/cart`.
+
+Under `--probe` only, and absent without it:
+
+`indexable_urls[]` — array of str — **what CI-019 asserts is empty.** Tested URLs that
+  are permitted by robots.txt, answered 2xx/3xx, and carry no `noindex` in a
+  `<meta name="robots">` or an `X-Robots-Tag`. A 404 or 410 is not an indexable page
+  and does not appear. Comments are stripped before the meta tag is looked for —
+  markup inside a comment is not markup.
+`unprobed_urls[]` — array of str — permitted URLs whose fetch failed or answered 5xx.
+  Deliberately neither list: an unreachable page is not proven absent and not proven
+  indexable, so a network failure cannot read as a clean site.
+`rows[].probe` — object, present only for permitted paths (a disallowed path is out of
+  the index already and fetching it would spend a request to learn nothing)
+  - `probed` — bool (always true when the key exists)
+  - `status` — int or null
+  - `exists` — bool or null (null when the probe could not tell)
+  - `noindex` — bool or null
+  - `error` — str or null
 `rows[]` — array, one per path
   - item keys: url, decisions, allowed_for
   - `decisions.<agent>.allowed` — bool
