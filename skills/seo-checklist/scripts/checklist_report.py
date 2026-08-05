@@ -26,6 +26,10 @@ import sys
 
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
+# Split out of NO_DATA in 0.16: the audit would have decided this and was not
+# given what it needed. It is the operator's work, not the site's defect and not
+# a limit of the tool, and it is the half of "waiting on you" that is not the queue.
+NEEDS_INPUT = "NEEDS_INPUT"
 
 # basis: presentation — 60 and 85 choose the colour of a category bar, nothing else. A
 #  verdict is already computed by the time either is read, so a reader who disagrees with
@@ -42,7 +46,19 @@ LINKED_FROM_SHOWN = 3        # basis: presentation — the same, for a broken-UR
 #  the inherited numbers
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 STATUS_ICON = {PASS: "PASS", FAIL: "FAIL", WARN: "WARN",
-               NO_DATA: "NO DATA", MANUAL: "MANUAL", LLM_PENDING: "LLM", NA: "N/A"}
+               NO_DATA: "NO DATA", NEEDS_INPUT: "NEED INPUT", MANUAL: "MANUAL",
+               LLM_PENDING: "LLM", NA: "N/A"}
+# Order for every place statuses are listed: the report's status table, the HTML
+# legend and its filter buttons. One tuple so a new status cannot be added to two
+# of the three and go missing from the third.
+STATUS_ORDER = (PASS, WARN, FAIL, NO_DATA, NEEDS_INPUT, LLM_PENDING, MANUAL, NA)
+
+PARTITION_NOTE = (
+    "Every item is in exactly one row and the rows add up to the registry, so "
+    "nothing is hidden in a denominator. There is no single coverage percentage on "
+    "purpose: it added together how far the tool reached, how much work the operator "
+    "had done, and how much of the checklist was never the audit's job, and then "
+    "moved for any of the three without saying which.")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -327,7 +343,8 @@ def plain_summary(data: dict, L: "Lang | None" = None) -> list[str]:
         out.append(L.t("p_quick",
                        "{quick} of those are quick fixes — a setting or a line of "
                        "text, not a rebuild.").format(quick=quick))
-    undecided = c.get(LLM_PENDING, 0) + c.get(MANUAL, 0) + c.get(NO_DATA, 0)
+    undecided = (c.get(LLM_PENDING, 0) + c.get(MANUAL, 0) + c.get(NO_DATA, 0)
+                 + c.get(NEEDS_INPUT, 0))
     if undecided:
         out.append(L.t("p_undecided",
                        "{undecided} more could not be settled by measurement: they "
@@ -456,10 +473,10 @@ def history_section(data: dict, L: "Lang | None" = None) -> list[str]:
         arrow = "→" if move == 0 else ("↑" if move > 0 else "↓")
         out += [L.t("since_scores",
                     "Compared with the run of {when}: score {then} {arrow} {now}, "
-                    "coverage {cov_then}% {arrow} {cov_now}%.").format(
+                    "over {w_then}% {arrow} {w_now}% of the weight in scope.").format(
                         when=when or "?", then=score_then, now=score_now,
-                        arrow=arrow, cov_then=base.get("coverage_pct"),
-                        cov_now=now.get("coverage_pct")), ""]
+                        arrow=arrow, w_then=base.get("weight_pct"),
+                        w_now=now.get("weight_pct")), ""]
     else:
         out += [L.t("since_baseline",
                     "Compared with the run of {when}.").format(when=when or "?"), ""]
@@ -673,17 +690,39 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
             "",
         ]
     else:
+        p, w = s["partition"], s["waiting_on_you"]
         out += [
-            f"**{L.t('seo_score', 'SEO Score')} {s['seo_score']}/100**",
+            f"**{L.t('seo_score', 'SEO Score')} {s['seo_score']}/100** — "
+            + L.t("score_weight",
+                  "over {decided} decided items, {pct}% of the weight in scope")
+              .format(decided=s["decided"], pct=s["weight_pct"]),
             "",
-            f"**{L.t('coverage', 'Coverage')} {s['coverage_pct']}%** — {s['decided']} / "
-            f"{s['applicable']} ({s['coverage_of_registry_pct']}% "
-            f"{L.t('of_registry', 'of the full registry')}, {s['total_items']}).",
+            L.t("score_note",
+                "The share of the weight travels with the score because it is the "
+                "claim you can check: the same 69 over 55% of the registry and over "
+                "95% of it are not the same statement about a site."),
             "",
-            L.t("coverage_note",
-                "The two numbers are deliberately separate: a high score over thin "
-                "coverage means little, and an item nobody could check is not "
-                "evidence that the site failed it."),
+            f"| {L.t('bucket', 'Where the registry went')} | "
+            f"{L.t('count', 'Count')} | {L.t('who_moves_it', 'Who moves it')} |",
+            "|---|---:|---|",
+            f"| {L.t('b_decided', 'Decided')} | {p['decided']} | "
+            f"{L.t('b_decided_who', 'the score is computed over these')} |",
+            f"| {L.t('b_waiting', 'Waiting on you')} | {p['waiting_on_you']} | "
+            + L.t("b_waiting_who",
+                  "{llm} awaiting a language-model verdict, {inp} awaiting an input "
+                  "only you can supply").format(llm=w["llm_pending"],
+                                                inp=w["needs_input"]) + " |",
+            f"| {L.t('b_person', 'Needs a person')} | {p['needs_a_person']} | "
+            f"{L.t('b_person_who', 'answerable, but by a human rather than here')} |",
+            f"| {L.t('b_undecided', 'Undecided')} | {p['undecided']} | "
+            + L.t("b_undecided_who", "nobody: the site served no such field, or a "
+                                     "service could not be reached") + " |",
+        ] + ([f"| {L.t('b_na', 'Not applicable')} | {p['not_applicable']} | "
+              f"{L.t('b_na_who', 'out of scope for this mode or profile')} |"]
+             if p["not_applicable"] else []) + [
+            f"| **{L.t('b_total', 'The registry')}** | **{s['total_items']}** | |",
+            "",
+            L.t("partition_note", PARTITION_NOTE),
             "",
         ]
     out += [
@@ -694,14 +733,18 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
         PASS: L.status(PASS, "check passed"),
         FAIL: L.status(FAIL, "check failed — actionable"),
         WARN: L.status(WARN, "borderline, counts as half"),
-        NO_DATA: L.status(NO_DATA, "could not be determined (script error, "
-                                   "missing credentials, missing field)"),
+        NO_DATA: L.status(NO_DATA, "could not be determined — the site served no "
+                                   "such field, a service was unreachable, or the "
+                                   "check failed"),
+        NEEDS_INPUT: L.status(NEEDS_INPUT, "the audit would have decided this and "
+                                           "was not given what it needed — see the "
+                                           "reason on the item"),
         LLM_PENDING: L.status(LLM_PENDING, "needs a language-model judgement — "
                                            "see LLM-QUEUE.md"),
         MANUAL: L.status(MANUAL, "needs a human — see the Manual section"),
         NA: L.status(NA, f"not applicable in `{mode}` mode; excluded from both metrics"),
     }
-    for st in (PASS, WARN, FAIL, NO_DATA, LLM_PENDING, MANUAL, NA):
+    for st in STATUS_ORDER:
         n = s["status_counts"].get(st, 0)
         if n:
             out.append(f"| {STATUS_ICON[st]} | {n} | {meaning[st]} |")
@@ -771,12 +814,31 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
                        f"{L.title(i)} — {L.fix(i)}")
         out.append("")
 
+    # Its own section, and that is the whole point of splitting the status. These
+    # items are not a limit of the audit and not a defect of the site — they are the
+    # arguments this run was not given, and folding them in with the undetermined
+    # ones is how thirteen fixable items read as "could not be determined" for
+    # fifteen releases.
+    needs = [i for i in data["items"] if i["status"] == NEEDS_INPUT]
+    if needs:
+        out += [f"## {L.t('needs_input', 'What this audit was not given')}", "",
+                L.t("needs_input_note",
+                    "Each of these would have been decided if the run had been "
+                    "handed one more thing. They are work for whoever runs the "
+                    "audit, not for whoever owns the site, and the reason names the "
+                    "argument that fills it."), "",
+                f"| ID | {L.t('item', 'Item')} | {L.t('why', 'Why')} |", "|---|---|---|"]
+        for i in sorted(needs, key=lambda x: SEVERITY_ORDER.get(x["severity"], 9)):
+            out.append(f"| {i['id']} | {esc_md(i['title'])} | {esc_md(i['evidence'])} |")
+        out.append("")
+
     blocked = [i for i in data["items"] if i["status"] == NO_DATA]
     if blocked:
         out += [f"## {L.t('undetermined', 'Undetermined')}", "",
                 L.t("undetermined_note",
-                    "Checks that ran but could not produce a verdict. Each one "
-                    "lowers coverage; none of them lowers the score."), "",
+                    "Checks that ran and could not produce a verdict, with nothing "
+                    "anybody could supply to change that. None of them lowers the "
+                    "score; all of them narrow what it speaks for."), "",
                 f"| ID | {L.t('item', 'Item')} | {L.t('why', 'Why')} |", "|---|---|---|"]
         for i in blocked:
             out.append(f"| {i['id']} | {esc_md(i['title'])} | {esc_md(i['evidence'])} |")
@@ -896,7 +958,7 @@ border-bottom:1px solid var(--line);align-items:start}
 .row:last-child{border-bottom:0}
 .st{font-size:.7rem;font-weight:700;letter-spacing:.03em;padding-top:.15rem}
 .PASS{color:var(--pass)}.FAIL{color:var(--fail)}.WARN{color:var(--warn)}
-.NO_DATA,.LLM_PENDING{color:var(--none)}.MANUAL{color:var(--fg)}.NA{color:var(--na)}
+.NO_DATA,.LLM_PENDING,.NEEDS_INPUT{color:var(--none)}.MANUAL{color:var(--fg)}.NA{color:var(--na)}
 .sev{font-size:.7rem;color:var(--mut);padding-top:.2rem}
 .ttl{font-weight:500}.ev{color:var(--mut);font-size:.83rem;margin-top:.15rem;word-break:break-word}
 .fix{font-size:.83rem;margin-top:.2rem}
@@ -1032,7 +1094,8 @@ def render_html(data: dict, L: Lang | None = None) -> str:
     unreadable = data.get("entry_reachable") is False
 
     seg = [(FAIL, "var(--fail)"), (WARN, "var(--warn)"), (PASS, "var(--pass)"),
-           (NO_DATA, "var(--none)"), (LLM_PENDING, "var(--none)"),
+           (NO_DATA, "var(--none)"), (NEEDS_INPUT, "var(--none)"),
+           (LLM_PENDING, "var(--none)"),
            (MANUAL, "var(--line)"), (NA, "var(--na)")]
     total = sum(counts.values()) or 1
     bar = "".join(f'<i style="width:{100 * counts.get(k, 0) / total:.2f}%;background:{c}" '
@@ -1062,12 +1125,14 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             '<div class="metrics">',
             f'<div class="metric"><b>{s["seo_score"]}<small>/100</small></b>'
             f'<span>{html.escape(L.t("m_score_help", "Of the checks that could be decided, how many passed — weighted by how much each matters"))}</span></div>',
-            f'<div class="metric"><b>{s["coverage_pct"]}<small>%</small></b>'
-            f'<span>{html.escape(L.t("m_cov_help", "How much of the checklist could be decided at all: {decided} of {applicable}").format(decided=s["decided"], applicable=s["applicable"]))}</span></div>',
+            f'<div class="metric"><b>{s["weight_pct"]}<small>%</small></b>'
+            f'<span>{html.escape(L.t("m_weight_help", "How much of the registry that score speaks for, by weight: {decided} of {total} items decided").format(decided=s["decided"], total=s["total_items"]))}</span></div>',
             f'<div class="metric warnbox"><b>{counts.get(FAIL, 0) + counts.get(WARN, 0)}</b>'
             f'<span>{html.escape(L.t("m_broken_help", "Checks that need work"))}</span></div>',
+            f'<div class="metric"><b>{s["partition"]["waiting_on_you"]}</b>'
+            f'<span>{html.escape(L.t("m_waiting_help", "Waiting on you: {llm} unanswered language-model items, {inp} missing inputs").format(llm=s["waiting_on_you"]["llm_pending"], inp=s["waiting_on_you"]["needs_input"]))}</span></div>',
             "</div>",
-            f'<p class="note">{html.escape(L.t("coverage_note", "The two numbers are deliberately separate: a high score over thin coverage means little, and an item nobody could check is not evidence that the site failed it."))}</p>',
+            f'<p class="note">{html.escape(L.t("partition_note", PARTITION_NOTE))}</p>',
         ]
     parts.append(f'<div class="bar">{bar}</div><div class="legend">'
                  + "".join(f'<span><i style="background:{c}"></i>'
@@ -1134,10 +1199,11 @@ def render_html(data: dict, L: Lang | None = None) -> str:
             head.append('<p class="note">'
                         + html.escape(L.t("since_scores",
                             "Compared with the run of {when}: score {then} {arrow} "
-                            "{now}, coverage {cov_then}% {arrow} {cov_now}%.").format(
+                            "{now}, over {w_then}% {arrow} {w_now}% of the weight "
+                            "in scope.").format(
                                 when=when, then=then, now=cur, arrow=arrow,
-                                cov_then=base.get("coverage_pct"),
-                                cov_now=s.get("coverage_pct")))
+                                w_then=base.get("weight_pct"),
+                                w_now=s.get("weight_pct")))
                         + f'</p><div class="metrics"><div class="metric {tone}">'
                         f'<b>{cur - then:+d}</b><span>'
                         + html.escape(L.t("m_score_move",
@@ -1249,6 +1315,25 @@ def render_html(data: dict, L: Lang | None = None) -> str:
                                             "someone answers them."))
                           + f"</p>{rows}", len(pending)))
 
+    needs = [i for i in data["items"] if i["status"] == NEEDS_INPUT]
+    if needs:
+        rows = "".join(
+            f'<div class="row" data-st="NEEDS_INPUT">'
+            f'<div class="st NEEDS_INPUT">{STATUS_ICON[NEEDS_INPUT]}</div>'
+            f'<div class="sev">{html.escape(L.sev(i["severity"]))}<br>{i["id"]}</div>'
+            f'<div><div class="ttl">{html.escape(L.title(i))}</div>'
+            f'<div class="ev">{html.escape(i.get("evidence", ""))}</div></div></div>'
+            for i in sorted(needs, key=lambda x: SEVERITY_ORDER.get(x["severity"], 9)))
+        parts.append(fold(L.t("needs_input", "What this audit was not given"),
+                          '<p class="note">'
+                          + html.escape(L.t("needs_input_note",
+                                            "Each of these would have been decided if "
+                                            "the run had been handed one more thing. "
+                                            "They are work for whoever runs the audit, "
+                                            "not for whoever owns the site, and the "
+                                            "reason names the argument that fills it."))
+                          + f"</p>{rows}", len(needs)))
+
     blocked = [i for i in data["items"] if i["status"] == NO_DATA]
     if blocked:
         rows = "".join(
@@ -1270,7 +1355,7 @@ def render_html(data: dict, L: Lang | None = None) -> str:
         by_cat.setdefault(i["category_label"], []).append(i)
     full = ['<div class="filters"><button data-f="ALL" aria-pressed="true">'
             + html.escape(L.t("all", "All")) + "</button>"]
-    for st in (FAIL, WARN, PASS, NO_DATA, LLM_PENDING, MANUAL, NA):
+    for st in (FAIL, WARN, PASS, NO_DATA, NEEDS_INPUT, LLM_PENDING, MANUAL, NA):
         if counts.get(st):
             full.append(f'<button data-f="{st}">{STATUS_ICON[st]} ({counts[st]})</button>')
     full.append("</div>")
@@ -1476,12 +1561,16 @@ def main() -> int:
                   file=sys.stderr)
 
     s = data["scores"]
+    p = s["partition"]
     if s.get("seo_score") is None:
         print(f"\nNo SEO Score: {data.get('entry_error') or 'the site could not be read'}"
-              f"\nCoverage {s['coverage_pct']}% ({s['decided']}/{s['applicable']})")
+              f"\n{s['decided']}/{s['total_items']} items decided")
     else:
-        print(f"\nSEO Score {s['seo_score']}/100   Coverage {s['coverage_pct']}% "
-              f"({s['decided']}/{s['applicable']})")
+        print(f"\nSEO Score {s['seo_score']}/100 — over {s['decided']} items, "
+              f"{s['weight_pct']}% of the weight in scope")
+    print(f"  decided {p['decided']} · waiting on you {p['waiting_on_you']} · "
+          f"needs a person {p['needs_a_person']} · undecided {p['undecided']}"
+          + (f" · N/A {p['not_applicable']}" if p["not_applicable"] else ""))
     for line in provenance_warnings(data, lang):
         print(f"  ! {line}")
     for label, path in written:

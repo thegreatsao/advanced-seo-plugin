@@ -304,7 +304,8 @@ jobs:
           for name, text in (("html", html), ("markdown", md)):
               assert "--allow-private" in text, f"{name} does not say the host was private"
           print(f"live path OK: {d['scores']['seo_score']}/100 at "
-                f"{d['scores']['coverage_pct']}% over {len(d['runs'])} script runs")
+                f"{d['scores']['weight_pct']}% of the weight in scope, over "
+                f"{len(d['runs'])} script runs")
           PY
 
           # The fixture's planted defects, checked against the evidence layer

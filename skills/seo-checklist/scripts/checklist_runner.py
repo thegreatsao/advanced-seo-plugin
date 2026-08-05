@@ -428,6 +428,17 @@ def fetch_page(url: str, enforce_guard: bool = True) -> Fetch:
 # Statuses
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
+# The audit could have decided this and was not given what it needed. Split out of
+# NO_DATA in 0.16, because that status was carrying four unrelated sentences at once:
+# an input file was not passed, the site served no such field, an external service
+# could not reach the host, the script died. Only the first is work for the person
+# running the audit, and printing it as "could not decide" reads as a limit of the
+# tool rather than a missing argument — thirteen items said that in the measured run
+# this split came out of. It is also what makes the report's partition of the registry
+# derivable from statuses: reconstructing it by matching "missing input" inside the
+# evidence prose, which is how it was first measured, is a coupling that breaks in
+# silence the first time a reason is reworded.
+NEEDS_INPUT = "NEEDS_INPUT"
 
 # basis: inherited — critical 10 / high 6 / medium 3 / low 1, present at import from
 #  Agentic-SEO-Skill. **These weights decide the SEO Score itself** — the single most
@@ -837,12 +848,13 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
     """Map each unique (script, args) to the item ids that depend on it.
 
     Returns (plan, skipped) where skipped maps item id -> (status, reason) for
-    checks this run cannot perform. Capability gaps become N/A; missing inputs
-    become NO_DATA — the difference decides whether an item counts against
-    coverage or is simply out of scope for the mode.
+    checks this run cannot perform. Capability gaps become N/A — genuinely out of
+    scope for the mode. Missing inputs become NEEDS_INPUT, which is neither: the
+    item applies, the audit would have decided it, and one argument is what stands
+    in the way. It is the operator's to-do list and prints as one.
 
     `rejected` maps a ctx key to why the input we were handed cannot be used.
-    "Not supplied" and "supplied and refused" are both NO_DATA and are not the
+    "Not supplied" and "supplied and refused" are both NEEDS_INPUT and are not the
     same sentence: the first tells the operator to produce the file, the second
     tells them the file they produced is about something else."""
     plan: dict[tuple, list[str]] = {}
@@ -865,8 +877,8 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                 skipped[it["id"]] = (NA, f"Search Console needs network access; "
                                          f"{mode} mode makes none")
             elif not has_gsc:
-                skipped[it["id"]] = (NO_DATA, "no Search Console credentials — "
-                                              "set GSC_CREDENTIALS_PATH")
+                skipped[it["id"]] = (NEEDS_INPUT, "no Search Console credentials — "
+                                                  "set GSC_CREDENTIALS_PATH")
             if it["id"] in skipped:
                 continue
         elif need not in caps:
@@ -888,7 +900,7 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
             else:
                 args.append(a)
         if no_input:
-            skipped[it["id"]] = (NO_DATA, no_input)
+            skipped[it["id"]] = (NEEDS_INPUT, no_input)
             continue
         # Flags the operator turned on for this run, appended to the one script each
         # belongs to. Deliberately not registry args: the registry says what an item
@@ -1061,9 +1073,30 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
 
 
 def score(graded: list[dict]) -> dict:
-    """SEO Score counts only items that were actually decided. Coverage says
-    how many of the registry we could decide at all — reporting one without
-    the other turns 'we could not check it' into 'it is broken'."""
+    """SEO Score counts only items that were actually decided, and says over how
+    much of the registry's weight it was computed.
+
+    There is no `Coverage %` any more, and removing it was the point. It divided
+    decided items by applicable ones, which added together three quantities that
+    measure different things: how far the tool reached, how much work the operator
+    had done, and how much of the registry was never the audit's job to answer. A
+    figure that moves for three unrelated reasons cannot be attributed by the person
+    reading it — coverage falling from 62% to 50% read as the site becoming harder to
+    measure when it could equally mean nobody answered the queue this time. That is
+    the same objection this project raises to a single SEO score, one level down, and
+    it was in every report from 0.1.0 to 0.15.0.
+
+    Two things replace it.
+
+    `weight_pct` travels with the score, because it is the claim a reader has to be
+    able to check: 69/100 computed over 55% of the registry's weight is a different
+    statement from the same 69 over 95%, and nothing in the old pair of numbers said
+    which one you were holding.
+
+    `partition` puts every item in exactly one bucket named for **whose action moves
+    it**, and the buckets sum to the registry — so no item can hide in a denominator,
+    and a test asserts the sum. Percentages named nobody; `waiting_on_you` is a list
+    of things to do."""
     scored = [g for g in graded if g["status"] in (PASS, FAIL, WARN)]
     applicable = [g for g in graded if g["status"] != NA]
     earned = sum(SEVERITY_WEIGHT[g["severity"]] * (1.0 if g["status"] == PASS else
@@ -1101,10 +1134,45 @@ def score(graded: list[dict]) -> dict:
     for g in graded:
         counts[g["status"]] = counts.get(g["status"], 0) + 1
 
+    # The weight the score was computed over, against the weight of the whole
+    # registry. `total` above is the same sum, but it is the denominator *inside*
+    # the score and says nothing about what was left out of it.
+    # Over the applicable items, not the whole registry: an N/A item is out of
+    # scope for this mode or profile, and counting it here would make narrowing
+    # scope look like a thinner audit. N/A drops out of both numbers, as it always
+    # has — this is that rule, applied to the number that replaced coverage.
+    weight_registry = sum(SEVERITY_WEIGHT[g["severity"]] for g in applicable)
+
+    # Every item lands in exactly one bucket, and the buckets sum to the registry.
+    # Derived from statuses alone — see NEEDS_INPUT for why that mattered enough to
+    # add a status for it.
+    partition = {
+        # The score is computed over these.
+        "decided": len(scored),
+        # The operator's to-do list: a queue nobody answered, a file nobody passed.
+        # One bucket because it is one question — what is left for the person who
+        # ran this — and its two halves are counted separately underneath.
+        "waiting_on_you": counts.get(LLM_PENDING, 0) + counts.get(NEEDS_INPUT, 0),
+        # Answerable, but not here and not by a script: the Search Console UI, or
+        # somebody looking at the thing.
+        "needs_a_person": counts.get(MANUAL, 0),
+        # Nobody's to-do. The site served no such field, an external service could
+        # not reach the host, the script died. Distinguishing those further would
+        # need a status per cause and they do not earn one.
+        "undecided": counts.get(NO_DATA, 0),
+        # Out of scope for this mode or profile, and out of both numbers above.
+        "not_applicable": counts.get(NA, 0),
+    }
     return {
         "seo_score": round(100 * earned / total) if total else None,
-        "coverage_pct": round(100 * len(scored) / len(applicable)) if applicable else 0,
-        "coverage_of_registry_pct": round(100 * len(scored) / len(graded)) if graded else 0,
+        # How much of the registry the score speaks for. Always printed beside it;
+        # a score without it is a fraction with the denominator torn off.
+        "weight_pct": round(100 * total / weight_registry) if weight_registry else 0,
+        "weight_decided": total,
+        "weight_applicable": weight_registry,
+        "partition": partition,
+        "waiting_on_you": {"llm_pending": counts.get(LLM_PENDING, 0),
+                           "needs_input": counts.get(NEEDS_INPUT, 0)},
         "decided": len(scored),
         "applicable": len(applicable),
         "total_items": len(graded),
@@ -2030,12 +2098,12 @@ def main() -> int:
                     help="JSON file of Core Web Vitals from a local browser trace "
                          "(chrome-devtools MCP). Lab data, reported separately from "
                          "the CrUX field data PageSpeed provides. Without it the "
-                         "three lab items report NO_DATA.")
+                         "three lab items report NEEDS_INPUT.")
     ap.add_argument("--rendered-json", default="",
                     help="JSON of measurements taken from the rendered page "
                          "(chrome-devtools MCP). Answers font size, link "
                          "distinctness, overlays and — from a mobile render — tap "
-                         "targets. Without it those items report NO_DATA.")
+                         "targets. Without it those items report NEEDS_INPUT.")
     ap.add_argument("--crawl-json", default="", metavar="PATH",
                     help="where to write the crawl inventory the site-wide checks "
                          "read (default: alongside --json, as *-crawl.json). It is "
@@ -2050,7 +2118,7 @@ def main() -> int:
     ap.add_argument("--links-csv", default="",
                     help="Search Console Links report export (ZIP or CSV). The "
                          "Links report has no API, so incoming-link items stay "
-                         "NO_DATA without it.")
+                         "NEEDS_INPUT without it.")
     ap.add_argument("--profile", default="",
                     help="site profile: default, local, ecommerce, saas, blog, "
                          "media, or 'auto' to accept the detector's suggestion. "
@@ -2062,7 +2130,7 @@ def main() -> int:
                     help="server access log (combined format or JSON lines, .gz "
                          "fine). The only evidence here about what crawlers "
                          "actually did rather than what the site offers them; "
-                         "CI-018 is NO_DATA without it. A week or more of log is "
+                         "CI-018 is NEEDS_INPUT without it. A week or more of log is "
                          "worth much more than a day.")
     ap.add_argument("--no-http-cache", action="store_true",
                     help="fetch every URL again in every script instead of once "
@@ -2590,7 +2658,7 @@ def main() -> int:
             "mode": prev.get("mode"),
             "profile": prev.get("profile"),
             "seo_score": ps.get("seo_score"),
-            "coverage_pct": ps.get("coverage_pct"),
+            "weight_pct": ps.get("weight_pct"),
             "decided": ps.get("decided"),
         }
     else:
@@ -2605,14 +2673,25 @@ def main() -> int:
     if entry_error:
         print(f"UNREACHABLE: {audit_url} could not be read — {entry_error}.")
         print(f"No score: nothing about this site was measured. "
-              f"{s['decided']}/{s['applicable']} items decided.")
+              f"{s['decided']}/{s['total_items']} items decided.")
     else:
-        print(f"SEO Score: {s['seo_score']}/100   Coverage: {s['coverage_pct']}% "
-              f"({s['decided']}/{s['applicable']} applicable items decided; "
-              f"{s['coverage_of_registry_pct']}% of the full {s['total_items']}-item registry)")
-    for st in (PASS, WARN, FAIL, NO_DATA, LLM_PENDING, MANUAL, NA):
-        if s["status_counts"].get(st):
-            print(f"  {st:<12} {s['status_counts'][st]}")
+        print(f"SEO Score: {s['seo_score']}/100 — over {s['decided']} items, "
+              f"{s['weight_pct']}% of the weight in scope")
+    # The partition, not a percentage. Every item is in one line and the lines add
+    # up to the registry, which is the property a reader can check by eye.
+    p, w = s["partition"], s["waiting_on_you"]
+    waiting = ""
+    if p["waiting_on_you"]:
+        halves = [f"{w['llm_pending']} unanswered LLM item(s)" if w["llm_pending"] else "",
+                  f"{w['needs_input']} missing input(s)" if w["needs_input"] else ""]
+        waiting = "   (" + ", ".join(h for h in halves if h) + ")"
+    print(f"  decided          {p['decided']:>4}")
+    print(f"  waiting on you   {p['waiting_on_you']:>4}{waiting}")
+    print(f"  needs a person   {p['needs_a_person']:>4}")
+    print(f"  undecided        {p['undecided']:>4}")
+    if p["not_applicable"]:
+        print(f"  not applicable   {p['not_applicable']:>4}")
+    print(f"  {'':<15}  ---- {s['total_items']} items in the registry")
     if payload["requested_url"]:
         print(f"Redirected: {payload['requested_url']} -> {audit_url} "
               f"(another host; the destination was audited)")

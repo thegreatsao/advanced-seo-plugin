@@ -421,8 +421,15 @@ interstitial without admitting it would be the same lie in a new place.
 
 ## Statuses
 
-`PASS` · `FAIL` · `WARN` (counts as half) · `NO_DATA` (ran, could not decide) ·
-`LLM_PENDING` · `MANUAL` · `N/A` (out of scope for this mode).
+`PASS` · `FAIL` · `WARN` (counts as half) · `NO_DATA` (ran, nothing anybody can
+supply would decide it) · `NEEDS_INPUT` (would have been decided; the run was not
+given the file, key or credentials — the reason names the flag) · `LLM_PENDING` ·
+`MANUAL` · `N/A` (out of scope for this mode).
+
+`NEEDS_INPUT` is the operator's to-do list and prints as its own report section,
+"What this audit was not given". It was split out of `NO_DATA` in 0.16 because that
+status was carrying four sentences at once, and thirteen fixable items on a measured
+run were reading as limits of the tool.
 
 Absence of a field is `NO_DATA`, not `PASS`. An item only passes on absence when
 its rule sets `missing_is: pass` — a parser that never emits a key must not be
@@ -493,13 +500,33 @@ from `INDEXNOW_KEY` and `PAGESPEED_API_KEY` are replaced with `<redacted>`
 throughout the payload before anything is written. Credential *paths* are not
 secrets and stay readable.
 
-## Two metrics, never one
+## The score, and how much of the registry it speaks for
 
-- **SEO Score** — passed checks among those actually decided, weighted by severity
-- **Coverage** — how many applicable items could be decided at all
+**There is no `Coverage %` as of 0.16.** It divided decided items by applicable
+ones, which added together three unrelated quantities — how far the tool reached,
+how much work the operator had done, and how much of the checklist was never the
+audit's job — so it moved for any of the three without saying which. That is this
+project's own objection to a single SEO score, one level down.
 
-Always report both. A 96/100 over 19% coverage (typical for `archive` mode) is not
-a good site, it is a thin audit.
+Two things replace it, and **both must be reported**:
+
+- **SEO Score with its weight share** — `69/100 over 106 items, 55% of the weight
+  in scope`. Never quote the score alone: 69 over 55% and 69 over 95% are different
+  claims about a site, and only the second one is an audit.
+- **The partition** — every item in exactly one bucket, named for whose action moves
+  it, and the buckets add up to the registry:
+
+| Bucket | Who moves it |
+|---|---|
+| decided | — the score is computed over these |
+| waiting on you | the operator: unanswered `LLM_PENDING`, plus `NEEDS_INPUT` |
+| needs a person | `MANUAL` — answerable, but by a human rather than here |
+| undecided | nobody: `NO_DATA` — no such field, service unreachable, check failed |
+| not applicable | `N/A` — out of scope for this mode or profile |
+
+When you summarise a run in chat, give the score **with** its weight share and say
+what is waiting on the reader. "69/100" on its own is the number this design exists
+to stop.
 
 The **per-category** scores use the same severity weighting as the headline score,
 so they are comparable with it and with each other. A category still cannot show

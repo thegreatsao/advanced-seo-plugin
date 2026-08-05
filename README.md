@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.15.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.16.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -32,13 +32,25 @@ Console call, a language-model judgement, or a human. Nothing in the registry is
 executable; assertions are declarative and interpreted by the runner. Coverage is
 therefore a property of the registry, not an accident of the run.
 
-Two numbers come out, and they are deliberately never merged:
+The score never travels alone. It carries the share of the registry's weight it
+was computed over, and beneath it every item lands in exactly one bucket named for
+whose action moves it:
 
-- **SEO Score** — of the items actually decided, how many passed, weighted by severity
-- **Coverage** — of the items that applied, how many could be decided at all
+```
+SEO Score 69/100 — over 106 items, 55% of the weight in scope
+  decided           106
+  waiting on you     49   (36 unanswered LLM items, 13 missing inputs)
+  needs a person     34
+  undecided          25
+                   ---- 214 items in the registry
+```
 
-A 96/100 at 19% coverage is not a good site. It is a thin audit. Collapsing these
-into one number is how audits come to sound more confident than they are.
+There was a single `Coverage %` until 0.16 and removing it was the point: it added
+together how far the tool reached, how much work the operator had done, and how much
+of the checklist was never the audit's job, then moved for any of the three without
+saying which. The buckets add up to the registry, so nothing hides in a denominator,
+and `waiting on you` is a list of things to do rather than a percentage that blames
+nobody.
 
 ## What is in the registry
 
@@ -260,14 +272,15 @@ UI; mobile usability was withdrawn from the API in December 2023.
 
 They are `MANUAL` rather than `NO_DATA` because they are answerable today — by a
 person opening Search Console. `NO_DATA` says the audit tried and could not
-decide, which invites somebody to go fix the tool. Coverage is unmoved either
-way: both statuses stay in the denominator and out of the decided count.
+decide, which invites somebody to go fix the tool. Neither is counted as decided,
+so the score's weight share is the same either way.
 
-Without a key, those items are `NO_DATA` in `live` and `page` mode — the run
-could have asked and did not decide — and `N/A` only in `archive`, which makes no
-network calls at all. The difference matters: `N/A` leaves the coverage
-denominator, so reporting a missing key that way would raise coverage precisely
-where the audit is thinnest.
+Without a key, those items are `NEEDS_INPUT` in `live` and `page` mode — the run
+could have asked, and one argument is what stands in the way — and `N/A` only in
+`archive`, which makes no network calls at all. The difference matters: `N/A` is
+out of scope entirely, so reporting a missing key that way would shrink what the
+score has to speak for precisely where the audit is thinnest. `NEEDS_INPUT` puts
+those seven items on the operator's list instead, under their own heading.
 
 Credentials are never transmitted anywhere, and Search Console data is written only
 to local files. Values from `INDEXNOW_KEY` and `PAGESPEED_API_KEY` are replaced

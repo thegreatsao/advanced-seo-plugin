@@ -38,6 +38,7 @@ from harness import FixtureSite, spawn  # noqa: E402
 
 FAIL, PASS, WARN = "FAIL", "PASS", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
+NEEDS_INPUT = "NEEDS_INPUT"
 DECIDED = (PASS, FAIL, WARN)
 
 SITE = None
@@ -566,7 +567,7 @@ class ArtifactsMustDescribeTheAuditedPage(unittest.TestCase):
         rows = {i["id"]: i for i in crossed["items"]}
         for item_id in ("SP-214", "SP-215", "SP-216"):
             row = rows[item_id]
-            self.assertEqual(row["status"], NO_DATA,
+            self.assertEqual(row["status"], NEEDS_INPUT,
                              f"{item_id} was decided from a trace of another page: "
                              f"{row.get('evidence')}")
             # The reason has to name the other page. "missing input" would send the

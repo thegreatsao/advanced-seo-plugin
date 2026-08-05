@@ -14,7 +14,8 @@ SKILL = os.path.join(ROOT, "skills", "seo-checklist")
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
 
 from checklist_report import (  # noqa: E402
-    FAIL, LLM_PENDING, MANUAL, NA, NO_DATA, PASS, WARN, Lang, apply_llm_review,
+    FAIL, FIX_STATUSES, LLM_PENDING, MANUAL, NA, NEEDS_INPUT, NO_DATA, PASS,
+    STATUS_ICON, STATUS_ORDER, WARN, Lang, apply_llm_review,
     fix_rows, history_section, merge_llm_answers, priority_of, render_html,
     render_llm_queue, render_markdown, write_fixes,
 )
@@ -228,11 +229,13 @@ class SecondReading(unittest.TestCase):
         self.assertIn("PASS", row["evidence"])
         self.assertIn("FAIL", row["evidence"])
 
-    def test_a_contested_item_costs_coverage(self):
+    def test_a_contested_item_narrows_what_the_score_speaks_for(self):
+        """Disagreement returns the item to NO_DATA, so the score is computed over
+        less of the registry — which is what the audit not knowing looks like."""
         data = self.answered(PASS)
-        before = data["scores"]["coverage_pct"]
+        before = data["scores"]["weight_pct"]
         apply_llm_review(data, {"CN-047": {"status": "FAIL", "evidence": "no"}})
-        self.assertLess(data["scores"]["coverage_pct"], before)
+        self.assertLess(data["scores"]["weight_pct"], before)
 
     def test_it_cannot_touch_a_script_verdict(self):
         """A measurement is not an opinion. Letting a reviewer contest one would
@@ -407,10 +410,10 @@ class HistoryReachesTheFile(unittest.TestCase):
         data = results(item("CN-047", FAIL), item("CN-048", PASS))
         # A real `scores` block, because both renderers read more of it than the
         # history section does and a hand-made stub would only test this test.
-        data["scores"] = dict(score(data["items"]), seo_score=71, coverage_pct=55)
+        data["scores"] = dict(score(data["items"]), seo_score=71, weight_pct=55)
         data["entry_reachable"] = True
         data["compared_with"] = {"started_at": "2026-07-01T09:30:00+00:00",
-                                 "seo_score": 64, "coverage_pct": 50,
+                                 "seo_score": 64, "weight_pct": 50,
                                  "registry_version": "test"}
         data["diff"] = list(changes)
         data.update(extra)
@@ -547,3 +550,88 @@ class TheFixListIsMachineReadable(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EveryStatusReachesEverySurface(unittest.TestCase):
+    """A status is not added until every place that lists one knows about it.
+
+    The lesson this class exists for is 0.14.0's: a rule guarded at its own call
+    site is guarded at one call site. `NEEDS_INPUT` had to be threaded into an icon
+    table, a meaning table, a stylesheet, a bar legend, a filter row and two report
+    renderers, and missing any one of them fails in the quietest possible way — the
+    count is simply absent from a document nobody diffs against the run.
+    """
+
+    def statuses(self):
+        """Every status the runner can put on an item, read from the runner rather
+        than restated here — a list maintained beside the thing it checks has the
+        same blind spot as the thing it checks."""
+        sys.path.insert(0, os.path.join(SKILL, "scripts"))
+        import checklist_runner as r
+        return {r.PASS, r.FAIL, r.WARN, r.NO_DATA, r.NEEDS_INPUT, r.LLM_PENDING,
+                r.MANUAL, r.NA}
+
+    def test_the_report_can_name_every_status_the_runner_emits(self):
+        missing = self.statuses() - set(STATUS_ICON)
+        self.assertFalse(missing, f"no icon for {missing}")
+        self.assertEqual(set(STATUS_ORDER), self.statuses())
+
+    def test_a_run_with_every_status_renders_all_of_them(self):
+        """Both renderers, one payload, every status present exactly once."""
+        rows = [item(f"X-{n}", st) for n, st in enumerate(sorted(self.statuses()))]
+        data = results(*rows)
+        data["scores"] = {"seo_score": 50, "weight_pct": 40, "decided": 3,
+                          "applicable": 7, "total_items": 8,
+                          "weight_decided": 12, "weight_applicable": 30,
+                          "partition": {"decided": 3, "waiting_on_you": 2,
+                                        "needs_a_person": 1, "undecided": 1,
+                                        "not_applicable": 1},
+                          "waiting_on_you": {"llm_pending": 1, "needs_input": 1},
+                          "status_counts": {st: 1 for st in self.statuses()},
+                          "by_category": {}}
+        md = render_markdown(data)
+        html_out = render_html(data)
+        for st in self.statuses():
+            self.assertIn(STATUS_ICON[st], md, f"{st} missing from the markdown")
+            self.assertIn(STATUS_ICON[st], html_out, f"{st} missing from the HTML")
+
+    def test_an_input_nobody_supplied_is_not_somebody_elses_fix(self):
+        """NEEDS_INPUT is the auditor's work, so it must not reach the fix list.
+
+        The same rule NO_DATA and LLM_PENDING already follow: filling a client's
+        sprint with the auditor's unfinished business is the failure `--fixes` was
+        scoped to avoid."""
+        self.assertNotIn(NEEDS_INPUT, FIX_STATUSES)
+        rows = fix_rows(results(item("A-1", NEEDS_INPUT), item("A-2", FAIL)))
+        self.assertEqual([r["id"] for r in rows], ["A-2"])
+
+    def test_neither_renderer_prints_a_missing_number(self):
+        """A renamed score key must not surface as the word None to a client.
+
+        0.16 renamed `coverage_pct` and the markdown history section was updated
+        while the HTML one was not, because the two call sites hold the same string
+        and only one had a test. It rendered "coverage None%" into a delivered
+        document and nothing failed. Both renderers are asserted here, over a
+        payload that exercises the history section, so the next renamed key cannot
+        reach a reader through the untested half.
+        """
+        data = results(item("A-1", PASS), item("A-2", FAIL))
+        from checklist_runner import score
+        data["scores"] = score(data["items"])
+        data["entry_reachable"] = True
+        data["compared_with"] = {"started_at": "2026-07-01T09:30:00+00:00",
+                                 "seo_score": 64, "weight_pct": 50,
+                                 "registry_version": "test"}
+        data["diff"] = [{"id": "A-1", "kind": "improved", "from": FAIL, "to": PASS,
+                         "title": "A-1"}]
+        for name, text in (("markdown", render_markdown(data)),
+                           ("html", render_html(data))):
+            self.assertNotIn("None", text, f"{name} printed a missing number")
+
+    def test_the_russian_report_names_the_new_status_and_its_section(self):
+        ru = Lang("ru")
+        for key in ("needs_input", "needs_input_note", "b_waiting", "score_weight",
+                    "partition_note"):
+            self.assertNotEqual(ru.t(key, "<english>"), "<english>",
+                                f"{key} falls back to English")
+        self.assertNotEqual(ru.status(NEEDS_INPUT, "<english>"), "<english>")

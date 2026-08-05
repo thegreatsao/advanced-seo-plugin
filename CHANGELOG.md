@@ -10,6 +10,89 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.16.0 — 5 August 2026
+
+**Coverage was one number standing for three things, and it is gone.**
+
+`Coverage %` divided decided items by applicable ones. That sum added together how
+far the tool reached, how much work the operator had done, and how much of the
+checklist was never the audit's job to answer — so it moved for any of the three
+without saying which. Coverage falling from 62% to 50% between two audits read as
+the site becoming harder to measure when it could equally mean nobody answered the
+queue that week. It is the same objection this project raises to a single SEO score,
+one level down, and it was in every report from 0.1.0 to 0.15.0.
+
+Measured on the good fixture, `--sample 3`, no key and no artifacts: `50%`. What it
+was made of — 106 decided, 36 nobody had answered, 34 that no audit can answer, 13
+waiting on a file, 25 genuinely undecidable. One percentage for five facts.
+
+**The score now carries the share of the weight it was computed over.**
+
+```
+SEO Score 69/100 — over 106 items, 55% of the weight in scope
+```
+
+489 points of 890. `96/100 at 19%` reads wrong on sight, which is what the old pair
+of numbers was reaching for; what it never said was which of the two you were
+holding, because the same 69 was printed over 55% and over 95% of the registry.
+`N/A` items are out of the denominator, as they are out of every other number here.
+
+**Under it, a partition — not percentages.**
+
+Every item lands in exactly one bucket named for **whose action moves it**, and the
+buckets add up to the registry, so nothing hides in a denominator:
+
+| Bucket | Fixture run | Who moves it |
+|---|---:|---|
+| decided | 106 | — the score is computed over these |
+| waiting on you | 49 | the operator: 36 unanswered queue items, 13 missing inputs |
+| needs a person | 34 | a human, in the Search Console UI or by looking |
+| undecided | 25 | nobody: no such field, service unreachable, check failed |
+| not applicable | 0 | out of scope for this mode or profile |
+
+A test asserts the sum equals the registry. A percentage can be read without
+noticing what fell out of its denominator; rows that have to add up cannot.
+
+**`NEEDS_INPUT` is a status now, because the partition has to come from statuses.**
+
+`NO_DATA` was carrying four unrelated sentences: an input was not supplied, the site
+served no such field, an external service could not reach the host, the script died.
+Only the first is work for the person running the audit, and printing it as "could
+not be determined" reads as a limit of the tool rather than a missing argument.
+Thirteen items said that on the measured run; seven of them were a Search Console
+key.
+
+The first version of the partition was computed by matching `"missing input"` inside
+the evidence prose, which is how it was first measured — and that coupling breaks in
+silence the first time a reason is reworded. A status is what makes it structural.
+`NEEDS_INPUT` gets its own report section, **"What this audit was not given"**, in
+both renderers and in Russian; it is not a `--fixes` row, for the same reason
+`NO_DATA` and `LLM_PENDING` are not: a client's sprint should not fill with the
+auditor's unfinished business.
+
+**Two defects the change turned up on the way.**
+
+- **The HTML history section was printing `coverage None%`.** The same sentence
+  lives in two renderers, the markdown one had a test, and the HTML one was found by
+  grepping for the renamed key rather than by anything failing. Both are asserted now
+  — over a payload that exercises the history section, against the literal word
+  `None` — and the assertion was checked by reintroducing the bug.
+- **The report would not have parsed on the declared Python floor.** An escaped
+  quote inside an f-string is 3.12 syntax; the floor is 3.10 and the development venv
+  is 3.14, so only `ruff` saw it. The shared sentence is a module constant now.
+
+Also: the report's status table, bar legend and filter buttons read one
+`STATUS_ORDER` tuple instead of three hand-written lists, and a test ties that tuple
+to the statuses the runner can actually emit. Adding a status to two surfaces out of
+three fails the build rather than going missing from a document nobody diffs.
+
+Russian: 16 new strings and the two statuses, 116 in all. `item_titles` and
+`item_fixes` remain empty.
+
+Registry unchanged at `1c4b3697cc1f`, 214 items: this release changes how the run is
+reported, not what it checks. Every one of the 214 verdicts on the fixture is the
+same before and after — only their arithmetic is presented differently.
+
 ## 0.15.0 — 5 August 2026
 
 Registry unchanged (`1c4b3697cc1f`, 214 items). Tests 552 → 564.

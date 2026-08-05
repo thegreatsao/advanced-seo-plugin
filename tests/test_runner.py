@@ -25,6 +25,7 @@ import harness  # noqa: E402
 
 from checklist_runner import (  # noqa: E402
     ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
+    NEEDS_INPUT,
     NEEDS_THE_OUTSIDE_WORLD, NO_DATA, PASS, WARN, aggregate_pages, artifact_subject,
     audit_target,
     build_plan, choose_profile, diff_runs, evaluate, grade, is_page_level,
@@ -867,7 +868,7 @@ class BrowserArtifacts(unittest.TestCase):
                                   {"cwv_json": "the artifact describes https://b/"})
         self.assertEqual(plan, {})
         status, reason = skipped["SP-214"]
-        self.assertEqual(status, NO_DATA)
+        self.assertEqual(status, NEEDS_INPUT)
         self.assertIn("describes", reason)
         self.assertNotIn("missing input", reason)
 
@@ -964,18 +965,45 @@ class Scoring(unittest.TestCase):
                  "status": s, "effort": "low"}
                 for n, s in enumerate(statuses)]
 
-    def test_na_leaves_both_metrics_alone(self):
+    def test_na_leaves_the_score_and_its_reach_alone(self):
         """'We did not crawl' must not read as 'the site failed'."""
         with_na = score(self.rows(PASS, FAIL, NA, NA))
         without = score(self.rows(PASS, FAIL))
         self.assertEqual(with_na["seo_score"], without["seo_score"])
-        self.assertEqual(with_na["coverage_pct"], without["coverage_pct"])
+        # N/A is out of the registry's weight as well as out of the score, so the
+        # share the score speaks for is unchanged rather than diluted.
+        self.assertEqual(with_na["weight_pct"], without["weight_pct"])
+        self.assertEqual(with_na["partition"]["not_applicable"], 2)
 
-    def test_no_data_lowers_coverage_but_not_the_score(self):
+    def test_an_undecided_item_narrows_the_reach_but_not_the_score(self):
         clean = score(self.rows(PASS, PASS))
         murky = score(self.rows(PASS, PASS, NO_DATA))
         self.assertEqual(clean["seo_score"], murky["seo_score"])
-        self.assertLess(murky["coverage_pct"], clean["coverage_pct"])
+        self.assertLess(murky["weight_pct"], clean["weight_pct"])
+
+    def test_every_item_lands_in_exactly_one_bucket(self):
+        """The property that replaced the coverage percentage.
+
+        A percentage can be read without noticing what fell out of its denominator;
+        a partition cannot, because the rows are printed and they have to add up.
+        This is the assertion that keeps them adding up when a status is added —
+        which is exactly what 0.16 did, and the old `applicable` denominator would
+        have absorbed NEEDS_INPUT silently."""
+        s = score(self.rows(PASS, FAIL, WARN, NO_DATA, NEEDS_INPUT,
+                            LLM_PENDING, MANUAL, NA))
+        p = s["partition"]
+        self.assertEqual(sum(p.values()), s["total_items"])
+        self.assertEqual(p, {"decided": 3, "waiting_on_you": 2, "needs_a_person": 1,
+                             "undecided": 1, "not_applicable": 1})
+        self.assertEqual(s["waiting_on_you"], {"llm_pending": 1, "needs_input": 1})
+
+    def test_the_score_says_how_much_of_the_registry_it_speaks_for(self):
+        """69/100 over 55% of the weight and over 95% of it are different claims,
+        and the old report printed the same 69 for both."""
+        half = score(self.rows(PASS, PASS, NO_DATA, NO_DATA))
+        self.assertEqual(half["seo_score"], 100)
+        self.assertEqual(half["weight_pct"], 50)
+        self.assertEqual(score(self.rows(PASS, PASS))["weight_pct"], 100)
 
     def test_warn_counts_as_half(self):
         self.assertEqual(score(self.rows(WARN))["seo_score"], 50)
@@ -983,10 +1011,10 @@ class Scoring(unittest.TestCase):
         self.assertEqual(score(self.rows(FAIL))["seo_score"], 0)
 
     def test_pending_work_does_not_inflate_the_score(self):
-        for status in (LLM_PENDING, MANUAL):
+        for status in (LLM_PENDING, MANUAL, NEEDS_INPUT):
             s = score(self.rows(PASS, status))
             self.assertEqual(s["seo_score"], 100)
-            self.assertLess(s["coverage_pct"], 100)
+            self.assertLess(s["weight_pct"], 100)
 
 
 class Diff(unittest.TestCase):
@@ -1431,12 +1459,19 @@ class UnreachableSite(unittest.TestCase):
         """Offline items are not gated by reachability — they read a local file,
         not the site. Every one of them takes that file as its first argument,
         so when the fetch failed and there is no HTML to hand them, they drop out
-        as NO_DATA on the missing input instead."""
+        on the missing input instead.
+
+        NEEDS_INPUT and not NO_DATA even here, and the reason is worth stating: the
+        status says an input was absent, not that the operator can conjure it. The
+        run already reports the unreachable entry page in its own words, loudly and
+        first; an item saying "no HTML" underneath it is a consequence, not a second
+        diagnosis. Reporting the two differently would need a status per cause, and
+        the causes are already in the reasons."""
         item = [{"id": "O", "check": {"requires": "offline", "script": "parse_html.py",
                                       "args": ["{html}", "--url", "{url}"]}}]
         _, skipped = build_plan(item, {"url": "https://e.com"}, {"offline"}, "live",
                                 unreachable_skips(item, "HTTP 503"), False)
-        self.assertEqual(skipped["O"][0], NO_DATA)
+        self.assertEqual(skipped["O"][0], NEEDS_INPUT)
         self.assertIn("html", skipped["O"][1])
 
 
@@ -1449,7 +1484,7 @@ class SearchConsoleBoundary(unittest.TestCase):
         denominator and raises coverage exactly where the audit is thinnest."""
         _, skipped = build_plan(self.ITEM, {}, {"offline", "fetch", "crawl", "api"},
                                 "live", None, False)
-        self.assertEqual(skipped["G"][0], NO_DATA)
+        self.assertEqual(skipped["G"][0], NEEDS_INPUT)
 
     def test_a_mode_without_network_puts_it_out_of_scope(self):
         """archive promises no network at all, so the item genuinely does not
@@ -1493,7 +1528,7 @@ class SearchConsoleBoundary(unittest.TestCase):
                  "severity": "high", "status": NO_DATA, "effort": "low"}]
         as_no_data = score(rows)
         as_manual = score([dict(rows[0], status=MANUAL)])
-        self.assertEqual(as_no_data["coverage_pct"], as_manual["coverage_pct"])
+        self.assertEqual(as_no_data["weight_pct"], as_manual["weight_pct"])
         self.assertEqual(as_no_data["applicable"], as_manual["applicable"])
         self.assertEqual(as_no_data["decided"], as_manual["decided"])
 

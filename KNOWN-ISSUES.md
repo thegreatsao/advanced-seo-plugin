@@ -1,12 +1,23 @@
 # Known issues
 
-What is wrong with this plugin as of **0.15.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.16.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.16.0**: the report's own arithmetic. `Coverage %` added together three
+quantities that measure different things — how far the tool reached, how much work the
+operator had done, and how much of the checklist was never the audit's job — and then
+moved for any of the three without saying which, which is this file's founding
+objection applied to the number this file's project reports. It is replaced by the
+score's weight share and a partition of the registry that has to add up. `NEEDS_INPUT`
+split out of `NO_DATA` on the way, because a partition reconstructed by matching prose
+inside an evidence string is a coupling that breaks in silence. Two defects fell out of
+the change: the HTML history section had been printing `coverage None%` with no test
+over it, and a shared string would not have parsed on the declared 3.10 floor.
 
 **Fixed in 0.15.0**: four of the five open items. The answer-block score no longer
 depends on whether a page closes its tags — and the sibling walk that caused it was
