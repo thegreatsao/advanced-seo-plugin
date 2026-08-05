@@ -633,9 +633,15 @@ item(116, "critical", S, "domain_safety_check.py", PAGE,
 item(117, "critical", S, "security_headers.py", PAGE,
      {"path": "https", "truthy": True},
      "Force HTTPS sitewide with a single canonical protocol")
-item(118, "critical", S, "security_headers.py", PAGE,
-     {"path": "https", "truthy": True},
-     "Maintain a valid TLS certificate")
+# SE-118 asserted `https` — SE-117's field, from SE-117's script — until 0.20, so two
+# `critical` items shared one assertion and this one could not fail independently on any
+# site. A certificate that expired yesterday passed it, because the URL still began
+# `https`. `tls_certificate.py` does a verifying handshake instead: expiry, trust chain
+# and hostname are the library's verdict rather than a scheme string, and `valid` is only
+# ever True after one succeeded.
+item(118, "critical", S, "tls_certificate.py", PAGE,
+     {"path": "valid", "truthy": True},
+     "Maintain a valid TLS certificate — unexpired, trusted, issued for this hostname")
 item(119, "medium", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
      RATING("CLS"),
      "The cookie banner must not cause layout shift", warn=RATING_WARN("CLS"))

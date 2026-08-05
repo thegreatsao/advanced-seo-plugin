@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "ae29bf452412",
+  "registry_version": "a7bb134d42f9",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -2457,18 +2457,18 @@
       "severity": "critical",
       "source": "script",
       "check": {
-        "script": "security_headers.py",
+        "script": "tls_certificate.py",
         "args": [
           "{url}"
         ],
         "requires": "fetch",
         "assert": {
-          "path": "https",
+          "path": "valid",
           "truthy": true
         }
       },
       "effort": "low",
-      "fix": "Maintain a valid TLS certificate"
+      "fix": "Maintain a valid TLS certificate — unexpired, trusted, issued for this hostname"
     },
     {
       "id": "SE-119",

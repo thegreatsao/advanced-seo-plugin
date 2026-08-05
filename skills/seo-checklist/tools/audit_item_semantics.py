@@ -31,7 +31,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-REGISTRY = Path(__file__).resolve().parent.parent / "skills/seo-checklist/resources/config/checklist.json"
+REGISTRY = Path(__file__).resolve().parent.parent / "resources/config/checklist.json"
 
 # Words that carry no discriminating meaning in either half of the comparison.
 STOP = {
