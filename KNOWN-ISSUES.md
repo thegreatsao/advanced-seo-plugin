@@ -1,12 +1,23 @@
 # Known issues
 
-What is wrong with this plugin as of **0.17.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.18.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Measured in 0.18.0, and the answer is uncomfortable.** `measured` is still 0 and that
+is the honest count: what `tools/audit_score_sensitivity.py` measured is not the weight
+table but the consequence of it being wrong. Re-scored across four real runs from flat
+1/1/1/1 to steep 27/9/3/1, the headline moves 0.2, 1.9, 9.3 and **14.6** points. So the
+table cannot be written off as decoration, and the driver is not how many items were
+decided — it is how far the per-severity pass rates spread, which means the score is
+most sensitive to an unexamined number on exactly the sites where severity
+discriminates. `EFFORT_COST` came out the other way: dividing by effort changes 2-4 of
+the first ten fixes and so earns its place, while the exact ratio does not — 1/2/3 gives
+the identical first ten on every run measured.
 
 **Fixed in 0.16.0**: the report's own arithmetic. `Coverage %` added together three
 quantities that measure different things — how far the tool reached, how much work the

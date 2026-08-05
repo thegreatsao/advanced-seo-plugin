@@ -10,6 +10,57 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.18.0 — 5 August 2026
+
+**How much of the SEO Score is the site, and how much is a table nobody chose.**
+
+`SEVERITY_WEIGHT` — critical 10, high 6, medium 3, low 1 — decides the headline, and
+`EFFORT_COST` orders the fix list. Both are `inherited`: they arrived with borrowed
+code and nobody here has examined them, while the score has been reported to two
+significant figures the whole time.
+
+The step taken here is deliberately not calibration. What a critical item is worth
+relative to a low one cannot be measured from anything in this repository — it needs
+outcome data over real properties. What *can* be measured today is whether the answer
+matters, and `tools/audit_score_sensitivity.py` measures it by re-scoring finished
+runs under a spread of defensible tables.
+
+**The result is neither of the two outcomes that were predicted.**
+
+| Run | Decided | flat 1/1/1/1 → steep 27/9/3/1 | Spread | Pass-rate range |
+|---|---:|---|---:|---:|
+| good fixture, live | 106 | 69.3 → 69.1 | **0.2** | 11.8 |
+| broken fixture, live | 106 | 33.5 → 31.6 | **1.9** | 27.0 |
+| good fixture, page mode | 88 | 89.8 → 80.5 | **9.3** | 37.5 |
+| smoke page, archive | 16 | 56.2 → 70.8 | **14.6** | 50.0 |
+
+So the table is neither decoration nor uniformly decisive, and the driver is not how
+many items were decided — it is **how far the per-severity pass rates spread**. A
+weighted mean can only differ from an unweighted one by as much as the groups differ,
+so the score is least sensitive to the weighting on a site that passes its critical
+and its low items at the same rate, and most sensitive on one whose critical items are
+the broken ones. That is the sobering direction: the weighting matters most on exactly
+the sites worth auditing.
+
+`measured` in the threshold inventory stays **0**, and that is the honest count. What
+was measured is the consequence of the number, not the number.
+
+**`EFFORT_COST` is closed.** Dividing by effort changes 2-4 of the first ten fixes
+against not dividing at all, so the idea earns its place; the exact ratio does not —
+1/2/3 gives the identical first ten on every run measured and 1/3/9 differs by one
+row. Whether to divide is the decision, which numbers is not, and the basis line says
+so now.
+
+**The tool.** `tools/audit_score_sensitivity.py` reads artifacts a normal audit
+already writes and re-runs no check. It asserts nothing, and CI prints its read-out
+over `live.json` rather than gating on it: the spread is a property of the site
+audited, so a threshold on it would fail whenever the fixture changed. Five tests pin
+the thing that would make the whole exercise meaningless — that its arithmetic and
+`checklist_runner.score`'s are the same one, over the same decided items, and that its
+fix ordering is the report's.
+
+580 -> 585 tests. Registry unchanged at `1c4b3697cc1f`, 214 items.
+
 ## 0.17.0 — 5 August 2026
 
 **The two groups that could only sit at zero can now be answered.**

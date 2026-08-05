@@ -441,10 +441,15 @@ NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
 NEEDS_INPUT = "NEEDS_INPUT"
 
 # basis: inherited — critical 10 / high 6 / medium 3 / low 1, present at import from
-#  Agentic-SEO-Skill. **These weights decide the SEO Score itself** — the single most
-#  consequential unexamined number in this tree. Nobody here has asked whether a
-#  critical item is ten low items or three, and the score has been reported to two
-#  significant figures the whole time
+#  Agentic-SEO-Skill. **These weights decide the SEO Score itself.** Nobody here has
+#  asked whether a critical item is ten low items or three; what 0.18 measured is not
+#  the number but the consequence of getting it wrong, with
+#  tools/audit_score_sensitivity.py over four real runs. Re-scored from flat 1/1/1/1
+#  to steep 27/9/3/1 the headline moved 0.2, 1.9, 9.3 and 14.6 points — so the table
+#  cannot be dismissed as decoration. The driver is not the item count but how far
+#  the per-severity pass rates spread: 11.8 points of spread gave 0.2, and 50 gave
+#  14.6. It moves the score most on exactly the sites where severity discriminates,
+#  which is where the critical items are the broken ones
 SEVERITY_WEIGHT = {"critical": 10, "high": 6, "medium": 3, "low": 1}
 
 # Two severity vocabularies exist in this tree and only one of them is the

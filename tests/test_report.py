@@ -731,3 +731,61 @@ class AnswersFromAPerson(unittest.TestCase):
         for name, text in (("markdown", render_markdown(data)),
                            ("html", render_html(data))):
             self.assertIn("on their word", text, f"{name} hides the claimed verdict")
+
+
+class TheSensitivityToolMeasuresTheRealScore(unittest.TestCase):
+    """`tools/audit_score_sensitivity.py` re-scores finished runs under other weight
+    tables. A tool that computed the score its own way would produce a spread about
+    a number nobody is shown, so the first thing to pin is that its arithmetic and
+    the runner's are the same one."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        import audit_score_sensitivity as sens
+        self.sens = sens
+
+    def rows(self):
+        return [item("A-1", PASS, severity="critical"),
+                item("A-2", FAIL, severity="critical"),
+                item("A-3", WARN, severity="low"),
+                item("A-4", PASS, severity="medium"),
+                item("A-5", NO_DATA, severity="high")]
+
+    def test_it_reproduces_the_headline_the_runner_reports(self):
+        from checklist_runner import SEVERITY_WEIGHT, score
+        items = self.rows()
+        self.assertEqual(round(self.sens.headline(self.sens.scored_items(
+            {"items": items}), SEVERITY_WEIGHT)), score(items)["seo_score"])
+
+    def test_it_scores_only_what_was_decided(self):
+        """NO_DATA must not enter, exactly as it does not enter the real score —
+        otherwise every undecided item would read as a failure and the spread would
+        be measuring the wrong thing."""
+        self.assertEqual([i["id"] for i in self.sens.scored_items({"items": self.rows()})],
+                         ["A-1", "A-2", "A-3", "A-4"])
+
+    def test_flat_weights_are_the_unweighted_pass_rate(self):
+        """The null hypothesis has to actually be the null hypothesis: under
+        1/1/1/1 the score is the plain credit-per-item mean, so a run where the
+        shipped table lands on the same number is a run where weighting did
+        nothing."""
+        items = self.sens.scored_items({"items": self.rows()})
+        flat = self.sens.CANDIDATE_WEIGHTS["flat (1/1/1/1)"]
+        credit = 1.0 + 0.0 + 0.5 + 1.0
+        self.assertEqual(self.sens.headline(items, flat),
+                         round(100 * credit / len(items), 1))
+
+    def test_the_pass_rates_add_up_to_the_items_scored(self):
+        rates = self.sens.pass_rates(self.sens.scored_items({"items": self.rows()}))
+        self.assertEqual(sum(n for n, _ in rates.values()), 4)
+
+    def test_the_fix_order_is_the_one_the_report_uses(self):
+        """The effort half compares fix lists, so it has to build the same list the
+        report builds — a different ordering would measure a ranking nobody sees."""
+        from checklist_report import EFFORT_COST
+        from checklist_runner import SEVERITY_WEIGHT
+        items = self.sens.scored_items({"items": self.rows()})
+        mine = self.sens.fix_order(items, SEVERITY_WEIGHT, EFFORT_COST)
+        theirs = [r["id"] for r in fix_rows(results(*items))
+                  if r["status"] in (FAIL, WARN)]
+        self.assertEqual(mine, theirs)

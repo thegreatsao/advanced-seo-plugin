@@ -191,8 +191,12 @@ class Lang:
 # one-line meta tag. Dividing by effort answers the question people actually ask
 # first — what is worth doing this afternoon.
 # basis: inherited — low 1 / medium 2 / high 4, present at import. Divides
-#  SEVERITY_WEIGHT to rank what to do first, so the ratio between the two tables is
-#  doing real work that neither was measured for
+#  SEVERITY_WEIGHT to rank what to do first. 0.18 measured what that ratio is worth
+#  with tools/audit_score_sensitivity.py: *dividing* changes 2-4 of the first ten
+#  rows against not dividing at all, so the idea earns its place, while the exact
+#  ratio does not — 1/2/3 gives the identical first ten on every run measured, and
+#  1/3/9 differs by one row. Whether to divide by effort is the decision; which
+#  numbers is not
 EFFORT_COST = {"low": 1, "medium": 2, "high": 4}
 
 

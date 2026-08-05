@@ -353,6 +353,10 @@ jobs:
       - name: Every threshold says what it rests on
         run: python skills/seo-checklist/tools/audit_thresholds.py --check
 
+      - name: How much of the score is the weight table
+        run: |
+          python skills/seo-checklist/tools/audit_score_sensitivity.py live.json
+
       - name: robots.txt applies to discovered URLs, not to the audit target
         run: |
           cd skills/seo-checklist/scripts

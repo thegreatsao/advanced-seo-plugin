@@ -156,6 +156,14 @@ never grant it.
 
 ## 0.18 — the two tables that produce the headline number
 
+**Shipped, and the result was neither of the two outcomes predicted below.** The spread
+is 0.2 to 14.6 points depending on the run, so the table is neither decoration nor
+uniformly decisive: it matters in proportion to how far the per-severity pass rates
+spread, and therefore most on the sites where severity actually discriminates. That
+does not close the question, it sharpens it — the next step is outcome data, and
+`tools/audit_score_sensitivity.py` is what will measure whether any calibration helped.
+`EFFORT_COST` is closed: divide by effort, and stop arguing about which numbers.
+
 `measured` is 0 across 113 thresholds. Do not attack 113. Attack two:
 
 ```
