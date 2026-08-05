@@ -701,7 +701,17 @@ item(137, "medium", S, "orphan_pages_from_sitemap.py", CRAWLARG,
 # revealed this. Capped at 25 URLs: enough to find dead entries, not a second crawl.
 item(138, "medium", S, "sitemap_checker.py",
      ["{url}", "--fetch-urls", "--max-urls", "25"],
-     {"path": "issues", "none_matching": "(?i)404|redirect|noindex"},
+     # `field` is not optional here, and 0.19.0 is the third time this tree has
+     # learned it. Without it the pattern is matched against the whole serialised
+     # issue — `severity`, `message`, `url`, `evidence` — so "404" hit the *port* of
+     # a test origin that bound 40455 and reported a clean sitemap as full of dead
+     # URLs. On a real site `/blog/404-errors-explained` in a sitemap does the same
+     # thing. The soft-404 guard in the runner already carries this lesson in
+     # writing ("Never a substring: `404` appears in the title of every article ever
+     # written about broken links") and the keyword items learned it in 0.5.0; the
+     # rules were never audited for it.
+     {"path": "issues", "field": "message",
+      "none_matching": "(?i)404|redirect|noindex"},
      "Remove invalid URLs from sitemaps")
 item(139, "low", S, "gsc_cannibalization.py", GSCARG,
      {"path": "branded.ranks_first", "truthy": True},
@@ -710,7 +720,10 @@ item(140, "low", M, fix="Add a Google News sitemap if the site qualifies")
 item(141, "critical", G, fix="Check for manual actions in Search Console")
 item(142, "high", G, fix="Resolve crawl and indexing issues")
 item(143, "low", S, "schema_required_props.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)WebSite|SearchAction"},
+     # Scoped for the same reason as GO-138, and this one was waiting to fire on
+     # any site with `/website-design` in a URL the checker reported on.
+     {"path": "issues", "field": "message",
+      "none_matching": "(?i)WebSite|SearchAction"},
      "Optimize for sitelinks and the Sitelinks Search Box")
 item(144, "medium", S, "answer_block_scanner.py", PAGE,
      {"path": "score", "gte": 70},
@@ -778,7 +791,8 @@ item(155, "low", S, "url_quality.py", PAGE,
 item(156, "medium", M, fix="Helpful 404 page with navigation and search")
 item(157, "low", L, fix="Use tag pages deliberately rather than generating duplicates")
 item(158, "medium", S, "schema_required_props.py", PAGE,
-     {"path": "issues", "none_matching": "(?i)BreadcrumbList"},
+     {"path": "issues", "field": "message",
+      "none_matching": "(?i)BreadcrumbList"},
      "Breadcrumbs in the UI and as BreadcrumbList markup")
 item(159, "low", L, fix="Simplify primary navigation")
 item(160, "low", L, fix="Optimize footer navigation")

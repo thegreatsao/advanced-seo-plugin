@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.19.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.19.1**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -350,6 +350,20 @@ verdict without carrying its address, and a site-level check has no single page 
 name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
+
+- **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
+  array without a `field` matches the whole serialised issue, URLs included, so
+  GO-138's `404` matched the *port* of a test origin that bound 40455. The
+  nondeterminism was an ephemeral port sometimes containing three digits, and every
+  theory built from the "flaky test" framing — DNS, the parallel runner, shared
+  rate-limit state — was wrong. It is a registry defect: a sitemap listing
+  `/blog/404-errors-explained` fails GO-138 on any site, and GO-143's `WebSite` was one
+  `/website-design` URL from the same. **Third occurrence of one mistake** — the
+  keyword items fired on their own remediation text in 0.5.0, which is why `field`
+  exists, and the soft-404 guard says "never a substring" in writing. Neither was ever
+  turned on the rules. The entry below is what it replaced; it is kept because the
+  useful part is the shape: printing the payload cost four lines and settled in one
+  firing what three rounds of reasoning got wrong.
 
 - **One test is not deterministic, in a suite whose whole premise is that it is.**
   `test_go_138_needs_the_urls_fetched_to_find_anything` failed once on CI under 3.10

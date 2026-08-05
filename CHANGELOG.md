@@ -10,6 +10,44 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.19.1 — 5 August 2026
+
+**The flake was not a flake. Three assertions could match a URL and call it a
+verdict.**
+
+`test_go_138_needs_the_urls_fetched_to_find_anything` failed once on CI, passed on a
+re-run of the same commit, and survived 15 local runs of the full suite. 0.18.0 shipped
+a diagnostic instead of a guess: the assertion now prints the issues it actually saw.
+It fired again on the next push and named its own cause in one line.
+
+The test origin had bound port **40455**, and GO-138's rule is
+`none_matching: "(?i)404|redirect|noindex"` over `issues`. Without a `field`, the
+pattern is matched against the whole serialised issue — severity, message, url,
+evidence — so `404` matched the port inside
+`{"message": "Sitemap URL missing lastmod", "url": "http://127.0.0.1:40455/"}` and a
+clean sitemap was reported as full of dead URLs.
+
+**This is a registry defect, not a test defect.** A sitemap listing
+`/blog/404-errors-explained` fails GO-138 on any site. GO-143 matched `WebSite` the
+same way and was one `/website-design` URL away from the same failure; AR-158's
+`BreadcrumbList` shares the shape. All three now name `field: "message"`.
+
+**Third occurrence of one mistake.** The keyword items fired on their own remediation
+text in 0.5.0, which is why `field` exists at all and why the comment beside it in
+`checklist_runner.py` explains the hazard. The runner's soft-404 guard carries the same
+lesson in writing — *"Never a substring: `404` appears in the title of every article
+ever written about broken links"*. Neither was ever turned on the rules themselves.
+A test does it now: an `issues` pattern without a `field` fails the build, and a
+`field` naming something no issue carries fails it too.
+
+Worth keeping in view about the diagnosis: the mechanism was only reachable when an
+ephemeral port happened to contain `404`, so it looked like nondeterminism and every
+theory built from that framing — DNS, the parallel runner, shared rate-limit state —
+was wrong. Printing the payload cost four lines and settled it on the first firing.
+
+Registry `1c4b3697cc1f` -> `ae29bf452412`: three assert rules gain a `field`. No item,
+severity or script changed. 599 -> 601 tests.
+
 ## 0.19.0 — 5 August 2026
 
 **A trend, not a pair — and a Russian report that is Russian all the way down.**

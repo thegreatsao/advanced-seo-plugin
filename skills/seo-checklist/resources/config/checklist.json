@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "1c4b3697cc1f",
+  "registry_version": "ae29bf452412",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -2888,6 +2888,7 @@
         "requires": "crawl",
         "assert": {
           "path": "issues",
+          "field": "message",
           "none_matching": "(?i)404|redirect|noindex"
         }
       },
@@ -2967,6 +2968,7 @@
         "requires": "fetch",
         "assert": {
           "path": "issues",
+          "field": "message",
           "none_matching": "(?i)WebSite|SearchAction"
         }
       },
@@ -3287,6 +3289,7 @@
         "requires": "fetch",
         "assert": {
           "path": "issues",
+          "field": "message",
           "none_matching": "(?i)BreadcrumbList"
         }
       },

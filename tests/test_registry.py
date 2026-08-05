@@ -777,3 +777,43 @@ class GradedRowsCarryWhatTheReportRanksOn(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class APatternNeverReadsAnAddress(unittest.TestCase):
+    """`none_matching` over an `issues[]` array must name the field it searches.
+
+    Without `field` the pattern is matched against the whole serialised issue —
+    severity, message, url, evidence — so it can fire on text the check never
+    reasoned about. GO-138's `404` matched the *port* of a test origin that bound
+    40455 and reported a clean sitemap as full of dead URLs; on a real site a
+    sitemap containing `/blog/404-errors-explained` does the same. GO-143's
+    `WebSite` was one `/website-design` URL away from the same failure.
+
+    Three occurrences now: the keyword items fired on their own remediation text in
+    0.5.0, the soft-404 guard carries "never a substring" in writing, and these
+    rules were never audited against either lesson. A rule, not a memory.
+    """
+
+    def test_every_issue_pattern_names_the_field_it_searches(self):
+        loose = []
+        for item in DATA["items"]:
+            rule = ((item.get("check") or {}).get("assert") or {})
+            if "none_matching" not in rule:
+                continue
+            # Only arrays of issue dicts are at risk. A path that resolves to a
+            # plain string — `meta_robots` — has one thing to match and no
+            # neighbouring URL to match by accident.
+            if rule.get("path") == "issues" and not rule.get("field"):
+                loose.append(f"{item['id']} ({rule['none_matching']})")
+        self.assertEqual(loose, [], "these match the whole issue, URLs included: "
+                                    + ", ".join(loose))
+
+    def test_the_named_field_is_one_the_scripts_emit(self):
+        """A `field` that no issue carries makes the rule match nothing and pass
+        every site — the failure `audit_assertions.py` exists for, arrived at from
+        the other direction."""
+        for item in DATA["items"]:
+            rule = ((item.get("check") or {}).get("assert") or {})
+            if rule.get("path") == "issues" and rule.get("field"):
+                self.assertIn(rule["field"], ("message", "type", "severity"),
+                              f"{item['id']} searches an unknown issue field")
