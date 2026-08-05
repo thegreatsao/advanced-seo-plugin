@@ -343,9 +343,19 @@ than fetching them.
   - item keys: type, severity, similarity, url_a, url_b, word_count_a, word_count_b, noindex_in_pair, finding, fix
 `thin_content[]` — array
   - item keys: type, severity, url, word_count, threshold, finding, fix
+`duplicate_descriptions[]` — array — groups of pages sharing one meta description,
+  compared on collapsed whitespace and case, since two descriptions differing by a
+  trailing space are one description to anyone reading a SERP. Pages with **no**
+  description are not counted as duplicates of each other — that is MS-028's finding
+  and counting it here would report one defect under two items.
+  - item keys: type, severity, description, urls, finding, fix
 `summary.exact_duplicate_groups` — int
 `summary.near_duplicate_pairs` — int
 `summary.thin_pages` — int
+`summary.duplicate_description_groups` — int — **what MS-029 asserts is zero.** That
+  item read `exact_duplicate_groups` until 0.22, which counts duplicate page *content*
+  — CN-041's verdict — so a site running one description across forty distinct pages
+  passed it.
 `summary.avg_word_count` — int
 
 ### eeat_signal_checker.py

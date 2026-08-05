@@ -453,8 +453,15 @@ class TheBrokenSiteFailsWhatItWasBuiltToFail(unittest.TestCase):
                       f"{self.broken[item_id].get('evidence')}")
 
     def test_the_page_level_basics(self):
-        # title, one h1, viewport, lang, meta description, meta keywords
-        for item_id in ("MS-026", "CN-065", "MB-093", "IN-123", "MS-027", "MS-031"):
+        # title, one h1, viewport, lang, meta description, meta keywords.
+        #
+        # MS-027 was on this list and is not any more. It asserted `meta_description
+        # truthy` — the same field, script and rule as MS-028 — so "write a unique,
+        # compelling description" was answered by "a description exists" and could not
+        # fail on any page MS-028 passed. Uniqueness is MS-029's job as of 0.22 and
+        # compelling is a judgement, so the item went to the copy lens. What it used to
+        # cover here is covered by MS-028, which is on this list and always was.
+        for item_id in ("MS-026", "CN-065", "MB-093", "IN-123", "MS-028", "MS-031"):
             self.assertMoved(item_id, PASS, (FAIL, WARN))
 
     def test_noindex_is_reported_as_not_indexable(self):

@@ -339,6 +339,28 @@ rather than a repair, which is why it is last.
 **No registry additions.** 214 stays 214, and may become fewer if the duplicate pairs
 merge. Everything here repairs, removes or reclassifies what is already there.
 
+> **Closed in 0.22.0, and 214 is still 214.** The eight synonym pairs did not merge;
+> they carry weight once, through a `scores_with` pointer decided by hand. A merge
+> would have deleted a source number a reader may look up, and the harm was never that
+> two rows existed — it was that one defect scored twice and, where the twins disagreed
+> on severity, that its weight depended on which row you read.
+>
+> The other two of the ten were not duplicates at all: MS-027/MS-028 and MS-029/CN-041
+> were two requirements sharing one assertion because the second had never been written.
+> Those were repaired, not paired. CN-053 was reclassified — it counted words under a
+> title about iframes — and so was MS-027, since *compelling* is not a thing an
+> assertion decides.
+>
+> The 42 unreviewed vocabulary misses are 0: fourteen were the heuristic's own fault
+> and the remaining 28 carry written rulings. Four of those rulings are new defects,
+> left open on purpose rather than repaired in the pass that found them — CI-002,
+> IN-127, and the Core Web Vitals group, where **five** items exist and three measure
+> something other than Core Web Vitals. That last one is a redesign of a group, not
+> four edits.
+>
+> Both audit tools now run in CI, which they could not before: a required check that is
+> red by default is a check nobody reads.
+
 ---
 
 ## 1.0 — the document and the code say the same thing

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "598d714134d9",
+  "registry_version": "e7d966be23f9",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -702,22 +702,10 @@
       "category_label": "Meta & Structured Data",
       "title": "Write Unique, Compelling Meta Descriptions",
       "severity": "high",
-      "source": "script",
-      "check": {
-        "script": "parse_html.py",
-        "args": [
-          "{html}",
-          "--url",
-          "{url}"
-        ],
-        "requires": "offline",
-        "assert": {
-          "path": "meta_description",
-          "truthy": true
-        }
-      },
-      "effort": "low",
-      "fix": "Write a unique description that reflects the page content"
+      "source": "llm",
+      "lens": "copy",
+      "effort": "medium",
+      "fix": "Write a description that earns the click: specific to this page, distinct from every other, and true to what is on it"
     },
     {
       "id": "MS-028",
@@ -760,12 +748,12 @@
         ],
         "requires": "crawl",
         "assert": {
-          "path": "summary.exact_duplicate_groups",
+          "path": "summary.duplicate_description_groups",
           "eq": 0
         }
       },
       "effort": "low",
-      "fix": "Remove duplicate meta descriptions"
+      "fix": "Give each page its own meta description — these are shared across pages"
     },
     {
       "id": "MS-030",
@@ -1211,20 +1199,10 @@
       "category_label": "Content",
       "title": "Avoid Critical Content in iFrames",
       "severity": "medium",
-      "source": "script",
-      "check": {
-        "script": "javascript_render_audit.py",
-        "args": [
-          "{url}"
-        ],
-        "requires": "fetch",
-        "assert": {
-          "path": "raw.word_count",
-          "gte": 300
-        }
-      },
+      "source": "llm",
+      "lens": "layout",
       "effort": "high",
-      "fix": "Do not hide critical content inside iframes"
+      "fix": "Keep the content this page is about in the page, not inside an embedded frame a crawler may not credit to it"
     },
     {
       "id": "CN-054",
@@ -1960,7 +1938,8 @@
         }
       },
       "effort": "medium",
-      "fix": "Move to WebP/AVIF and compress images"
+      "fix": "Move to WebP/AVIF and compress images",
+      "scores_with": "MD-189"
     },
     {
       "id": "MB-098",
@@ -2066,7 +2045,8 @@
         }
       },
       "effort": "medium",
-      "fix": "Optimize video for mobile"
+      "fix": "Optimize video for mobile",
+      "scores_with": "MD-190"
     },
     {
       "id": "MB-103",
@@ -2112,7 +2092,8 @@
         }
       },
       "effort": "medium",
-      "fix": "Add a favicon - it shows in mobile SERPs"
+      "fix": "Add a favicon - it shows in mobile SERPs",
+      "scores_with": "TE-166"
     },
     {
       "id": "MB-105",
@@ -3566,7 +3547,8 @@
         }
       },
       "effort": "low",
-      "fix": "Check the domain against blocklists and Safe Browsing"
+      "fix": "Check the domain against blocklists and Safe Browsing",
+      "scores_with": "SE-116"
     },
     {
       "id": "TE-172",
@@ -3775,7 +3757,8 @@
         }
       },
       "effort": "low",
-      "fix": "Pass W3C validation"
+      "fix": "Pass W3C validation",
+      "scores_with": "CI-017"
     },
     {
       "id": "TE-182",
@@ -3874,7 +3857,8 @@
         }
       },
       "effort": "medium",
-      "fix": "Meaningful alt text on informative images"
+      "fix": "Meaningful alt text on informative images",
+      "scores_with": "CI-016"
     },
     {
       "id": "MD-187",
@@ -4203,7 +4187,8 @@
         }
       },
       "effort": "medium",
-      "fix": "Add direct answers, definitions, lists and tables for featured snippets"
+      "fix": "Add direct answers, definitions, lists and tables for featured snippets",
+      "scores_with": "GO-144"
     },
     {
       "id": "GEO-005",
@@ -4225,7 +4210,8 @@
         }
       },
       "effort": "medium",
-      "fix": "Back factual claims with sources, add cite/blockquote, populate sameAs"
+      "fix": "Back factual claims with sources, add cite/blockquote, populate sameAs",
+      "scores_with": "GO-145"
     },
     {
       "id": "GEO-006",

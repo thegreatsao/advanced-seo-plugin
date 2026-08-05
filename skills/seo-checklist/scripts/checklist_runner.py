@@ -995,6 +995,13 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
         # a registry test asserts every real item declares one.
         row["effort"] = it.get("effort", "medium")
         row["fix"] = it.get("fix", "")
+        # Set on the second of two items that run the same script with the same args
+        # and the same assertion — one requirement listed twice by the source
+        # checklists this registry merges. It still runs and still reports; it does
+        # not carry weight a second time. See `score` and SAME_CHECK in
+        # tools/build_checklist.py, which is where a human decided each pairing.
+        if it.get("scores_with"):
+            row["scores_with"] = it["scores_with"]
         src = it["source"]
 
         if it["id"] in skipped and skipped[it["id"]][0] == NA:
@@ -1115,10 +1122,20 @@ def score(graded: list[dict]) -> dict:
     of things to do."""
     scored = [g for g in graded if g["status"] in (PASS, FAIL, WARN)]
     applicable = [g for g in graded if g["status"] != NA]
+
+    # Weight is carried per *check*, not per item. Eight pairs in this registry run
+    # one script with one set of arguments and one assertion under two source numbers
+    # — "Add a Favicon" and "Ensure Favicon Displays in Mobile SERPs" are one question
+    # asked twice — and until 0.22 both halves scored. That did two things: it doubled
+    # a single defect's pull on the headline, and where the twins disagreed on severity
+    # it made the weight of one defect depend on which of them a reader happened to
+    # look at. The second item still runs and still reports its own status; it is left
+    # out of these sums and out of `weight_registry`, so the denominator matches.
+    weighed = [g for g in scored if not g.get("scores_with")]
     earned = sum(SEVERITY_WEIGHT[g["severity"]] * (1.0 if g["status"] == PASS else
                                                    0.5 if g["status"] == WARN else 0.0)
-                 for g in scored)
-    total = sum(SEVERITY_WEIGHT[g["severity"]] for g in scored)
+                 for g in weighed)
+    total = sum(SEVERITY_WEIGHT[g["severity"]] for g in weighed)
 
     by_cat: dict[str, dict] = {}
     for g in graded:
@@ -1157,7 +1174,8 @@ def score(graded: list[dict]) -> dict:
     # scope for this mode or profile, and counting it here would make narrowing
     # scope look like a thinner audit. N/A drops out of both numbers, as it always
     # has — this is that rule, applied to the number that replaced coverage.
-    weight_registry = sum(SEVERITY_WEIGHT[g["severity"]] for g in applicable)
+    weight_registry = sum(SEVERITY_WEIGHT[g["severity"]] for g in applicable
+                          if not g.get("scores_with"))
 
     # Every item lands in exactly one bucket, and the buckets sum to the registry.
     # Derived from statuses alone — see NEEDS_INPUT for why that mattered enough to

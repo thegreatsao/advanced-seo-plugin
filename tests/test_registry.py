@@ -817,3 +817,90 @@ class APatternNeverReadsAnAddress(unittest.TestCase):
             if rule.get("path") == "issues" and rule.get("field"):
                 self.assertIn(rule["field"], ("message", "type", "severity"),
                               f"{item['id']} searches an unknown issue field")
+
+
+class OneCheckCarriesWeightOnce(unittest.TestCase):
+    """`scores_with`, and the eight pairs it exists for.
+
+    Two source checklists are merged into this registry and both of them ask some
+    questions. Eight pairs run one script with one set of arguments and one assertion
+    — `TE-166` *Add a Favicon* and `MB-104` *Ensure Favicon Displays in Mobile SERPs*
+    are one question written twice. Until 0.22 both halves scored, which did two
+    things: a single defect pulled the headline down twice, and where the twins
+    disagreed on severity the weight of one defect depended on which of them a reader
+    happened to look at.
+
+    The twin still runs and still reports. It does not carry weight. What these tests
+    guard is that the pointer is not a way to make an item disappear: every twin must
+    point at an item that exists, that shares its exact check, and that carries the
+    weight itself.
+    """
+
+    def twins(self):
+        return [i for i in ITEMS if i.get("scores_with")]
+
+    @staticmethod
+    def shape(item):
+        check = item.get("check") or {}
+        return (check.get("script"), json.dumps(check.get("args"), sort_keys=True),
+                json.dumps(check.get("assert"), sort_keys=True))
+
+    def test_every_pointer_names_an_item_that_exists(self):
+        ids = {i["id"] for i in ITEMS}
+        for item in self.twins():
+            self.assertIn(item["scores_with"], ids,
+                          f"{item['id']} defers to an id that is not in the registry")
+
+    def test_a_twin_shares_its_primary_s_check_exactly(self):
+        """The claim `scores_with` makes is *this is the same check*. If the shapes
+        differ, two different questions are being asked and one of them stopped
+        counting — which is not a merge, it is a deletion with a friendly name."""
+        by_id = {i["id"]: i for i in ITEMS}
+        for item in self.twins():
+            primary = by_id[item["scores_with"]]
+            self.assertEqual(self.shape(item), self.shape(primary),
+                             f"{item['id']} defers to {primary['id']} but they do not "
+                             f"run the same check")
+
+    def test_the_item_that_carries_the_weight_carries_it(self):
+        """No chains and no cycles. A twin pointing at another twin would leave the
+        pair scoring nothing at all, and nothing in the score would say so."""
+        by_id = {i["id"]: i for i in ITEMS}
+        for item in self.twins():
+            primary = by_id[item["scores_with"]]
+            self.assertIsNone(primary.get("scores_with"),
+                              f"{item['id']} -> {primary['id']} -> "
+                              f"{primary.get('scores_with')}: nothing scores")
+
+    def test_the_survivor_is_never_the_weaker_of_the_two(self):
+        """Where the twins disagree on severity, dropping the higher one would lower
+        the registry's own weighting of a defect by an accident of which id was typed
+        first. MB-102 (low) and MD-190 (medium) are the pair this is about."""
+        order = ["low", "medium", "high", "critical"]
+        by_id = {i["id"]: i for i in ITEMS}
+        for item in self.twins():
+            primary = by_id[item["scores_with"]]
+            self.assertGreaterEqual(order.index(primary["severity"]),
+                                    order.index(item["severity"]),
+                                    f"{item['id']} ({item['severity']}) defers to "
+                                    f"{primary['id']} ({primary['severity']})")
+
+    def test_no_group_sharing_one_check_is_left_unruled(self):
+        """The other direction: a new item that silently duplicates an existing
+        assertion. `tools/audit_item_semantics.py` is the CI step for this; the test
+        is here so the suite fails first and names the pair."""
+        by_shape = {}
+        for item in ITEMS:
+            if not (item.get("check") or {}).get("script"):
+                continue
+            by_shape.setdefault(self.shape(item), []).append(item)
+        for group in by_shape.values():
+            if len(group) < 2:
+                continue
+            carriers = [i for i in group if not i.get("scores_with")]
+            ids = ", ".join(i["id"] for i in group)
+            self.assertEqual(len(carriers), 1,
+                             f"{ids} run one check; exactly one must carry the weight")
+            self.assertTrue(all(i["scores_with"] == carriers[0]["id"]
+                                for i in group if i.get("scores_with")),
+                            f"{ids} share a check but do not agree which one scores")

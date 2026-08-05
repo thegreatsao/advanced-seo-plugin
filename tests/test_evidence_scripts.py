@@ -1098,8 +1098,15 @@ class LlmsTxt(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class DuplicateAndThinContent(unittest.TestCase):
-    """MS-022 `exact_duplicates`, MS-029 and CN-041 `summary.exact_duplicate_groups`,
-    CN-039 `summary.thin_pages`."""
+    """MS-022 `exact_duplicates`, CN-041 `summary.exact_duplicate_groups`,
+    CN-039 `summary.thin_pages`, MS-029 `summary.duplicate_description_groups`.
+
+    MS-029 *Eliminate Duplicate Meta Descriptions* asserted the content-duplication
+    count until 0.22 — a different requirement reading CN-041's verdict, so a site
+    with one description on forty pages passed it as long as the pages differed. The
+    crawl inventory has carried `meta_description` per page since 0.9.0 and nothing
+    read it.
+    """
 
     def test_four_distinct_pages_are_not_duplicates_of_each_other(self):
         good = out("dupes")
@@ -1121,8 +1128,50 @@ class DuplicateAndThinContent(unittest.TestCase):
     def test_two_paths_serving_one_document_are_found(self):
         bad = out("dupes_bad")
         self.assertEqual(bad["summary"]["exact_duplicate_groups"], 1)
-        for item_id in ("MS-022", "MS-029", "CN-041"):
+        for item_id in ("MS-022", "CN-041"):
             self.assertEqual(verdict(item_id, bad), FAIL, item_id)
+
+    def test_ms_029_fails_on_shared_descriptions_and_not_on_shared_content(self):
+        """The wiring, on a payload built for it rather than on a fixture.
+
+        This origin's duplicate pages carry no description at all, so it can show
+        CN-041 failing and cannot show MS-029 failing — and a site where exactly one
+        of the two is wrong is the case that proves they are two items. The pair is
+        built here instead: same content, different descriptions, then the reverse.
+
+        The rest of the fixture is left alone on purpose. Adding pages to reach the
+        crawl would mean adding them to `SITEMAP_BAD`, which is where this origin's
+        pages are discovered — and the sitemap's contents are counted by four other
+        items and the orphan arithmetic.
+        """
+        shared_desc = {"summary": {"exact_duplicate_groups": 0,
+                                   "duplicate_description_groups": 1}}
+        shared_body = {"summary": {"exact_duplicate_groups": 1,
+                                   "duplicate_description_groups": 0}}
+        self.assertEqual(verdict("MS-029", shared_desc), FAIL)
+        self.assertEqual(verdict("CN-041", shared_desc), PASS)
+        self.assertEqual(verdict("MS-029", shared_body), PASS)
+        self.assertEqual(verdict("CN-041", shared_body), FAIL)
+
+    def test_a_page_with_no_description_is_not_a_duplicate_of_another_with_none(self):
+        """MS-028's finding, made once. Counting the absent ones here would report
+        one defect under two items and drag a third — CN-041 — into a question about
+        descriptions it does not ask."""
+        import duplicate_content
+        pages = {"/a": {"meta_description": ""}, "/b": {"meta_description": "   "},
+                 "/c": {"meta_description": "One of a kind"}}
+        self.assertEqual(duplicate_content.duplicate_descriptions(pages), [])
+
+    def test_descriptions_differing_only_in_case_or_spacing_are_one_description(self):
+        """Two of these are the same line to anyone reading a SERP, and treating
+        them as distinct is exactly how a duplicate hides from this check."""
+        import duplicate_content
+        pages = {"/a": {"meta_description": "Fresh bread daily"},
+                 "/b": {"meta_description": "fresh  bread   daily "},
+                 "/c": {"meta_description": "Something else"}}
+        groups = duplicate_content.duplicate_descriptions(pages)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["urls"], ["/a", "/b"])
 
     def test_an_indexable_thin_page_is_counted(self):
         thin = {p["url"]: p for p in out("dupes_bad").get("thin_content") or []}
@@ -1564,17 +1613,48 @@ class Accessibility(unittest.TestCase):
 
 
 class JavascriptRender(unittest.TestCase):
-    """CN-053 `raw.word_count`, TE-169 `raw.internal_link_count`,
-    TE-177 `raw.title`, MB-105 `diffs`."""
+    """TE-169 `raw.internal_link_count`, TE-177 `raw.title`, MB-105 `diffs`.
+
+    CN-053 read `raw.word_count` here until 0.22 and does not any more. Its title is
+    *Avoid Critical Content in iFrames* and it counted words — nothing in the item
+    observed an iframe, and this script reports no iframe signal of any kind, so a
+    café was told to stop hiding content in frames it does not have because one page
+    ran to 293 words. It is an LLM item on the layout lens now: whether the content
+    that matters is inside a frame is a judgement about what matters.
+
+    `raw.word_count` is consequently asserted by nothing. It stays in the output —
+    it is real, and the report shows it — and thin content is CN-039's question,
+    measured against the crawl rather than one page.
+    """
 
     def test_the_raw_html_carries_the_content(self):
         good = out("jsrender")
         self.assertGreaterEqual(good["raw"]["word_count"], 300)
-        for item_id in ("CN-053", "TE-169", "TE-177"):
+        for item_id in ("TE-169", "TE-177"):
             self.assertEqual(verdict(item_id, good), PASS, item_id)
 
-    def test_a_nineteen_word_page_fails_the_depth_check(self):
-        self.assertEqual(verdict("CN-053", out("jsrender_bad")), FAIL)
+    def test_no_item_grades_a_site_on_this_script_s_word_count(self):
+        """The regression guard for the removal, not a formality: `raw.word_count`
+        is still emitted, so re-pointing an item at it is one line away, and the
+        next person to do it should have to argue with this test first."""
+        rules = json.dumps([(i.get("check") or {}).get("assert") for i in ITEMS.values()])
+        self.assertNotIn("raw.word_count", rules)
+
+    def test_a_twenty_word_page_is_no_longer_this_script_s_business(self):
+        """What CN-053 used to fail here, recorded rather than deleted.
+
+        The page is twenty words with a cross-domain canonical and two h1s, and this
+        script's three remaining items all pass it — correctly. It serves a title
+        without JavaScript (TE-177), carries eight internal links (TE-169) and renders
+        to the same thing it ships (MB-105). None of those is a lie, and none of them
+        is about the page being thin, which is CN-039's question against the crawl.
+        Asserting the passes keeps the run in use: an unasserted run is a script
+        nobody checked, hiding behind a green suite.
+        """
+        bad = out("jsrender_bad")
+        self.assertLess(bad["raw"]["word_count"], 300)
+        for item_id in ("TE-169", "TE-177", "MB-105"):
+            self.assertEqual(verdict(item_id, bad), PASS, item_id)
 
     def test_static_html_shows_no_rendered_difference(self):
         """MB-105 can only fail a site that needs JavaScript to produce its content,

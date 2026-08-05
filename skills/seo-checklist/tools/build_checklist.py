@@ -380,15 +380,27 @@ item(25, "medium", L, fix="The title must accurately describe the page content a
 item(26, "critical", S, "parse_html.py", HTMLARG,
      {"path": "title", "truthy": True},
      "Every page needs a title")
-item(27, "high", S, "parse_html.py", HTMLARG,
-     {"path": "meta_description", "truthy": True},
-     "Write a unique description that reflects the page content")
+# Three items about meta descriptions that were two assertions between them. MS-027
+# and MS-028 both asserted `meta_description truthy` — the same field, the same script,
+# the same rule — so "write a unique, compelling description" was answered by "a
+# description exists", and MS-027 could not fail on any page MS-028 passed. MS-029,
+# about *duplicate descriptions*, read `summary.exact_duplicate_groups`, which counts
+# duplicate page **content**: a different requirement borrowing CN-041's verdict.
+#
+# Split so each asserts what its own title says. MS-028 keeps the presence check, which
+# is exactly what it asks for. MS-029 gets evidence of its own — the crawl inventory has
+# carried `meta_description` per page since 0.9.0 and nothing read it. And MS-027 is not
+# a script item at all: "unique" is now MS-029's job, and **compelling** is a judgement
+# no assertion makes. Leaving it as a presence check let the registry claim it had
+# graded the copy. The copy lens grades copy.
+item(27, "high", L, fix="Write a description that earns the click: specific to this "
+                        "page, distinct from every other, and true to what is on it")
 item(28, "medium", S, "parse_html.py", HTMLARG,
      {"path": "meta_description", "truthy": True},
      "Fill in meta descriptions, high-value pages first")
 item(29, "medium", S, "duplicate_content.py", CRAWLARG,
-     {"path": "summary.exact_duplicate_groups", "eq": 0},
-     "Remove duplicate meta descriptions")
+     {"path": "summary.duplicate_description_groups", "eq": 0},
+     "Give each page its own meta description — these are shared across pages")
 item(30, "low", S, "parse_html.py", HTMLARG,
      {"path": "meta_description", "len_between": [120, 165]},
      "Keep meta descriptions around 150-160 characters")
@@ -465,9 +477,19 @@ item(51, "high", S, "rendered_audit.py", RENDERED,
      {"path": "overlays_covering_content", "eq": 0},
      "Remove intrusive interstitials, especially on mobile")
 item(52, "medium", L, fix="Limit heavy advertising above the fold")
-item(53, "medium", S, "javascript_render_audit.py", PAGE,
-     {"path": "raw.word_count", "gte": 300},
-     "Do not hide critical content inside iframes")
+# This asserted `raw.word_count >= 300`. **It counted words.** Nothing in the item
+# observed an iframe — `javascript_render_audit.py` reports no iframe signal of any
+# kind — so a café was told to stop hiding content in iframes it does not have, on
+# three of eight pages, because one of them ran to 293 words. Worse than CI-019's
+# mismatch, which at least listed URLs a reader could check: this FAIL reads as
+# entirely sensible until somebody opens `checklist.json`.
+#
+# It does not become a script item with a better field, because the question is not
+# "is there an iframe" — embeds are normal and fine. It is whether the content that
+# matters is inside one, and that is a judgement about what matters. The layout lens
+# reads the page and can see both.
+item(53, "medium", L, fix="Keep the content this page is about in the page, not inside "
+                          "an embedded frame a crawler may not credit to it")
 item(54, "high", S, "image_inventory.py", PAGE,
      # The script does detect this, and says "Likely LCP image is lazy-loaded" —
      # LCP before lazy, so a pattern requiring lazy first never matched. Counting
@@ -1048,10 +1070,10 @@ def load_titles() -> dict[int, str]:
 # body copy. Every llm item must appear here — main() refuses to build otherwise,
 # so a new item cannot silently fall out of the dispatch.
 LENS = {
-    "copy": ["MS-024", "MS-025", "CN-037", "CN-042", "CN-043", "CN-046",
+    "copy": ["MS-024", "MS-025", "MS-027", "CN-037", "CN-042", "CN-043", "CN-046",
              "CN-047", "CN-049", "CN-050", "CN-058", "CN-064", "CN-067",
              "KW-072", "KW-073", "KW-074", "KW-075", "KW-077", "MD-188"],
-    "layout": ["CN-052", "CN-055", "CN-059", "CN-060", "CN-061", "CN-062",
+    "layout": ["CN-052", "CN-053", "CN-055", "CN-059", "CN-060", "CN-061", "CN-062",
                "CN-063", "MB-101", "AR-157", "AR-159", "AR-160", "AR-161"],
     # TE-165 (subdomain vs subdirectory) is filed under technical, but the
     # decision is almost always driven by language/region targeting.
@@ -1059,6 +1081,36 @@ LENS = {
     "market": ["CO-191", "LO-196", "LO-197"],
 }
 LENS_OF = {eid: lens for lens, ids in LENS.items() for eid in ids}
+
+
+# Pairs that run one script with one set of arguments and one assertion, because the
+# two source checklists merged here asked the same question twice. The key is the item
+# that keeps the weight; the value is the twin that stops carrying it. Both still run
+# and both still report a status — a reader looking up "Add a Favicon" should find an
+# answer — but the score counts the check once.
+#
+# Two harms, and the second is the reason this is not merely tidy. A single defect
+# pulled the headline down twice. And where the twins disagree on severity — MB-102
+# `low` against MD-190 `medium` — the weight of one defect depended on which of them
+# the reader happened to look at. The survivor is the one with the higher severity, so
+# nothing is quietly downgraded; where they tie, the lower id keeps it.
+#
+# Deliberately not on this list: pairs that *look* like synonyms but are two
+# requirements sharing one assertion because the second was never written. Those are
+# defects, not duplicates, and 0.22 repaired the two it had — MS-027/MS-028 and
+# MS-029/CN-041. Adding a pair here is a claim that one check genuinely answers both
+# titles; check that before you do it.
+SAME_CHECK = {
+    "CI-016": "MD-186",   # "Provide Meaningful Image Alt Text" / "...Alt Text"
+    "CI-017": "TE-181",   # both titled "Validate HTML (W3C)", word for word
+    "GO-144": "GEO-004",  # featured snippets / answer blocks for AEO
+    "GO-145": "GEO-005",  # AI Overviews / citation-ready content
+    "MD-189": "MB-097",   # modern formats — MD-189 medium, MB-097 medium, lower id
+    "MD-190": "MB-102",   # video SEO (medium) over "Optimize Video for Mobile" (low)
+    "TE-166": "MB-104",   # "Add a Favicon" / "Ensure Favicon Displays in Mobile SERPs"
+    "SE-116": "TE-171",   # hacked content & malware / blocklist & Safe-Browsing checks
+}
+SCORES_WITH = {twin: primary for primary, twin in SAME_CHECK.items()}
 
 
 def build() -> list[dict]:
@@ -1090,6 +1142,8 @@ def build() -> list[dict]:
                 entry["lens"] = LENS_OF.get(entry["id"], "")
             entry["effort"] = effort_for(entry)
             entry["fix"] = fix
+            if entry["id"] in SCORES_WITH:
+                entry["scores_with"] = SCORES_WITH[entry["id"]]
             out.append(entry)
 
     for row in EXTRA:
@@ -1121,6 +1175,8 @@ def build() -> list[dict]:
             entry["lens"] = LENS_OF.get(entry["id"], "")
         entry["effort"] = effort_for(entry)
         entry["fix"] = fix
+        if entry["id"] in SCORES_WITH:
+            entry["scores_with"] = SCORES_WITH[entry["id"]]
         out.append(entry)
     return out
 

@@ -57,13 +57,111 @@ REVIEWED: dict[str, str] = {
     "GO-134": "DEFECT (0.20). 'Resolve Search Console issues' reads `opportunities` "
               "through a severity gate, so position 4.0 with 115 impressions printed "
               "as a high failure. An opportunity is not a defect at any threshold.",
+
+    # --- Ruled in 0.22, the pass that emptied the unreviewed list -------------
+    # Read in one sitting against the registry and each script's output shape. Most
+    # are the heuristic doing its job badly rather than the registry doing its job
+    # wrongly: `text_nodes_below_12px` really is font size, `overlays_covering_content`
+    # really is an intrusive interstitial, and no token-overlap test will ever know
+    # that. Those are marked OK. Four are not.
+
+    "CI-002": "DEFECT. 'Ensure important content is indexed' asserts "
+              "summary.urls >= 1 — a sitemap listing one URL passes a site of five "
+              "hundred pages, and being in a sitemap is not being indexed. The floor "
+              "it actually checks (a sitemap exists and is not empty) is GO-136's.",
+    "SP-111": "DEFECT. Titled 'Check Core Web Vitals (Desktop) in Search Console' and "
+              "asserts performance_score >= 90 — the blended Lighthouse score, which "
+              "mixes TBT and Speed Index and is not Core Web Vitals. The script "
+              "already computes the right thing in `field_cwv`, from CrUX, which is "
+              "the data Search Console shows. This item does not read it.",
+    "SP-112": "DEFECT, and the same one as SP-111 with --strategy mobile. Pointing it "
+              "at `field_cwv.verdict` would make it identical to SP-108 in script, "
+              "args and assertion — so it is not a repair, it is a duplicate pair that "
+              "the source checklist listed twice. Belongs with the eight above.",
+    "IN-127": "DEFECT. 'Use a clear international URL structure' asserts "
+              "checks.protocol_consistency.passed — whether the hreflang set mixes "
+              "http and https. That is worth checking and it is not URL structure; "
+              "subdirectory vs subdomain vs ccTLD is what the title names.",
+
+    "CI-015": "OK. rows.0.status < 500 is exactly '5xx server errors', spelled in "
+              "numbers instead of words.",
+    "MS-021": "OK. title len_gte 30 is the '<30 characters' in the title, as a rule.",
+    "CN-034": "OK. text_nodes_below_12px == 0 is 'readable font sizes' measured.",
+    "CN-038": "OK on the measurement, and 'balance' is aspiration rather than a "
+              "second requirement: freshness score is the only part of it a number "
+              "can carry.",
+    "CN-044": "OK, weakly. trust_links includes a contact link and also privacy and "
+              "terms, so a site with a privacy page and no contact page passes. Worth "
+              "a narrower signal one day; not a mismatch between title and assertion.",
+    "CN-051": "OK. overlays_covering_content == 0 is an intrusive interstitial, "
+              "measured on the rendered page, which is the only place it exists.",
+    "KW-071": "OK. Cannibalisation is keyword duplication seen from the SERP side, "
+              "and worst_spread is how far one query's URLs are scattered.",
+    "MB-093": "OK, weakly, and it is `critical`. A viewport meta tag is necessary for "
+              "a responsive layout and nowhere near sufficient — a fixed-width page "
+              "with the tag passes. The full check needs rendering at two widths.",
+    "MB-098": "OK. The pattern counts size and dimension issues, which is the title.",
+    "MB-105": "OK. `diffs` is the parity between raw and rendered, which is the item.",
+    "SP-107": "OK. FCP is when above-the-fold content appears; the title says so in "
+              "English and the assertion says so in an acronym.",
+    "SE-116": "OK. safe_browsing.clean is hacked content and malware, as graded by "
+              "the service that grades it.",
+    "IN-128": "OK. hreflang self-reference is the mechanism by which the correct "
+              "localised page is served; without it the set does not resolve.",
+    "GO-131": "OK. A measurement id present is GA4 installed.",
+    "GO-143": "OK. Sitelinks and the sitelinks search box are driven by WebSite and "
+              "SearchAction markup, which is what the pattern looks for.",
+    "AR-153": "OK. topical_cluster_mapper's score is the silo structure, scored.",
+    "AR-154": "OK. collection_page_checker is written for category pages.",
+    "TE-172": "OK. rich_results_guard's errors are structured data implemented wrongly.",
+    "TE-175": "OK on subject. The threshold is another matter — 'at most 3 missing "
+              "headers' is a number nobody measured, which is KNOWN-ISSUES §2 and not "
+              "this tool's question.",
+    "TE-177": "OK. `raw` is the pre-JavaScript document, so a title in it is the page "
+              "being readable without JavaScript.",
+    "TE-180": "OK. a11y_seo_checker's score is WCAG basics, scored.",
+    "MD-185": "OK. Image issues at medium and above is 'optimize images'.",
+    "GEO-007": "OK. key_valid is IndexNow configured; there is nothing else to be.",
+    "TECH-001": "OK, weakly. `summary.warnings` is broader than retired schema types "
+                "— any warning fails an item whose title is about HowTo and FAQ "
+                "specifically. Real but minor, and narrowing it needs the guard to "
+                "classify its own warnings first.",
 }
 
 
+# Suffixes stripped before comparing, longest first. Without this the heuristic
+# reported `indexability_matrix.py` as sharing no vocabulary with "Ensure URL Is
+# Indexed" — the two words differ by four letters and mean the same thing. Crude on
+# purpose: a real stemmer is a dependency, and every pair this needs to catch is a
+# regular English plural or participle.
+_SUFFIXES = ("ability", "ibility", "ations", "ation", "ising", "izing", "ised",
+             "ized", "ing", "ies", "ed", "es", "s")
+
+
+def _stem(word: str) -> str:
+    for suffix in _SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[:-len(suffix)]
+    return word
+
+
 def tokens(text: str) -> set[str]:
-    """Words, with snake_case and dotted paths split and camelCase broken up."""
+    """Words, with snake_case and dotted paths split and camelCase broken up.
+
+    `len > 2` would drop `h1`, `h2` and `ga4`, which are the entire subject of the
+    items that name them — and dropping them from the *assertion* side left those
+    items with an empty vocabulary, so they could not share a word with anything and
+    were flagged no matter what they asserted. A short token carrying a digit is an
+    identifier, not noise, and is kept.
+    """
     text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text or "")
-    return {w for w in re.split(r"[^a-zA-Z0-9]+", text.lower()) if len(w) > 2 and w not in STOP}
+    out = set()
+    for word in re.split(r"[^a-zA-Z0-9]+", text.lower()):
+        if word in STOP:
+            continue
+        if len(word) > 2 or (len(word) == 2 and any(c.isdigit() for c in word)):
+            out.add(_stem(word))
+    return out
 
 
 def assertion_paths(rule: object) -> list[str]:
@@ -72,6 +170,14 @@ def assertion_paths(rule: object) -> list[str]:
     if isinstance(rule, dict):
         if isinstance(rule.get("path"), str):
             found.append(rule["path"])
+        # A `field` names the part of the payload actually read, and a `value_map`'s
+        # keys are the script's own vocabulary for the verdict — `indexable`,
+        # `not_indexable`. Both are what the item asserts about; leaving them out
+        # judged an assertion by its container instead of its content.
+        if isinstance(rule.get("field"), str):
+            found.append(rule["field"])
+        if isinstance(rule.get("value_map"), dict):
+            found.extend(k for k in rule["value_map"] if isinstance(k, str))
         for value in rule.values():
             found.extend(assertion_paths(value))
     elif isinstance(rule, list):
@@ -101,11 +207,21 @@ def main() -> int:
         print("  none")
     for shape, group in sorted(duplicates.items(), key=lambda kv: kv[1][0]["id"]):
         ids = ", ".join(f"{i['id']} ({i['severity']})" for i in group)
-        print(f"  {ids}")
+        # A group is answered when exactly one member carries the weight and every
+        # other points at it. That is a human decision recorded in SAME_CHECK, not a
+        # silencing: the twins still run and still report. What is still a failure is
+        # a group nobody has ruled on, or one where the pointers disagree about which
+        # item survives — two items each deferring to the other would score neither.
+        carriers = [i for i in group if not i.get("scores_with")]
+        targets = {i["scores_with"] for i in group if i.get("scores_with")}
+        declared = len(carriers) == 1 and targets <= {carriers[0]["id"]}
+        print(f"  {'[paired]' if declared else '[UNRULED]'} {ids}")
         print(f"      {shape[0]} {shape[1]}  assert {shape[2]}")
         for item in group:
-            print(f"      {item['id']}: {item['title']}")
-        failures.append(f"{ids} are one check scored {len(group)} times")
+            twin = f"  -> scores with {item['scores_with']}" if item.get("scores_with") else ""
+            print(f"      {item['id']}: {item['title']}{twin}")
+        if not declared:
+            failures.append(f"{ids} are one check scored {len(group)} times")
 
     # 2. Vocabulary — a heuristic, and the output is a reading list.
     print("\n== items whose assertion shares no vocabulary with their own title ==")

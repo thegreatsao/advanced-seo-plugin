@@ -975,6 +975,44 @@ class Scoring(unittest.TestCase):
         self.assertEqual(with_na["weight_pct"], without["weight_pct"])
         self.assertEqual(with_na["partition"]["not_applicable"], 2)
 
+    def twinned(self, *statuses):
+        """`statuses` graded normally, with a final row deferring to the one before."""
+        rows = self.rows(*statuses)
+        rows[-1]["scores_with"] = rows[-2]["id"]
+        return rows
+
+    def test_a_twin_reports_its_status_and_does_not_score_twice(self):
+        """`scores_with`: one check, two source numbers, one lot of weight.
+
+        Eight pairs in this registry run the same script with the same arguments and
+        the same assertion, because the two checklists merged here both asked. Scoring
+        both halves meant one defect pulled the headline down twice — and where the
+        twins disagreed on severity, the weight of that defect depended on which of
+        them the reader happened to look at.
+
+        The twin is still graded, still counted in the partition, and still appears in
+        the report. `weight_pct` matters as much as the score here: dropping the twin
+        from the numerator without dropping it from `weight_registry` would report a
+        thinner audit for an item that was in fact decided, which inverts what that
+        number means.
+        """
+        plain = score(self.rows(PASS, FAIL))
+        pair = score(self.twinned(PASS, FAIL, FAIL))
+        self.assertEqual(pair["seo_score"], plain["seo_score"])
+        self.assertEqual(pair["weight_pct"], plain["weight_pct"])
+        self.assertEqual(pair["weight_decided"], plain["weight_decided"])
+        # Reported, not hidden. Three items were decided and the buckets still sum.
+        self.assertEqual(pair["partition"]["decided"], 3)
+        self.assertEqual(sum(pair["partition"].values()), 3)
+
+    def test_the_pointer_moves_weight_and_never_a_verdict(self):
+        """A twin cannot soften its primary. Two items failing one check costs what
+        one failing item costs — and still costs something."""
+        both_pass = score(self.rows(PASS, PASS))
+        pair = score(self.twinned(PASS, FAIL, FAIL))
+        self.assertEqual(pair["seo_score"], score(self.rows(PASS, FAIL))["seo_score"])
+        self.assertLess(pair["seo_score"], both_pass["seo_score"])
+
     def test_an_undecided_item_narrows_the_reach_but_not_the_score(self):
         clean = score(self.rows(PASS, PASS))
         murky = score(self.rows(PASS, PASS, NO_DATA))

@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.21.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.22.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -477,11 +477,66 @@ name. A column called `url` would be read as "fix this page".
     exactly this — *"a second copy drifts the moment either side changes"* — and then
     tested for presence. Presence is not parity. A real guard has to bind the translation
     to the English text it was written against; a hash beside each entry would do it, at
-    the cost of 428 more lines in `ru.json`.
+    the cost of 428 more lines in `ru.json`. **Built in 0.22.0** —
+    `tools/i18n_digest.py` stores a digest of the English `(title, fix)` beside each
+    translation, a test reads it and CI runs `--check`. Deliberately not a digest of the
+    translation: improving Russian wording should not require re-stamping anything, and
+    only a change on the English side is a reason to re-read the Russian. An item with
+    no digest counts as drift rather than as a fresh start.
   - **`EveryCriticalItemIsCovered` measured coverage against a set literal** and never
     opened a test file, so a script named there and tested nowhere read as covered. The
     class exists to stop coverage meaning "the ones somebody got round to" and had the
     same hole one level up. A third test now makes the suite prove each name.
+
+  **Closed in 0.22.0, and it was two problems.** Two of the ten were never duplicates:
+  they were two requirements sharing one assertion because the second had never been
+  written, which is SE-118's defect again. `MS-027` *Write Unique, Compelling Meta
+  Descriptions* and `MS-028` *Fill Missing* both asserted `meta_description truthy`, so
+  MS-027 could not fail on any page MS-028 passed; and `MS-029` *Eliminate Duplicate
+  Meta Descriptions* read the duplicate **content** count, so a site running one
+  description across forty distinct pages passed it. MS-028 keeps the presence check.
+  MS-029 gets `duplicate_description_groups`, computed from the crawl inventory, which
+  has carried `meta_description` per page since 0.9.0 with nothing reading it. MS-027
+  went to the copy lens: uniqueness is now MS-029's, and *compelling* is a judgement no
+  assertion makes.
+
+  The other eight are real synonyms and now carry weight once. A `scores_with` pointer,
+  decided by hand in `SAME_CHECK` and guarded five ways, names the item that scores —
+  the higher-severity one, so nothing is quietly downgraded. The twin still runs and
+  still reports; it is out of `weight_registry` as well as the score, so the denominator
+  matches. **`SP-111`/`SP-112` are a ninth pair nobody had counted**, found while ruling
+  on the vocabulary list: both assert `performance_score >= 90` under the title *Check
+  Core Web Vitals in Search Console*, and pointing either at the right evidence would
+  make it identical to SP-108. Left open — see the CWV entry below.
+
+- **Open — the vocabulary list is ruled on, and four of the rulings are defects.** The
+  42 unreviewed misses are 0. Fourteen were the tool's own fault: `len(w) > 2` dropped
+  `h1`, `h2` and `ga4`, and dropping them from the *assertion* side left those items
+  with an empty vocabulary, unable to share a word with anything they asserted. The
+  heuristic now keeps short tokens carrying a digit, stems regular English endings, and
+  reads `field` and `value_map` keys as part of what an item asserts.
+
+  The 28 that survived are each answered in writing in `REVIEWED`, and four are real:
+
+  - **`SP-111` and `SP-112`** assert `performance_score >= 90` — the blended Lighthouse
+    score, which mixes TBT and Speed Index and is not Core Web Vitals. `pagespeed.py`
+    already computes the right thing in `field_cwv`, from CrUX, which is the data
+    Search Console shows. Neither item reads it. There are **five** Core Web Vitals
+    items in this registry and three of them measure something else: `SP-113` *Meet
+    Core Web Vitals Thresholds* (`critical`) asserts `metrics.LCP.rating` alone — one
+    of the three. Repairing them is a redesign of the group, not four edits, which is
+    why 0.22 recorded it instead of doing it in the pass that found it.
+  - **`CI-002`** *Ensure Important Content Is Indexed* asserts `summary.urls >= 1`. A
+    sitemap listing one URL passes a site of five hundred pages, and being in a sitemap
+    is not being indexed. The floor it actually checks is GO-136's.
+  - **`IN-127`** *Use a Clear International URL Structure* asserts whether the hreflang
+    set mixes http and https. Worth checking, and it is not URL structure —
+    subdirectory against subdomain against ccTLD is what the title names.
+
+  Two more are weak rather than wrong and are written down as such: `MB-093` grades a
+  `critical` "responsive layout" on the presence of a viewport meta tag, which a
+  fixed-width page can carry; `CN-044` accepts any trust link for "a clear contact
+  page", so a site with a privacy policy and no contact page passes.
 
 - **Open — two items report something that is not a defect of the site, and one of them
   cannot be acted on at all.**

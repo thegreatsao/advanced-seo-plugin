@@ -854,3 +854,56 @@ class TheRegistryIsTranslatedOrTheGapIsCounted(unittest.TestCase):
         row = {"id": first, "title": "Ensure URL Is Indexed", "fix": "Remove noindex"}
         self.assertNotEqual(ru.title(row), row["title"])
         self.assertNotEqual(ru.fix(row), row["fix"])
+
+
+class ATranslationIsBoundToTheEnglishItTranslates(unittest.TestCase):
+    """The gap `TheRegistryIsTranslatedOrTheGapIsCounted` could not see.
+
+    That class checks a translation exists, is not blank and contains Cyrillic. All
+    three stayed green through 0.20 while SE-118's English fix text changed and its
+    Russian one did not, because a sentence that has quietly stopped describing the
+    English one is still Russian, still present and still non-blank. Its docstring
+    had said the risk out loud — *"a second copy drifts the moment either side
+    changes"* — and then tested for presence. Presence is not parity.
+
+    `_source_digests` closes it: a hash of the English `(title, fix)` pair, stored
+    beside the translation and checked here. Change the English and this fails,
+    naming the item, until somebody re-reads the Russian and re-stamps it with
+    `tools/i18n_digest.py`.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        import i18n_digest
+        self.mod = i18n_digest
+
+    def test_every_translation_matches_the_english_it_was_written_against(self):
+        want = self.mod.english()
+        with open(os.path.join(I18N, "ru.json"), encoding="utf-8") as f:
+            have = json.load(f).get(self.mod.KEY) or {}
+        drifted = sorted(i for i, d in want.items() if have.get(i) != d)
+        self.assertEqual(drifted, [],
+                         "the English moved and the Russian did not: "
+                         f"{drifted[:8]} — re-read them, then run "
+                         "tools/i18n_digest.py to stamp them")
+
+    def test_the_digest_moves_when_either_side_of_the_english_moves(self):
+        """Both halves, and separately. A digest over the concatenation alone would
+        miss a word moved from the end of a title to the start of a fix — which is
+        exactly the kind of edit that leaves a translation describing neither."""
+        base = self.mod.digest("Add a Favicon", "Serve a favicon at the site root")
+        self.assertNotEqual(base, self.mod.digest("Add a Favicon!",
+                                                  "Serve a favicon at the site root"))
+        self.assertNotEqual(base, self.mod.digest("Add a Favicon",
+                                                  "Serve a favicon at the root"))
+        self.assertNotEqual(self.mod.digest("ab", "c"), self.mod.digest("a", "bc"))
+
+    def test_an_unstamped_item_is_drift_and_not_a_fresh_start(self):
+        """A translation added without recording what it translated is the same
+        unverifiable claim as one that has drifted, and reads as coverage."""
+        with open(os.path.join(I18N, "ru.json"), encoding="utf-8") as f:
+            stamped = set((json.load(f).get(self.mod.KEY) or {}))
+        with open(os.path.join(SKILL, "resources", "config", "checklist.json"),
+                  encoding="utf-8") as f:
+            ids = {i["id"] for i in json.load(f)["items"]}
+        self.assertEqual(sorted(ids - stamped), [])

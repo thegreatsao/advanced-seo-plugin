@@ -56,6 +56,23 @@ jobs:
       - name: No assertion can never fire
         run: python skills/seo-checklist/tools/audit_assertions.py
 
+      # The other half of that objection: an assertion that fires correctly, on the
+      # wrong thing. Held out of CI through 0.20 and 0.21 because it exited 1 on the
+      # registry as shipped, and a required check that is red by default is a check
+      # nobody reads. Green as of 0.22 — every duplicate group is a recorded pairing
+      # and every vocabulary miss carries a written ruling — so it can hold the line
+      # from here. An item added with no ruling, or one sharing another's assertion
+      # without SAME_CHECK saying so, now fails the build.
+      - name: Every item asserts what its title says
+        run: python skills/seo-checklist/tools/audit_item_semantics.py
+
+      # 0.19.0 translated all 214 items and 0.20 changed one item's English fix text
+      # without touching the Russian. Every i18n test stayed green: the translation
+      # existed, was not blank and was in Cyrillic. Presence is not parity, so each
+      # translation now carries a digest of the English it was written against.
+      - name: No translation has drifted from its English
+        run: python skills/seo-checklist/tools/i18n_digest.py --check
+
       # The Public Suffix List is a dated artifact. Its absence is not a crash,
       # it is a quiet downgrade to the heuristic it replaced, so the shipped
       # snapshot is checked rather than assumed. --check downloads nothing.

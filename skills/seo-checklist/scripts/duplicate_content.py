@@ -70,8 +70,36 @@ def pages_from_inventory(inventory: dict) -> dict:
             # meta tag. The header was invisible to this script before, so a page
             # kept out of the index by a header was still asked for 300 more words.
             "noindex": bool(row.get("noindex")),
+            # Carried for MS-029, which is about duplicate *meta descriptions* and had
+            # been answered by this script's duplicate *content* count — a different
+            # requirement reading another item's verdict. The inventory has held this
+            # field all along; nothing read it.
+            "meta_description": (row.get("meta_description") or "").strip(),
         }
     return pages
+
+
+def duplicate_descriptions(pages: dict) -> list:
+    """Groups of pages sharing one meta description.
+
+    Compared case-insensitively on collapsed whitespace: two descriptions differing
+    only in a trailing space or a capital are the same description to anyone reading
+    a SERP, and treating them as distinct is how a duplicate hides.
+
+    A page with no description is not a duplicate of another page with no description
+    — that is MS-028's finding, and counting it here would report one defect twice.
+    """
+    groups = {}
+    for key, page in pages.items():
+        text = " ".join(page.get("meta_description", "").split()).lower()
+        if not text:
+            continue
+        groups.setdefault(text, []).append(key)
+    return [{"type": "duplicate_meta_description", "severity": "medium",
+             "description": text, "urls": sorted(urls),
+             "finding": f"{len(urls)} pages share one meta description",
+             "fix": "Write a distinct description for each page"}
+            for text, urls in sorted(groups.items()) if len(urls) > 1]
 
 
 # ---------------------------------------------------------------------------
@@ -189,10 +217,12 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
         "exact_duplicates": exact_dupes,
         "near_duplicates": near_dupes,
         "thin_content": thin_pages,
+        "duplicate_descriptions": duplicate_descriptions(pages),
         "summary": {
             "exact_duplicate_groups": len(exact_dupes),
             "near_duplicate_pairs": len(near_dupes),
             "thin_pages": len(thin_pages),
+            "duplicate_description_groups": len(duplicate_descriptions(pages)),
             "avg_word_count": round(
                 sum(p["word_count"] for p in pages.values()) / max(1, len(pages))
             ),

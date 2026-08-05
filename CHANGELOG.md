@@ -10,6 +10,97 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.22.0 — 6 August 2026
+
+**The open list, emptied — and emptying it found four more defects than the list had.**
+
+**Ten duplicate groups were two problems, not one.** Two of them were never
+duplicates: they were two different requirements sharing one assertion because the
+second was never written, which is SE-118's defect wearing different clothes.
+
+- `MS-027` *Write Unique, Compelling Meta Descriptions* and `MS-028` *Fill Missing
+  Meta Descriptions* both asserted `meta_description truthy`. So "unique and
+  compelling" was answered by "exists", and MS-027 could not fail on any page MS-028
+  passed. MS-028 keeps the presence check, which is exactly what it asks. Uniqueness
+  became MS-029's job. **Compelling** is a judgement no assertion makes, so MS-027 is
+  an LLM item on the copy lens — leaving it as a presence check let the registry claim
+  it had graded the copy.
+- `MS-029` *Eliminate Duplicate Meta Descriptions* read `summary.exact_duplicate_groups`
+  — duplicate page **content**, CN-041's verdict. A site running one description across
+  forty distinct pages passed it. `duplicate_content.py` now computes
+  `duplicate_description_groups` from the crawl inventory, which has carried
+  `meta_description` per page since 0.9.0 with nothing reading it. Compared on
+  collapsed whitespace and case, because two descriptions differing by a trailing
+  space are one description to anyone reading a SERP. Pages with *no* description are
+  not counted as duplicates of each other: that is MS-028's finding, made once.
+
+**The remaining eight are real synonyms, and they now carry weight once.** *Add a
+Favicon* and *Ensure Favicon Displays in Mobile SERPs* are one question the two
+merged source checklists both asked. Scoring both halves did two things: one defect
+pulled the headline down twice, and where the twins disagreed on severity — `MB-102`
+low against `MD-190` medium — the weight of a defect depended on which twin the reader
+looked at. A `scores_with` pointer, decided by hand in `SAME_CHECK` and checked five
+ways by tests, keeps the higher-severity item as the one that scores. The twin still
+runs, still reports its status, still appears in the report. It is out of
+`weight_registry` as well as out of the score, so the denominator matches and
+`weight_pct` does not shrink for an item that was in fact decided.
+
+**CN-053 counted words.** Titled *Avoid Critical Content in iFrames*, asserting
+`raw.word_count >= 300`. Nothing in the item observed an iframe and
+`javascript_render_audit.py` reports no iframe signal of any kind, so a café was told
+to stop hiding content in frames it does not have — on three of eight pages, because
+one ran to 293 words. It does not become a script item with a better field: embeds are
+normal, and whether the content that *matters* is inside one is a judgement about what
+matters. Layout lens.
+
+**The 42 unreviewed vocabulary misses are 0, and 14 of them were the tool's fault.**
+`len(w) > 2` dropped `h1`, `h2` and `ga4` — which are the entire subject of the items
+that name them, and dropping them from the *assertion* side left those items with an
+empty vocabulary, unable to share a word with anything. The heuristic now keeps short
+tokens carrying a digit, stems regular English endings so `indexed` matches
+`indexability`, and reads `field` and `value_map` keys as part of what an item asserts.
+The remaining 28 are each answered in writing in `REVIEWED`. Four are defects:
+
+- **`SP-111` and `SP-112`**, *Check Core Web Vitals in Search Console*, assert
+  `performance_score >= 90` — the blended Lighthouse score, which mixes TBT and Speed
+  Index and is not Core Web Vitals. `pagespeed.py` already computes the right thing in
+  `field_cwv`, from CrUX, which is the data Search Console shows. Neither reads it. And
+  pointing SP-112 at it would make it identical to SP-108 in script, args and
+  assertion — so it is a ninth duplicate pair, not a repair.
+- **`CI-002`** *Ensure Important Content Is Indexed* asserts `summary.urls >= 1`. A
+  sitemap listing one URL passes a site of five hundred pages, and being in a sitemap
+  is not being indexed.
+- **`IN-127`** *Use a Clear International URL Structure* asserts whether the hreflang
+  set mixes http and https. Worth checking; not URL structure.
+
+All four are left open rather than rewritten in the same pass that found them.
+
+**Presence is not parity.** The i18n tests check that a translation exists, is not
+blank and contains Cyrillic — all three stayed green through 0.20 while SE-118's
+English fix changed and its Russian did not. `tools/i18n_digest.py` stores a digest of
+the English `(title, fix)` beside each translation, so changing the English fails the
+build and names the item until somebody re-reads the Russian. Deliberately not a
+digest of the translation: improving Russian wording should not require re-stamping
+anything. An item with no digest counts as drift, not as a fresh start — a translation
+added without recording what it translated is the same unverifiable claim.
+
+**Two CI steps that could not exist before.** `audit_item_semantics.py` was held out
+of CI through 0.20 and 0.21 because it exited 1 on the registry as shipped, and a
+required check that is red by default is a check nobody reads. It is green now, so it
+holds the line: an item added with no ruling, or one silently sharing another's
+assertion, fails the build. `i18n_digest.py --check` joins it.
+
+**And the good fixture had duplicate meta descriptions.** Both blog posts carried a
+description saying it was shared *"on purpose, so the duplicate-content check has a
+duplicate to find"* — except the duplicate content moved to the broken fixture two
+releases ago and the descriptions stayed behind. Nothing noticed because nothing
+checked descriptions. MS-029's first act on being given real evidence was to accuse
+the site the pair calls good, correctly.
+
+Registry `598d714134d9` -> `e7d966be23f9`: MS-027 and CN-053 become `llm` items,
+MS-029 changes assertion, eight items gain `scores_with`. No severity changed.
+615 -> 629 tests. `llm` 36 -> 38, `script` 144 -> 142.
+
 ## 0.21.0 — 6 August 2026
 
 **CI-019 accused every small business on the internet of exposing a shopping cart it
