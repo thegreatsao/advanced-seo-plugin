@@ -14,6 +14,26 @@ import site_crawl
 from seo_common import normalize_url, print_json_or_text
 
 
+# basis: convention — four pages. Below it "this anchor appears on most pages" is a
+# statement about two or three documents, and the sitewide-link rule this feeds cannot
+# tell a navigation menu from a coincidence. A floor, not a calibration.
+MIN_PAGES_FOR_SITEWIDE = 4
+# basis: convention — half the crawled pages. "Sitewide" has no sharper definition
+# available here: a footer link on 60% of a site is the same thing as one on 95%, and
+# the number only has to sit above what an editorial link plausibly reaches.
+SITEWIDE_PAGE_SHARE = 0.5
+# basis: convention — five links carrying one anchor, and 80% of that target's links
+# being that anchor. Both halves are needed: the share alone fires on a target with two
+# links, and the count alone fires on any well-linked page. 0.9.0 is why the pair
+# exists — the count alone reported every navigation bar as anchor spam.
+EXACT_MATCH_MIN_LINKS = 5
+EXACT_MATCH_SHARE = 0.8   # basis: convention — the share half of the pair above
+# basis: convention — three editorial links, below a third of them distinct. A
+# diversity ratio only means something once there are enough links to divide, which is
+# what the count is doing beside it.
+DIVERSITY_MIN_LINKS = 3
+DIVERSITY_FLOOR = 0.34   # basis: convention — the ratio half of the pair above
+
 GENERIC_ANCHORS = {
     "",
     "click here",
@@ -76,12 +96,12 @@ def navigation_links(links: list[dict], pages: dict) -> set:
     means nothing, and a link on both of them is as likely to be editorial.
     """
     html_pages = [key for key, row in pages.items() if row.get("status") == 200]
-    if len(html_pages) < 4:
+    if len(html_pages) < MIN_PAGES_FOR_SITEWIDE:
         return set()
     sources: dict[tuple, set] = defaultdict(set)
     for link in links:
         sources[_pair(link)].add(link["source"])
-    threshold = len(html_pages) / 2
+    threshold = len(html_pages) * SITEWIDE_PAGE_SHARE
     return {pair for pair, srcs in sources.items() if len(srcs) > threshold}
 
 
@@ -146,9 +166,11 @@ def audit_anchor_text(start_url: str, inventory: dict | None = None, depth: int 
             "top_anchor_count": top_count,
         }
         target_rows.append(row)
-        if top_count >= 5 and top_count / max(1, len(normalized)) >= 0.8:
+        if top_count >= EXACT_MATCH_MIN_LINKS and \
+                top_count / max(1, len(normalized)) >= EXACT_MATCH_SHARE:
             overused_exact.append(row)
-        if len(editorial_anchors) >= 3 and diversity_ratio < 0.34:
+        if len(editorial_anchors) >= DIVERSITY_MIN_LINKS and \
+                diversity_ratio < DIVERSITY_FLOOR:
             low_diversity.append(row)
 
     issues = []

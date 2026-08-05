@@ -174,7 +174,7 @@ def pace(host: str, rps: float | None = None) -> float:
             # A stale slot from a previous run — or a clock that moved — must not
             # park the audit. monotonic() is per-boot, so a value in the future
             # means the file outlived a reboot.
-            if last > now or now - last > 3600:
+            if last > now or now - last > STALE_PACE_SLOT_SECONDS:
                 last = 0.0
             waited = max(0.0, last + interval - now)
             if waited:
@@ -208,6 +208,12 @@ def pace(host: str, rps: float | None = None) -> float:
 # ignored while `*` rules applied instead. Verified against CPython's
 # Entry.applies_to; there is a test.
 ROBOTS_TOKEN = "AgenticSEOSkill"
+
+# basis: convention — one hour. An operational bound, not a verdict: a pacing slot older
+#  than this is treated as belonging to a previous run, because `monotonic()` is per-boot
+#  and a file that outlived a reboot would otherwise park the audit. An hour is longer
+#  than any audit and shorter than any uptime worth worrying about.
+STALE_PACE_SLOT_SECONDS = 3600
 
 # Cached on disk rather than per process. Every evidence script is its own
 # process, so an in-process cache would fetch /robots.txt 45 times per audit —

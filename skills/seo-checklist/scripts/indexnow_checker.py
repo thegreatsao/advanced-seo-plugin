@@ -34,6 +34,11 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get, safe_post
 
+# basis: presentation — a key longer than eight characters is echoed as first four,
+#  last four; anything shorter is replaced outright. A masking rule for the output, and
+#  the only threshold in this tree whose purpose is to *not* report something.
+KEY_MASK_MIN_CHARS = 8
+
 INDEXNOW_ENDPOINTS = {
     "bing": "https://www.bing.com/indexnow",
     "yandex": "https://yandex.com/indexnow",
@@ -192,7 +197,7 @@ def run_indexnow_check(site_url: str, key: str) -> dict:
 
     results = {
         "url": site_url,
-        "key": key[:4] + "..." + key[-4:] if len(key) > 8 else "***",
+        "key": key[:4] + "..." + key[-4:] if len(key) > KEY_MASK_MIN_CHARS else "***",
         "checks": {},
         "issues": [],
         "summary": {"passed": 0, "failed": 0, "info": 0},

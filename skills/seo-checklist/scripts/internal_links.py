@@ -23,6 +23,17 @@ from urllib.parse import urlparse
 import site_crawl
 
 
+# basis: inherited — under three outgoing internal links from a page, present at
+#  import. A page with a navigation bar clears this without trying, so it fires on
+#  pages rendered client-side or genuinely orphaned in the other direction.
+LOW_OUTLINKS = 3
+# basis: inherited — over a hundred, present at import. Above it the page is a
+#  directory or a tag index rather than a document, and PageRank per link is thin.
+HIGH_OUTLINKS = 100
+# basis: inherited — a site averaging under five internal links per page, present at
+#  import.
+LOW_AVERAGE_OUTLINKS = 5
+
 def analyze(inventory: dict, start_url: str) -> dict:
     """Link structure from an inventory. No requests."""
     pages = inventory.get("pages") or {}
@@ -107,8 +118,8 @@ def analyze(inventory: dict, start_url: str) -> dict:
 
     no_text = sum(1 for row in pages.values() for link in (row.get("links") or [])
                   if link.get("internal") and not (link.get("anchor") or "").strip())
-    low_link_pages = [key for key, count in out_counts.items() if count < 3]
-    high_link_pages = [key for key, count in out_counts.items() if count > 100]
+    low_link_pages = [key for key, count in out_counts.items() if count < LOW_OUTLINKS]
+    high_link_pages = [key for key, count in out_counts.items() if count > HIGH_OUTLINKS]
 
     result["summary"] = {
         "pages": len(pages),
@@ -149,7 +160,7 @@ def analyze(inventory: dict, start_url: str) -> dict:
     if result["orphan_candidates"]:
         result["recommendations"].append(
             "Add internal links pointing to orphan pages from related content")
-    if result["link_distribution"]["avg"] < 5:
+    if result["link_distribution"]["avg"] < LOW_AVERAGE_OUTLINKS:
         result["recommendations"].append(
             "Increase internal linking — aim for 3-5 relevant links per 1000 words")
 

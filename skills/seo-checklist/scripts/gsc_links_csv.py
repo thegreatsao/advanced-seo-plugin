@@ -31,6 +31,10 @@ import re
 import zipfile
 
 # Google localises the export, so match on shape rather than on English headers.
+# basis: inherited — half the backlinks from one domain, present at import. Round, and
+#  the finding it raises is about concentration risk rather than about a number of links.
+TOP1_SHARE_PCT = 50
+
 SITE_SHEETS = ("linking sites", "linking-sites", "ссылающиеся сайты", "sites")
 ANCHOR_SHEETS = ("linking text", "linking-text", "anchor", "текст ссылок")
 PAGE_SHEETS = ("linked pages", "linked-pages", "top linked", "страницы")
@@ -168,7 +172,7 @@ def analyze(path: str, site: str = "") -> dict:
             "message": "no linking-sites sheet found in the export — re-export from "
                        "Search Console -> Links -> Export",
         })
-    if result["concentration"]["top1_share_pct"] and result["concentration"]["top1_share_pct"] > 50:
+    if result["concentration"]["top1_share_pct"] and result["concentration"]["top1_share_pct"] > TOP1_SHARE_PCT:
         result["issues"].append({
             "severity": "high",
             "message": f"{result['concentration']['top1_share_pct']}% of links come from "

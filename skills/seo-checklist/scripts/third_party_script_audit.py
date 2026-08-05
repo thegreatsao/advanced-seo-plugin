@@ -27,6 +27,13 @@ KNOWN_TAGS = {
 }
 
 
+# basis: inherited — eight third-party scripts, present at import. Round, and the sort
+#  of number a performance blog post quotes; nothing here measured what an eighth tag
+#  costs that a seventh did not.
+MANY_THIRD_PARTY_SCRIPTS = 8
+# basis: inherited — 300KB of third-party JavaScript, present at import.
+THIRD_PARTY_BYTES_WARN = 300_000
+
 def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
     path = Path(source)
     if path.is_file():
@@ -85,9 +92,9 @@ def audit(source: str, fetch_scripts: bool = False, timeout: int = 15) -> dict:
     third_party = [row for row in scripts if row["third_party"]]
     blocking_third_party = [row for row in third_party if row["blocking"]]
     total_bytes = sum(row["content_length"] or 0 for row in third_party)
-    if len(third_party) >= 8:
+    if len(third_party) >= MANY_THIRD_PARTY_SCRIPTS:
         issues.append({"severity": "warning", "message": "Many third-party script tags detected", "evidence": str(len(third_party))})
-    if total_bytes > 300_000:
+    if total_bytes > THIRD_PARTY_BYTES_WARN:
         issues.append({"severity": "warning", "message": "Third-party script transfer size is high", "evidence": f"{total_bytes} bytes"})
 
     return {

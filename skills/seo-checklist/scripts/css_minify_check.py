@@ -35,6 +35,20 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get
 
+# The three signals of minified CSS, all present at import and all inherited. Any one
+# alone is weak — a long licence header raises bytes-per-line, a build that strips
+# comments without joining lines lowers the comment share — so they are read together.
+# basis: inherited — 180 bytes per line, present at import. Source CSS averages well
+#  under 100.
+MINIFIED_BYTES_PER_LINE = 180
+# basis: inherited — under 8% comments, present at import.
+MINIFIED_COMMENT_SHARE = 0.08
+# basis: inherited — fewer than 20 indented lines in the first 400, present at import.
+MINIFIED_MAX_INDENTED = 20
+# basis: inherited — 20KB recoverable, present at import: the point at which minifying
+#  is worth a medium finding rather than a note.
+WASTED_BYTES_WARN = 20000
+
 MAX_SHEETS = 12
 # basis: inherited — 2KB, present at import. Below it the minified/unminified ratio is
 #  dominated by the licence header
@@ -53,7 +67,9 @@ def looks_minified(css: str) -> tuple[bool, float]:
     comment_pct = comments / len(css) if css else 0
     indented = sum(1 for ln in css.split("\n")[:400] if ln[:2] in ("  ", "\t "))
     # Any one signal alone is weak evidence; together they are decisive.
-    minified = ratio > 180 and comment_pct < 0.08 and indented < 20
+    minified = (ratio > MINIFIED_BYTES_PER_LINE
+                and comment_pct < MINIFIED_COMMENT_SHARE
+                and indented < MINIFIED_MAX_INDENTED)
     return minified, round(ratio, 1)
 
 
@@ -122,7 +138,7 @@ def check(url: str, timeout: int = 15) -> dict:
                            f"{row['ratio']} bytes/line): {row['href']}",
                 "url": row["href"],
             })
-    if result["wasted_bytes"] > 20000:
+    if result["wasted_bytes"] > WASTED_BYTES_WARN:
         result["issues"].append({
             "severity": "medium",
             "message": f"~{result['wasted_bytes'] // 1024} KB recoverable by minifying CSS",

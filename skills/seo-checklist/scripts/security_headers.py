@@ -70,6 +70,15 @@ SECURITY_HEADERS = {
 }
 
 
+# basis: standard — one year of HSTS `max-age`, the minimum hstspreload.org requires
+#  for inclusion in the browsers' preload list. Not this project's number and checkable
+#  against a published requirement, which is what separates it from the rest here.
+HSTS_MIN_MAX_AGE = 31_536_000
+# basis: inherited — more than three of the tracked headers absent, present at import.
+#  A count over a weighted set, so it double-counts what SECURITY_HEADERS already
+#  scores; kept because the finding it raises is about breadth rather than score.
+MANY_MISSING_HEADERS = 3
+
 def check_security_headers(url: str, timeout: int = 15) -> dict:
     """
     Check security headers for a URL.
@@ -124,7 +133,7 @@ def check_security_headers(url: str, timeout: int = 15) -> dict:
                     if "max-age=" in value.lower():
                         try:
                             max_age = int(value.lower().split("max-age=")[1].split(";")[0].strip())
-                            if max_age < 31536000:
+                            if max_age < HSTS_MIN_MAX_AGE:
                                 result["issues"].append(
                                     f"⚠️ HSTS max-age is {max_age}s — recommend at least 31536000 (1 year)"
                                 )
@@ -143,7 +152,7 @@ def check_security_headers(url: str, timeout: int = 15) -> dict:
 
         # Summary issues
         missing_count = len(result["headers_missing"])
-        if missing_count > 3:
+        if missing_count > MANY_MISSING_HEADERS:
             result["issues"].append(f"🔴 {missing_count} security headers missing — poor security posture")
         elif missing_count > 0:
             result["issues"].append(f"⚠️ {missing_count} security header(s) missing")

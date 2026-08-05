@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.14.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.15.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -399,6 +399,21 @@ Never-crawled findings need a window of at least a week, and percentages need at
 crawler requests; below either, the figures are absent rather than computed from nothing.
 A week or more of log is worth much more than a day.
 
+**Who a crawler says it is, and who it is.** Classification is a lookup over the
+User-Agent, which is a string the client chose — so a scraper announcing itself as
+Googlebot spends Google's crawl budget in these figures, and the direction of that error
+is always towards *over*-reporting the crawl. `--verify-bots` confirms each claimed search
+crawler by the reverse-then-forward DNS check Google, Bing and Yandex document, and
+requests from an address that fails are re-attributed out of the crawl-budget numbers
+rather than annotated in place. Off by default: it is a network call about a third party.
+A DNS failure is *not* read as forgery, and three crawlers that publish address ranges
+instead of a DNS convention (DuckDuckBot, SeznamBot, PetalBot) stay claims either way.
+
+```bash
+python3 $S/scripts/checklist_runner.py https://example.com/ \
+    --server-log /var/log/nginx/access.log --verify-bots
+```
+
 **A URL is fetched once per run.** Thirty-six of the evidence scripts need the page
 they are judging and each runs in its own process, so the same document used to be
 requested 37 times. Responses are now shared through a directory the runner creates
@@ -479,6 +494,13 @@ is in `SKILL.md`), save the numbers and pass `--rendered-json`.
 mobile-interstitial keys are dropped rather than zeroed: a desktop window cannot
 answer either question, and a 0 would be a verdict about a viewport nobody looked
 at.
+
+**A supplied measurement is the one input an audit cannot check by measuring again.** A
+file naming a different page is refused with the reason. Its *age* cannot be verified at
+all — every date inside it is the operator's claim — so the report states how many days
+ago it was last written, from the filesystem rather than from the file, and
+`--max-artifact-age DAYS` refuses one that is older. Off by default: how stale a
+measurement may be depends on how often the page changes.
 
 ## Assertions that cannot fire
 

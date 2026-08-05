@@ -32,6 +32,14 @@ except ImportError:
     print("Error: gsc_checker.py must be importable from the same directory")
     sys.exit(1)
 
+# basis: inherited — average position 1.5, present at import. An average, so a page
+#  alternating between 1 and 2 counts as owning the query; below it the page is not
+#  reliably first for anything.
+RANKS_FIRST_POSITION = 1.5
+# basis: inherited — 100 impressions, present at import. Splits a cannibalised query
+#  into `high` and `medium`: below it the split is real but too small to prioritise.
+HIGH_SEVERITY_IMPRESSIONS = 100
+
 ROW_LIMIT = 5000
 # basis: inherited — 10 impressions, present at import. Below it two pages sharing a
 #  query is noise rather than cannibalisation, but the number was not measured
@@ -107,7 +115,7 @@ def find_branded(rows: list, site_url: str) -> dict:
         "position": owner["position"],
         "clicks": owner["clicks"],
         "owns_homepage": path in ("", "/"),
-        "ranks_first": owner["position"] <= 1.5,
+        "ranks_first": owner["position"] <= RANKS_FIRST_POSITION,
         "host": host,
     }
 
@@ -151,7 +159,7 @@ def analyze(site_url: str, credentials: str, days: int) -> dict:
 
     for c in result["cannibalized"][:10]:
         result["issues"].append({
-            "severity": "high" if c["impressions"] > 100 else "medium",
+            "severity": "high" if c["impressions"] > HIGH_SEVERITY_IMPRESSIONS else "medium",
             "message": f"'{c['query']}' splits across {c['page_count']} URLs "
                        f"({c['impressions']} impressions, rank spread {c['spread']}) — "
                        f"pick one target and consolidate",

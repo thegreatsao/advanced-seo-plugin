@@ -42,6 +42,17 @@ except ImportError:
 PSI_API = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 VALID_STRATEGIES = ("mobile", "desktop")
 
+# basis: inherited — 100ms of predicted saving, present at import. Below it a Lighthouse
+#  opportunity is dropped from the report, so it does decide what the audit says; the
+#  number is a noise floor for an estimate Lighthouse itself calls approximate.
+MIN_OPPORTUNITY_SAVINGS_MS = 100
+# basis: presentation — Lighthouse's own published score bands (90 and above green, 50
+#  and above amber) and a millisecond value rendered as seconds once it reaches a
+#  thousand. Both only choose what the console prints.
+SCORE_GOOD = 90
+SCORE_AVERAGE = 50        # basis: presentation — the amber band of the pair above
+SECONDS_DISPLAY_MS = 1000  # basis: presentation — where ms is printed as seconds
+
 # Current CWV thresholds (as of 2026)
 # basis: standard — the same published Core Web Vitals bands as cwv_metrics.THRESHOLDS.
 #  Two copies because one reads a local trace and one reads CrUX; a test asserts they
@@ -184,7 +195,7 @@ def parse_pagespeed_response(data: dict[str, Any], url: str, strategy: str = "mo
     for audit_id, audit in audits.items():
         if audit.get("details", {}).get("type") == "opportunity":
             savings = audit.get("details", {}).get("overallSavingsMs")
-            if savings and savings > 100:
+            if savings and savings > MIN_OPPORTUNITY_SAVINGS_MS:
                 result["opportunities"].append({
                     "title": audit.get("title", audit_id),
                     "savings_ms": round(savings),
@@ -306,9 +317,9 @@ def print_result(result: dict):
     print("=" * 50)
 
     score = result["performance_score"]
-    if score >= 90:
+    if score >= SCORE_GOOD:
         icon = "🟢"
-    elif score >= 50:
+    elif score >= SCORE_AVERAGE:
         icon = "🟡"
     else:
         icon = "🔴"
@@ -330,7 +341,7 @@ def print_result(result: dict):
 
             unit = metric["unit"]
             value = metric["value"]
-            if unit == "ms" and value >= 1000:
+            if unit == "ms" and value >= SECONDS_DISPLAY_MS:
                 display = f"{value/1000:.1f}s"
             elif unit == "ms":
                 display = f"{value}ms"
@@ -349,7 +360,7 @@ def print_result(result: dict):
         print("\nTop Opportunities:")
         for opp in result["opportunities"][:5]:
             savings = opp["savings_ms"]
-            if savings >= 1000:
+            if savings >= SECONDS_DISPLAY_MS:
                 display = f"{savings/1000:.1f}s"
             else:
                 display = f"{savings}ms"

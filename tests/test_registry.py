@@ -18,6 +18,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL = os.path.join(ROOT, "skills", "seo-checklist")
 SCRIPTS = os.path.join(SKILL, "scripts")
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import harness  # noqa: E402
 
 REGISTRY = os.path.join(SKILL, "resources", "config", "checklist.json")
 SHAPES = os.path.join(SKILL, "resources", "references", "script-output-shapes.md")
@@ -170,8 +173,11 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
     # The unnamed count is a ceiling rather than a list, for the same reason the
     # request count in CI is: a printed number in a green build is a number nobody
     # reads. It may fall freely and may not rise without somebody deciding to raise
-    # it here. 77 at 0.13.0.
-    UNNAMED_CEILING = 77
+    # it here. 77 at 0.13.0, and **zero** from 0.15.0: every number a comparison in
+    # this tree reads now has a name and a stated basis. Kept as a ceiling rather than
+    # deleted, because zero is a state to defend and not an achievement to file away —
+    # the next bare literal somebody types fails this.
+    UNNAMED_CEILING = 0
 
     def _tool(self):
         sys.path.insert(0, os.path.join(SKILL, "tools"))
@@ -187,7 +193,7 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
         bare = [f"{t['file']}:{t['line']} {t['name']}" for t in named if not t["kind"]]
         self.assertEqual(bare, [], "add a `# basis: kind — why` line above each")
 
-    def test_the_kinds_are_the_documented_four(self):
+    def test_the_kinds_are_the_documented_five(self):
         at = self._tool()
         named, _ = at.scan()
         self.assertEqual({t["kind"] for t in named} - set(at.KINDS), set())
@@ -273,8 +279,11 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
         found = self.outputs()
         self.assertIn("checklist-results.json", found,
                       "the defaults were not read; this test would pass on nothing")
-        proc = subprocess.run(["git", "check-ignore", "-v", *sorted(found)],
-                              cwd=ROOT, capture_output=True, text=True)
+        # `git -C` rather than `cwd=`, and through `harness.spawn` so the binary is
+        # resolved to an absolute path: both a `cwd` and a bare executable name put the
+        # child on CPython's fork path, where macOS kills it before it execs.
+        proc = harness.spawn(["git", "-C", ROOT, "check-ignore", "-v", *sorted(found)],
+                             env=os.environ.copy())
         if proc.returncode == 128:
             self.skipTest("not a git checkout")
         ignored = {line.rsplit("\t", 1)[-1] for line in proc.stdout.splitlines()}
@@ -286,8 +295,7 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
         """The same check from the other end. A pattern added to `.gitignore` does
         nothing for a file already in the index, and that was the second half of the
         mistake: the ignore list and the index both had to be fixed."""
-        proc = subprocess.run(["git", "ls-files"], cwd=ROOT,
-                              capture_output=True, text=True)
+        proc = harness.spawn(["git", "-C", ROOT, "ls-files"], env=os.environ.copy())
         if proc.returncode != 0:
             self.skipTest("not a git checkout")
         self.assertEqual(sorted(self.outputs() & set(proc.stdout.split())), [])

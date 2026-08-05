@@ -22,6 +22,12 @@ import sys
 from collections import defaultdict
 
 import site_crawl
+from seo_common import THIN_CONTENT_WORDS
+
+# basis: inherited — 100 words, present at import. Splits a thin page into two
+#  severities: under a hundred words the page is closer to empty than to short, which is
+#  a different conversation with whoever owns it.
+NEARLY_EMPTY_WORDS = 100
 
 # Quality gates from resources/references/quality-gates.md
 # basis: inherited — 300 words for a default page, present at import from
@@ -31,9 +37,9 @@ import site_crawl
 THIN_CONTENT_THRESHOLDS = {
     "blog_post": 1500,
     "landing_page": 800,
-    "product_page": 300,
+    "product_page": THIN_CONTENT_WORDS,
     "location_page": 350,
-    "default": 300,
+    "default": THIN_CONTENT_WORDS,
 }
 
 
@@ -165,7 +171,7 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
         if wc < threshold:
             thin_pages.append({
                 "type": "thin_content",
-                "severity": "Warning" if wc >= 100 else "Critical",
+                "severity": "Warning" if wc >= NEARLY_EMPTY_WORDS else "Critical",
                 "url": url,
                 "word_count": wc,
                 "threshold": threshold,

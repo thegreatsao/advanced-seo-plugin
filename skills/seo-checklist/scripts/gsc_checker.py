@@ -29,6 +29,28 @@ except ImportError:
     HAS_GSC_DEPS = False
 
 
+# The opportunity rules, all present at import and none of them decided here. They read
+# as SEO-blog folklore stated in numbers, which is worth saying plainly: "striking
+# distance" is a phrase, not a measurement, and none of these bands was checked against
+# what a ranking change on this site actually costs or returns.
+# basis: inherited — positions 4-20 with at least 50 impressions, present at import.
+STRIKING_DISTANCE_MIN_POSITION = 4
+# basis: inherited — position 20, the far end of the band above: roughly the bottom of
+#  Google's second page of results.
+STRIKING_DISTANCE_MAX_POSITION = 20
+# basis: inherited — fifty impressions, the sample floor of the rule above: below it
+#  an average position is the average of one or two searches.
+STRIKING_DISTANCE_MIN_IMPRESSIONS = 50
+# basis: inherited — top three positions, under 5% CTR, at least 100 impressions,
+#  present at import. Reads as a featured snippet taking the clicks.
+TOP_POSITION_MAX = 3
+LOW_CTR_PCT = 5           # basis: inherited — the CTR half of the rule above
+LOW_CTR_MIN_IMPRESSIONS = 100   # basis: inherited — the sample floor of the rule above
+# basis: inherited — 200 impressions with under 2% CTR, present at import: seen often,
+#  clicked rarely, wherever it ranks.
+HIGH_IMPRESSIONS = 200
+VERY_LOW_CTR_PCT = 2      # basis: inherited — the CTR half of the rule above
+
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 
 
@@ -200,7 +222,8 @@ def detect_opportunities(performance_data: list) -> list:
         ctr = row.get("ctr", 0)
         imps = row.get("impressions", 0)
 
-        if 4 <= pos <= 20 and imps >= 50:
+        if (STRIKING_DISTANCE_MIN_POSITION <= pos <= STRIKING_DISTANCE_MAX_POSITION
+                and imps >= STRIKING_DISTANCE_MIN_IMPRESSIONS):
             opportunities.append({
                 "type": "striking_distance",
                 "severity": "High",
@@ -211,7 +234,8 @@ def detect_opportunities(performance_data: list) -> list:
                 "finding": f"Position {pos} with {imps} impressions — within striking distance.",
                 "fix": "Optimize content for this query. Add keyword to H1/H2, expand content depth, build internal links.",
             })
-        elif pos <= 3 and ctr < 5 and imps >= 100:
+        elif (pos <= TOP_POSITION_MAX and ctr < LOW_CTR_PCT
+              and imps >= LOW_CTR_MIN_IMPRESSIONS):
             opportunities.append({
                 "type": "low_ctr_top_position",
                 "severity": "Medium",
@@ -223,7 +247,7 @@ def detect_opportunities(performance_data: list) -> list:
                 "finding": f"Position {pos} but only {ctr}% CTR — a Featured Snippet may be stealing clicks.",
                 "fix": "Optimize for Featured Snippet (40-55 word answer after H2). Improve title tag and meta description.",
             })
-        elif imps >= 200 and ctr < 2:
+        elif imps >= HIGH_IMPRESSIONS and ctr < VERY_LOW_CTR_PCT:
             opportunities.append({
                 "type": "high_impressions_low_ctr",
                 "severity": "Medium",

@@ -16,6 +16,14 @@ FACET_PARAMS = {"sort", "filter", "color", "size", "brand", "price", "min_price"
 TRACKING_PREFIXES = ("utm_", "fbclid", "gclid", "msclkid")
 
 
+# basis: inherited — 115 characters, present at import. An oddly specific number for a
+#  convention: long URLs are held to be worse for sharing and for click-through, and no
+#  search engine publishes a length limit anywhere near this.
+MAX_URL_CHARS = 115
+# basis: inherited — more than five path segments, present at import: a proxy for how
+#  deep a page sits, which is not the same thing as click depth from the home page.
+MAX_PATH_SEGMENTS = 5
+
 def analyze_urls(urls: list[str]) -> dict:
     rows = []
     path_variants = defaultdict(list)
@@ -24,7 +32,7 @@ def analyze_urls(urls: list[str]) -> dict:
         params = parse_qs(parsed.query, keep_blank_values=True)
         path = parsed.path or "/"
         flags = []
-        if len(url) > 115:
+        if len(url) > MAX_URL_CHARS:
             flags.append("long_url")
         if any(ch.isupper() for ch in path):
             flags.append("uppercase_path")
@@ -32,7 +40,7 @@ def analyze_urls(urls: list[str]) -> dict:
             flags.append("underscore_in_path")
         if re.search(r"/(tag|category|author|page)/\d+/?$", path):
             flags.append("thin_archive_pattern")
-        if len([seg for seg in path.split("/") if seg]) > 5:
+        if len([seg for seg in path.split("/") if seg]) > MAX_PATH_SEGMENTS:
             flags.append("deep_path")
         if params:
             flags.append("has_parameters")

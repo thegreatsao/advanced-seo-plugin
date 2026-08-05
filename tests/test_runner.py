@@ -445,7 +445,7 @@ class PrivateAddresses(unittest.TestCase):
                  "https://nothing-resolves-here.invalid/", "--mode", "page",
                  "--allow-private", "--no-history", "--no-prompt", "--quiet",
                  "--timeout", "20", "--json", out],
-                capture_output=True, text=True, timeout=300)
+                capture_output=True, text=True, timeout=300, close_fds=False)
             self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
             with open(out, encoding="utf-8") as f:
                 payload = json.load(f)
@@ -479,7 +479,7 @@ class PrivateAddresses(unittest.TestCase):
                 [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"),
                  "https://example.com/", "--archive", site, "--allow-private",
                  "--no-history", "--no-prompt", "--quiet", "--json", out],
-                capture_output=True, text=True, timeout=300)
+                capture_output=True, text=True, timeout=300, close_fds=False)
             self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
             with open(out, encoding="utf-8") as f:
                 payload = json.load(f)
@@ -532,6 +532,74 @@ class AScriptTheOperatingSystemKilled(unittest.TestCase):
         source = inspect.getsource(checklist_runner.run_script)
         self.assertIn("close_fds=False", source)
         self.assertNotIn("cwd=", source)
+
+    # Every condition CPython actually checks before choosing `posix_spawn` over
+    # `fork`+`exec`, as three rules over the whole tree rather than one assertion about
+    # one function. 0.14.0 guarded `run_script` and `harness.spawn` and left eight other
+    # call sites forking, one of them in an evidence script — and the cost was not
+    # hypothetical: the openssl child in `harness.tls_context()` died of signal 11 and
+    # the `except` around it reported `SkipTest("openssl unavailable")`, so **the TLS
+    # site shape 0.14.0 announced as exercised live had never run on macOS at all**,
+    # and the message blamed a binary that was installed and working.
+    SPAWNS = ("run", "Popen", "call", "check_call", "check_output")
+
+    def _spawn_calls(self):
+        """(file, line, call node) for every `subprocess.<spawn>` in the tree."""
+        import ast
+        found = []
+        for folder in (SCRIPTS, os.path.join(SCRIPTS, "lib"),
+                       os.path.join(ROOT, "skills", "seo-checklist", "tools"),
+                       os.path.dirname(os.path.abspath(__file__))):
+            for entry in sorted(os.listdir(folder)):
+                if not entry.endswith(".py"):
+                    continue
+                path = os.path.join(folder, entry)
+                with open(path, encoding="utf-8") as f:
+                    tree = ast.parse(f.read())
+                for node in ast.walk(tree):
+                    if (isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Attribute)
+                            and node.func.attr in self.SPAWNS
+                            and isinstance(node.func.value, ast.Name)
+                            and node.func.value.id == "subprocess"):
+                        found.append((os.path.basename(path), node.lineno, node))
+        return found
+
+    def test_every_child_in_the_tree_is_started_without_forking(self):
+        """Rule one: `close_fds=False`, everywhere, not only in the two functions
+        somebody remembered."""
+        calls = self._spawn_calls()
+        self.assertGreater(len(calls), 8, "the scan found almost nothing")
+        bad = [f"{name}:{line}" for name, line, node in calls
+               if not any(kw.arg == "close_fds" for kw in node.keywords)]
+        self.assertEqual(bad, [], "these fork, and macOS kills a forked child inside "
+                                  "Apple's atfork handler before it execs")
+
+    def test_no_child_in_the_tree_is_given_a_working_directory(self):
+        """Rule two. A `cwd` forces the fork path on its own, whatever `close_fds`
+        says. `git -C`, `PYTHONPATH` and absolute paths cover every use it had here."""
+        bad = [f"{name}:{line}" for name, line, node in self._spawn_calls()
+               if any(kw.arg == "cwd" for kw in node.keywords)]
+        self.assertEqual(bad, [], "pass a tool flag or absolute paths instead")
+
+    def test_no_child_is_started_by_a_bare_binary_name(self):
+        """Rule three, and the one that made the other two look done while three call
+        sites still forked. CPython requires `os.path.dirname(executable)` to be
+        non-empty, so `["openssl", ...]` and `["git", ...]` take the fork path however
+        carefully everything else is set. `sys.executable` is absolute, which is why
+        every call that used it appeared to be fixed. Resolve with `shutil.which`."""
+        import ast
+        bad = []
+        for name, line, node in self._spawn_calls():
+            argv = node.args[0] if node.args else None
+            if not isinstance(argv, (ast.List, ast.Tuple)) or not argv.elts:
+                continue
+            first = argv.elts[0]
+            if (isinstance(first, ast.Constant) and isinstance(first.value, str)
+                    and "/" not in first.value):
+                bad.append(f"{name}:{line} {first.value!r}")
+        self.assertEqual(bad, [], "a bare name on PATH has no dirname, so CPython "
+                                  "forks; resolve it with shutil.which first")
 
 
 class Robots(unittest.TestCase):
@@ -2323,7 +2391,8 @@ class OneFetchPerUrl(unittest.TestCase):
             # port nothing has seen before — which every `served()` origin is.
             procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
                                       stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE, text=True)
+                                      stderr=subprocess.PIPE, text=True,
+                                      close_fds=False)
                      for _ in range(6)]
             outs = [p.communicate(timeout=60) for p in procs]
             self.assertEqual([o.strip() for o, _ in outs], ["200"] * 6,
@@ -2343,7 +2412,8 @@ class OneFetchPerUrl(unittest.TestCase):
             env = harness.offline_env(**{self.sh.CACHE_DIR_VAR: self.dir})
             procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
                                       stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE, text=True)
+                                      stderr=subprocess.PIPE, text=True,
+                                      close_fds=False)
                      for _ in range(8)]
             outs = [p.communicate(timeout=60) for p in procs]
             self.assertEqual([o.strip() for o, _ in outs],
@@ -2360,15 +2430,22 @@ class OneFetchPerUrl(unittest.TestCase):
         the checkout. This one did, and `checklist-results-crawl.json` reached a
         commit because of it.
         """
-        import subprocess
+        # The working directory is set **inside** the child, after exec, rather than by
+        # `cwd=`. This test genuinely needs one — the point is where the runner puts its
+        # output when nobody tells it — and `cwd=` is the one argument that forces
+        # CPython onto the fork path all on its own, where macOS kills the child before
+        # it runs a line. `runpy` with `__main__` gives the runner the same argv and the
+        # same `if __name__` entry it gets from the shell.
+        launch = ("import os, runpy, sys; os.chdir(sys.argv.pop(1)); "
+                  "runpy.run_path(sys.argv.pop(1), run_name='__main__')")
         with harness.served({"/": self.PAGE, "/robots.txt": (404, "")}) as site:
-            out = subprocess.run(
-                [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"),
+            out = harness.spawn(
+                [sys.executable, "-c", launch, self.dir,
+                 os.path.join(SCRIPTS, "checklist_runner.py"),
                  site.url, "--allow-private", "--max-rps", "50", "--no-history",
                  "--no-prompt", "--quiet", "--only", "crawling_indexing",
                  "--timeout", "60"],
-                env=harness.offline_env(), capture_output=True, text=True,
-                timeout=300, cwd=self.dir)
+                env=harness.offline_env(), timeout=300)
             self.assertEqual(out.returncode, 0, out.stderr[-2000:])
         left = [d for d in os.listdir(tempfile.gettempdir())
                 if d.startswith("seo-http-")]

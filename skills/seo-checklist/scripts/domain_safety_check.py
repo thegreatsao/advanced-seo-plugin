@@ -39,6 +39,19 @@ try:
 except ImportError:
     from scripts.lib.safe_http import default_headers, safe_get
 
+# basis: inherited — three labels, present at import, and definitional rather than
+#  calibratable: a whois lookup needs the registrable domain, and a multi-label public
+#  suffix (.co.uk, .com.br) is the only case where that is three labels rather than two.
+SECOND_LEVEL_LABELS = 3
+# basis: inherited — 3 seconds to first byte, present at import. Well above anything a
+#  Core Web Vitals band would allow, so this is a reachability smell rather than a
+#  performance verdict; the performance items measure that properly.
+SLOW_RESPONSE_MS = 3000
+# basis: inherited — 90 days, present at import. A domain younger than a quarter is
+#  reported as still accumulating trust, which is an SEO-folklore claim rather than
+#  something measured here, and the finding is `low` for that reason.
+YOUNG_DOMAIN_DAYS = 90
+
 SB_ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 SB_THREAT_TYPES = ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE",
                    "POTENTIALLY_HARMFUL_APPLICATION"]
@@ -103,7 +116,9 @@ def registrable_domain(host: str) -> str:
     if len(labels) <= 2:
         return host
     second_level = {"co", "com", "net", "org", "gov", "edu", "ac"}
-    keep = 3 if labels[-2] in second_level and len(labels) >= 3 else 2
+    keep = (SECOND_LEVEL_LABELS
+            if labels[-2] in second_level and len(labels) >= SECOND_LEVEL_LABELS
+            else 2)
     return ".".join(labels[-keep:])
 
 
@@ -118,8 +133,13 @@ def check_whois(domain: str, timeout: int) -> dict:
     queried = registrable_domain(domain)
     out["queried"] = queried
     try:
+        # `close_fds=False` is what makes CPython choose `posix_spawn` over
+        # `fork`+`exec`, and on macOS a forked child dies inside Apple's own atfork
+        # handler before it execs — signal 11, no output. This is the only evidence
+        # script that starts a child process, so it is the only one outside the runner
+        # that has to say so.
         proc = subprocess.run([binary, queried], capture_output=True, text=True,
-                              timeout=timeout)
+                              timeout=timeout, close_fds=False)
     except (subprocess.TimeoutExpired, OSError) as exc:
         out["error"] = f"whois failed: {exc}"[:200]
         return out
@@ -192,7 +212,7 @@ def check(url: str, timeout: int = 20) -> dict:
             "message": f"Site not reachable: {up['error'] or 'HTTP ' + str(up['status'])}",
             "url": url,
         })
-    elif up["response_ms"] and up["response_ms"] > 3000:
+    elif up["response_ms"] and up["response_ms"] > SLOW_RESPONSE_MS:
         result["issues"].append({
             "severity": "medium",
             "message": f"Slow response: {up['response_ms']} ms",
@@ -215,7 +235,7 @@ def check(url: str, timeout: int = 20) -> dict:
         })
 
     who = result["whois"]
-    if who.get("checked") and who.get("age_days") is not None and who["age_days"] < 90:
+    if who.get("checked") and who.get("age_days") is not None and who["age_days"] < YOUNG_DOMAIN_DAYS:
         result["issues"].append({
             "severity": "low",
             "message": f"Domain is only {who['age_days']} days old — expect slower "

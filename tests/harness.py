@@ -414,22 +414,33 @@ def tls_context():
     HTTPS shape reports itself as unexercised rather than silently not running.
     """
     import ssl
-    import subprocess
     import unittest
     if "context" in _TLS:
         return _TLS["context"]
     folder = tempfile.mkdtemp(prefix="seo-tls-")
     cert, key = os.path.join(folder, "cert.pem"), os.path.join(folder, "key.pem")
+    # Through `spawn`, and this call is why the rule is tree-wide rather than a note
+    # on two functions. It used to be a bare `subprocess.run`, so the openssl child
+    # forked, hit Apple's atfork handler and died of signal 11 — and the `except`
+    # below turned that into `SkipTest("openssl unavailable")`. openssl was installed
+    # and fine. **So the TLS shape 0.14.0 announced as "exercised live" had never once
+    # run on the machine it was written on**, and the message named the wrong cause,
+    # which is the failure this whole tree is built to refuse.
     try:
-        subprocess.run(
-            ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-             "-keyout", key, "-out", cert, "-days", "2",
-             "-subj", "/CN=127.0.0.1",
-             "-addext", "subjectAltName=IP:127.0.0.1"],
-            check=True, capture_output=True, timeout=120)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise unittest.SkipTest(f"openssl unavailable, so the HTTPS shape cannot be "
-                                f"served: {exc}") from exc
+        proc = spawn(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                      "-keyout", key, "-out", cert, "-days", "2",
+                      "-subj", "/CN=127.0.0.1",
+                      "-addext", "subjectAltName=IP:127.0.0.1"],
+                     env=os.environ.copy(), timeout=120)
+    except OSError as exc:
+        raise unittest.SkipTest(f"openssl could not be run, so the HTTPS shape "
+                                f"cannot be served: {exc}") from exc
+    if proc.returncode != 0:
+        # Named apart from "not installed", because they call for opposite responses:
+        # one is a machine without openssl, the other is a bug in this harness.
+        raise unittest.SkipTest(
+            f"openssl exited {proc.returncode} generating a test certificate, so the "
+            f"HTTPS shape cannot be served: {(proc.stderr or '').strip()[:300]}")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
     _TLS.update(context=context, cert=cert)
@@ -448,7 +459,7 @@ def tls_env(**extra) -> dict:
                        **extra)
 
 
-def spawn(args, env=None, timeout=600, stdin_text=None, cwd=None):
+def spawn(args, env=None, timeout=600, stdin_text=None):
     """`subprocess.run` for a child process, on the one code path that survives macOS.
 
     Every test module that runs a script or an audit goes through here, and the reason
@@ -474,17 +485,30 @@ def spawn(args, env=None, timeout=600, stdin_text=None, cwd=None):
     nothing, and `checklist_runner.run_script` now does the same thing for the same
     reason.
 
-    Pass a directory as `cwd` only if a test genuinely depends on it — it puts the
-    child back on the forking path, and on macOS it will start dying again.
+    There is deliberately no `cwd` parameter. It had one, unused, and an unused
+    parameter that silently reopens the bug is worse than no parameter: a child that
+    needs a working directory should be given a tool flag that takes one (`git -C`) or
+    absolute paths.
     """
+    # The condition nobody reads until it bites. CPython chooses `posix_spawn` only
+    # when `os.path.dirname(executable)` is non-empty — a bare `"openssl"` or `"git"`
+    # goes back through `fork`+`exec` however carefully everything else is set, and on
+    # macOS that child dies before it execs. 0.14.0's fix worked for every call that
+    # passed `sys.executable`, which is absolute, and silently did nothing for the
+    # calls that named a binary on `PATH`.
+    args = list(args)
+    if args and isinstance(args[0], str) and not os.path.dirname(args[0]):
+        import shutil
+        args[0] = shutil.which(args[0]) or args[0]
     kwargs = {"capture_output": True, "text": True, "timeout": timeout,
-              "env": env or offline_env(), "close_fds": False}
-    if cwd is not None:
-        kwargs["cwd"] = cwd
+              "env": env or offline_env()}
     if stdin_text is not None:
         kwargs["input"] = stdin_text
     import subprocess
-    return subprocess.run(list(args), **kwargs)
+    # `close_fds` spelled out at the call rather than folded into `kwargs`, so the
+    # tree-wide rule in `test_runner.py` can see it. A guard that a helper can hide
+    # from is a guard that stops at the helper.
+    return subprocess.run(args, close_fds=False, **kwargs)
 
 
 def offline_env(**extra) -> dict:

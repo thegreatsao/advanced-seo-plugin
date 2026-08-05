@@ -24,11 +24,17 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from lib.safe_http import default_headers, pace, retry_after_seconds
+    from lib.safe_http import (MAX_RETRY_AFTER_WAIT, default_headers, pace,
+                               retry_after_seconds)
 except ImportError:
-    from scripts.lib.safe_http import default_headers, pace, retry_after_seconds
+    from scripts.lib.safe_http import (MAX_RETRY_AFTER_WAIT, default_headers, pace,
+                                       retry_after_seconds)
 
 NU_ENDPOINT = "https://validator.w3.org/nu/"
+# basis: inherited — more than 10 validation warnings, present at import. Warnings are
+#  advisory in Nu's own output, so this is a "the page has a pattern of them" line rather
+#  than a count anybody calibrated.
+MANY_WARNINGS = 10
 # basis: inherited — 40, present at import. A cap on how much of Nu's answer is carried
 #  forward, not a verdict: a page with more than 40 validation errors is already failing
 #  the item
@@ -58,7 +64,7 @@ def validate(url: str, timeout: int = 45) -> dict:
                             headers=default_headers({"Accept": "application/json"}),
                             timeout=timeout)
         wait = retry_after_seconds(resp)
-        if 0 < wait <= 30:
+        if 0 < wait <= MAX_RETRY_AFTER_WAIT:
             time.sleep(wait)
             pace("validator.w3.org")
             resp = requests.get(f"{NU_ENDPOINT}?{query}",
@@ -119,7 +125,7 @@ def validate(url: str, timeout: int = 45) -> dict:
                        f"{first.get('message', '')[:160]}",
             "url": url,
         })
-    if counts["warning"] > 10:
+    if counts["warning"] > MANY_WARNINGS:
         result["issues"].append({
             "severity": "low",
             "message": f"{counts['warning']} HTML validation warnings",

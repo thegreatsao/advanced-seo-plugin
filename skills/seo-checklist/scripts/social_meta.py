@@ -32,6 +32,11 @@ except ImportError:
     from scripts.lib.safe_http import default_headers, safe_get
 
 
+# basis: presentation — 60 characters of a tag's value in the console listing. The
+#  length limits that decide verdicts are in OG_REQUIREMENTS and TWITTER_REQUIREMENTS
+#  above, and are `standard`; this one is a terminal width.
+TAG_DISPLAY_CHARS = 60
+
 HEADERS = default_headers()
 
 # Required and recommended OG tags
@@ -233,7 +238,7 @@ def main():
     for tag in OG_REQUIREMENTS:
         value = result["og_tags"].get(tag)
         if value:
-            display = value[:60] + "..." if len(value) > 60 else value
+            display = value[:TAG_DISPLAY_CHARS] + "..." if len(value) > TAG_DISPLAY_CHARS else value
             print(f"  ✅ {tag}: {display}")
         else:
             req = "required" if OG_REQUIREMENTS[tag]["required"] else "optional"

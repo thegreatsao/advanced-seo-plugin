@@ -45,6 +45,12 @@ sys.path.insert(0, SCRIPT_DIR)
 # script or its arguments. Only one of the two is worth retrying, and a reader
 # who cannot tell which one happened cannot know whether to raise --timeout or
 # open the script.
+# basis: presentation — 120 characters of a requests exception message, cut at a word
+#  boundary, and 10 broken URLs listed on the console before the rest are pointed at in
+#  the inventory file. Neither number is read before a verdict exists.
+ERROR_DETAIL_CHARS = 120
+BROKEN_URLS_SHOWN = 10       # basis: presentation — the console listing's length
+
 FAILURE_LABEL = {
     "timeout": "script timed out",
     "crash": "script failed",
@@ -386,8 +392,8 @@ def fetch_page(url: str, enforce_guard: bool = True) -> Fetch:
         # mostly noise. Keep the type, trim the rest at a word boundary so the
         # report does not print half an identifier.
         detail = " ".join(str(e).split())
-        if len(detail) > 120:
-            detail = detail[:120].rsplit(" ", 1)[0] + "…"
+        if len(detail) > ERROR_DETAIL_CHARS:
+            detail = detail[:ERROR_DETAIL_CHARS].rsplit(" ", 1)[0] + "…"
         return Fetch("", f"{type(e).__name__}: {detail}" if detail
                          else type(e).__name__, "", "")
 
@@ -825,7 +831,8 @@ HOW_TO_SUPPLY = {
 def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                preskip: dict[str, tuple[str, str]] | None = None,
                has_gsc: bool = False,
-               rejected: dict[str, str] | None = None
+               rejected: dict[str, str] | None = None,
+               opt_in: dict[str, list[str]] | None = None
                ) -> tuple[dict[tuple, list[str]], dict[str, tuple[str, str]]]:
     """Map each unique (script, args) to the item ids that depend on it.
 
@@ -883,6 +890,12 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
         if no_input:
             skipped[it["id"]] = (NO_DATA, no_input)
             continue
+        # Flags the operator turned on for this run, appended to the one script each
+        # belongs to. Deliberately not registry args: the registry says what an item
+        # needs in order to be decided, and these say what this run is permitted to
+        # do — the same distinction as `--allow-private`, which is why neither lives
+        # in checklist.json.
+        args += (opt_in or {}).get(chk["script"], [])
         plan.setdefault((chk["script"], tuple(args)), []).append(it["id"])
     return plan, skipped
 
@@ -1704,6 +1717,27 @@ def artifact_subject(path: str) -> str | None:
     return url if isinstance(url, str) and url.strip() else None
 
 
+def artifact_age_days(path: str) -> int | None:
+    """How long ago the file was last written, in whole days, or None if unreadable.
+
+    The filesystem's own record and **not** a timestamp inside the file. That
+    distinction is the whole of what this adds: everything an artifact says about
+    itself is the operator's claim, including any date it carries, so a trace of
+    yesterday's staging build can describe today's URL and say so. An mtime is still
+    forgeable — `touch` exists — but it is not forgeable by *writing JSON*, which is
+    what producing one of these files involves, and a stale file usually goes stale by
+    being left alone rather than by anybody deciding to lie.
+
+    So this does not make the age verifiable. It makes it **visible and boundable**,
+    which is as far as re-measuring cannot reach.
+    """
+    try:
+        mtime = os.path.getmtime(os.path.expanduser(path))
+    except OSError:
+        return None
+    return max(0, int((time.time() - mtime) // 86400))
+
+
 def same_page(a: str, b: str) -> bool:
     """Whether two URLs name the same page, for the purpose of trusting a file.
 
@@ -2044,6 +2078,18 @@ def main() -> int:
     ap.add_argument("--sample", type=int, default=1, metavar="N",
                     help="audit N pages instead of one; page-level checks are "
                          "aggregated across them, site-level checks run once")
+    ap.add_argument("--max-artifact-age", type=int, default=0, metavar="DAYS",
+                    help="refuse a --cwv-json or --rendered-json file last written "
+                         "more than DAYS ago. Off by default, because there is no "
+                         "honest default: how stale a measurement may be depends on "
+                         "how often the page changes. The age is recorded and shown "
+                         "either way.")
+    ap.add_argument("--verify-bots", action="store_true",
+                    help="confirm every claimed search crawler in a --server-log by "
+                         "reverse-then-forward DNS. Off by default because it is a "
+                         "network call about a third party, and without it the crawl "
+                         "figures rest on a User-Agent string the client chose. "
+                         "Recorded in the artifact either way.")
     ap.add_argument("--gsc-property", default="",
                     help="Search Console property (default: sc-domain:<registrable domain>). "
                          "Must be one the service account can read — it is not always the "
@@ -2284,9 +2330,16 @@ def main() -> int:
             continue
         claimed = artifact_subject(ctx[key])
         matches = None if not claimed else same_page(claimed, audit_url)
+        age = artifact_age_days(ctx[key])
         artifacts[key] = {"path": ctx[key], "describes": claimed,
-                          "matches_audited_url": matches}
-        if matches is False:
+                          "matches_audited_url": matches, "age_days": age}
+        if a.max_artifact_age and age is not None and age > a.max_artifact_age:
+            rejected[key] = (f"the artifact was last written {age} day(s) ago, over "
+                             f"the {a.max_artifact_age}-day limit this run was given "
+                             f"— re-measure the page")
+            print(f"  --{key.replace('_', '-')} ignored: written {age} day(s) ago",
+                  file=sys.stderr)
+        elif matches is False:
             rejected[key] = (f"the artifact describes {claimed}, not {audit_url} — "
                              f"re-measure the page being audited")
             print(f"  --{key.replace('_', '-')} ignored: it describes {claimed}, "
@@ -2350,8 +2403,9 @@ def main() -> int:
                       + (f"; truncated at --crawl-max-pages {a.crawl_max_pages}"
                          if s.get("truncated") else ""), file=sys.stderr)
 
+    opt_in = {"server_log_audit.py": ["--verify-bots"]} if a.verify_bots else {}
     plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path),
-                               rejected)
+                               rejected, opt_in)
     if not a.quiet:
         script_backed = sum(1 for i in items if i["source"] == "script")
         print(f"  {script_backed} script-backed items -> {len(plan)} unique runs"
@@ -2402,7 +2456,8 @@ def main() -> int:
                       file=sys.stderr)
                 continue
             pctx = dict(ctx, url=page_url, html=page_html)
-            pplan, pskip = build_plan(page_items, pctx, caps, mode, preskip, bool(gsc_path))
+            pplan, pskip = build_plan(page_items, pctx, caps, mode, preskip,
+                                      bool(gsc_path), opt_in=opt_in)
             presults = execute(pplan, a.workers, a.timeout, True)
             per_page.append(grade(page_items, pplan, presults, pskip, bool(gsc_path)))
             if os.path.exists(page_html):
@@ -2465,6 +2520,7 @@ def main() -> int:
         # staging box and an audit of the live site produce the same-shaped file,
         # and only one of them describes what a visitor or a crawler gets.
         "allow_private": bool(a.allow_private),
+        "verify_bots": bool(a.verify_bots),
         # Whether the page-level items all read the same bytes. With the cache off
         # each script fetches for itself, so on a site that changes mid-audit two
         # items can describe two different documents — a reader comparing verdicts
@@ -2586,8 +2642,8 @@ def main() -> int:
                         if len(row["linked_from"]) > 1 else "")
                      if row.get("linked_from") else " — in the sitemap only")
             print(f"  [{row['status'] or 'no response'}] {row['url']}{where}")
-        if len(c["broken"]) > 10:
-            print(f"  … {len(c['broken']) - 10} more in {c['inventory']}")
+        if len(c["broken"]) > BROKEN_URLS_SHOWN:
+            print(f"  … {len(c['broken']) - BROKEN_URLS_SHOWN} more in {c['inventory']}")
     print(f"\nResults: {os.path.abspath(a.json_out)}")
     if crawl_path and os.path.exists(crawl_path):
         print(f"Crawl:   {os.path.abspath(crawl_path)}")

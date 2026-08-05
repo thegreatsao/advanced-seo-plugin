@@ -24,6 +24,14 @@ except ImportError:
     from scripts.lib.safe_http import is_private_host
 
 
+# basis: standard — 50,000 URLs per sitemap file, the limit stated in the sitemaps.org
+#  protocol. Google documents the same figure alongside a 50MB uncompressed cap.
+MAX_URLS_PER_SITEMAP = 50_000
+# basis: inherited — 25 sitemap files followed, present at import. An operational cap on
+#  a recursive index walk rather than a verdict, and the reason it is not larger is that
+#  a sitemap index can point at itself.
+MAX_SITEMAPS_FOLLOWED = 25
+
 def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_urls: bool = False, timeout: int = 15, max_urls: int = 100) -> dict:
     # A URL the caller supplied, or one robots.txt declares, is one the site claims
     # exists — failing to load it is a defect. A conventional filename we merely
@@ -49,7 +57,7 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
     seen_sitemaps = set()
     seen_urls = set()
 
-    while queue and len(seen_sitemaps) < 25:
+    while queue and len(seen_sitemaps) < MAX_SITEMAPS_FOLLOWED:
         sm_url = normalize_url(queue.pop(0), site_url)
         if sm_url in seen_sitemaps:
             continue
@@ -85,7 +93,7 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
         if parsed["type"] == "sitemapindex":
             result["summary"]["indexes"] += 1
             queue.extend(item["loc"] for item in parsed["sitemaps"])
-        if parsed["type"] == "urlset" and len(parsed["urls"]) > 50000:
+        if parsed["type"] == "urlset" and len(parsed["urls"]) > MAX_URLS_PER_SITEMAP:
             result["issues"].append(issue("error", "Sitemap exceeds 50,000 URL limit", sm_url, str(len(parsed["urls"]))))
 
         for row in parsed["urls"]:

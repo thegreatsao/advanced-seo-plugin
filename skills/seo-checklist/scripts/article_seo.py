@@ -33,13 +33,58 @@ except ImportError:
 
 try:
     from lib.safe_http import safe_get
+    from seo_common import THIN_CONTENT_WORDS
 except ImportError:
     from scripts.lib.safe_http import safe_get
+    from scripts.seo_common import THIN_CONTENT_WORDS
 
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+# Every threshold in this file is `inherited`: article_seo.py arrived from
+# Agentic-SEO-Skill and not one of these numbers was decided here. Naming them does not
+# calibrate them — it makes them arguable, which is the step that was missing while they
+# were literals scattered through 600 lines.
+
+# basis: inherited — 8 words, present at import. Filters navigation entries and captions
+#  out of the paragraph list so readability is measured on prose.
+MIN_PARAGRAPH_WORDS = 8
+# basis: inherited — present at import, and part of the Flesch syllable estimate rather
+#  than a verdict: a word of three letters or fewer is counted as one syllable.
+SHORT_WORD_LETTERS = 3
+# basis: inherited — Flesch Reading Ease bands, present at import. 70 and 50 are the
+#  ordinary textbook cut-offs for "easy" and "plain English", which puts them closer to
+#  `standard` than the rest of this file; left inherited because no edition of Flesch is
+#  cited here and the audience labels attached to them are this tool's own wording.
+READABILITY_EASY = 70
+READABILITY_MEDIUM = 50   # basis: inherited — the lower band of the pair above
+# basis: inherited — 30, present at import. Below it the text is reported as very
+#  difficult to read, which is a claim about audience rather than a Flesch band.
+READABILITY_HARD = 30
+# basis: inherited — a unigram has to appear more than three times to be a keyword
+#  candidate, present at import.
+MIN_UNIGRAM_COUNT = 3
+# basis: inherited — SERP truncation, present at import. **The check and its own advice
+#  disagree**: these accept 30-65 characters while the fix text beside them asks for
+#  50-60, so a 35-character title passes and is then told to expand. Recorded rather
+#  than reconciled, because deciding which pair is right is a calibration and this pass
+#  was an inventory.
+TITLE_MIN_CHARS = 30
+TITLE_MAX_CHARS = 65   # basis: inherited — the upper bound of the pair above
+# basis: inherited — the same for meta descriptions, present at import, with the same
+#  disagreement: the check accepts 100-165 and the advice asks for 120-155.
+META_MIN_CHARS = 100
+META_MAX_CHARS = 165   # basis: inherited — the upper bound of the pair above
+# basis: inherited — 1000 words, present at import: the "may be thin for a blog post"
+#  line, itself below the 1500 the fix text asks for.
+BLOG_THIN_WORDS = 1000
+# basis: inherited — more than three images without loading="lazy", present at import.
+MAX_EAGER_IMAGES = 3
+# basis: inherited — five related keywords, present at import. A padding target for the
+#  keyword list, not a verdict about the page.
+MIN_RELATED_KEYWORDS = 5
 
 STOP_WORDS = {
     "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
@@ -228,7 +273,7 @@ def extract_content(soup: BeautifulSoup, cms: str) -> dict:
     para_scope = body_container if body_container else soup
     for p in para_scope.find_all("p"):
         text = p.get_text(" ", strip=True)
-        if len(text.split()) > 8:  # skip tiny fragments
+        if len(text.split()) > MIN_PARAGRAPH_WORDS:  # skip tiny fragments
             result["paragraphs"].append(text)
 
     # ── Images ────────────────────────────────────────────────────────────
@@ -325,7 +370,7 @@ def _describe_schema_node(data: dict) -> dict:
 def _count_syllables(word: str) -> int:
     """Approximate syllable count for a word."""
     word = word.lower().strip(".,!?;:")
-    if len(word) <= 3:
+    if len(word) <= SHORT_WORD_LETTERS:
         return 1
     vowels = "aeiouy"
     count = 0
@@ -368,9 +413,9 @@ def compute_readability(text: str) -> dict:
     fre = round(max(0, min(100, fre)), 1)
     fkgl = round(max(0, fkgl), 1)
 
-    if fre >= 70:
+    if fre >= READABILITY_EASY:
         grade_label = "Easy (suitable for general audience)"
-    elif fre >= 50:
+    elif fre >= READABILITY_MEDIUM:
         grade_label = "Medium (suitable for high school / college)"
     else:
         grade_label = "Difficult (technical / specialist audience)"
@@ -411,7 +456,7 @@ def extract_keywords_frequency(text: str, top_n: int = 12) -> list:
 
     scored: list[tuple[str, float]] = []
     for term, cnt in unigrams.items():
-        if cnt > 3:
+        if cnt > MIN_UNIGRAM_COUNT:
             scored.append((term, float(cnt)))
     for term, cnt in bigrams.items():
         if cnt > 1:
@@ -473,17 +518,17 @@ def detect_seo_issues(content: dict, structured_data: list, readability: dict) -
     # Title checks
     if not title:
         issues.append({"severity": "Critical", "area": "Title", "finding": "No <title> tag found.", "fix": "Add a descriptive title tag (50-60 chars)."})
-    elif len(title) < 30:
+    elif len(title) < TITLE_MIN_CHARS:
         issues.append({"severity": "Warning", "area": "Title", "finding": f"Title too short ({len(title)} chars).", "fix": "Expand title to 50-60 characters with primary keyword near the start."})
-    elif len(title) > 65:
+    elif len(title) > TITLE_MAX_CHARS:
         issues.append({"severity": "Warning", "area": "Title", "finding": f"Title may be truncated in SERPs ({len(title)} chars).", "fix": "Keep title under 60 characters."})
 
     # Meta description
     if not meta:
         issues.append({"severity": "Warning", "area": "Meta Description", "finding": "No meta description found.", "fix": "Add a compelling 120-155 character meta description with a CTA."})
-    elif len(meta) < 100:
+    elif len(meta) < META_MIN_CHARS:
         issues.append({"severity": "Warning", "area": "Meta Description", "finding": f"Meta description too short ({len(meta)} chars).", "fix": "Expand to 120-155 characters."})
-    elif len(meta) > 165:
+    elif len(meta) > META_MAX_CHARS:
         issues.append({"severity": "Warning", "area": "Meta Description", "finding": f"Meta description may be truncated ({len(meta)} chars).", "fix": "Keep under 155 characters."})
 
     # H1
@@ -493,9 +538,9 @@ def detect_seo_issues(content: dict, structured_data: list, readability: dict) -
         issues.append({"severity": "Warning", "area": "H1", "finding": f"Multiple H1 tags found ({len(h1s)}).", "fix": "Use exactly one H1 per page."})
 
     # Word count (blog post minimum = 1,500)
-    if word_count < 300:
+    if word_count < THIN_CONTENT_WORDS:
         issues.append({"severity": "Critical", "area": "Content", "finding": f"Very thin content ({word_count} words).", "fix": "Expand content to at least 1,500 words for blog posts."})
-    elif word_count < 1000:
+    elif word_count < BLOG_THIN_WORDS:
         issues.append({"severity": "Warning", "area": "Content", "finding": f"Content may be thin for a blog post ({word_count} words).", "fix": "Aim for 1,500+ words of substantive, unique content."})
 
     # Author attribution (E-E-A-T)
@@ -513,7 +558,7 @@ def detect_seo_issues(content: dict, structured_data: list, readability: dict) -
 
     # Images: lazy loading
     no_lazy = [img for img in images if img.get("loading") != "lazy" and img.get("src")]
-    if len(no_lazy) > 3:
+    if len(no_lazy) > MAX_EAGER_IMAGES:
         issues.append({"severity": "Info", "area": "Images", "finding": f"{len(no_lazy)} image(s) without loading='lazy'.", "fix": "Add loading='lazy' to below-the-fold images to improve LCP."})
 
     # Structured data
@@ -528,7 +573,7 @@ def detect_seo_issues(content: dict, structured_data: list, readability: dict) -
 
     # Readability
     fre = readability.get("flesch_reading_ease")
-    if fre is not None and fre < 30:
+    if fre is not None and fre < READABILITY_HARD:
         issues.append({"severity": "Info", "area": "Readability", "finding": f"Content is very difficult to read (Flesch score: {fre}).", "fix": "Simplify sentences. Aim for Flesch score ≥ 50 for broader audience reach."})
 
     return issues
@@ -583,7 +628,7 @@ def main():
         related_kws = [k for k in related_kws if k.lower() != target_kw.lower()]
 
     # Pad with extracted keywords if autocomplete returned few results
-    if len(related_kws) < 5:
+    if len(related_kws) < MIN_RELATED_KEYWORDS:
         extras = [k for k in extracted_kws if k not in related_kws and k != target_kw]
         related_kws.extend(extras)
 

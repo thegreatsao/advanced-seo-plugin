@@ -10,6 +10,210 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.15.0 — 5 August 2026
+
+Registry unchanged (`1c4b3697cc1f`, 214 items). Tests 552 → 564.
+
+Every phase of the plan had shipped, so this release is the open list in
+KNOWN-ISSUES.md — the items that were written down because they could not be closed at
+the time. Four of the five closed. The largest one turned out to be hiding the second
+largest.
+
+### Fixed — the answer-block score no longer depends on whether the page closes its tags
+
+`answer_block_scanner.py` found the answer to a question heading with
+`find_next_sibling()`, which asks the parser where the heading's parent ends — and that
+is the one question `lxml` and `html.parser` answer differently. `html.parser` applies
+none of HTML's implied end tags, so an unclosed `<p>` swallows every heading and list
+after it and three unclosed `<li>` nest three deep. One page, two parsers, scores of 10
+and 32, and **neither was the reading a browser gives**. 0.14.0 pinned those numbers as
+a fact; recording a verdict that depends on which library is installed was the wrong
+thing to do with it.
+
+Three queries were rewritten against what both parsers agree about, which is also what
+the browser agrees about:
+
+* the answer is found in **document order** to the next heading, not by sibling walk;
+* a paragraph's word count is its **own** text, with block-level descendants excluded;
+* a list's items are the `<li>` whose **nearest list ancestor** is that list, not its
+  direct children.
+
+Three shapes that a browser renders identically now score identically under both
+parsers, where they used to produce five different numbers between them.
+
+**And a second defect the sibling walk was hiding, which needed no invalid markup at
+all.** A `<div>` between the heading and the paragraph — every themed CMS there is —
+was itself read as the answer, so the reported word count was the whole section's and
+the reported answer text was every paragraph in it. Two paragraphs measured 53 words
+and squeezed under the 70-word ceiling with the wrong text attached; three or more went
+over it and the page had no direct answer at all. Wrappers are walked through now.
+
+Nothing changed on the fixture pair: both fixture pages close their tags and wrap
+nothing, so all 214 verdicts are identical. That is the shape a fix like this should
+have — no movement on valid markup, and the right answer on the markup most of the web
+actually serves.
+
+### Fixed — 0.14.0's fork fix covered two call sites out of ten, and one of them was lying
+
+0.14.0 diagnosed macOS killing a forked child inside Apple's Network.framework
+`atfork` handler, fixed `checklist_runner.run_script` and `tests/harness.spawn`, and
+wrote down that the workaround "holds only while nothing reintroduces a `cwd=` or
+`close_fds=True`". It was already broken when that sentence was written. **Eight other
+call sites in this tree still forked**, and the crash dialogs never stopped.
+
+The missing condition is one CPython checks and nobody reads. `posix_spawn` is used only
+when **`os.path.dirname(executable)` is non-empty** — so `["openssl", …]` and
+`["git", …]` take the fork path however carefully `close_fds` and `cwd` are set. Every
+call that passed `sys.executable` looked fixed because that path is absolute. Every call
+that named a binary on `PATH` was not.
+
+**What that cost is the finding.** `harness.tls_context()` generated its certificate with
+a bare `subprocess.run(["openssl", …], check=True)`. The child died of signal 11, and the
+`except` around it raised `SkipTest("openssl unavailable, so the HTTPS shape cannot be
+served")`. openssl was installed and working. So the TLS site shape 0.14.0 announced as
+*exercised live* had **never once run on the machine it was written on** — it ran on
+Linux CI, which is the only reason the claim was not simply false — and the skip message
+named a cause that was not the cause, which is the failure this entire tree is built to
+refuse. Local runs went from 4 skips to 1, which is what Linux has always reported.
+
+Three rules now, checked by AST over `scripts/`, `scripts/lib/`, `tools/` and `tests/` —
+every `subprocess` spawn in the tree, not the two functions somebody remembered:
+
+* `close_fds=False` on every call;
+* no `cwd=` on any call — `git -C`, `PYTHONPATH` and, where a working directory is
+  genuinely the thing under test, `runpy` inside the child after exec;
+* no bare executable name — resolved with `shutil.which` first.
+
+`harness.spawn` lost its unused `cwd` parameter, because an unused parameter that
+silently reopens the bug is worse than no parameter, and it now spells `close_fds` at the
+call rather than folding it into a kwargs dict — a guard a helper can hide from is a guard
+that stops at the helper. The two sites this actually mattered for outside the tests were
+`domain_safety_check.py`, the one evidence script that starts a child process (`whois`),
+and `tools/probe_shapes.py`.
+
+### Changed — every number a verdict rests on has a name and a stated basis
+
+`tools/audit_thresholds.py` reported 36 named thresholds and **77 comparisons against a
+bare literal**, held as a ceiling in CI because "a number nothing can name is a number
+nobody can argue with". All 77 are named now, and the count is zero.
+
+The point was never the count. It was what naming them made visible:
+
+| | 0.14.0 | 0.15.0 |
+|---|---|---|
+| `standard` — a published authority, named | 4 | 6 |
+| `measured` — calibrated against something | **0** | **0** |
+| `convention` — a judgement made here, stated as one | 18 | 32 |
+| `inherited` — arrived with borrowed code, never examined | 14 | **75** |
+
+**`inherited` went from 14 to 75.** The unnamed literals were not a random scatter: 59
+of the 77 were already there in the initial commit, which is checkable rather than
+remembered — the classification comes from `git show <initial commit>`. So the honest
+figure is that roughly two thirds of the numbers this registry's verdicts rest on
+arrived with borrowed code and have never been examined by anybody here, and the old
+14 read that way only because the other 61 had nowhere to carry a label.
+
+`measured` is still zero, which remains the finding underneath the finding.
+
+Three things fell out of the pass, and each is the argument for doing it:
+
+* **Two thresholds were written twice.** 300 words for thin content lived in
+  `duplicate_content.THIN_CONTENT_THRESHOLDS` *and* as a literal in `article_seo.py`;
+  the 30-second `Retry-After` ceiling lived in `safe_http.MAX_RETRY_AFTER_WAIT` *and* as
+  a literal in `html_validator.py`. Both now have one home. One number in two places is
+  one number that can be revised in one of them.
+* **A check and its own advice disagree.** `article_seo.py` accepts a title of 30-65
+  characters while the fix text beside it asks for 50-60, and accepts a meta description
+  of 100-165 while advising 120-155. Recorded in the basis lines rather than reconciled:
+  deciding which pair is right is a calibration, and this pass was an inventory.
+* **The audit tool had two blind spots of its own.** It excluded 100, 1000 and 1024 as
+  "units rather than limits" — removing them surfaced eleven comparisons, **ten of them
+  real thresholds**, including "a meta description under 100 characters is too short"
+  and "under 1000 words may be thin for a blog post". And it counted equality
+  comparisons on the unnamed side while counting only ordering comparisons on the named
+  side, so the two halves of one tool disagreed about what a threshold is.
+
+A fifth basis kind, `presentation`, now covers the eleven numbers that decide what is
+*printed* and never what is decided — a truncation length, a "… and 7 more" cut-off, how
+much of an API key is masked. They are named and checked like the rest and kept out of
+the verdict total, because a report listing three linking pages instead of four is a
+report making a different choice, not an audit reaching a different verdict.
+
+### Added — `--verify-bots` confirms a crawler is the crawler it claims to be
+
+`server_log_audit.py` classified crawlers by User-Agent, which is a string the client
+chose, and the direction of that error was always towards *over*-reporting the crawl:
+nobody forges a User-Agent to look less important. A scraper announcing itself as
+Googlebot spent Google's crawl budget in the figures CI-018 reports.
+
+`--verify-bots` (on `server_log_audit.py`, and on the runner, off by default in both)
+does the reverse-then-forward DNS check Google, Bing and Yandex all document. **The
+second step is the one that matters**: a reverse lookup alone trusts whoever controls
+the PTR record for the address, which is the address's owner, so anybody with a rented
+block can name it `crawl-203-0-113-1.googlebot.com` and be believed. Confirming that the
+name resolves back to the same address closes that, because the forward zone is Google's.
+
+Requests from an address that fails are **re-attributed out of the crawl-budget
+figures**, not annotated in place — the whole cost of an unverified identity was that a
+scraper's 404s counted as Google's, and leaving them there with a note beside them would
+leave the number wrong. A `medium` finding says how many.
+
+Four things it deliberately does not do:
+
+* **Treat a DNS failure as forgery.** `unresolved` keeps the requests attributed to the
+  crawler that claimed them. Reading "the resolver did not answer" as "not Googlebot"
+  would turn one outage on the auditing machine into a report telling a client their
+  entire crawl is fraudulent — the same shape as a busy W3C validator becoming "your
+  HTML has errors".
+* **Invent a rule for crawlers that publish none.** DuckDuckBot, SeznamBot and PetalBot
+  publish address ranges rather than a DNS convention, so they answer
+  `no_published_rule` and stay claims.
+* **Ask DNS more than once per address.** A log is millions of lines and a crawler
+  reuses its addresses; the cache means eight requests from two addresses cost two
+  lookups. Bounded at 64 addresses, beyond which an address is `not_checked` and, again,
+  not assumed either way.
+* **Run by default, or reach the network from the test suite.** The resolver is
+  injectable, which is what lets eight tests cover forgery, a lying PTR record, a
+  label-boundary suffix (`notgooglebot.com` ends with `googlebot.com`), a dead resolver,
+  the cache, the budget and the default path — all offline.
+
+### Added — a supplied measurement's age is shown, and can be bounded
+
+A `--cwv-json` or `--rendered-json` file is the one input an audit cannot check by
+measuring again. 0.7.0 closed the part that could be checked: an artifact naming a
+different page is refused with the reason. What remained was *when* — a trace from six
+months ago describing today's URL was accepted without comment.
+
+The report now states the age of the oldest supplied measurement in days, and
+`--max-artifact-age DAYS` refuses one that is older. Off by default, because there is no
+honest default: how stale a measurement may be depends on how often the page changes.
+
+The age comes from the filesystem's mtime and **not** from any timestamp inside the
+file, and that is the whole of what it adds. Everything an artifact says about itself is
+the operator's claim. An mtime is still forgeable — `touch` exists — but not by writing
+JSON, which is what producing one of these files involves, and files usually go stale by
+being left alone rather than by anybody deciding to lie. It does not make the age
+verifiable; it makes it visible and boundable, which is as far as re-measuring cannot
+reach.
+
+### Fixed — the Russian report is no longer missing its highest-stakes prose
+
+`--lang ru` left 19 of the report's 100 own strings in English, silently, because `t()`
+falls back. They were the "what was audited" caveat block — the private-host warning,
+the scored-interstitial warning, the thin-page warning, the supplied-measurement
+warning — and the whole "Since the previous audit" section, which arrived untranslated
+in 0.12.0 and was only noticed because 0.7.0 had taught the warning to *count* instead
+of asserting completeness.
+
+All 19 are translated. `item_titles` and `item_fixes` are still empty and still
+reported: 214 item titles and their recommendations are a translation project, not a
+code change, and the warning says so rather than implying the report is fully Russian.
+
+The test that guarded this had to change with it. It asserted that `missing_strings()`
+was non-empty, which would have started failing the moment the work was done — a test
+that punishes the fix is a test that keeps the defect. It now removes a string the
+report asks for and checks the counter finds it.
+
 ## 0.14.0 — 4 August 2026
 
 Registry unchanged (`1c4b3697cc1f`, 214 items). Tests 525 → 549, in two new files.

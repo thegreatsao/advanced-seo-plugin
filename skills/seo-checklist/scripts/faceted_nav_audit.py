@@ -24,6 +24,16 @@ from urllib.parse import parse_qs, urlparse
 from seo_common import fetch_url, parse_html, read_urls, same_host
 
 
+# basis: inherited — three query parameters on one URL, present at import. A count, not
+#  a judgement about which parameters: three combined facets is where the crawlable
+#  variants of a page start multiplying.
+PARAM_COMBINATION_COUNT = 3
+# basis: inherited — five URL variants of one path, present at import.
+PATH_EXPLOSION_VARIANTS = 5
+# basis: inherited — a parameter seen on three URLs, present at import, and reported as
+#  info rather than a finding: frequency here is evidence for a human, not a verdict.
+FREQUENT_PARAM_COUNT = 3
+
 FACET_KEYS = {"sort", "filter", "color", "size", "brand", "price", "min_price", "max_price", "rating", "page", "view", "availability", "material"}
 
 
@@ -36,7 +46,7 @@ def audit(urls: list[str], fetch: bool = False, timeout: int = 15) -> dict:
         params = parse_qs(parsed.query, keep_blank_values=True)
         facet_params = sorted(k for k in params if k.lower() in FACET_KEYS or k.lower().startswith("filter"))
         flags = []
-        if len(params) >= 3:
+        if len(params) >= PARAM_COMBINATION_COUNT:
             flags.append("parameter_combination")
         if facet_params:
             flags.append("facet_parameters")
@@ -60,11 +70,11 @@ def audit(urls: list[str], fetch: bool = False, timeout: int = 15) -> dict:
             param_counts[key] += 1
         by_path[row["path"]].append(url)
         rows.append(row)
-    path_explosions = {path: vals for path, vals in by_path.items() if len(vals) >= 5}
+    path_explosions = {path: vals for path, vals in by_path.items() if len(vals) >= PATH_EXPLOSION_VARIANTS}
     issues = []
     if path_explosions:
         issues.append({"severity": "warning", "message": "Multiple parameter variants share the same path", "count": len(path_explosions)})
-    frequent_params = {k: v for k, v in param_counts.items() if v >= 3}
+    frequent_params = {k: v for k, v in param_counts.items() if v >= FREQUENT_PARAM_COUNT}
     if frequent_params:
         issues.append({"severity": "info", "message": "Frequent URL parameters detected", "evidence": frequent_params})
     return {"count": len(rows), "frequent_params": frequent_params, "path_explosions": path_explosions, "rows": rows, "issues": issues}

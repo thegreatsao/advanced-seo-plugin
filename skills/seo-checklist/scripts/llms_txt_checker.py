@@ -27,6 +27,17 @@ except ImportError:
     from scripts.lib.safe_http import default_headers, safe_get
 
 
+# basis: inherited — every one of these, present at import. `llms.txt` is a proposal
+#  with no ratified spec, so none of them can be `standard` even in principle: the file
+#  format's own documentation states no lengths and no section counts.
+MIN_DESCRIPTION_CHARS = 20
+GOOD_DESCRIPTION_CHARS = 50   # basis: inherited — the "detailed enough" line, same origin
+MIN_SECTIONS = 3              # basis: inherited — a structured file has a few sections
+GOOD_LINKS = 5                # basis: inherited — enough links for the file to be a
+#  map of the site rather than a single pointer, same origin as the rest here
+MANY_LINKS = 10               # basis: inherited — the next step up, same origin
+MIN_CONTENT_BYTES = 200       # basis: inherited — below it the file is a placeholder
+
 def check_llms_txt(url: str, timeout: int = 15) -> dict:
     """
     Fetch and validate llms.txt from a domain.
@@ -167,9 +178,9 @@ def _score_quality(result: dict):
     # Description present (+20)
     if parsed["description"]:
         score += 20
-        if len(parsed["description"]) < 20:
+        if len(parsed["description"]) < MIN_DESCRIPTION_CHARS:
             quality["issues"].append("⚠️ Description too short")
-        elif len(parsed["description"]) > 50:
+        elif len(parsed["description"]) > GOOD_DESCRIPTION_CHARS:
             score += 5  # Bonus for good description
     else:
         quality["issues"].append("⚠️ Missing description (> blockquote)")
@@ -178,7 +189,7 @@ def _score_quality(result: dict):
     # Sections present (+15)
     if parsed["sections"]:
         score += 15
-        if len(parsed["sections"]) >= 3:
+        if len(parsed["sections"]) >= MIN_SECTIONS:
             score += 5  # Bonus for good organization
     else:
         quality["suggestions"].append("Add sections (## Section Name) to organize content")
@@ -186,9 +197,9 @@ def _score_quality(result: dict):
     # Links present (+20)
     if parsed["links"]:
         score += 20
-        if len(parsed["links"]) >= 5:
+        if len(parsed["links"]) >= GOOD_LINKS:
             score += 5  # Bonus for comprehensive links
-        if len(parsed["links"]) >= 10:
+        if len(parsed["links"]) >= MANY_LINKS:
             score += 5
     else:
         quality["issues"].append("⚠️ No links found")
@@ -196,7 +207,7 @@ def _score_quality(result: dict):
 
     # Content length (+5)
     content_len = len(result["content"] or "")
-    if content_len > 200:
+    if content_len > MIN_CONTENT_BYTES:
         score += 5
 
     quality["score"] = min(score, 100)

@@ -21,7 +21,7 @@ threshold, and it must carry a line of the form
 
     # basis: <kind> — <what it rests on>
 
-in the comment block above it, or in its own trailing comment. Four kinds, and the
+in the comment block above it, or in its own trailing comment. Five kinds, and the
 distinction between them is the whole point:
 
   standard    An external published authority, named in the text. Google's Core Web
@@ -36,12 +36,21 @@ distinction between them is the whole point:
               a to-do with a name.** The count is printed, and it is the honest
               measure of how much of this registry rests on numbers nobody here
               decided.
+  presentation
+              Decides what is *printed*, never what is decided: a truncation length,
+              a "… and 7 more" cut-off, how much of a key is masked. Counted apart
+              from the four above and excluded from "numbers a verdict depends on",
+              because a report that lists three linking pages instead of four is a
+              report making a different choice, not an audit reaching a different
+              verdict. **The line is that the verdict is already computed** when one
+              of these is read; anything that could still change it is a threshold.
 
-**Unnamed thresholds are counted separately and not excused.** A comparison against a
-bare literal cannot carry a basis, because it has no name to hang one on — the first
-step for those is a constant, not a comment. The count is a ceiling in CI rather than
-a list, for the same reason the request count is: a printed number in a green build is
-a number nobody reads.
+**Every number is named now.** The unnamed count was 77 at 0.14.0 and is a ceiling in
+CI; a comparison against a bare literal cannot carry a basis, because it has no name
+to hang one on, so the first step for those was a constant rather than a comment.
+Naming them is what let `presentation` be told from `convention` at all — and what
+turned up two thresholds written twice, which is the concrete argument for the
+exercise: one number in two places is one number that can drift into two.
 """
 from __future__ import annotations
 
@@ -55,9 +64,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 SCRIPTS = os.path.join(SKILL, "scripts")
 
-BASIS = re.compile(r"#\s*basis:\s*(standard|measured|convention|inherited)\s*[—-]\s*(\S.*)",
-                   re.I)
-KINDS = ("standard", "measured", "convention", "inherited")
+BASIS = re.compile(
+    r"#\s*basis:\s*(standard|measured|convention|inherited|presentation)\s*[—-]\s*(\S.*)",
+    re.I)
+KINDS = ("standard", "measured", "convention", "inherited", "presentation")
+# The four that decide a verdict. `presentation` is named and checked like the rest and
+# then kept out of this total, because the number §2 of KNOWN-ISSUES quotes is meant to
+# be "how much of the registry rests on numbers nobody here decided", and a truncation
+# length is not part of that.
+VERDICT_KINDS = ("standard", "measured", "convention", "inherited")
 
 # Numbers that are not thresholds, and excluding them is what keeps this tool worth
 # reading. An HTTP status code is an identity, not a limit: `status == 404` asks which
@@ -65,7 +80,15 @@ KINDS = ("standard", "measured", "convention", "inherited")
 # the arithmetic constants — a comparison against 0 or 1 is almost always "is there
 # any" or "is there more than one".
 HTTP_STATUS = frozenset(range(100, 600))
-ARITHMETIC = frozenset({0, 1, 2, -1, 100, 1000, 1024})
+# 0, 1, 2 and -1 only. This set used to hold 100, 1000 and 1024 as well, on the theory
+# that they are units rather than limits — and that was measured wrong: removing them
+# surfaced eleven comparisons, ten of them real thresholds, including "a meta
+# description under 100 characters is too short" and "under 1000 words may be thin for
+# a blog post". A round number is *more* likely to be a threshold somebody typed, not
+# less. `2` stays because it is almost always arity — "did we get at least two labels",
+# "is there more than one hop to compare" — and the ones it hides are visible in
+# `--unnamed` output as soon as anybody looks.
+ARITHMETIC = frozenset({0, 1, 2, -1})
 # A comparison is about a status code when the other side says so. Checked by name
 # rather than by value, because 200 is also a perfectly good byte count.
 STATUS_WORDS = re.compile(r"\b(status|status_code|code|http_status|response_code)\b")
@@ -177,13 +200,24 @@ def named_thresholds(path: str) -> list[dict]:
 
 
 def unnamed_thresholds(path: str) -> list[dict]:
-    """Comparisons against a bare number, excluding status codes and arithmetic."""
+    """Ordering comparisons against a bare number, less status codes and arithmetic.
+
+    Ordering only, for the same reason `named_thresholds` counts ordering only: a bare
+    number tested for equality is an identity, not a limit. `len(lang) == 2` asks
+    whether a code is two letters, and there is no calibration of that. Keeping the two
+    halves of this tool on one rule also matters for its arithmetic — the unnamed count
+    is meant to be "how many of these have not been given a name yet", and it cannot be
+    if the two sides disagree about what counts.
+    """
     with open(path, encoding="utf-8") as fh:
         src = fh.read()
     lines = src.splitlines()
+    ordering = (ast.Lt, ast.LtE, ast.Gt, ast.GtE)
     out = []
     for node in ast.walk(ast.parse(src)):
         if not isinstance(node, ast.Compare):
+            continue
+        if not any(isinstance(op, ordering) for op in node.ops):
             continue
         text = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
         about_status = bool(STATUS_WORDS.search(text))
@@ -242,11 +276,14 @@ def main() -> int:
         print(f"\n{len(unnamed)} comparison(s) against a bare number")
         return 0
 
-    print(f"{len(named)} named threshold(s) a verdict depends on:")
-    for kind in KINDS:
-        print(f"  {kind:<11} {len(by_kind[kind]):>3}")
-    print(f"  {'no basis':<11} {len(bare):>3}")
-    print(f"\n{len(unnamed)} threshold(s) still unnamed — a comparison against a bare "
+    verdict = sum(len(by_kind[k]) for k in VERDICT_KINDS)
+    print(f"{verdict} number(s) a verdict depends on:")
+    for kind in VERDICT_KINDS:
+        print(f"  {kind:<12} {len(by_kind[kind]):>3}")
+    print(f"  {'no basis':<12} {len(bare):>3}")
+    print(f"\n{len(by_kind['presentation'])} more decide only what is printed "
+          f"(presentation), and are not counted above")
+    print(f"{len(unnamed)} threshold(s) still unnamed — a comparison against a bare "
           f"number cannot carry a basis, so the first step for those is a constant")
 
     if bare:

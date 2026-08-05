@@ -17,6 +17,14 @@ except ImportError:
 from seo_common import BeautifulSoup, load_html, normalize_url, require_bs4
 
 
+# basis: inherited — one week of `max-age` for a fingerprinted static asset, present at
+#  import. Round, and the sort of number a CDN's own documentation suggests.
+STATIC_MAX_AGE_MIN = 604800
+# basis: inherited — 30 days, present at import. Above it a static asset is expected to
+#  carry `immutable`, because a month of caching with no fingerprint in the URL is a
+#  month of serving a file that has changed.
+STATIC_IMMUTABLE_MAX_AGE = 2_592_000
+
 STATIC_EXTENSIONS = (".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".woff2", ".woff")
 TEXT_EXTENSIONS = (".html", ".css", ".js", ".mjs", ".json", ".xml", ".svg", ".txt")
 
@@ -91,9 +99,9 @@ def _check_url(url: str, timeout: int) -> dict:
     if is_text and row["content_encoding"] not in ("br", "gzip", "deflate"):
         row["issues"].append({"severity": "warning", "message": "Compressible response is not Brotli/gzip encoded"})
     max_age = _cache_max_age(row["cache_control"])
-    if is_static and (max_age is None or max_age < 604800):
+    if is_static and (max_age is None or max_age < STATIC_MAX_AGE_MIN):
         row["issues"].append({"severity": "warning", "message": "Static asset cache lifetime is short or missing"})
-    if is_static and row["cache_control"] and "immutable" not in row["cache_control"].lower() and max_age and max_age >= 2_592_000:
+    if is_static and row["cache_control"] and "immutable" not in row["cache_control"].lower() and max_age and max_age >= STATIC_IMMUTABLE_MAX_AGE:
         row["issues"].append({"severity": "info", "message": "Long-lived static asset can use immutable"})
     if not row["etag"] and "last-modified" not in headers:
         row["issues"].append({"severity": "info", "message": "No validator header (ETag or Last-Modified)"})

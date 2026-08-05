@@ -135,27 +135,37 @@ class Localisation(unittest.TestCase):
         self.assertIn("recommendations", reported)
 
     def test_the_report_chrome_is_counted_rather_than_declared_complete(self):
-        """This claim was wrong, and wrong in the flattering direction.
+        """This claim was wrong once, and wrong in the flattering direction.
 
         `untranslated()` named the two opt-in layers and said nothing about the
         report's own wording, on the assumption that it was complete. Six of the
-        fifty-one strings had no Russian at all — the whole "what was audited"
-        block, which is the highest-stakes prose in the document — and `t()` falls
-        back to English silently, so nothing showed. The count now comes from the
-        file, so the next string added is reported the day it is added.
+        fifty-one strings had no Russian at all — the whole "what was audited" block,
+        which is the highest-stakes prose in the document — and `t()` falls back to
+        English silently, so nothing showed.
+
+        The gap is closed as of 0.15.0: `ru.json` carries all of them, and by then it
+        was nineteen rather than six, because 0.12.0's "since the previous audit"
+        section arrived untranslated and the count was the only thing that noticed.
+        So this test no longer measures the file — it removes a string the report asks
+        for and checks that the counter finds it. The old version asserted `missing`
+        was non-empty, which would have started failing the moment the work was done,
+        and a test that punishes the fix is a test that keeps the defect.
         """
-        missing = Lang("ru").missing_strings()
-        self.assertTrue(missing, "if ru.json is now complete, so much the better — "
-                                 "but then this test needs a different fixture, not "
-                                 "deleting")
-        self.assertTrue(any("report string" in w for w in Lang("ru").untranslated()))
-        # And the count has to be real: every key it names must be one the report
-        # actually asks for, or the warning is noise.
+        lang = Lang("ru")
+        self.assertEqual(lang.missing_strings(), [],
+                         "ru.json is expected complete; add the Russian for these")
+        # Every key the report asks for is a key this counter can be asked about.
         with open(os.path.join(SKILL, "scripts", "checklist_report.py"),
                   encoding="utf-8") as f:
             source = f.read()
-        for key in missing:
+        for key in ("w_private_host", "since_last", "what_was_audited"):
             self.assertIn(f'"{key}"', source)
+            hobbled = Lang("ru")
+            hobbled.data["strings"] = {k: v for k, v in lang.data["strings"].items()
+                                       if k != key}
+            self.assertIn(key, hobbled.missing_strings())
+            self.assertTrue(any("report string" in w
+                                for w in hobbled.untranslated()))
 
     def test_english_reports_nothing_untranslated(self):
         self.assertEqual(Lang("en").untranslated(), [])

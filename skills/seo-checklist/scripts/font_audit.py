@@ -12,6 +12,11 @@ from urllib.parse import urlparse
 from seo_common import BeautifulSoup, fetch_url, load_html, normalize_url, require_bs4
 
 
+# basis: inherited — 100KB for one font file, present at import. A full-weight Latin
+#  WOFF2 lands well under it, so the number is a smell for an unsubsetted or non-WOFF2
+#  face rather than a budget.
+LARGE_FONT_BYTES = 100_000
+
 FONT_EXTENSIONS = (".woff2", ".woff", ".ttf", ".otf", ".eot")
 
 
@@ -103,7 +108,7 @@ def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
             length = headers.get("content-length")
             row["content_length"] = int(length) if length and length.isdigit() else None
             row["cache_control"] = headers.get("cache-control")
-            if row["content_length"] and row["content_length"] > 100_000:
+            if row["content_length"] and row["content_length"] > LARGE_FONT_BYTES:
                 issues.append({"severity": "warning", "message": "Large font file", "url": font_url, "evidence": f"{row['content_length']} bytes"})
         if row["format"] and row["format"] != "woff2":
             issues.append({"severity": "info", "message": "Font is not WOFF2", "url": font_url, "evidence": row["format"]})

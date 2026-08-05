@@ -44,6 +44,7 @@ import io
 import json
 import os
 import re
+import socket
 import sys
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, urlsplit
@@ -109,6 +110,111 @@ NOT_USER_AGENTS = ("google-extended", "applebot-extended")
 GENERIC_BOT = re.compile(r"bot\b|crawler|spider|scraper|curl/|wget/|python-requests|"
                          r"headlesschrome|facebookexternalhit|slackbot|"
                          r"whatsapp|telegrambot|semrush|ahrefs|mj12bot|dotbot")
+
+
+# ---------------------------------------------------------------------------
+# Is it really them
+# ---------------------------------------------------------------------------
+
+# The domains a search crawler's own addresses reverse-resolve to, as published by the
+# operator. Only crawlers with a *documented* rule are here. DuckDuckBot, SeznamBot and
+# PetalBot publish address ranges instead of a DNS convention, so a reverse lookup for
+# them would either invent a rule or fail every address, and both are worse than saying
+# there is no published rule — which is what `no_published_rule` below says.
+CRAWLER_DOMAINS = {
+    "Googlebot": ("googlebot.com", "google.com"),
+    "bingbot": ("search.msn.com",),
+    "YandexBot": ("yandex.com", "yandex.ru", "yandex.net"),
+    "Baiduspider": ("baidu.com", "baidu.jp"),
+    "Applebot": ("applebot.apple.com",),
+    "Yahoo! Slurp": ("crawl.yahoo.net",),
+}
+
+# basis: convention — 64 distinct addresses per run. Two DNS round trips each, and the
+#  number only has to be larger than the address pool a real crawler uses on one site in
+#  a week; Googlebot's is a few dozen. Beyond it, addresses are reported as `not_checked`
+#  rather than assumed either way.
+MAX_VERIFIED_ADDRESSES = 64
+
+
+class SystemResolver:
+    """`socket`, and nothing else. A class so a test can hand in something that does
+    not touch the network — which is what keeps this suite offline while the feature
+    that needs DNS exists.
+
+    No timeout, and that is not an oversight: `gethostbyaddr` goes through the system
+    resolver, which `socket.setdefaulttimeout` does not reach. What bounds this is
+    `MAX_VERIFIED_ADDRESSES` and the runner's own per-script timeout.
+    """
+
+    @staticmethod
+    def reverse(ip: str) -> str:
+        return socket.gethostbyaddr(ip)[0]
+
+    @staticmethod
+    def forward(host: str) -> list[str]:
+        return socket.gethostbyname_ex(host)[2]
+
+
+class AddressCheck:
+    """Reverse-then-forward DNS confirmation of a claimed search crawler.
+
+    Google, Bing and Yandex document the same two-step rule, and the second step is the
+    one that matters. A reverse lookup alone trusts whoever controls the PTR record for
+    the address, and that is the address's owner — so anybody with a rented block can
+    point it at `crawl-203-0-113-1.googlebot.com` and be believed. Confirming that the
+    name resolves *back* to the same address closes it, because the forward zone belongs
+    to Google.
+
+    Answers, and what each one means:
+
+    * `verified` — reverse and forward agree. It is the crawler it says it is.
+    * `forged` — the name is not in the crawler's domain, or does not resolve back.
+      Its requests are re-attributed to `other` so they leave the crawl-budget figures.
+    * `unresolved` — no PTR record, or DNS failed. **Not treated as forged**: a
+      resolver that is down would otherwise turn every crawler on the site into an
+      impostor, which is the same failure as reading a third party's outage as a defect
+      in the site.
+    * `no_published_rule` / `not_checked` — nothing was asked. Same handling as
+      `unresolved`, for the same reason.
+    """
+
+    def __init__(self, resolver=None, budget: int = MAX_VERIFIED_ADDRESSES):
+        self.resolver = resolver or SystemResolver()
+        self.budget = budget
+        self.cache: dict[tuple[str, str], str] = {}
+        self.counts: collections.Counter = collections.Counter()
+
+    def status(self, name: str, ip: str) -> str:
+        domains = CRAWLER_DOMAINS.get(name)
+        if not domains:
+            return "no_published_rule"
+        key = (name, ip)
+        if key in self.cache:
+            return self.cache[key]
+        if len(self.cache) >= self.budget:
+            return "not_checked"
+        verdict = self._resolve(ip, domains)
+        self.cache[key] = verdict
+        self.counts[verdict] += 1
+        return verdict
+
+    def _resolve(self, ip: str, domains: tuple[str, ...]) -> str:
+        try:
+            host = (self.resolver.reverse(ip) or "").rstrip(".").lower()
+        except OSError:
+            return "unresolved"
+        if not host:
+            return "unresolved"
+        # On a label boundary, not a substring: `notgooglebot.com` ends with
+        # "googlebot.com" and is not Google.
+        if not any(host == d or host.endswith("." + d) for d in domains):
+            return "forged"
+        try:
+            addresses = self.resolver.forward(host)
+        except OSError:
+            return "unresolved"
+        return "verified" if ip in addresses else "forged"
 
 
 def classify_agent(ua: str) -> tuple[str, str]:
@@ -361,7 +467,8 @@ def _log_key(path: str) -> str:
 # ---------------------------------------------------------------------------
 
 def audit(log_path: str, inventory_path: str = "", base_url: str = "",
-          max_lines: int = DEFAULT_MAX_LINES) -> dict:
+          max_lines: int = DEFAULT_MAX_LINES, checker: "AddressCheck | None" = None
+          ) -> dict:
     result = {
         "log_file": log_path,
         "base_url": base_url,
@@ -374,7 +481,8 @@ def audit(log_path: str, inventory_path: str = "", base_url: str = "",
         "window": {"first": None, "last": None, "days": None},
         "bot_identity": "claimed, not verified — a User-Agent is what the client "
                         "says it is; confirming Googlebot needs a reverse DNS "
-                        "lookup this script does not make",
+                        "lookup, which --verify-bots makes and this run did not",
+        "address_checks": {},
         "bots": {},
         "by_status_class": {},
         "search": {},
@@ -395,6 +503,8 @@ def audit(log_path: str, inventory_path: str = "", base_url: str = "",
         return result
 
     counts: dict[str, collections.Counter] = collections.defaultdict(
+        collections.Counter)
+    address_checks: dict[str, collections.Counter] = collections.defaultdict(
         collections.Counter)
     per_bot: dict[str, dict] = {}
     wasted: collections.Counter = collections.Counter()
@@ -436,6 +546,15 @@ def audit(log_path: str, inventory_path: str = "", base_url: str = "",
                         last_at = when
 
                 kind, name = classify_agent(row["ua"])
+                if checker is not None and kind == "search" and row["ip"]:
+                    verdict = checker.status(name, row["ip"])
+                    address_checks[name][verdict] += 1
+                    if verdict == "forged":
+                        # Re-attributed rather than annotated. The whole cost of an
+                        # unverified identity was that a scraper's 404s counted as
+                        # Google's crawl budget, and leaving the requests in `search`
+                        # with a note beside them would leave that number wrong.
+                        kind, name = "other", f"{name} (address not confirmed)"
                 klass = status_class(row["status"])
                 counts["all"][klass] += 1
                 counts[kind][klass] += 1
@@ -488,6 +607,24 @@ def audit(log_path: str, inventory_path: str = "", base_url: str = "",
             "severity": "low", "type": "mixed_format",
             "message": "some lines carry no User-Agent field; those requests are "
                        "counted in the totals but attributed to no crawler"})
+
+    if checker is not None:
+        result["address_checks"] = {name: dict(c) for name, c in
+                                    sorted(address_checks.items())}
+        tally = checker.counts
+        result["bot_identity"] = (
+            f"confirmed by reverse-then-forward DNS: {tally['verified']} address(es) "
+            f"verified, {tally['forged']} not the crawler they claimed, "
+            f"{tally['unresolved']} with no usable PTR record. A crawler with no "
+            f"published DNS rule, and any address beyond the "
+            f"{checker.budget}-address budget, is still a claim")
+        forged = sum(c.get("forged", 0) for c in address_checks.values())
+        if forged:
+            result["issues"].append({
+                "severity": "medium", "type": "forged_crawler",
+                "message": f"{forged} request(s) claimed to be a search crawler from "
+                           f"address(es) that are not — re-attributed to 'other', so "
+                           f"the crawl-budget figures above exclude them"})
 
     _window(result, first_at, last_at)
     result["by_status_class"] = dict(counts["all"])
@@ -697,10 +834,17 @@ def main() -> int:
     ap.add_argument("--max-lines", type=int, default=DEFAULT_MAX_LINES,
                     help=f"stop after N lines (default {DEFAULT_MAX_LINES}); "
                          f"truncation is reported in the output")
+    ap.add_argument("--verify-bots", action="store_true",
+                    help="confirm each claimed search crawler by reverse-then-forward "
+                         "DNS. Off by default: it is the only network call this script "
+                         "makes, and a run without it reports crawler identity as the "
+                         "claim it is. Requests from an address that fails the check "
+                         "are re-attributed out of the crawl-budget figures")
     ap.add_argument("--json", "-j", action="store_true")
     a = ap.parse_args()
 
-    result = audit(a.log, a.inventory, a.url, a.max_lines)
+    result = audit(a.log, a.inventory, a.url, a.max_lines,
+                   checker=AddressCheck() if a.verify_bots else None)
 
     if a.json:
         print(json.dumps(result, indent=2))

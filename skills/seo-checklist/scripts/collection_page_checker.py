@@ -10,6 +10,14 @@ from schema_required_props import load_source_html
 from seo_common import issue, parse_html, print_json_or_text
 
 
+# basis: inherited — 150 words, present at import, and deliberately below the 300 a
+#  content page is held to: a collection page's job is the grid, so the copy only has to
+#  be enough to say what the collection is.
+COLLECTION_THIN_WORDS = 150
+# basis: inherited — four distinct product links, present at import. Below it the grid
+#  is either empty or built by client-side rendering, and this script reads HTML.
+MIN_PRODUCT_LINKS = 4
+
 FILTER_PARAMS = {"filter", "sort", "color", "size", "brand", "price", "min_price", "max_price", "page", "p"}
 
 
@@ -28,7 +36,7 @@ def check_collection_page(source: str, timeout: int = 15) -> dict:
     issues = []
     url = final_url or source
     word_count = parsed.get("word_count", 0)
-    if word_count < 150:
+    if word_count < COLLECTION_THIN_WORDS:
         issues.append(issue("warning", "Collection page has thin visible copy", url, str(word_count)))
     if not parsed.get("headings", {}).get("h1"):
         issues.append(issue("error", "Collection page is missing H1", url))
@@ -47,7 +55,7 @@ def check_collection_page(source: str, timeout: int = 15) -> dict:
         text = link.get("text", "")
         if any(token in href.lower() for token in ("/product", "/products/", "/p/")) or text.lower() in {"view", "details", "buy"}:
             product_links.append(href)
-    if len(set(product_links)) < 4:
+    if len(set(product_links)) < MIN_PRODUCT_LINKS:
         issues.append(issue("info", "Few crawlable product links detected", url, str(len(set(product_links)))))
     rels = {rel for link in parsed.get("links", []) for rel in rel_values(link.get("rel"))}
     pagination_links = []

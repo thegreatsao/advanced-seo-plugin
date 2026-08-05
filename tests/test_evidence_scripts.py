@@ -789,6 +789,152 @@ class ServerLogs(unittest.TestCase):
                              f"{token} is counted as a real crawler")
 
 
+class CrawlerAddressesAreConfirmed(unittest.TestCase):
+    """CI-018's `bot_identity`, and the reason `--verify-bots` exists.
+
+    Classification is a lookup over a string the client chose, so a scraper announcing
+    itself as Googlebot was counted as Googlebot — and the direction of that error was
+    always towards *over*-reporting the crawl, because nobody forges a User-Agent to
+    look less important. Every test here hands in a resolver, so the suite stays
+    offline: the whole feature is one network call, and the seam that lets it be tested
+    is what makes adding it acceptable at all.
+    """
+
+    REAL = "66.249.66.1"
+    FAKE = "203.0.113.9"
+
+    UA = ("Mozilla/5.0 (compatible; Googlebot/2.1; "
+          "+http://www.google.com/bot.html)")
+
+    def _log(self) -> str:
+        """Three requests from Google's address, five 404s from somewhere else — both
+        announcing themselves as Googlebot. Built in a method rather than a class
+        attribute because a comprehension in a class body cannot see the class's own
+        names."""
+        rows = [f'{self.REAL} - - [01/Jul/2026:00:0{i}:00 +0000] "GET /p{i} HTTP/1.1" '
+                f'200 12 "-" "{self.UA}"' for i in range(3)]
+        rows += [f'{self.FAKE} - - [01/Jul/2026:01:0{i}:00 +0000] "GET /admin{i} '
+                 f'HTTP/1.1" 404 9 "-" "{self.UA}"' for i in range(5)]
+        return "\n".join(rows) + "\n"
+
+    class Resolver:
+        """Reverse and forward answers written down, plus a record of the questions
+        asked — so a test can assert that one address costs one lookup."""
+
+        def __init__(self, reverse_map, forward_map=None, fail=()):
+            self.reverse_map, self.fail = reverse_map, set(fail)
+            self.forward_map = forward_map or {}
+            self.asked = []
+
+        def reverse(self, ip):
+            self.asked.append(ip)
+            if ip in self.fail:
+                raise OSError("no PTR record")
+            return self.reverse_map[ip]
+
+        def forward(self, host):
+            return self.forward_map.get(host, [])
+
+    def _audit(self, resolver, budget=64):
+        import tempfile
+
+        import server_log_audit as sla
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as fh:
+            fh.write(self._log())
+            path = fh.name
+        try:
+            return sla.audit(path, checker=sla.AddressCheck(resolver, budget))
+        finally:
+            os.unlink(path)
+
+    def _both_ways(self):
+        return self.Resolver(
+            {self.REAL: "crawl-66-249-66-1.googlebot.com",
+             self.FAKE: "host9.cheap-vps.example.com"},
+            {"crawl-66-249-66-1.googlebot.com": [self.REAL]})
+
+    def test_a_forged_googlebot_leaves_the_crawl_budget_figures(self):
+        """The finding underneath the feature. Five 404s from an address that is not
+        Google used to be five 404s of Google's crawl budget wasted — the exact number
+        the item reports, inflated by whoever pointed a scraper at the site."""
+        result = self._audit(self._both_ways())
+        self.assertEqual(result["address_checks"]["Googlebot"],
+                         {"verified": 3, "forged": 5})
+        self.assertEqual(result["bots"]["Googlebot"]["requests"], 3)
+        self.assertEqual(
+            result["bots"]["Googlebot (address not confirmed)"]["kind"], "other")
+        self.assertEqual(result["summary"]["search_bot_requests"], 3)
+        self.assertIn("forged_crawler", [i.get("type") for i in result["issues"]])
+
+    def test_a_reverse_lookup_alone_is_not_enough(self):
+        """The half of the rule that is easy to skip and does the work. A PTR record is
+        controlled by whoever owns the address, so anyone with a rented block can name
+        it `crawl-….googlebot.com`. Only the forward zone is Google's, so a name that
+        does not resolve back to the address is forged."""
+        lying = self.Resolver(
+            {self.REAL: "crawl-66-249-66-1.googlebot.com",
+             self.FAKE: "crawl-203-0-113-9.googlebot.com"},        # says the words
+            {"crawl-66-249-66-1.googlebot.com": [self.REAL],
+             "crawl-203-0-113-9.googlebot.com": ["8.8.8.8"]})      # resolves elsewhere
+        result = self._audit(lying)
+        self.assertEqual(result["address_checks"]["Googlebot"],
+                         {"verified": 3, "forged": 5})
+
+    def test_a_hostname_that_merely_ends_in_the_domain_is_forged(self):
+        """`notgooglebot.com` ends with the string "googlebot.com". The suffix has to
+        match on a label boundary — the same class of bug as the robots.txt token that
+        was read as Apple's crawler by substring."""
+        import server_log_audit as sla
+        check = sla.AddressCheck(self.Resolver(
+            {self.FAKE: "www.notgooglebot.com"},
+            {"www.notgooglebot.com": [self.FAKE]}))
+        self.assertEqual(check.status("Googlebot", self.FAKE), "forged")
+
+    def test_a_resolver_that_is_down_does_not_make_every_crawler_an_impostor(self):
+        """The failure this feature could easily have introduced. Reading "DNS did not
+        answer" as "not Googlebot" would turn one outage on the auditing machine into a
+        report telling a client their whole crawl is fraudulent — the same shape as a
+        busy W3C validator becoming "your HTML has errors"."""
+        result = self._audit(self.Resolver({}, fail=(self.REAL, self.FAKE)))
+        self.assertEqual(result["address_checks"]["Googlebot"], {"unresolved": 8})
+        self.assertEqual(result["bots"]["Googlebot"]["requests"], 8)
+        self.assertNotIn("forged_crawler", [i.get("type") for i in result["issues"]])
+
+    def test_one_address_costs_one_lookup_however_many_requests_it_made(self):
+        """Eight requests, two addresses, two questions. A log is millions of lines and
+        a crawler reuses its addresses; asking DNS per line would be the fan-out the
+        response cache and the shared crawl exist to remove."""
+        resolver = self._both_ways()
+        self._audit(resolver)
+        self.assertEqual(sorted(resolver.asked), sorted([self.REAL, self.FAKE]))
+
+    def test_beyond_the_budget_an_address_is_unchecked_and_not_assumed(self):
+        """A bounded feature has to say where it stopped. `not_checked` is handled like
+        `unresolved`: the requests stay attributed to the crawler that claimed them,
+        because a budget running out is not evidence about anybody."""
+        result = self._audit(self._both_ways(), budget=1)
+        self.assertEqual(result["address_checks"]["Googlebot"],
+                         {"verified": 3, "not_checked": 5})
+        self.assertEqual(result["bots"]["Googlebot"]["requests"], 8)
+
+    def test_a_crawler_with_no_published_rule_is_left_as_a_claim(self):
+        """DuckDuckBot, SeznamBot and PetalBot publish address ranges rather than a DNS
+        convention. Inventing a rule for them would report every one of their visits as
+        forged, which is worse than the claim it replaces."""
+        import server_log_audit as sla
+        check = sla.AddressCheck(self.Resolver({}))
+        for name in ("DuckDuckBot", "SeznamBot", "PetalBot"):
+            self.assertNotIn(name, sla.CRAWLER_DOMAINS)
+            self.assertEqual(check.status(name, self.FAKE), "no_published_rule")
+
+    def test_nothing_asks_dns_unless_the_operator_asked_for_it(self):
+        """The default has to stay a file read, and the audit of the good fixture is
+        the one that proves it: no checker, no `address_checks`, and the identity field
+        still says the word "claim" out loud."""
+        self.assertEqual(out("log_good")["address_checks"], {})
+        self.assertIn("not verified", out("log_good")["bot_identity"])
+
+
 # ---------------------------------------------------------------------------
 # Crawling and indexing
 # ---------------------------------------------------------------------------

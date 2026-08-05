@@ -116,6 +116,14 @@ def picture_sources(img, base_url: str = "") -> list[dict]:
     return out
 
 
+# basis: inherited — 300 words, present at import from Agentic-SEO-Skill. It lives
+# here because two scripts compared against it independently: `duplicate_content.py`
+# through THIN_CONTENT_THRESHOLDS and `article_seo.py` through a bare literal, so one
+# number had two homes and could be revised in one of them. Its provenance is exactly
+# what KNOWN-ISSUES §2 suspected — conventional in SEO writing, with no source anybody
+# here can point at.
+THIN_CONTENT_WORDS = 300
+
 # Below this many declared pixels an image is not what the Largest Contentful Paint
 # measures — it is an icon. A threshold, not a law: 100×100 is the smallest thing that
 # could plausibly be the largest paint on a page with any content at all, and Chrome's

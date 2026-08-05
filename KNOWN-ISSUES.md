@@ -1,12 +1,21 @@
 # Known issues
 
-What is wrong with this plugin as of **0.14.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.15.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
+
+**Fixed in 0.15.0**: four of the five open items. The answer-block score no longer
+depends on whether a page closes its tags — and the sibling walk that caused it was
+hiding a second defect that needed no invalid markup at all. Every number a verdict
+rests on now carries a stated basis, which moved `inherited` from 14 to 75 and turned
+up two thresholds written twice. `--verify-bots` confirms a crawler by reverse-then-
+forward DNS and takes a forged one out of the crawl-budget figures. A supplied
+measurement's age is shown and can be bounded. And the Russian report's caveat block —
+19 strings, not the six this file claimed — is translated.
 
 **Fixed in 0.14.0**: the HTML parser was chosen by import order, so one machine could
 parse a page two ways and two scripts inside one audit could disagree — measured,
@@ -173,37 +182,65 @@ gets a confident verdict about the wrong question, which is the failure this sui
 worst at seeing, and nothing automatic can close it — a number's correctness is a
 judgement, not an assertion.
 
-**What 0.13.0 did close is the invisibility.** `tools/audit_thresholds.py` finds every
-number a verdict depends on and requires each to carry a stated basis, checked in CI:
+**What 0.13.0 opened and 0.15.0 finished is the invisibility.**
+`tools/audit_thresholds.py` finds every number a verdict depends on and requires each to
+carry a stated basis, checked in CI. 0.13.0 could see 36 of them; 77 more were
+comparisons against a bare literal, which cannot carry a basis because there is no name
+to hang one on. All of them are named now:
 
-| Basis | Count | What it means |
-|---|---|---|
-| `standard` | 4 | an external published authority, named — Google's Core Web Vitals bands, Open Graph's and Twitter's own documented limits |
-| `measured` | **0** | calibrated against something, and the text says what against |
-| `convention` | 18 | a judgement made here, stated as one: a round number because a line had to be somewhere |
-| `inherited` | 14 | arrived with the borrowed code and has not been examined |
+| Basis | 0.13.0 | 0.15.0 | What it means |
+|---|---|---|---|
+| `standard` | 4 | 6 | an external published authority, named — Google's Core Web Vitals bands, the sitemaps.org URL limit, HSTS preload's one-year `max-age` |
+| `measured` | **0** | **0** | calibrated against something, and the text says what against |
+| `convention` | 18 | 32 | a judgement made here, stated as one: a round number because a line had to be somewhere |
+| `inherited` | 14 | **75** | arrived with the borrowed code and has not been examined |
+| unnamed | 77 | **0** | a bare literal, with nowhere to carry a basis at all |
 
-**Zero `measured` is the finding.** Not one threshold in this tree was arrived at by
-measurement; every number is either somebody else's standard, a judgement, or an
-inheritance. That was the suspicion §2 has carried since it was written, and it is now
-a figure rather than a worry.
+**Two findings, and the second one is why the naming was worth the diff.**
 
-`inherited` is assigned from evidence rather than memory: a constant counts as
-inherited when `git show <initial commit>` finds it already there. The list includes
-the ones that matter most. **`SEVERITY_WEIGHT` — critical 10, high 6, medium 3, low 1
-— decides the SEO Score itself**, and nobody here has asked whether a critical item is
-worth ten low ones or three; the score has been reported to two significant figures
-the whole time. `EFFORT_COST` divides it to rank what to do first, so the ratio between
-two unexamined tables is doing real work. `THIN_CONTENT_THRESHOLDS`'s 300 words is one
-of the numbers this section used to name, and its provenance turned out to be exactly
-what was suspected: conventional in SEO writing, with no source anybody here can point
-at.
+*Zero `measured`.* Not one threshold in this tree was arrived at by measurement; every
+number is either somebody else's standard, a judgement, or an inheritance. That was the
+suspicion this section carried since it was written, and it is a figure now.
 
-**77 thresholds are still unnamed** — comparisons against a bare literal, which cannot
-carry a basis because there is no name to hang one on. MB-095's 250 KB was one of them
-until 0.13.0: an inline `> 250_000` in the middle of a loop, which is why no inventory
-could find it. A number nothing can name is a number nobody can argue with. CI holds
-that count as a ceiling rather than printing it.
+*`inherited` is 75 and not 14.* The unnamed literals were not a random scatter — 59 of
+the 77 were already present in the initial commit. So the honest statement is that
+**roughly two thirds of the numbers this registry's verdicts rest on arrived with
+borrowed code and have never been examined by anybody here**, and the old 14 read that
+way only because the other 61 had nowhere to carry a label. An inventory that undercounts
+in the flattering direction is the failure this file exists to prevent, and it did it to
+itself for two releases.
+
+`inherited` is assigned from evidence rather than memory: a constant counts as inherited
+when `git show <initial commit>` finds it already there. The list includes the ones that
+matter most. **`SEVERITY_WEIGHT` — critical 10, high 6, medium 3, low 1 — decides the
+SEO Score itself**, and nobody here has asked whether a critical item is worth ten low
+ones or three; the score has been reported to two significant figures the whole time.
+`EFFORT_COST` divides it to rank what to do first, so the ratio between two unexamined
+tables is doing real work. `THIN_CONTENT_THRESHOLDS`'s 300 words is one of the numbers
+this section used to name, and its provenance turned out to be exactly what was
+suspected: conventional in SEO writing, with no source anybody here can point at. The
+whole of `gsc_checker.py`'s opportunity rules read as SEO-blog folklore stated in
+numbers — "striking distance" is a phrase, not a measurement.
+
+Three things fell out of the naming pass, each of which is the argument for it:
+
+- **Two thresholds were written twice** — 300 words for thin content, and the
+  30-second `Retry-After` ceiling. One number in two places is one number that can be
+  revised in one of them. Both have one home now.
+- **A check and its own advice disagree.** `article_seo.py` accepts a title of 30-65
+  characters while the fix text beside it asks for 50-60, and accepts a meta description
+  of 100-165 while advising 120-155. Recorded in the basis lines rather than reconciled:
+  which pair is right is a calibration, and that pass was an inventory.
+- **The audit tool had two blind spots of its own.** It excluded 100, 1000 and 1024 as
+  "units rather than limits", and removing them surfaced eleven comparisons of which ten
+  were real thresholds. And it counted equality comparisons on the unnamed side while
+  counting only ordering comparisons on the named side, so the two halves of one tool
+  disagreed about what a threshold is.
+
+A fifth kind, `presentation`, covers the eleven numbers that decide what is *printed* and
+never what is decided, and is kept out of the total above — a report listing three
+linking pages instead of four is a report making a different choice, not an audit
+reaching a different verdict.
 
 0.9.0 is the evidence that this is not theoretical. Sharing one crawl changed *how
 many pages* the anchor-text check reads, and BL-081's threshold — five identical
@@ -219,9 +256,14 @@ Two narrower gaps, both measured:
   and the W3C validator. Nothing here can prove they read Google's *real* response
   shape, only the shape they were written for. That is the honest limit of an offline
   suite, and the reason `tools/probe_shapes.py` exists.
-- **The `<picture>` fix nearly shipped broken** because `lxml` and `html.parser`
-  disagree about the DOM, and which one runs depends on import order — see §6. A test
-  now pins both. Nothing pins the other structural queries that do not exist yet.
+- **Structural queries are the one place a parser can change a verdict**, and both
+  known sites are now handled rather than pinned: `picture_sources()` copes with either
+  DOM, and the answer-block scanner was rewritten against document order in 0.15.0. A
+  test asserts the two parsers *agree* — which is a stronger guard than the old pair of
+  pinned numbers, because it fails on the next query written against sibling position
+  rather than only on the two that were. What still has no guard is a structural query
+  nobody has written yet, and the standing lesson is that `find_next_sibling()` and
+  `recursive=False` are both questions about where the parser thinks an element ends.
 
 ## 3. One site shape is still untested live, and it is the one a fixture cannot be
 
@@ -287,16 +329,17 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
-- **The answer-block score depends on whether the page closes its tags.**
-  `answer_block_scanner.py` finds the answer to a heading with `find_next_sibling()`,
-  and on markup with an unclosed `<p>` — the commonest invalidity on the web — the two
-  HTML parsers see different documents: one finds a list and no direct answer, the other
-  a direct answer and no list. GO-144 asserts `score >= 70`; the score is 10 against 32,
-  and **neither reading is right**. Measured and pinned in `tests/test_parser.py`, which
-  is how the parser question got settled without settling this one: the parser is now
-  deliberate, so the score is at least reproducible, but a sibling walk is the wrong
-  instrument for markup a browser repairs. The fix is to search forward in document
-  order to the next heading rather than to the next sibling, and it is not written.
+- **Closed in 0.15.0 — the answer-block score.** `answer_block_scanner.py` found the
+  answer to a heading with `find_next_sibling()`, which asks the parser where the
+  heading's parent ends, and that is the one question the two parsers answer
+  differently. Three queries were rewritten against document order and nearest-ancestor
+  ownership, which is what both parsers — and the browser — agree about. Kept here
+  because of what it turned into: 0.14.0 *pinned* the 10-against-32 as a fact, and a
+  verdict that depends on which library is installed is not a fact worth recording. And
+  the sibling walk was hiding a second defect that needed no invalid markup at all — a
+  `<div>` between the heading and the paragraph, which is every themed CMS there is, was
+  itself read as the answer, so the word count was the whole section's. **The bug that
+  gets written down instead of fixed is the bug whose neighbour never gets found.**
 - **macOS kills a forked child inside Apple's own framework, and the runner forks 55 of
   them.** Once Network.framework has been initialised in a process, `fork()` runs its
   `pthread_atfork` child handler — `nw_settings_child_has_forked` — which dereferences
@@ -307,39 +350,51 @@ name. A column called `url` would be read as "fix this page".
   the chain outright. `run_script` and `harness.spawn` now start children through
   `posix_spawn`, which does not fork, and a signal death is classified as `signal` with
   the signal named rather than as `crash` with "exit code -11". What is *not* fixed: the
-  trade is that a child inherits this process's descriptors for the moment before exec,
-  and the workaround holds only while nothing reintroduces a `cwd=` or `close_fds=True`
-  to those call sites — a test asserts both, because the symptom of getting it wrong is
-  55 evidence scripts appearing to crash at once.
-- **A crawler's identity in a server log is a claim, not proof.** `server_log_audit.py`
-  classifies by User-Agent, which is a string the client chose. Confirming Googlebot
-  needs a reverse DNS lookup plus a forward confirmation, and this script makes no
-  network calls at all — partly by design, and partly because the test suite is offline
-  and a DNS-dependent check could not be verified there. So a scraper announcing itself
-  as Googlebot inflates the crawl-budget numbers, and the direction of the error is
-  towards *over*-reporting the crawl. `bot_identity` says this in the output rather than
-  in a comment, and distinct IPs per crawler are reported so a reader can notice one
-  address doing all of it. Verification would be a `--verify-bots` flag; it is not
-  written, because adding an unverifiable network call to a new script's first release
-  is the risk this project keeps refusing.
+  trade is that a child inherits this process's descriptors for the moment before exec.
+  **The 0.14.0 note that "the workaround holds while nothing reintroduces a `cwd=` or
+  `close_fds=True`" was already wrong when it was written**: eight other call sites in
+  this tree still forked, because `posix_spawn` also requires
+  `os.path.dirname(executable)` to be non-empty and a bare `openssl` or `git` has none.
+  The openssl child in the TLS harness died of signal 11 and reported itself as
+  `SkipTest("openssl unavailable")`, so the site shape 0.14.0 called *exercised live* had
+  never run on macOS — 4 local skips against Linux CI's 1, which nobody read. Closed in
+  0.15.0 as three AST-checked rules over every `subprocess` call in the tree —
+  `close_fds=False`, no `cwd=`, no bare binary name. The lesson kept here: **a workaround
+  guarded at its own call site is guarded at one call site**, and a diagnostic that names
+  the wrong cause is worse than no diagnostic.
+- **Closed in 0.15.0, and still a claim by default.** `--verify-bots` does the
+  reverse-then-forward DNS check Google, Bing and Yandex document, and re-attributes a
+  forged crawler's requests out of the crawl-budget figures rather than annotating them
+  in place. What is *not* closed is the default: without the flag, `bot_identity` still
+  says the identity is a claim, because the flag is a network call about a third party
+  and this project does not make those without being asked. Three crawlers —
+  DuckDuckBot, SeznamBot, PetalBot — publish address ranges rather than a DNS
+  convention, so they answer `no_published_rule` and remain claims even with the flag;
+  inventing a rule for them would report every visit they make as forged.
 - **The rendered-page artifacts are the one input that cannot be checked by
-  re-measuring.** 0.7.0 closed the part that could be: an artifact naming a different
-  page is refused with the reason. What remains unverifiable is *when* — a trace from
-  six months ago describing today's URL is accepted, because a timestamp in the file
-  is the operator's claim too. The report says which verdicts came from a supplied
-  measurement, so a reader can weigh it; nothing can make that automatic.
+  re-measuring**, and 0.15.0 got as close as that allows. 0.7.0 closed the part that
+  could be checked: an artifact naming a different page is refused with the reason. The
+  age is now stated in the report in days and `--max-artifact-age` refuses one that is
+  too old — off by default, because how stale a measurement may be depends on how often
+  the page changes and there is no honest default for that. The age comes from the
+  filesystem's mtime and not from any timestamp inside the file, which is the whole of
+  what it adds: everything an artifact says about itself is the operator's claim. **Still
+  not verifiable** — `touch` exists — only visible and boundable, which is as far as
+  re-measuring cannot reach.
 - **The page guard is fingerprint-based**, so an interstitial from a vendor it does
   not recognise still gets through. Deliberate: an unknown interstitial and a
   client-rendered shell are indistinguishable from the HTML, and the second is a
   real finding, so the run warns with the visible word count instead of refusing to
   score.
-- **Client-facing reports are English-only.** `--lang ru` translates 45 of the
-  report's 51 own strings and all 16 category explanations. The six it does not are
-  the "what was audited" block — the caveats — and `item_titles` and `item_fixes` are
-  empty, so item titles and recommendations come out in the registry's English. As of
-  0.7.0 the stderr warning *counts* what is missing rather than asserting the chrome
-  is complete, which is how those six were found; it had been claiming otherwise
-  since the translation shipped.
+- **A Russian report still carries English item titles.** The report's own 100 strings
+  are fully translated as of 0.15.0. The 19 that were not — and this file said six,
+  because 0.12.0's "Since the previous audit" section arrived untranslated after the
+  claim was written — were the "what was audited" caveat block, the highest-stakes prose
+  in the document, silently falling back to English. What remains is `item_titles` and
+  `item_fixes`: 214 titles and their recommendations, which is a translation project
+  rather than a code change. The stderr warning names both layers rather than implying
+  the report is fully Russian, and that counting — added in 0.7.0 — is the only reason
+  either gap was ever visible.
 
 ---
 

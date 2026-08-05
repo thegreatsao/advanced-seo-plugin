@@ -29,7 +29,14 @@ partial), duplicate attributes and unquoted values (CDN rewriting).
 
 **The result.** Every field the registry reads is identical under both parsers across
 all fifteen shapes. The divergence is structural — parent/child, not values — and it
-reaches exactly two call sites, both pinned below with the numbers.
+reached exactly two call sites, both pinned below.
+
+One of the two used to change a *verdict*: `answer_block_scanner.py` scored the same
+page 10 or 32 depending on the parser. 0.15.0 fixed it rather than recording it, and
+the tests below now assert the two parsers **agree**. That is a stronger pin than the
+numbers were: a divergence recorded as a pair of numbers goes stale the moment either
+side moves, while an equality assertion fails the day a new structural query is
+written against sibling position again.
 """
 import json
 import os
@@ -244,11 +251,16 @@ class EveryFieldTheRegistryReadsIsParserIndependent(unittest.TestCase):
 
 
 class WhereTheParsersActuallyDiverge(unittest.TestCase):
-    """The two structural call sites, pinned with their numbers.
+    """The two structural call sites, and what each one does about it.
 
-    Both are recorded rather than fixed-and-forgotten: these are the facts that would
-    have to be re-measured if the parser choice were ever revisited, and a test is the
-    only place a number like that stays true.
+    The first — `<picture>` — is a divergence the code copes with, pinned with its
+    numbers because those are the facts that would have to be re-measured if the
+    parser choice were revisited.
+
+    The second used to be pinned the same way, at 10 against 32, and that was the
+    wrong thing to do with it. A verdict that depends on which parser is installed is
+    not a fact worth recording; it is a defect, and 0.15.0 fixed the instrument that
+    caused it. The tests below assert agreement now.
     """
 
     def scan(self, html: str, parser: str) -> dict:
@@ -302,62 +314,91 @@ class WhereTheParsersActuallyDiverge(unittest.TestCase):
 because the acidity in sourdough slows staling down considerably.
 <h2>What is a starter?</h2><ul><li>flour<li>water<li>time</ul></body></html>"""
 
-    def test_an_unclosed_p_moves_the_answer_block_score(self):
-        """The one place the parser changes a *verdict*, and the reason this file
-        exists rather than a one-line default.
-
-        `answer_block_scanner.py` finds the answer to a heading with
-        `find_next_sibling()`. On markup with an unclosed `<p>` — the commonest
-        invalidity on the web — lxml leaves the following `<h2>` inside the paragraph
-        and `html.parser` closes it per the spec, so the two see different documents:
-        one finds a list and no direct answer, the other a direct answer and no list.
-        GO-144 asserts `score >= 70`, and the score is 10 against 32.
-
-        **Neither is right**, which is the finding underneath the finding: the score
-        is sensitive to markup validity under either parser, and that is recorded in
-        KNOWN-ISSUES as its own defect rather than smuggled into a parser decision.
-        """
-        scores = {p: self.scan(self.UNCLOSED_ANSWER, p) for p in PARSERS}
-        self.assertEqual(scores["lxml"]["score"], 10)
-        self.assertEqual(scores["html.parser"]["score"], 32)
-        # And the shape of the disagreement, so a change in *how* they differ is not
-        # hidden by the totals happening to stay the same.
-        self.assertEqual(len(scores["lxml"]["lists"]), 1)
-        self.assertEqual(scores["lxml"]["direct_answers"], [])
-        self.assertEqual(scores["html.parser"]["lists"], [])
-        self.assertEqual(len(scores["html.parser"]["direct_answers"]), 1)
-
     VALID_ANSWER = """<html><head><title>T</title></head><body>
 <h2>How long does bread keep?</h2><p>Three days in paper, a week in the freezer,
 because the acidity in sourdough slows staling down considerably.</p>
 <h2>What is a starter?</h2><ul><li>flour</li><li>water</li><li>time</li></ul></body></html>"""
-
-    def test_valid_markup_gives_the_same_answer_blocks_either_way(self):
-        """The reassuring half, and the reason this divergence is bounded: markup that
-        closes its tags reads the same either way.
-
-        Both tags, though. The first version of this test closed the `<p>` and left the
-        `<li>`s open, and the scores came out 10 against 0 — so "valid enough" is not a
-        category here, and an unclosed `<li>` is pinned as its own case below.
-        """
-        out = {p: self.scan(self.VALID_ANSWER, p) for p in PARSERS}
-        self.assertEqual(out["lxml"]["score"], out["html.parser"]["score"])
-        self.assertEqual(len(out["lxml"]["direct_answers"]),
-                         len(out["html.parser"]["direct_answers"]))
-
 
     UNCLOSED_LI = """<html><head><title>T</title></head><body>
 <h2>How long does bread keep?</h2><p>Three days in paper, a week in the freezer,
 because the acidity in sourdough slows staling down considerably.</p>
 <h2>What is a starter?</h2><ul><li>flour<li>water<li>time</ul></body></html>"""
 
-    def test_an_unclosed_li_diverges_too(self):
-        """The second half of the same defect, and the reason the first version of the
-        test above passed for the wrong reason. An unclosed `<li>` is as common as an
-        unclosed `<p>`, and it moves the same score."""
-        scores = {p: self.scan(self.UNCLOSED_LI, p)["score"] for p in PARSERS}
-        self.assertNotEqual(scores["lxml"], scores["html.parser"])
-        self.assertEqual(scores, {"lxml": 10, "html.parser": 0})
+    def test_the_answer_block_score_no_longer_depends_on_closing_tags(self):
+        """The one place the parser used to change a *verdict*, and now the one place
+        this file proves a fix rather than records a fact.
+
+        Three documents that a browser renders identically — one closing every tag,
+        one leaving `<p>` open, one leaving `<li>` open. They used to score 10, 32 and
+        0 across the two parsers, because `html.parser` applies none of HTML's implied
+        end tags: an unclosed paragraph swallows the heading and list that follow it,
+        and three list items nest three deep. Every one of those numbers was wrong
+        about the page.
+
+        All nine readings are the same now, and it is the same reading a browser gives:
+        one three-item list, no direct answer — the paragraph is 18 words, under the
+        20-word floor. The assertion is *equality between the parsers and between the
+        three shapes*, which is a stronger statement than the old pair of pinned
+        numbers: it fails on any new structural query that trusts sibling position,
+        not only on the two that did.
+        """
+        shapes = {"valid": self.VALID_ANSWER,
+                  "unclosed_p": self.UNCLOSED_ANSWER,
+                  "unclosed_li": self.UNCLOSED_LI}
+        seen = {}
+        for shape, html in shapes.items():
+            for parser in PARSERS:
+                out = self.scan(html, parser)
+                seen[f"{shape}/{parser}"] = (out["score"], len(out["direct_answers"]),
+                                             len(out["definitions"]), len(out["lists"]))
+        self.assertEqual(set(seen.values()), {(10, 0, 0, 1)}, seen)
+
+    def test_a_list_item_reports_its_own_text_under_either_parser(self):
+        """Not only the count. `html.parser`'s nested items make each `<li>`'s
+        `get_text()` include every item after it, so the first item of a three-item
+        list read "flour water time" — the evidence string a report shows a client,
+        wrong in a way the score could not reveal."""
+        for html in (self.VALID_ANSWER, self.UNCLOSED_LI, self.UNCLOSED_ANSWER):
+            for parser in PARSERS:
+                out = self.scan(html, parser)
+                self.assertEqual(out["lists"][0]["sample"], ["flour", "water", "time"],
+                                 parser)
+
+    WRAPPED_ANSWER = """<html><body><h2>How long does bread keep?</h2>
+<div class="entry-content"><p>Three days in paper, a week in the freezer, because the
+acidity in a sourdough starter slows the staling process down very considerably.</p>
+<p>Longer if you slice it first and freeze the slices, which also means you can toast
+straight from frozen without waiting for a whole loaf to thaw on the counter.</p></div>
+</body></html>"""
+
+    def test_a_wrapped_answer_is_the_paragraph_and_not_the_wrapper(self):
+        """The second defect the sibling walk was hiding, and it needed no invalid
+        markup at all.
+
+        A `<div>` between the heading and the paragraph — every themed CMS on the web
+        — was itself read as the answer, so the word count was the whole section's.
+        Two paragraphs measured 53 words and squeezed under the 70-word ceiling with
+        the wrong text attached; three or more went over it and the page had no direct
+        answer. Walking through wrappers to the prose gives the paragraph, 23 words,
+        under both parsers.
+        """
+        for parser in PARSERS:
+            out = self.scan(self.WRAPPED_ANSWER, parser)
+            self.assertEqual(len(out["direct_answers"]), 1, parser)
+            answer = out["direct_answers"][0]
+            self.assertEqual(answer["word_count"], 23, parser)
+            self.assertTrue(answer["answer"].endswith("considerably."), answer)
+
+    def test_no_structural_query_trusts_sibling_position(self):
+        """What actually keeps the fix from being written back.
+
+        `find_next_sibling` asks the parser where an element's parent ends, and that
+        is the one question the two parsers answer differently. Read from the tokens
+        rather than the text, because this file's own prose names the method and the
+        first version of a grep test in this tree matched its own docstring.
+        """
+        path = os.path.join(SCRIPTS, "answer_block_scanner.py")
+        self.assertNotIn("find_next_sibling", executable_source(path))
 
 
 if __name__ == "__main__":

@@ -12,6 +12,11 @@ from datetime import date, datetime
 from seo_common import load_html, parse_html
 
 
+# basis: inherited — 730 days, present at import. Two years is the point at which a
+#  visible date is reported as old; it is a round number and nothing here measured what
+#  staleness costs a given kind of page.
+STALE_CONTENT_DAYS = 730
+
 DATE_RE = re.compile(
     r"\b(?:20\d{2}|19\d{2})[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12]\d|3[01])\b|"
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+"
@@ -122,7 +127,7 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
     issues = []
     if latest is None:
         issues.append({"severity": "warning", "message": "No parseable published or modified date found."})
-    elif age_days and age_days > 730:
+    elif age_days and age_days > STALE_CONTENT_DAYS:
         issues.append({"severity": "warning", "message": f"Latest visible freshness date is {age_days} days old."})
     if stale_stat_count:
         issues.append({"severity": "warning", "message": f"{stale_stat_count} statistic sentence(s) reference old years."})

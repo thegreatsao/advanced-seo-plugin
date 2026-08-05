@@ -18,6 +18,13 @@ except ImportError:
 from seo_common import load_html, normalize_url, parse_html
 
 
+# basis: inherited — 100, present at import, and a unit guess rather than a limit:
+#  Lighthouse reports network timings in milliseconds, but some versions and some
+#  proxies hand back seconds, and a page whose LCP resource genuinely starts within
+#  100ms of navigation is rare enough that treating the value as seconds is the safer
+#  reading. Wrong for a very fast resource, which is the trade.
+MS_IF_ABOVE = 100
+
 def _is_url(value: str) -> bool:
     if Path(value).is_file():
         return False
@@ -71,9 +78,9 @@ def subparts_from_lighthouse(path: str) -> dict:
 
     resource_start = resource.get("networkRequestTime") if resource else None
     resource_end = resource.get("networkEndTime") if resource else None
-    if isinstance(resource_start, (int, float)) and resource_start < 100:
+    if isinstance(resource_start, (int, float)) and resource_start < MS_IF_ABOVE:
         resource_start *= 1000
-    if isinstance(resource_end, (int, float)) and resource_end < 100:
+    if isinstance(resource_end, (int, float)) and resource_end < MS_IF_ABOVE:
         resource_end *= 1000
 
     resource_duration = None

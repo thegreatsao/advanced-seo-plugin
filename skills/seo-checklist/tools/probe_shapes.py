@@ -61,6 +61,21 @@ for key, env in (("cwv_json", "PROBE_CWV_JSON"), ("rendered_json", "PROBE_RENDER
         CTX[key] = os.environ[env]
 
 
+def _child_env() -> dict:
+    """The environment a probed script runs in, with `PYTHONPATH` instead of a `cwd`.
+
+    These calls used to pass `cwd=SCRIPT_DIR`, which was never needed for imports — a
+    script run by path already has its own directory on `sys.path` — and which forced
+    CPython onto `fork`+`exec`, where macOS kills the child inside Apple's atfork
+    handler before it execs. `PYTHONPATH` covers the case `cwd` was there for and keeps
+    the child on `posix_spawn`.
+    """
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (SCRIPT_DIR + os.pathsep + existing) if existing else SCRIPT_DIR
+    return env
+
+
 def build_inventory(path="probe-inventory.json"):
     """Crawl once, the way the runner does before it builds its plan.
 
@@ -72,7 +87,8 @@ def build_inventory(path="probe-inventory.json"):
     """
     proc = subprocess.run([PY, os.path.join(SCRIPT_DIR, "site_crawl.py"), URL,
                            "--out", path, "--json"],
-                          capture_output=True, text=True, timeout=600, cwd=SCRIPT_DIR)
+                          capture_output=True, text=True, timeout=600,
+                          env=_child_env(), close_fds=False)
     if proc.returncode != 0:
         print(f"[skip] crawl failed, so the site-wide items cannot be probed: "
               f"{(proc.stderr or '').strip()[-300:]}", file=sys.stderr)
@@ -179,7 +195,8 @@ def run(job):
     start = time.time()
     try:
         r = subprocess.run([PY, path] + args + ["--json"],
-                           capture_output=True, text=True, timeout=180, cwd=SCRIPT_DIR)
+                           capture_output=True, text=True, timeout=180,
+                           env=_child_env(), close_fds=False)
         elapsed = round(time.time() - start, 1)
         if r.returncode == 0 and r.stdout.strip():
             try:

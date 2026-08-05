@@ -27,6 +27,16 @@ import sys
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 NO_DATA, MANUAL, LLM_PENDING, NA = "NO_DATA", "MANUAL", "LLM_PENDING", "N/A"
 
+# basis: presentation — 60 and 85 choose the colour of a category bar, nothing else. A
+#  verdict is already computed by the time either is read, so a reader who disagrees with
+#  where amber starts is disagreeing with a stylesheet.
+BAR_FAIL_SCORE = 60
+BAR_WARN_SCORE = 85          # basis: presentation — the upper band of the pair above
+# basis: presentation — how many missing report strings are named before "…", and how
+#  many linking pages a broken-URL row lists before "+3". Both are line lengths.
+CAVEAT_LIST_SHOWN = 4
+LINKED_FROM_SHOWN = 3        # basis: presentation — the same, for a broken-URL row
+
 # basis: inherited — present at import. Only a sort order, so a wrong answer changes
 #  what is listed first rather than any verdict — which is why it is the least urgent of
 #  the inherited numbers
@@ -122,7 +132,7 @@ class Lang:
         missing = self.missing_strings()
         if missing:
             out.append(f"{len(missing)} report string(s): {', '.join(missing[:4])}"
-                       + (" …" if len(missing) > 4 else ""))
+                       + (" …" if len(missing) > CAVEAT_LIST_SHOWN else ""))
         return out
 
     def missing_strings(self) -> list[str]:
@@ -513,7 +523,7 @@ def broken_url_section(data: dict, L: "Lang | None" = None) -> list[str]:
         for row in broken[:50]:
             where = (", ".join(row["linked_from"][:3])
                      + (f" +{len(row['linked_from']) - 3}"
-                        if len(row["linked_from"]) > 3 else "")
+                        if len(row["linked_from"]) > LINKED_FROM_SHOWN else "")
                      if row.get("linked_from")
                      else L.t("sitemap_only", "the sitemap only"))
             status = row.get("status") or esc_md(str(row.get("error") or "no response"))[:60]
@@ -592,15 +602,27 @@ def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
     # instead of from anything this run observed. The verdict is only as good as
     # that file, and a reader looking at "LCP 820 ms — PASS" has no way to tell it
     # apart from a measurement the tool took — so the report says which.
-    supplied = sorted(key.replace("_", " ").replace(" json", "")
-                      for key, entry in (data.get("artifacts") or {}).items()
-                      if entry.get("matches_audited_url") is not False)
+    used = {key: entry for key, entry in (data.get("artifacts") or {}).items()
+            if entry.get("matches_audited_url") is not False}
+    supplied = sorted(key.replace("_", " ").replace(" json", "") for key in used)
     if supplied:
+        # The age is stated rather than implied, and in days, because "only as current
+        # as that" is a sentence a reader can nod along to without learning anything.
+        # A file written four months ago describing today's URL passes every check this
+        # run can make — the age is the one thing that can be shown, so it is shown.
+        ages = [entry["age_days"] for entry in used.values()
+                if entry.get("age_days") is not None]
+        when = ""
+        if ages:
+            when = " " + L.t("w_artifacts_age",
+                             "The oldest was written {days} day(s) ago.").format(
+                                 days=max(ages))
         out.append(L.t("w_artifacts",
                        "Some verdicts come from measurements supplied with the run "
                        "({kinds}) rather than from anything it observed itself. They "
                        "describe the page and the moment they were taken, and are "
-                       "only as current as that.").format(kinds=", ".join(supplied)))
+                       "only as current as that.").format(kinds=", ".join(supplied))
+                   + when)
     return out
 
 
@@ -1065,7 +1087,8 @@ def render_html(data: dict, L: Lang | None = None) -> str:
         parts.append(f'<section><h2>{html.escape(L.t("where", "Where the problems are"))}</h2>')
         for key, cat in cats:
             score = cat["score"]
-            tone = "fail" if score < 60 else ("warn" if score < 85 else "pass")
+            tone = ("fail" if score < BAR_FAIL_SCORE
+                    else ("warn" if score < BAR_WARN_SCORE else "pass"))
             failed = cat["counts"].get(FAIL, 0) + cat["counts"].get(WARN, 0)
             parts.append(
                 f'<div class="catrow"><div class="catname">{html.escape(cat["label"])}</div>'

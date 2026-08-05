@@ -20,6 +20,12 @@ except ImportError:  # pragma: no cover - optional dependency
     PlaywrightTimeout = TimeoutError
 
 
+# basis: inherited — 390 CSS pixels, present at import. The viewport width of the
+#  iPhone 14/15 class of device, so a fixed width above it guarantees a horizontal
+#  scrollbar on the commonest phone; it is a device fact rather than a judgement, but
+#  which device is the judgement.
+MAX_FIXED_WIDTH_PX = 390
+
 def _static_checks(source: str, timeout: int = 15) -> dict:
     html, final_url, fetched = load_html(source, timeout=timeout)
     parsed = parse_html(html, final_url)
@@ -40,7 +46,7 @@ def _static_checks(source: str, timeout: int = 15) -> dict:
         })
 
     fixed_width_hits = re.findall(r"(?:width|min-width)\s*:\s*(\d{3,})px", text, flags=re.I)
-    wide_values = [int(value) for value in fixed_width_hits if int(value) > 390]
+    wide_values = [int(value) for value in fixed_width_hits if int(value) > MAX_FIXED_WIDTH_PX]
     if wide_values:
         issues.append({
             "severity": "warning",

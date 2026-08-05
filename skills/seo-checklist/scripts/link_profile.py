@@ -31,6 +31,11 @@ import site_crawl
 # Build the graph from the inventory
 # ---------------------------------------------------------------------------
 
+# basis: inherited — an average of three internal links per page, present at import.
+#  The same number as `internal_links.LOW_OUTLINKS` and asked of a different quantity:
+#  that one is per page, this one is the site's mean.
+LOW_AVERAGE_INTERNAL_LINKS = 3
+
 def graph_from_inventory(inventory: dict) -> tuple:
     """(graph, crawled, base_domain, robots_refused) — no requests.
 
@@ -150,7 +155,7 @@ def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
             "fix": "Add contextual internal links to related content from these pages.",
         })
 
-    if avg_internal_links < 3:
+    if avg_internal_links < LOW_AVERAGE_INTERNAL_LINKS:
         issues.append({
             "type": "low_internal_linking",
             "severity": "High",
