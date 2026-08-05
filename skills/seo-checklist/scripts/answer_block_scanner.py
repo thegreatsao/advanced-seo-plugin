@@ -8,8 +8,10 @@ commonest invalidities on the web — an unclosed `<p>` and an unclosed `<li>` �
 it a document no browser would build: the paragraph swallows every heading and list
 that follows it, and three list items nest three deep. `lxml` closes both. A check
 written against the parser's tree therefore returned different verdicts on the same
-page depending on which parser was installed (measured at 10 against 32 in
-`tests/test_parser.py`), and *neither* number was the one a reader would give.
+page depending on which parser was installed — 10 against 32 before 0.15.0 rewrote
+this file — and *neither* number was the one a reader would give. Both return 42 on
+that markup now, and `tests/test_parser.py` asserts the agreement rather than the
+old pair of numbers.
 
 Document order and nearest-ancestor ownership are the two things both parsers agree
 about, and they agree with the browser. See `_answer_after`, `_own_text` and

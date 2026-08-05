@@ -291,18 +291,22 @@ def html_parser() -> str:
     It used to be `"lxml" if "lxml" in sys.modules else "html.parser"` — which does
     not ask whether lxml is *installed*, only whether something imported it first.
     Two runs on one machine could therefore parse the same page two different ways
-    depending on which script pulled lxml in, and the parsers are not equivalent: on
-    markup with an unclosed `<p>` — the commonest invalidity there is —
-    `answer_block_scanner.py` scores 10 under lxml and 32 under `html.parser`, and
-    GO-144 reads that score. A tool whose whole claim is that two runs of one site
-    agree cannot choose its substrate by accident of import order.
+    depending on which script pulled lxml in, and at the time the parsers were not
+    equivalent: on markup with an unclosed `<p>` — the commonest invalidity there is —
+    `answer_block_scanner.py` scored 10 under lxml and 32 under `html.parser`, and
+    GO-144 read that score. 0.15.0 removed the divergence at its source by rewriting
+    the scanner's structural queries against document order, and both parsers return
+    42 on that markup now. The decision below stands on its own anyway: a tool whose
+    whole claim is that two runs of one site agree cannot choose its substrate by
+    accident of import order, whether or not the substrates currently differ.
 
     **lxml, when it can be imported.** It is a declared requirement, so it is what
     runs in practice; it tolerates the broken markup real sites serve; and measured
     over the corpus in `tests/test_parser.py`, every field the registry reads comes
     out identical between the two across fifteen document shapes — deep nesting,
-    unclosed tags, an SVG `<title>`, templates, fragments. The divergence is
-    structural rather than field-level, and it has exactly two call sites.
+    unclosed tags, an SVG `<title>`, templates, fragments. The structural queries
+    agree too since 0.15.0, and a test asserts that agreement rather than pinning the
+    numbers it used to differ by.
 
     `SEO_HTML_PARSER` overrides it, and the run records which parser produced its
     verdicts. That pair is what makes a fixture-measured decision safe: an operator

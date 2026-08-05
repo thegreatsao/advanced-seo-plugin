@@ -1396,6 +1396,92 @@ def previous_run(domain: str, exclude: str) -> dict | None:
     return best
 
 
+# basis: convention — how many stored runs the trend reads. Twelve is a year of
+#  monthly audits or a quarter of weekly ones, which is the span somebody asks "has
+#  this moved" about; the cost of a larger number is reading more files, not a worse
+#  answer, so it is a default rather than a limit.
+HISTORY_RUNS = 12
+
+
+def run_series(domain: str, exclude: str, limit: int = HISTORY_RUNS) -> list[dict]:
+    """The arc of this domain's audits, oldest first, one compact record each.
+
+    `previous_run` answers "what changed since last time", and that is a different
+    question from the one a site owner actually asks — whether six months of work
+    moved anything. Every run since 0.1.0 has been stored in `.seo-runs/`; until now
+    exactly one of them was ever read.
+
+    Compact on purpose. A stored run is a megabyte and mostly evidence strings, and a
+    trend needs five numbers per run plus the per-item statuses. Carrying whole
+    payloads into the artifact would multiply the deliverable by the length of the
+    history, which is the wrong direction for a file people email.
+
+    Ordered by the timestamp *inside* each file, for the reason `previous_run`
+    documents: the name format has already changed once. An unreadable history file
+    is skipped rather than fatal — a corrupt record of an old audit is no reason to
+    abandon this one.
+    """
+    d = os.path.join(os.getcwd(), ".seo-runs", domain)
+    if not os.path.isdir(d):
+        return []
+    skip = os.path.basename(exclude) if exclude else ""
+    rows = []
+    for name in sorted(f for f in os.listdir(d) if f.endswith(".json") and f != skip):
+        try:
+            with open(os.path.join(d, name), encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        scores = payload.get("scores") or {}
+        rows.append((run_time(payload, name), {
+            "started_at": payload.get("started_at"),
+            "registry_version": payload.get("registry_version"),
+            "mode": payload.get("mode"),
+            "profile": payload.get("profile"),
+            "seo_score": scores.get("seo_score"),
+            "weight_pct": scores.get("weight_pct"),
+            "decided": scores.get("decided"),
+            "statuses": {i["id"]: i["status"] for i in payload.get("items", [])},
+        }))
+    rows.sort(key=lambda r: r[0])
+    return [r[1] for r in rows[-limit:]]
+
+
+# basis: convention — a sort order for the streak list, definitional in the same way
+#  VERDICT_RANK is: critical before low is the only ordering severity can have
+SEVERITY_ORDER_KEY = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+def open_since(series: list[dict], current: list[dict]) -> list[dict]:
+    """For each item failing now, the oldest run in which it was already failing.
+
+    This is the part of a trend worth printing. "FAIL" and "FAIL in every audit since
+    March" are different sentences to the person who owns the site, and only the
+    second one says the fix keeps not happening. A score line cannot carry it: a site
+    can hold the same score for six months while a different item fails each time.
+
+    Deliberately a *consecutive* streak counted backwards from now, not a total. An
+    item that failed, was fixed, and broke again is not an item nobody has touched,
+    and reporting it as one would be an accusation the data does not support.
+    """
+    out = []
+    for item in current:
+        if item["status"] not in (FAIL, WARN):
+            continue
+        streak, first = 0, None
+        for past in reversed(series):
+            if past["statuses"].get(item["id"]) not in (FAIL, WARN):
+                break
+            streak += 1
+            first = past["started_at"]
+        if streak:
+            out.append({"id": item["id"], "title": item["title"],
+                        "severity": item["severity"], "status": item["status"],
+                        "runs": streak + 1, "since": first})
+    out.sort(key=lambda r: (-r["runs"], SEVERITY_ORDER_KEY.get(r["severity"], 9)))
+    return out
+
+
 # Where a status sits on the pass/fail scale, for saying whether a change was an
 # improvement. Only these three are on it: NO_DATA, MANUAL, LLM_PENDING and N/A are
 # not worse or better verdicts, they are the absence of one.
@@ -2150,6 +2236,10 @@ def main() -> int:
                          "attached; otherwise default (the full registry).")
     ap.add_argument("--no-prompt", action="store_true",
                     help="never ask for a profile, even on a terminal")
+    ap.add_argument("--history-limit", type=int, default=HISTORY_RUNS, metavar="N",
+                    help=f"how many stored runs the trend reads (default: "
+                         f"{HISTORY_RUNS}). The report shows score and reach over "
+                         f"that span, and how long each open item has been failing.")
     ap.add_argument("--server-log", default="",
                     help="server access log (combined format or JSON lines, .gz "
                          "fine). The only evidence here about what crawlers "
@@ -2626,11 +2716,14 @@ def main() -> int:
         # Which parser read every page. It belongs beside the suffix snapshot for the
         # same reason: both are substrate the verdicts rest on, chosen by this run
         # rather than by the site. `lxml` and `html.parser` agree on every field the
-        # registry reads (fifteen document shapes, tests/test_parser.py) and disagree
-        # on structure — on markup with an unclosed `<p>`, GO-144's score is 10 under
-        # one and 32 under the other. A reader comparing two runs that differ has to
-        # be able to rule this out, and until 0.14.0 the choice was made by import
-        # order and recorded nowhere.
+        # registry reads (fifteen document shapes, tests/test_parser.py) and, since
+        # 0.15.0, on every structural query too — GO-144's score used to be 10 under
+        # one and 32 under the other on markup with an unclosed `<p>`, and both give
+        # 42 now that the scanner asks about document order rather than about where a
+        # parent ends. Recorded anyway: a reader comparing two runs that differ has to
+        # be able to rule this out, the guarantee is a test rather than a property of
+        # the libraries, and until 0.14.0 the choice was made by import order and
+        # recorded nowhere.
         "html_parser": html_parser(),
         "sample": a.sample,
         "sampled_urls": sampled_urls,
@@ -2688,6 +2781,30 @@ def main() -> int:
     else:
         payload["diff"] = None
         payload["compared_with"] = None
+
+    # The arc, not just the last step. `.seo-runs/` has held every run since 0.1.0 and
+    # exactly one of them was ever read; the question a site owner asks is whether
+    # months of work moved anything, and the data to answer it was already on disk.
+    #
+    # The per-run status maps are dropped before writing: they are what `open_since`
+    # is computed from, and carrying them into the artifact would multiply a file
+    # people email by the length of the history.
+    series = run_series(domain, hist, limit=a.history_limit)
+    payload["open_since"] = open_since(series, payload["items"])
+    # This run is the last point on its own arc. Excluded from `run_series` because
+    # `open_since` counts the streak *before* today and adds the current verdict
+    # itself; leaving it out of the printed history as well showed a reader a trend
+    # that stopped a month before the report in their hands.
+    payload["history"] = [{k: v for k, v in row.items() if k != "statuses"}
+                          for row in series] + [{
+        "started_at": payload.get("started_at"),
+        "registry_version": payload.get("registry_version"),
+        "mode": payload.get("mode"), "profile": payload.get("profile"),
+        "seo_score": payload["scores"].get("seo_score"),
+        "weight_pct": payload["scores"].get("weight_pct"),
+        "decided": payload["scores"].get("decided"),
+        "current": True,
+    }]
 
     with open(a.json_out, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)

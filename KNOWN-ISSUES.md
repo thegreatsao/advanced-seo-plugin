@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.18.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.19.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -425,6 +425,15 @@ name. A column called `url` would be read as "fix this page".
   client-rendered shell are indistinguishable from the HTML, and the second is a
   real finding, so the run warns with the visible word count instead of refusing to
   score.
+- **Closed in 0.19.0 — the Russian report is Russian throughout.** All 214 item
+  titles and all 214 recommendations are translated, and the claim is computed by a
+  test against `checklist.json` rather than declared in the file. That matters here
+  more than the translation does: this file has twice asserted a completeness it did
+  not have, both times in the flattering direction. What no test can catch is a
+  translation that has drifted in meaning from the item it translates — a translated
+  title is a second copy of the registry's wording, and only the ids are checkable.
+  The stale entry below is what it replaced.
+
 - **A Russian report still carries English item titles.** The report's own 100 strings
   are fully translated as of 0.15.0. The 19 that were not — and this file said six,
   because 0.12.0's "Since the previous audit" section arrived untranslated after the

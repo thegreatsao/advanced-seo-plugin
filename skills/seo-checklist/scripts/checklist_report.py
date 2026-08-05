@@ -467,6 +467,76 @@ def write_fixes(path: str, data: dict) -> str:
     return path
 
 
+# basis: presentation — how many streak rows are listed before the count stands in
+#  for the rest. Long enough that the worst offenders are all visible, short enough
+#  that the section is read rather than skimmed.
+OPEN_SINCE_SHOWN = 12
+
+
+def trend_section(data: dict, L: "Lang | None" = None) -> list[str]:
+    """The arc across stored runs, and what has been failing through all of them.
+
+    `history_section` answers "what changed since last time". This answers the
+    question a site owner actually asks — whether months of work moved anything —
+    and it needs no new measurement: `.seo-runs/` has held every run since 0.1.0
+    and exactly one of them was ever read.
+
+    The streak list is the part that earns the section. A score can sit at 70 for six
+    months while a different item fails each time, so the arc alone cannot say whether
+    anything is stuck; "FAIL in all six audits since March" can, and it is a different
+    sentence to the person paying for the work than "FAIL".
+    """
+    L = L or Lang()
+    history = data.get("history") or []
+    streaks = data.get("open_since") or []
+    if len(history) < 2 and not streaks:
+        return []
+    out = ["", f"## {L.t('over_time', 'Over time')}", ""]
+    if len(history) >= 2:
+        out += [
+            L.t("trend_note",
+                "Every audit of this domain that is still on disk, oldest first. "
+                "The reach column matters as much as the score: a run that could "
+                "decide less of the checklist is not a run that found less wrong."),
+            "",
+            f"| {L.t('when', 'When')} | {L.t('mode', 'Mode')} | "
+            f"{L.t('seo_score', 'SEO Score')} | {L.t('reach', 'Reach')} | "
+            f"{L.t('decided', 'Decided')} |",
+            "|---|---|---:|---:|---:|",
+        ]
+        for row in history:
+            score = row.get("seo_score")
+            out.append(
+                f"| {str(row.get('started_at') or '')[:16]}"
+                f"{' *(' + L.t('this_run', 'this run') + ')*' if row.get('current') else ''} "
+                f"| {row.get('mode') or '?'} "
+                f"| {'—' if score is None else score} "
+                f"| {row.get('weight_pct', '—')}% "
+                f"| {row.get('decided', '—')} |")
+        out.append("")
+    if streaks:
+        out += [
+            L.t("open_since_note",
+                "Open in every audit since the date shown — counted as an unbroken "
+                "run backwards from today, so an item that was fixed and broke again "
+                "is not listed here as untouched.").format(),
+            "",
+            f"| {L.t('audits', 'Audits')} | {L.t('since', 'Since')} | "
+            f"{L.t('severity', 'Severity')} | ID | {L.t('item', 'Item')} |",
+            "|---:|---|---|---|---|",
+        ]
+        for row in streaks[:OPEN_SINCE_SHOWN]:
+            out.append(f"| {row['runs']} | {str(row.get('since') or '')[:10]} "
+                       f"| {L.sev(row['severity'])} | {row['id']} "
+                       f"| {esc_md(L.title(row))} |")
+        if len(streaks) > OPEN_SINCE_SHOWN:
+            out.append("")
+            out.append(L.t("open_since_more", "+{n} more open across several audits.")
+                       .format(n=len(streaks) - OPEN_SINCE_SHOWN))
+        out.append("")
+    return out
+
+
 def history_section(data: dict, L: "Lang | None" = None) -> list[str]:
     """What moved since the previous audit of this domain.
 
@@ -810,6 +880,7 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
     # the second question a returning reader has, and the first is always "what do I
     # do now".
     out += history_section(data, L)
+    out += trend_section(data, L)
     out += broken_url_section(data, L)
 
     out += ["", f"## {L.t('full_checklist', 'Full checklist')}", ""]
@@ -1301,6 +1372,48 @@ def render_html(data: dict, L: Lang | None = None) -> str:
                         + html.escape(L.t("since_nothing", "No item changed status."))
                         + '</p>')
         parts.append("".join(head) + "".join(body) + "</section>")
+
+    # -- The arc, and what has been open through all of it -----------------------
+    history, streaks = data.get("history") or [], data.get("open_since") or []
+    if len(history) >= 2 or streaks:
+        block = [f'<section><h2>{html.escape(L.t("over_time", "Over time"))}</h2>']
+        if len(history) >= 2:
+            rows = "".join(
+                f'<tr><td>{html.escape(str(r.get("started_at") or "")[:16])}'
+                f'{" <b>(" + html.escape(L.t("this_run", "this run")) + ")</b>" if r.get("current") else ""}</td>'
+                f'<td>{html.escape(str(r.get("mode") or "?"))}</td>'
+                f'<td>{"&mdash;" if r.get("seo_score") is None else r["seo_score"]}</td>'
+                f'<td>{r.get("weight_pct", "&mdash;")}%</td>'
+                f'<td>{r.get("decided", "&mdash;")}</td></tr>' for r in history)
+            block.append(
+                f'<p class="note">{html.escape(L.t("trend_note", "Every audit of this domain that is still on disk, oldest first. The reach column matters as much as the score: a run that could decide less of the checklist is not a run that found less wrong."))}</p>'
+                f'<table><thead><tr><th>{html.escape(L.t("when", "When"))}</th>'
+                f'<th>{html.escape(L.t("mode", "Mode"))}</th>'
+                f'<th>{html.escape(L.t("seo_score", "SEO Score"))}</th>'
+                f'<th>{html.escape(L.t("reach", "Reach"))}</th>'
+                f'<th>{html.escape(L.t("decided", "Decided"))}</th></tr></thead>'
+                f'<tbody>{rows}</tbody></table>')
+        if streaks:
+            rows = "".join(
+                f'<tr><td>{r["runs"]}</td>'
+                f'<td>{html.escape(str(r.get("since") or "")[:10])}</td>'
+                f'<td>{html.escape(L.sev(r["severity"]))}</td>'
+                f'<td>{r["id"]}</td>'
+                f'<td>{html.escape(L.title(r))}</td></tr>'
+                for r in streaks[:OPEN_SINCE_SHOWN])
+            more = ""
+            if len(streaks) > OPEN_SINCE_SHOWN:
+                more = ('<p class="note">' + html.escape(
+                    L.t("open_since_more", "+{n} more open across several audits.")
+                    .format(n=len(streaks) - OPEN_SINCE_SHOWN)) + "</p>")
+            block.append(
+                f'<p class="note">{html.escape(L.t("open_since_note", "Open in every audit since the date shown — counted as an unbroken run backwards from today, so an item that was fixed and broke again is not listed here as untouched."))}</p>'
+                f'<table><thead><tr><th>{html.escape(L.t("audits", "Audits"))}</th>'
+                f'<th>{html.escape(L.t("since", "Since"))}</th>'
+                f'<th>{html.escape(L.t("severity", "Severity"))}</th><th>ID</th>'
+                f'<th>{html.escape(L.t("item", "Item"))}</th></tr></thead>'
+                f'<tbody>{rows}</tbody></table>{more}')
+        parts.append("".join(block) + "</section>")
 
     # -- The addresses, not the counts -------------------------------------------
     # Above the folded machine layer, because "which URL" is what a reader does

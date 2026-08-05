@@ -368,13 +368,18 @@ every run records `html_parser` in the results.
 
 You almost never need to touch it. It is worth knowing about in one situation: two runs
 of the same site disagree and nothing else explains it. Measured over fifteen document
-shapes, every field the checklist reads is identical between the two parsers — the
-divergence is structural. Two checks depend on structure, and one of them moves:
-`answer_block_scanner.py`'s score (GO-144) is 10 under `lxml` and 32 under `html.parser`
-on a page with an unclosed `<p>`, because libxml2 leaves the following heading inside the
-paragraph and `html.parser` closes it per the spec. **Neither reading is right** —
-report that item as sensitive to markup validity rather than as a measurement of the
-page, and see `KNOWN-ISSUES.md`.
+shapes, every field the checklist reads is identical between the two parsers, and since
+0.15.0 so is every structural query: the answer-block scanner was rewritten against
+document order and nearest-ancestor ownership, which is what both parsers — and the
+browser — agree about. On the markup that used to split them, an unclosed `<p>` with a
+wrapper `<div>` and unclosed `<li>`s, both now score 42. A test asserts the agreement
+rather than pinning the two numbers, which is the stronger guard: it fails on the next
+query written against sibling position, not only on the two that were.
+
+So no verdict here should be reported as sensitive to which parser is installed. What
+remains is a structural query nobody has written yet — `find_next_sibling()` and
+`recursive=False` are both questions about where the parser thinks an element ends, and
+that is why the run records `html_parser` in the artifact.
 
 ## When the site cannot be read
 

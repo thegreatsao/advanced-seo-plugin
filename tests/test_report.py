@@ -131,10 +131,24 @@ class Localisation(unittest.TestCase):
 
     def test_a_partly_translated_language_names_what_is_still_english(self):
         """A reader cannot tell a layer that was left in English from a layer that
-        was considered and kept. The report has to say which."""
-        reported = Lang("ru").untranslated()
+        was considered and kept. The report has to say which.
+
+        Hobbles a copy rather than asserting the shipped file is incomplete. Until
+        0.19.0 this test read `Lang("ru")` directly and passed because the two item
+        layers were genuinely empty — so completing them broke a test that was
+        supposed to be about the *warning*, and a test that fails when the gap it
+        describes is closed is a test pinned to a defect."""
+        ru = Lang("ru")
+        ru.data = dict(ru.data, item_titles={}, item_fixes={})
+        reported = ru.untranslated()
         self.assertIn("item titles", reported)
         self.assertIn("recommendations", reported)
+
+    def test_a_fully_translated_language_warns_about_nothing(self):
+        """The other half, and the one that makes the warning worth reading: it has
+        to be able to go quiet. A caveat that is always printed is a caveat nobody
+        reads by the third report."""
+        self.assertEqual(Lang("ru").untranslated(), [])
 
     def test_the_report_chrome_is_counted_rather_than_declared_complete(self):
         """This claim was wrong once, and wrong in the flattering direction.
@@ -789,3 +803,54 @@ class TheSensitivityToolMeasuresTheRealScore(unittest.TestCase):
         theirs = [r["id"] for r in fix_rows(results(*items))
                   if r["status"] in (FAIL, WARN)]
         self.assertEqual(mine, theirs)
+
+
+class TheRegistryIsTranslatedOrTheGapIsCounted(unittest.TestCase):
+    """`item_titles` and `item_fixes` against the registry they translate.
+
+    Both were empty from 0.2.0 to 0.18.0, so `--lang ru` produced a document whose
+    own prose was Russian and whose 214 item titles and recommendations were not.
+    They are complete as of 0.19.0, and this is what keeps them that way: a
+    translated title is a second copy of the registry's wording, and a second copy
+    drifts the moment either side changes.
+
+    The claim is *computed*. This file has twice declared a completeness it did not
+    have — 0.12.0's diff section arrived untranslated after the note was written, and
+    the caveat block turned out to be 19 strings while the note said six. Both times
+    the error was in the flattering direction.
+    """
+
+    def setUp(self):
+        with open(os.path.join(SKILL, "resources", "config", "checklist.json"),
+                  encoding="utf-8") as f:
+            self.ids = {i["id"] for i in json.load(f)["items"]}
+        with open(os.path.join(I18N, "ru.json"), encoding="utf-8") as f:
+            self.ru = json.load(f)
+
+    def test_every_item_has_a_russian_title_and_recommendation(self):
+        for key in ("item_titles", "item_fixes"):
+            missing = sorted(self.ids - set(self.ru.get(key) or {}))
+            self.assertEqual(missing, [], f"{key} does not cover: {missing[:8]}")
+
+    def test_no_translation_survives_an_item_the_registry_dropped(self):
+        """The other direction, and the one nobody notices: a title for an id that
+        no longer exists is dead weight that reads as coverage."""
+        for key in ("item_titles", "item_fixes"):
+            stray = sorted(set(self.ru.get(key) or {}) - self.ids)
+            self.assertEqual(stray, [], f"{key} translates ids that are gone: {stray}")
+
+    def test_no_entry_is_blank_or_left_in_english(self):
+        """A blank value counts as present to `dict` and falls back to English in the
+        report, which is the same silent gap with an extra step."""
+        for key in ("item_titles", "item_fixes"):
+            for item_id, text in (self.ru.get(key) or {}).items():
+                self.assertTrue(str(text).strip(), f"{key}[{item_id}] is blank")
+                self.assertRegex(str(text), "[а-яА-ЯёЁ]",
+                                 f"{key}[{item_id}] has no Russian in it: {text!r}")
+
+    def test_the_report_uses_them(self):
+        ru = Lang("ru")
+        first = sorted(self.ids)[0]
+        row = {"id": first, "title": "Ensure URL Is Indexed", "fix": "Remove noindex"}
+        self.assertNotEqual(ru.title(row), row["title"])
+        self.assertNotEqual(ru.fix(row), row["fix"])

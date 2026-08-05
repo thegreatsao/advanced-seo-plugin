@@ -192,6 +192,11 @@ performance on real properties.
 
 ## 0.19 — a series, and a report somebody can read
 
+**Shipped.** The trend reads every stored run rather than one, `open_since` says how
+many consecutive audits each open item has survived, and the Russian report is Russian
+throughout — 214 titles and 214 recommendations, checked against the registry by a
+test. What remains for 1.0 is the doc-code parity test.
+
 **History as a series, not a pair.** `.seo-runs/` has stored every run since 0.1.0;
 `--diff` compares against one. The question a site owner asks is whether six months of
 work moved anything, and the data to answer it is already on disk.

@@ -25,7 +25,7 @@ import harness  # noqa: E402
 
 from checklist_runner import (  # noqa: E402
     ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
-    NEEDS_INPUT,
+    NEEDS_INPUT, open_since, run_series,
     NEEDS_THE_OUTSIDE_WORLD, NO_DATA, PASS, WARN, aggregate_pages, artifact_subject,
     audit_target,
     build_plan, choose_profile, diff_runs, evaluate, grade, is_page_level,
@@ -2489,3 +2489,97 @@ class OneFetchPerUrl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HistoryIsASeries(unittest.TestCase):
+    """`.seo-runs/` held every run since 0.1.0 and exactly one was ever read.
+
+    The pair comparison answers "what changed since last time". A site owner asks
+    whether months of work moved anything, and until 0.19 the data to answer that
+    was on disk and unread.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.cwd = os.getcwd()
+        os.chdir(self.tmp)
+        self.dir = os.path.join(self.tmp, ".seo-runs", "example.com")
+        os.makedirs(self.dir)
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, name, when, score, statuses):
+        payload = {"started_at": when, "mode": "live", "registry_version": "test",
+                   "scores": {"seo_score": score, "weight_pct": 50, "decided": 9},
+                   "items": [{"id": i, "status": st} for i, st in statuses.items()]}
+        with open(os.path.join(self.dir, name), "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+    def seed(self):
+        self.write("a.json", "2026-04-01T09:00:00+00:00", 50,
+                   {"X-1": FAIL, "X-2": FAIL, "X-3": PASS})
+        self.write("b.json", "2026-05-01T09:00:00+00:00", 60,
+                   {"X-1": FAIL, "X-2": PASS, "X-3": PASS})
+        self.write("c.json", "2026-06-01T09:00:00+00:00", 70,
+                   {"X-1": FAIL, "X-2": FAIL, "X-3": PASS})
+
+    def test_it_reads_every_stored_run_oldest_first(self):
+        self.seed()
+        series = run_series("example.com", "")
+        self.assertEqual([r["seo_score"] for r in series], [50, 60, 70])
+
+    def test_it_is_ordered_by_the_timestamp_inside_the_file(self):
+        """Not by filename. The name format has already changed once, so a directory
+        holding both sorts wrongly by name — the same reason `previous_run` gives."""
+        self.write("zzz.json", "2026-01-01T09:00:00+00:00", 10, {"X-1": PASS})
+        self.seed()
+        self.assertEqual([r["seo_score"] for r in run_series("example.com", "")],
+                         [10, 50, 60, 70])
+
+    def test_the_current_run_is_excluded_by_name(self):
+        self.seed()
+        series = run_series("example.com", os.path.join(self.dir, "c.json"))
+        self.assertEqual([r["seo_score"] for r in series], [50, 60])
+
+    def test_a_corrupt_history_file_is_skipped_rather_than_fatal(self):
+        """A bad record of an old audit is no reason to abandon this one."""
+        self.seed()
+        with open(os.path.join(self.dir, "bad.json"), "w", encoding="utf-8") as f:
+            f.write("{not json")
+        self.assertEqual(len(run_series("example.com", "")), 3)
+
+    def test_it_reads_no_more_than_the_limit(self):
+        self.seed()
+        self.assertEqual([r["seo_score"] for r in run_series("example.com", "", 2)],
+                         [60, 70])
+
+    def test_the_streak_counts_back_from_now_and_includes_this_run(self):
+        self.seed()
+        series = run_series("example.com", "")
+        rows = {r["id"]: r for r in open_since(
+            series, [{"id": "X-1", "status": FAIL, "title": "one", "severity": "high"},
+                     {"id": "X-2", "status": FAIL, "title": "two", "severity": "low"}])}
+        # X-1 failed in all three stored runs and fails now: four audits.
+        self.assertEqual(rows["X-1"]["runs"], 4)
+        self.assertEqual(rows["X-1"]["since"], "2026-04-01T09:00:00+00:00")
+
+    def test_an_item_that_was_fixed_and_broke_again_is_not_called_untouched(self):
+        """The streak is consecutive, not a total. X-2 failed, passed, failed — an
+        accusation that nobody has touched it is one the data does not support."""
+        self.seed()
+        rows = {r["id"]: r for r in open_since(
+            run_series("example.com", ""),
+            [{"id": "X-2", "status": FAIL, "title": "two", "severity": "low"}])}
+        self.assertEqual(rows["X-2"]["runs"], 2)
+        self.assertEqual(rows["X-2"]["since"], "2026-06-01T09:00:00+00:00")
+
+    def test_an_item_that_passes_now_is_not_listed_at_all(self):
+        self.seed()
+        self.assertEqual(open_since(run_series("example.com", ""),
+                                    [{"id": "X-3", "status": PASS, "title": "three",
+                                      "severity": "low"}]), [])
+
+    def test_no_history_is_not_an_error(self):
+        self.assertEqual(run_series("nowhere.example", ""), [])

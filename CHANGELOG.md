@@ -10,6 +10,68 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.19.0 — 5 August 2026
+
+**A trend, not a pair — and a Russian report that is Russian all the way down.**
+
+`.seo-runs/` has stored every audit since 0.1.0 and exactly one of them was ever
+read. `--diff` answers "what changed since last time"; the question a site owner
+actually asks is whether months of work moved anything, and the data to answer it was
+already on disk.
+
+The report gains an **Over time** section: every stored run, oldest first, with the
+score, the share of the weight it spoke for, and how much it could decide. The reach
+column is there deliberately — a run that decided less of the checklist is not a run
+that found less wrong, and a score line alone cannot tell those apart. The current run
+is the last row and says so; leaving it out showed a reader an arc that stopped a
+month before the report in their hands.
+
+**`open_since` is the part that earns the section.** For every item failing now, how
+many consecutive audits it has been failing and since when. A score can sit at 70 for
+six months while a different item fails each time, so the arc alone cannot say whether
+anything is stuck; "open in all six audits since April" can. Counted as an unbroken
+streak backwards from today, never as a total — an item that was fixed and broke again
+is not an item nobody has touched, and reporting it as one would be an accusation the
+data does not support.
+
+`--history-limit` bounds how far back it reads (12 runs by default). Per-run status
+maps are dropped before writing: they are what the streak is computed from, and
+carrying them into the artifact would multiply a file people email by the length of
+the history.
+
+**The Russian report is complete.** All 214 item titles and all 214 recommendations,
+translated. From 0.2.0 to 0.18.0 `--lang ru` produced a document whose own prose was
+Russian and whose every checklist row was English — including, until this release, the
+one table naming what had been broken longest, which read `row["title"]` directly
+instead of going through the translation lookup like every other item row.
+
+The completeness is **computed, not declared**. Four tests check both directions
+against `checklist.json`: no item without a translation, no translation for an item
+the registry dropped, nothing blank, nothing without Cyrillic in it. This file has
+twice claimed a completeness it did not have — 0.12.0's diff section arrived
+untranslated after the note was written, and the caveat block was 19 strings while the
+note said six — and both errors were in the flattering direction. What no test can
+catch is a translation that has drifted in meaning from the item it translates.
+
+**Two tests changed because the gap they described closed.**
+`test_a_partly_translated_language_names_what_is_still_english` read `Lang("ru")`
+directly and passed because the item layers were genuinely empty, so completing them
+broke a test that was about the *warning*. It hobbles a copy now, and a second test
+asserts the warning can go quiet — a caveat that is always printed is one nobody reads
+by the third report.
+
+**Also in this release: four passages of prose that had been wrong since 0.15.0.**
+`SKILL.md`, `seo_common.py`, `checklist_runner.py` and the scanner's own docstring all
+still told the reader that `answer_block_scanner.py` scores 10 under `lxml` and 32
+under `html.parser` and that **neither reading is right**. 0.15.0 rewrote that file
+against document order and both parsers return 42 on exactly that markup. `SKILL.md`
+is the agent's instruction file, so this was not cosmetic: it instructed a model to
+hedge a verdict that had been sound for four releases. All four now state what was
+true, when it stopped being true, and what still justifies recording `html_parser` in
+the artifact.
+
+585 -> 599 tests. Registry unchanged at `1c4b3697cc1f`, 214 items.
+
 ## 0.18.0 — 5 August 2026
 
 **How much of the SEO Score is the site, and how much is a table nobody chose.**
