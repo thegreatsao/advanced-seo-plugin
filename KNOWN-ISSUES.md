@@ -377,12 +377,20 @@ name. A column called `url` would be read as "fix this page".
   disagree", promoted from a recorded inventory item to a verdict shipped against a real
   site.
 
-  Not yet known: why the good-site sweep does not catch it. The sweep asserts nothing is
-  decided *against* a site that should pass, so either the fixture's robots.txt disallows
-  those four paths — in which case the fixture is the one site on which this item is
-  meaningful, and that is the finding — or the item is exempted somewhere. **Answer that
-  before writing the fix**, because a sweep that cannot see a check accusing every correct
-  site is the defect, and CI-019 is only its first symptom.
+  **Why the good-site sweep does not catch it — answered, and it is the first of the two
+  hypotheses this entry offered.** `tests/fixtures/good/robots.txt` contains
+  `Disallow: /search`, `/cart`, `/checkout`, `/login`, under a comment reading *"The paths
+  CI-019 exists to keep out of an index."* The fixture was built to satisfy this item. So
+  the sweep is not blind in general — it is looking at the one site on the internet where
+  CI-019 is meaningful.
+
+  That generalises past CI-019 and is the more useful half: **a fixture constructed to
+  pass the registry cannot catch an item that accuses every real site**, because whoever
+  built the fixture tuned it for that item. The sweep's guarantee — "nothing is decided
+  against a site that should pass" — is narrower than it reads: it holds for the site the
+  registry was written against, and says nothing about the ones it was not. Nothing here
+  fixes that; a second fixture built *without* consulting the registry would, and is not
+  written.
 
   **It was not a single case, and the same run proved it.** CN-053 is titled *Avoid
   Critical Content in iFrames*, its fix text says "Do not hide critical content inside
@@ -410,9 +418,25 @@ name. A column called `url` would be read as "fix this page".
   and `plerdy_ref` is load-bearing — so deleting an id is not obviously right. But the
   score must not double-count: either one id decides and the other mirrors its verdict
   without contributing weight, or they merge and the mapping records that two source
-  numbers point at one check. **Nothing in the registry currently detects that two items
-  share a script, arguments and assertion**, which is the cheap test to write first; it
-  will find whatever else is paired.
+  numbers point at one check.
+
+  **Counted, and it is eleven groups rather than two.** `tools/audit_item_semantics.py`
+  compares script, args and assertion across all 214: CI-016/MD-186, CI-017/TE-181,
+  GO-144/GEO-004, GO-145/GEO-005, MB-097/MD-189, MB-102/MD-190, MB-104/TE-166,
+  MS-027/MS-028, MS-029/CN-041, SE-116/TE-171, SE-117/SE-118. Three pairs mix severities,
+  so **the weight one defect carries depends on which twin the reader looks at.** Two was
+  never a count — it was how many a single audit happened to fail on, and nothing in this
+  tree had ever asked.
+
+  **One of the eleven is a different and worse defect than the other ten.** `SE-117`
+  *Force HTTPS Sitewide* and `SE-118` *Valid TLS Certificate (HTTPS)* are both `critical`
+  and both assert `https == True`. Those are not one requirement written twice — they are
+  two requirements sharing one assertion, and the second **cannot fail independently on
+  any site**. A site with HTTPS forced and a certificate that expired yesterday passes
+  both. SE-118 sits in the registry weighing `critical` and checks nothing SE-117 does
+  not, so the fix is neither a merge nor a mirrored verdict: it needs evidence of its own
+  — `notAfter`, the chain, the hostname match — and until it has that, this registry has
+  never once verified a certificate.
 
 - **Open — two items report something that is not a defect of the site, and one of them
   cannot be acted on at all.**

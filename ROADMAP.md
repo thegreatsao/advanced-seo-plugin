@@ -227,13 +227,16 @@ the fixture pair and the two sweeps had all passed. Full diagnosis of each in
 Four repairs, in this order. The first two are audits and will find more than the list
 above; the last two are decisions.
 
-**1. Do the sweep first, not the items.** The good-site sweep exists to assert that nothing
-is decided against a site that should pass, and it does not catch this. Until that is
-explained, fixing CI-019 fixes one symptom of a blind spot of unknown size — and this
-tree's own history says the fix found by looking at output beats the fix found by
-reading code, four releases running. Either the fixture's robots.txt disallows those four
-paths, which makes it the one site where the item means anything, or something exempts
-it. Both answers change what gets written next.
+**1. Explain the sweep — done, and the answer is about the fixture.**
+`tests/fixtures/good/robots.txt` disallows exactly `/search`, `/cart`, `/checkout` and
+`/login`, under a comment naming CI-019 as the reason. The sweep is not blind; it is
+looking at the one site where the item is meaningful.
+
+The general form is the part to keep: **a fixture built to pass the registry cannot catch
+an item that accuses every real site.** The sweep's guarantee holds for the site the
+registry was written against and says nothing about the ones it was not, and no amount of
+sweeping fixes that — only a second fixture built without consulting the registry would,
+which is not written and is not scheduled here.
 
 **2. Audit the triple across all 214.** For every item: does the assertion measure what
 the title names, and does the fix text describe the work that would satisfy the
@@ -245,14 +248,31 @@ of them had nowhere to carry a label. §2 has recorded "a check and its own advi
 disagree" as an inventory finding since 0.15.0, and named `article_seo.py` — these are
 the first two caught deciding a real site.
 
-Add the cheap structural test in the same pass: **no two items may share a script,
-arguments and assertion.** Two pairs do today, and one image missing an `alt` therefore
-produced two `high` FAILs on a real audit. The duplication arrives honestly — the Plerdy
-source lists one requirement under two of its own headings and `plerdy_ref` is
-load-bearing — so the fix is not deleting an id. Either one id decides and its twin
-mirrors the verdict without contributing weight, or they merge and the mapping records
-that two source numbers point at one check. **What must stop is one defect carrying
-double weight in the headline number and two rows in `--fixes`.**
+**Written, and the count was wrong by a factor of five.** The same tool asks the cheap
+structural question — no two items may share a script, arguments and assertion — and
+**eleven groups do**, not the two a single audit happened to fail on. Three mix
+severities, so the weight a defect carries depends on which twin the reader looks at. The
+duplication arrives honestly, since the Plerdy source lists one requirement under two of
+its own headings and `plerdy_ref` is load-bearing, so the fix is not deleting an id:
+either one id decides and its twin mirrors the verdict without contributing weight, or
+they merge and the mapping records that two source numbers point at one check. **What
+must stop is one defect carrying double weight in the headline number and two rows in
+`--fixes`.**
+
+**And one of the eleven is not a scoring artifact at all.** `SE-117` *Force HTTPS
+Sitewide* and `SE-118` *Valid TLS Certificate* are both `critical` and both assert
+`https == True` — two requirements sharing one assertion, so **SE-118 cannot fail
+independently on any site** and a certificate that expired yesterday passes it. That is
+the one item here that needs new evidence rather than a decision: `notAfter`, the chain,
+the hostname match. Until it has them, this registry has never verified a certificate
+while reporting that it does. **Do this one first** — it is the only `critical` among the
+findings that is currently checking nothing.
+
+The vocabulary half of the tool is a heuristic and is reported as one: 46 of 214 items
+share no words between what they claim and what they assert. Four carry a written ruling;
+**42 are unreviewed and are the remaining work of this step.** The tool is not wired into
+CI yet, deliberately — it exits 1 today, and a required check that is red by default is a
+check nobody reads.
 
 **3. Then CI-019 itself, which needs two repairs.** `allowed_urls` must not count a URL
 that 404s — a path robots.txt permits and the server does not serve is a name nobody
