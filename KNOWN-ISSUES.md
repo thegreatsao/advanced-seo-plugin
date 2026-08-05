@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.19.1**, ranked by consequence, with the
+What is wrong with this plugin as of **0.20.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -437,6 +437,31 @@ name. A column called `url` would be read as "fix this page".
   not, so the fix is neither a merge nor a mirrored verdict: it needs evidence of its own
   — `notAfter`, the chain, the hostname match — and until it has that, this registry has
   never once verified a certificate.
+
+  **Closed in 0.20.0 for SE-118, leaving ten.** It now runs `tls_certificate.py` and
+  reads `valid`, set by a handshake with `CERT_REQUIRED` and `check_hostname`. The other
+  ten groups are untouched, and the count above is what the tool reported before the fix
+  — it reports ten today. Three things the repair turned up that are worth more than the
+  repair:
+
+  - **No fixture in this suite can exercise SE-118.** Both fixture sites are plaintext
+    and `http.server` does not speak TLS, so SE-118 had to leave `ACCUSED_ON_PURPOSE`
+    and its only coverage is a dedicated module that stands up its own TLS origin. This
+    is §3's problem wearing different clothes: the four test layers all run against
+    origins the suite can build, and a certificate is not one of them.
+  - **The i18n parity tests cannot see a stale translation.** They check that every item
+    has a Russian title and fix, that neither is blank, and that each contains Cyrillic.
+    SE-118's English fix text changed and its Russian one did not; all three tests stayed
+    green, because a sentence that has quietly stopped describing the English one is
+    still Russian, still present and still non-blank. The class's own docstring predicted
+    exactly this — *"a second copy drifts the moment either side changes"* — and then
+    tested for presence. Presence is not parity. A real guard has to bind the translation
+    to the English text it was written against; a hash beside each entry would do it, at
+    the cost of 428 more lines in `ru.json`.
+  - **`EveryCriticalItemIsCovered` measured coverage against a set literal** and never
+    opened a test file, so a script named there and tested nowhere read as covered. The
+    class exists to stop coverage meaning "the ones somebody got round to" and had the
+    same hole one level up. A third test now makes the suite prove each name.
 
 - **Open — two items report something that is not a defect of the site, and one of them
   cannot be acted on at all.**

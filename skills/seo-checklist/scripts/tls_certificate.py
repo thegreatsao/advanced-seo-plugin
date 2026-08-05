@@ -64,6 +64,15 @@ def inspect(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
         out["issues"].append({"severity": "critical", "message": "No host in URL"})
         return out
 
+    # An `http` URL has no certificate, so there is nothing here to inspect. Returning
+    # without `valid` makes SE-118 NO_DATA, which is the honest reading: SE-117 is the
+    # item that says the site is not on HTTPS, and it already fails. Opening TLS against
+    # the plaintext port instead would hand back `WRONG_VERSION_NUMBER` — an error about
+    # our own request, reported as if it were a fact about the site.
+    if parsed.scheme == "http":
+        out["reason"] = "URL is http:// — no certificate is served on this scheme"
+        return out
+
     # Pass one: a verifying handshake. This is the verdict.
     context = ssl.create_default_context()
     context.check_hostname = True

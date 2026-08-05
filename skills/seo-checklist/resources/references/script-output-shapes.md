@@ -1,7 +1,7 @@
-<!-- Updated: 2026-08-04 -->
+<!-- Updated: 2026-08-05 -->
 # Script output shapes
 
-All 55 scripts the registry runs are documented here, plus `site_crawl.py`, which
+All 57 scripts the registry runs are documented here, plus `site_crawl.py`, which
 the runner runs itself before building the plan and whose inventory the ten site-wide
 checks read. Four of them break the
 `issues[].severity` + `message` convention the rest share — `gsc_checker.py` and
@@ -1327,6 +1327,36 @@ root. `--out PATH` writes the inventory to a file and prints the summary instead
 `clusters.seo.internal_edges[]` — array
 `clusters.seo.missing_links[]` — array
 `clusters.seo.orphan_candidates[]` — array
+`issues[]` — array
+
+### tls_certificate.py
+
+SE-118 reads `valid`, and the point of that field is that a handshake set it —
+`CERT_REQUIRED` and `check_hostname` against the system trust store — not a look at
+the scheme. Three shapes, and the difference between them is the whole contract:
+
+- **verified** — `valid: true`, plus the certificate's own fields below.
+- **rejected** — `valid: false` and `verify_error`, with a `critical` issue carrying
+  the library's reason. Expired, self-signed, wrong host, untrusted chain.
+- **nothing to look at** — `valid` **absent**, so the assertion lands on `NO_DATA`
+  and not `FAIL`. Either `error` (the connection never reached a certificate) or
+  `reason` (the URL is `http://`, so no certificate is served on this scheme). "We
+  could not look" and "we looked and it is invalid" are different claims, and only
+  the second one is an accusation.
+
+`url` / `host` — str
+`port` — int
+`https` — bool
+`valid` — bool — **absent** when no certificate was seen; see above
+`tls_version` — str — e.g. `TLSv1.3`
+`subject.commonName` — str
+`issuer.countryName` / `issuer.organizationName` / `issuer.commonName` — str
+`san[]` — array of str — DNS names on the certificate
+`not_before` / `not_after` — str — OpenSSL format, e.g. `Nov  1 02:12:37 2026 GMT`
+`days_until_expiry` — int — a `high` issue under 30 days
+`verify_error` — str — only when `valid` is false
+`error` — str — only when the handshake never completed
+`reason` — str — only when the URL is `http://`
 `issues[]` — array
 
 ### url_quality.py

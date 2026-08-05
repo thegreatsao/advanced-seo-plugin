@@ -1887,12 +1887,19 @@ class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):
     def test_the_scripts_that_answered_said_why(self):
         """A script may legitimately return a result for an unreachable host — it just
         has to carry the reason, so the runner can report NO_DATA with something a
-        reader can act on rather than a bare absence."""
+        reader can act on rather than a bare absence.
+
+        `reason` joined the accepted keys in 0.20 for `tls_certificate.py`, which can
+        decline to look without anything having gone wrong: an `http://` URL serves no
+        certificate, so there is no error to report and still a why to carry. The rule
+        being enforced is "say why", not "name an exception".
+        """
         silent = [script for script, payload in self.dead_output.items()
                   if payload is not None and script not in self.URL_ONLY
                   and not any(str(payload.get(key) or "")
-                              for key in ("error", "fetch_error", "fetch_errors"))]
-        self.assertEqual(silent, [], f"no error recorded by: {silent}")
+                              for key in ("error", "fetch_error", "fetch_errors",
+                                          "reason"))]
+        self.assertEqual(silent, [], f"nothing said why by: {silent}")
 
 
 class IndexNow(unittest.TestCase):

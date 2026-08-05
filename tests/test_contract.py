@@ -385,7 +385,13 @@ class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):
     # by refusing to accept an exemption nothing needs.
     ACCUSED_ON_PURPOSE = {
         "SE-117": "served over plain HTTP by http.server: HSTS cannot be present",
-        "SE-118": "served over plain HTTP by http.server: no mixed-content story",
+        # SE-118 was here until 0.20, when it stopped reading `https` off
+        # security_headers.py and started verifying an actual certificate. On an
+        # http:// fixture there is no certificate to inspect, so it now resolves to
+        # NO_DATA rather than accusing anything, and this test demanded its removal.
+        # Worth stating plainly: no fixture in this suite can exercise SE-118 — both
+        # sites are plaintext and http.server does not speak TLS. Its only coverage
+        # is tests/test_tls_certificate.py, which stands up its own TLS origin.
         "SE-120": "http.server sends no security headers at all",
         "TE-170": "http.server sends no cache headers and no gzip",
         "TE-175": "http.server sends no cache headers and no gzip",

@@ -10,6 +10,65 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.20.0 — 5 August 2026
+
+**The registry said it verified certificates. It never once did.**
+
+SE-118 — `critical`, titled "valid TLS certificate" — asserted `https == true` on the
+output of `security_headers.py`. That is SE-117's field, from SE-117's script. Two
+critical items therefore shared one assertion: SE-118 could not fail independently on
+any site in the world, and a certificate that expired yesterday passed it, because
+`https://` was still `https://`. Every audit this plugin has produced since 0.1.0
+reported a verified certificate on the strength of a URL scheme.
+
+It now runs `tls_certificate.py` and reads `valid`, which is set by a handshake with
+`verify_mode = CERT_REQUIRED` and `check_hostname = True` against the system trust
+store. Nothing re-implements verification: `ssl` rejects the connection and the reason
+it gave is what gets reported. A second, non-verifying pass exists only to *read* a
+certificate the first pass refused — without it, "expired" and "connection refused"
+would arrive as the same empty result.
+
+**A verdict that used to be unconditionally PASS can now FAIL.** By the rule at the
+top of this file that is exactly why this is a minor and not a patch. Anyone whose
+SE-118 result moved has not regressed; they are being told something true for the
+first time.
+
+**Three things the fix uncovered, none of them about TLS:**
+
+- No fixture in this suite can exercise SE-118. Both fixture sites are plaintext and
+  `http.server` does not speak TLS, so SE-118 dropped out of `ACCUSED_ON_PURPOSE` and
+  its only coverage is `test_tls_certificate.py`, which stands up its own TLS origin.
+- The first draft opened TLS against the good fixture's plaintext port and reported
+  `SSLError: WRONG_VERSION_NUMBER` — an error about our own request, presented as a
+  fact about the site, which the good-site sweep counted as a crashed script. An
+  `http://` URL now returns without a handshake and without `valid`, so the item is
+  `NO_DATA`. SE-117 is the item that says a site is not on HTTPS, and it already fails.
+- `test_evidence.EveryCriticalItemIsCovered` measured coverage against a hand-written
+  set literal and never opened a test file, so a script named there and tested nowhere
+  would have read as covered. A third test now makes the suite prove each name.
+
+**`tools/audit_item_semantics.py`** is new, and deliberately not wired into CI: it
+exits 1 today, and a required check that is red by default is a check nobody reads.
+It finds two classes of defect. Exact duplicates — items whose (script, args, assert)
+triple is identical, so they cannot disagree. There were **eleven groups**; SE-117 and
+SE-118 were the worst because both are `critical`, and closing that one leaves **ten
+still standing**, none of which this release touches. And a vocabulary
+heuristic: items whose title and fix text share no terms with the script and assertion
+path underneath them, 42 of which are unreviewed. CI-019 and CN-053 are confirmed real
+by hand — they accuse a site over indexable URLs the crawler never fetched — and
+TE-179 and GO-134 are confirmed false alarms.
+
+**The step-1 question, answered.** The good-site sweep is not blind to CI-019; the
+fixture's `robots.txt` was written to satisfy it, `Disallow: /search /cart /checkout
+/login` and all. Which generalises: a fixture built to pass the registry cannot catch
+an item that accuses every real site.
+
+Registry `ae29bf452412` -> `a7bb134d42f9`: SE-118 changes script and assertion. No
+other item, severity or script changed. 601 -> 608 tests. `ru.json` follows SE-118's
+new fix text — and worth stating, nothing caught that gap: the i18n parity tests check
+that a translation exists, is non-blank and contains Cyrillic, none of which notices a
+Russian sentence that has quietly stopped describing the English one.
+
 ## 0.19.1 — 5 August 2026
 
 **The flake was not a flake. Three assertions could match a URL and call it a

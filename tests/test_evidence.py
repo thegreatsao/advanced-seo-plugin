@@ -325,8 +325,14 @@ class RobotsPathTester(unittest.TestCase):
 
 
 class SecurityHeaders(unittest.TestCase):
-    """SE-117 and SE-118 (critical) read `https`; TE-175 (high) reads
-    `headers_missing`."""
+    """SE-117 (critical) reads `https`; TE-175 (high) reads `headers_missing`.
+
+    SE-118 read `https` too until 0.20, from this same script — two critical items
+    sharing one field, so SE-118 could not fail independently on any site and a
+    certificate that expired yesterday passed it. It now reads `valid` from
+    `tls_certificate.py` (`test_tls_certificate.py`). The other half of that fix is
+    asserted here: this script's output can no longer decide SE-118 at all.
+    """
 
     def setUp(self):
         import security_headers as sh
@@ -353,20 +359,33 @@ class SecurityHeaders(unittest.TestCase):
         "Permissions-Policy": "camera=()",
     }
 
-    def test_https_with_every_header_passes_all_three(self):
+    def test_https_with_every_header_passes_both_items_it_decides(self):
         self.serve("https://example.com/", self.ALL_HEADERS)
         out = self.sh.check_security_headers("https://example.com/")
         self.assertIs(out["https"], True)
         self.assertEqual(out["headers_missing"], {})
-        for item_id in ("SE-117", "SE-118", "TE-175"):
+        for item_id in ("SE-117", "TE-175"):
             self.assertEqual(verdict(item_id, out), PASS, item_id)
 
-    def test_plain_http_fails_the_two_critical_items(self):
+    def test_plain_http_fails_the_critical_item(self):
         self.serve("http://example.com/", {})
         out = self.sh.check_security_headers("http://example.com/")
         self.assertIs(out["https"], False)
         self.assertEqual(verdict("SE-117", out), FAIL)
-        self.assertEqual(verdict("SE-118", out), FAIL)
+
+    def test_this_script_cannot_decide_se_118_in_either_direction(self):
+        """The regression guard for the 0.20 fix, and the reason it is two asserts.
+
+        A scheme is not a certificate. Whatever this script says about `https`, the
+        item that claims a certificate was verified must not resolve from it — and
+        `NO_DATA` on both a good and a bad response is what proves the field it used
+        to read is genuinely gone rather than merely renamed.
+        """
+        for url, headers in (("https://example.com/", self.ALL_HEADERS),
+                             ("http://example.com/", {})):
+            self.serve(url, headers)
+            out = self.sh.check_security_headers(url)
+            self.assertEqual(verdict("SE-118", out), NO_DATA, url)
 
     def test_te_175_reads_a_field_and_not_the_prose(self):
         """This script appends plain strings to `issues`, so the old
@@ -651,9 +670,14 @@ class EveryCriticalItemIsCovered(unittest.TestCase):
     somebody got round to" — and which ones those were would be invisible.
     """
 
+    # Scripts tested anywhere in `tests/`, not only in this file — `tls_certificate.py`
+    # needs a certificate to answer at all, so its cases live in `test_tls_certificate.py`
+    # where the TLS harness is. A hand-kept list can claim coverage that does not exist,
+    # which is the failure mode this class was written against, so the third test below
+    # makes the suite prove each name.
     COVERED = {"parse_html.py", "indexability_matrix.py", "canonical_checker.py",
                "robots_path_tester.py", "security_headers.py", "pagespeed.py",
-               "domain_safety_check.py"}
+               "domain_safety_check.py", "tls_certificate.py"}
 
     def test_every_script_deciding_a_critical_item_has_a_test_class(self):
         with open(REGISTRY, encoding="utf-8") as f:
@@ -671,6 +695,24 @@ class EveryCriticalItemIsCovered(unittest.TestCase):
                     for i in items if i["severity"] == "critical"}
         self.assertEqual(self.COVERED - deciders, set(),
                          "this file tests a script no critical item reads any more")
+
+    def test_every_name_on_the_list_is_actually_exercised_somewhere(self):
+        """The list is a claim, and a claim in a set literal costs one line to fake.
+
+        Both tests above read `COVERED` and neither opens a test file, so a script
+        added here and tested nowhere would turn this class green while removing the
+        coverage it exists to measure. This is the only test that looks.
+        """
+        tests_dir = os.path.dirname(os.path.abspath(__file__))
+        corpus = ""
+        for name in sorted(os.listdir(tests_dir)):
+            if name.startswith("test_") and name.endswith(".py"):
+                with open(os.path.join(tests_dir, name), encoding="utf-8") as f:
+                    corpus += f.read()
+        unproven = sorted(s for s in self.COVERED
+                          if s not in corpus and s[:-3] not in corpus)
+        self.assertEqual(unproven, [],
+                         "named as covered, but no test file mentions it: " + str(unproven))
 
 
 if __name__ == "__main__":
