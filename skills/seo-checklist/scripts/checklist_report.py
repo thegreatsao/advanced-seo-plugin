@@ -52,6 +52,11 @@ STATUS_ICON = {PASS: "PASS", FAIL: "FAIL", WARN: "WARN",
 # legend and its filter buttons. One tuple so a new status cannot be added to two
 # of the three and go missing from the third.
 STATUS_ORDER = (PASS, WARN, FAIL, NO_DATA, NEEDS_INPUT, LLM_PENDING, MANUAL, NA)
+# basis: convention — twenty rows. The opportunity list is as long as the query report
+# behind it, and a section nobody scrolls to the end of teaches the reader to skip the
+# section. The count and the JSON path are printed when it truncates, so nothing is
+# silently dropped.
+OPPORTUNITY_LIMIT = 20
 
 def provenance_line(s: dict, L) -> str:
     """How much of the score is a measurement and how much is somebody's word.
@@ -735,6 +740,53 @@ def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
     return out
 
 
+def opportunity_section(data: dict, L: "Lang | None" = None) -> list[str]:
+    """Search Console's opportunities — worth knowing, and not a verdict about anything.
+
+    This is what the registry could not say for four releases. `GO-134` asserted over
+    `opportunities[]` through a severity gate, so "Position 4.0 with 115 impressions —
+    within striking distance" was reported as a `high` failure and ranked first in the fix
+    list: a site's best result, presented as its worst problem. The roadmap read that as a
+    missing *status* — something between PASS and FAIL meaning "worth knowing" — and
+    costing every surface a new status was the reason it stayed open.
+
+    It was not a status. A status is a verdict about an item, and there is no item here to
+    have a verdict about: nobody is failing anything by ranking fourth. What was missing
+    was a place in the deliverable for a finding that is neither. So the item now asserts
+    on what Search Console reports as broken, and the opportunities are printed here —
+    outside the score, outside the partition, outside `--fixes`, and stated as such in the
+    text so no reader has to infer it.
+    """
+    L = L or Lang()
+    opportunities = [o for o in (data.get("gsc_opportunities") or [])
+                     if isinstance(o, dict) and o.get("finding")]
+    if not opportunities:
+        return []
+    out = [f"## {L.t('opportunities', 'Worth knowing: what Search Console suggests')}", "",
+           L.t("opportunities_note",
+               "Not defects, and deliberately not scored. Every line is a query this "
+               "site already ranks for, where Google's own numbers say there is more to "
+               "win — so there is nothing here to fix and nothing here that failed. They "
+               "are outside the score, the item partition and the fix list, because a "
+               "good result graded as a failure is how a report tells someone to repair "
+               "their best page."), "",
+           f"| {L.t('query', 'Query')} | {L.t('page', 'Page')} | {L.t('finding', 'What it says')} "
+           f"| {L.t('what_to_do', 'What to do')} |", "|---|---|---|---|"]
+    for o in opportunities[:OPPORTUNITY_LIMIT]:
+        out.append(f"| {esc_md(str(o.get('query') or '—'))} "
+                   f"| {esc_md(str(o.get('page') or '—'))} "
+                   f"| {esc_md(str(o.get('finding')))} "
+                   f"| {esc_md(str(o.get('fix') or '—'))} |")
+    if len(opportunities) > OPPORTUNITY_LIMIT:
+        out.append("")
+        out.append(L.t("opportunities_more",
+                       "{shown} of {total} shown; the rest are in "
+                       "`gsc_opportunities` in the JSON.").format(
+                           shown=OPPORTUNITY_LIMIT, total=len(opportunities)))
+    out.append("")
+    return out
+
+
 def render_markdown(data: dict, L: Lang | None = None) -> str:
     s = data["scores"]
     mode = data.get("mode", "live")
@@ -937,6 +989,8 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
         for i in blocked:
             out.append(f"| {i['id']} | {esc_md(i['title'])} | {esc_md(i['evidence'])} |")
         out.append("")
+
+    out += opportunity_section(data, L)
 
     errs = {k: v["error"] for k, v in data.get("runs", {}).items() if v.get("error")}
     if errs:
@@ -1533,6 +1587,32 @@ def render_html(data: dict, L: Lang | None = None) -> str:
                                             "Each lowers coverage; none lowers the score. "
                                             "This list is the honest part of the audit."))
                           + f"</p>{rows}", len(blocked)))
+
+    # Deliberately not a `row` with a `data-st`: the status filters below are a filter
+    # over items, and an opportunity is not an item. Giving it a status class would put
+    # it back inside the thing this section exists to keep it out of.
+    opportunities = [o for o in (data.get("gsc_opportunities") or [])
+                     if isinstance(o, dict) and o.get("finding")]
+    if opportunities:
+        rows = "".join(
+            f'<div class="row"><div class="sev">GSC</div>'
+            f'<div><div class="ttl">{html.escape(str(o.get("query") or "—"))}</div>'
+            f'<div class="ev">{html.escape(str(o.get("finding")))} '
+            f'&middot; {html.escape(str(o.get("page") or ""))}<br>'
+            f'{html.escape(str(o.get("fix") or ""))}</div></div></div>'
+            for o in opportunities[:OPPORTUNITY_LIMIT])
+        parts.append(fold(
+            L.t("opportunities", "Worth knowing: what Search Console suggests"),
+            '<p class="note">'
+            + html.escape(L.t("opportunities_note",
+                              "Not defects, and deliberately not scored. Every line is a "
+                              "query this site already ranks for, where Google's own "
+                              "numbers say there is more to win — so there is nothing "
+                              "here to fix and nothing here that failed. They are "
+                              "outside the score, the item partition and the fix list, "
+                              "because a good result graded as a failure is how a report "
+                              "tells someone to repair their best page."))
+            + f"</p>{rows}", len(opportunities)))
 
     by_cat: dict[str, list] = {}
     for i in data["items"]:

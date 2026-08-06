@@ -931,6 +931,23 @@ def _timed(key: tuple, timeout: int) -> dict:
     return payload
 
 
+def gsc_opportunities(results: dict) -> list:
+    """The `opportunities[]` gsc_checker.py found, lifted out of its payload.
+
+    Script payloads are not kept in the artifact — they are megabytes and mostly
+    duplicated evidence — so anything a reader needs after the run has to be named. This
+    is named because it is the one thing in a run that is real work and is not a verdict:
+    each entry carries its own `finding` and `fix`, and no item asserts on it.
+    """
+    for key, payload in results.items():
+        if key[0] != "gsc_checker.py" or not isinstance(payload, dict):
+            continue
+        found = payload.get("opportunities")
+        if isinstance(found, list):
+            return [o for o in found if isinstance(o, dict)]
+    return []
+
+
 def execute(plan: dict[tuple, list[str]], workers: int, timeout: int, quiet: bool) -> dict:
     """Run every unique job once. Slow jobs are submitted first so they
     overlap the fast ones instead of trailing the pool."""
@@ -2758,6 +2775,14 @@ def main() -> int:
             for kind in FAILURE_LABEL
             if any(v.get("__error_kind__") == kind for v in results.values())
         },
+        # Search Console's opportunities: work a person can do, carried in the artifact
+        # because no item asserts on them any more and nothing else in a run knows about
+        # them. GO-134 used to read this field through a severity gate, so "position 4.0
+        # with 115 impressions" arrived as a high failure — the site's best result,
+        # printed as the first thing to fix. Deleting the assertion without keeping the
+        # data would have thrown away the most useful thing GSC returns, so it lives
+        # here instead and the report prints it outside the score and the fix list.
+        "gsc_opportunities": gsc_opportunities(results),
         "items": graded,
     }
 

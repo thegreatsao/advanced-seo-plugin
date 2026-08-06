@@ -10,6 +10,78 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.23.0 — 6 August 2026
+
+**Two items reported the wrong thing, and both were found by auditing a real site
+rather than by reading the code.** A trilingual Lithuanian café: 24 pages, three
+languages, one of the plainest link structures a site can have. It collected a `high`
+failure for its best search result and a `medium` failure for its navigation menu.
+
+**`GO-134` no longer grades an opportunity as a defect.** It asserted
+`none_severity: [critical, high]` over `gsc_checker.py`'s `opportunities[]`, so
+*"Position 4.2 with 60 impressions — within striking distance"* arrived as a `high`
+FAIL and ranked first in the fix list. Ranking fourth is the best news in the report.
+This was open since 0.20 and the reason it stayed open was a misdiagnosis, recorded in
+ROADMAP §4: it looked like the registry needed a new **status** meaning *worth knowing*,
+which would have cost the runner, both reports, the CSV, both translations, the score
+partition, the diff buckets and the every-status-reaches-every-surface test.
+
+It needed no status. A status is a verdict about an item, and no item was failing —
+nobody is doing anything wrong by ranking fourth. What was missing was **a place in the
+deliverable for a finding that is not a verdict**, and that is a report section, not a
+vocabulary word.
+
+So the item asserts on what its title says: `gsc_checker.py` now emits `issues[]`,
+built from what Search Console reports as **broken** — errors and warnings recorded
+against a submitted sitemap. That is the only such report the API exposes; manual
+actions, Index Coverage and mobile usability have no endpoint, which is why GO-141,
+GO-142 and MB-099 are `MANUAL` and not wired to a script. Errors fail the item,
+warnings warn it, using the same `ISSUES_ANY` / `NOTHING_SERIOUS` pair every other
+issue-shaped item uses.
+
+`detect_issues()` returns `None` rather than `[]` when the sitemap list could not be
+read, so the item reports `NO_DATA` instead of passing on an answer nobody got. An
+unreadable report is not a clean one — the same trap `missing_is: pass` sets, one field
+along.
+
+**The opportunities did not lose their home.** Deleting the assertion and keeping
+nothing would have thrown away the most useful thing GSC returns: each entry carries
+its own `finding` and `fix`, and on the café's own data the list was five pages sitting
+at position 2.0–2.2 with 0.4–1.2% CTR. The runner lifts them into
+`gsc_opportunities` in the artifact and both reports print them under **Worth knowing:
+what Search Console suggests**, stated in the text as outside the score, outside the
+item partition and outside `--fixes`. In the HTML they are deliberately not `row`s with
+a `data-st`, because the status filters are a filter over items and an opportunity is
+not one.
+
+**`BL-081` stops reporting a translated site's menu as anchor spam.** 0.9.0 taught the
+check that repetition *across* pages is a navigation bar and repetition *within* one
+page is stuffing. That fix asked "does this (target, anchor) pair appear on more than
+half the crawled pages" once, of the whole site — and a translated site has one menu per
+language. On 24 pages in three languages no menu entry reaches more than 8 of them:
+33%, under any share worth calling sitewide. So `navigation_links()` returned the empty
+set, all 489 menu links were graded as editorial, and 21 of 24 targets came back as
+`overused_exact_match_targets` on a site whose links are fine. Verified against the
+live inventory before changing anything: max pair reach 8, threshold 12, navigation
+classified 0.
+
+The question is now asked once per **language section** as well as once per site, and
+the grouping is the page's declared `<html lang>` — measured, not inferred from `/en/`,
+because a URL prefix is a convention and `lang` is a statement. Stuffing still cannot
+hide in the new scope: a pair with one source page has a reach of one, and one is never
+more than half of a group that must hold at least four pages to be asked about at all.
+A site that declares no language is one group, so nothing about a monolingual site
+changes.
+
+`site_crawl.py` records `lang` per page, from the parse it was already doing.
+`INVENTORY_VERSION` 1 -> 2 — bumped rather than treating absence as tolerable, because
+a reader that reads "no lang recorded" as "one language" puts a trilingual site's whole
+navigation back into the editorial set, silently, which is what that counter exists to
+prevent.
+
+Registry `e7d966be23f9` -> `12b5f87a35f7`: GO-134 changes assertion and gains a warn
+band. No item added, none removed, no severity changed.
+
 ## 0.22.0 — 6 August 2026
 
 **The open list, emptied — and emptying it found four more defects than the list had.**

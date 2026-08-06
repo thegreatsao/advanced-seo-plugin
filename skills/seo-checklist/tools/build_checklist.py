@@ -726,9 +726,20 @@ item(132, "medium", S, "ga4_tag_checker.py", PAGE,
      {"path": "duplicates", "len_eq": 0},
      "Remove duplicate GA4/GTM tags")
 item(133, "high", M, fix="Set up Google Search Console as a domain property")
+# `opportunities` was the wrong field to read. "Position 4.0 with 115 impressions —
+# within striking distance" is the site's best result, and a severity gate printed it as
+# the first thing a client should fix. No calibration of those thresholds could have
+# repaired that: an opportunity is not a defect at any number, so the defect was the
+# field, not the numbers in it. `issues` is what Search Console reports as *broken* —
+# errors and warnings against a submitted sitemap, the only such report the API exposes
+# (manual actions, Index Coverage and mobile usability have no endpoint, which is why
+# GO-141, GO-142 and MB-099 are MANUAL). The opportunities did not lose their home: the
+# report carries them outside the score and outside the fix list, because they are work
+# without being failure.
 item(134, "high", S, "gsc_checker.py", GSCARG,
-     {"path": "opportunities", "none_severity": ["critical", "high"]},
-     "Resolve the issues Search Console reports")
+     ISSUES_ANY(),
+     "Resolve what Search Console reports as broken: errors against a submitted sitemap",
+     warn=NOTHING_SERIOUS())
 item(135, "medium", S, "gsc_url_inspection.py", INSPECTARG,
      {"path": "issues", "none_severity": ["critical", "high"]},
      "Resolve what URL Inspection reports: blocked indexing, failed fetch, or a "

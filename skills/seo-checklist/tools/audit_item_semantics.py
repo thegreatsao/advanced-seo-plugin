@@ -54,9 +54,12 @@ REVIEWED: dict[str, str] = {
     "TE-179": "DEFECT (0.20). 'Domain history and reputation' is asserted as "
               "whois.age_days >= 90. A new domain is not a reputation problem and no "
               "work closes the item; it closes itself.",
-    "GO-134": "DEFECT (0.20). 'Resolve Search Console issues' reads `opportunities` "
-              "through a severity gate, so position 4.0 with 115 impressions printed "
-              "as a high failure. An opportunity is not a defect at any threshold.",
+    "GO-134": "FIXED (0.23). A defect from 0.20: 'Resolve Search Console issues' read "
+              "`opportunities` through a severity gate, so position 4.0 with 115 "
+              "impressions printed as a high failure. An opportunity is not a defect at "
+              "any threshold, so it asserts on `issues` instead — errors and warnings "
+              "against a submitted sitemap, the only thing the API reports as broken. "
+              "The opportunities are reported outside the score and the fix list.",
 
     # --- Ruled in 0.22, the pass that emptied the unreviewed list -------------
     # Read in one sitting against the registry and each script's output shape. Most

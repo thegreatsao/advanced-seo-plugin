@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.22.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.23.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -538,8 +538,8 @@ name. A column called `url` would be read as "fix this page".
   fixed-width page can carry; `CN-044` accepts any trust link for "a clear contact
   page", so a site with a privacy policy and no contact page passes.
 
-- **Open — two items report something that is not a defect of the site, and one of them
-  cannot be acted on at all.**
+- **Closed — TE-179 in 0.21.0, GO-134 in 0.23.0. Two items reported something that is
+  not a defect of the site, and one of them could not be acted on at all.**
 
   `TE-179` *Review Domain History & Reputation* asserts `whois.age_days >= 90`. The café's
   domain was 58 days old, so it failed. **A new domain is not a reputation problem and
@@ -556,8 +556,9 @@ name. A column called `url` would be read as "fix this page".
   not a failure at any threshold**, and reading one through a severity gate turns the
   best finding in the report into the item a client is told to fix first.
 
-  **TE-179 closed in 0.21.0. GO-134 stays open, and the shared question is answered:
-  this registry does not need a status meaning "worth knowing but not actionable".**
+  **TE-179 closed in 0.21.0. GO-134 in 0.23.0. The shared question was answered
+  correctly in 0.21.0 and then applied to only one of them: this registry does not need a
+  status meaning "worth knowing but not actionable".**
 
   The two items looked like one missing bucket and are not. TE-179's defect was never
   that a true fact had nowhere to go — it was that `age_days` is neither history nor
@@ -569,15 +570,29 @@ name. A column called `url` would be read as "fix this page".
 
   GO-134 fails the premise instead. Every entry in `opportunities[]` carries its own
   `finding` and `fix`, so that work is real and a person can do it; what is wrong is the
-  name and the weight, and both are inherited. It is left open rather than quietly
-  rewritten, because changing a `high` to something else is a threshold decision and §2
-  is the standing objection to making those by feel.
+  name and the weight, and both are inherited.
 
   So the bucket has no occupants. A new status would have cost the runner, the report,
   the HTML, the CSV, both translations, the score partition, the diff buckets and the
   every-status-reaches-every-surface test, in order to make two miscategorised assertions
-  comfortable. **What was missing was not a status. It was a correct assertion.** Reopen
-  this on the evidence of an item that genuinely has nowhere to go — not on these two.
+  comfortable. **What was missing was not a status. It was a correct assertion.**
+
+  **0.23.0 wrote that assertion, and the last sentence of this entry was what kept it
+  from being written for two releases.** "Changing a `high` to something else is a
+  threshold decision" was true and beside the point: nothing about GO-134 needed a
+  severity changed. Reading the wrong field is not a calibration question, and no value
+  of `high`, `medium` or `low` makes a good search result into a defect. Held under §2's
+  discipline against tuning numbers by feel, an item went on printing a site's best
+  result as its worst problem — the discipline protecting the defect it was written to
+  catch.
+
+  `gsc_checker.py` now emits `issues[]` from the sitemap report, which is the one place
+  the Search Console API says a thing is **wrong**, and GO-134 asserts on that. The
+  opportunities are reported outside the score, the partition and the fix list, under
+  *Worth knowing: what Search Console suggests*. That section is what "no new status"
+  actually required and nobody built: the answer was never that this data has nowhere to
+  go, only that where it goes is not a verdict. Reopen this on the evidence of an item
+  that genuinely has nowhere to go — not on these two.
 
 - **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
   array without a `field` matches the whole serialised issue, URLs included, so

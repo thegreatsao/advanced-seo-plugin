@@ -57,7 +57,11 @@ from seo_common import (
 
 # Bumped when a reader could be wrong about what a field means. `load()` refuses an
 # inventory it does not understand rather than reading a field that has moved.
-INVENTORY_VERSION = 1
+# 2 adds `lang`. Bumped rather than tolerated as absent: a version-1 inventory cannot
+# answer the language question at all, and a reader that treats "no lang recorded" as
+# "one language" would put a trilingual site's whole navigation back into the editorial
+# link set — silently, which is the failure this counter exists to stop.
+INVENTORY_VERSION = 2
 
 DEFAULT_MAX_PAGES = 100
 DEFAULT_DEPTH = 3
@@ -285,6 +289,13 @@ def _read_page(fetched: dict, key: str, site_url: str,
         "external_out": 0,
         "links": [],
         "html": False,
+        # The declared `<html lang>`. Free — the parse below already produced it — and
+        # it is what lets a reader tell one language section of a site from another
+        # without inferring anything from URL shape. anchor_text_audit.py needs it:
+        # "this pair appears on most pages" is false of a menu that exists once per
+        # language, and on a trilingual site no menu entry reaches a third of the crawl.
+        # Measured rather than guessed, which is the only reason it belongs here.
+        "lang": None,
     }
     row["redirected"] = bool(row["redirect_chain"])
     text = fetched.get("text") or ""
@@ -301,6 +312,7 @@ def _read_page(fetched: dict, key: str, site_url: str,
     row["meta_description"] = parsed.get("meta_description")
     row["meta_robots"] = parsed.get("meta_robots")
     row["canonical"] = parsed.get("canonical")
+    row["lang"] = parsed.get("lang")
     row["noindex"] = has_noindex(parsed.get("meta_robots"), fetched.get("headers"))
 
     # Every `<a>`, with nothing deduplicated. The first version of this collapsed

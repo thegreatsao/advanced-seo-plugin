@@ -59,6 +59,13 @@ def anchors_from_inventory(inventory: dict) -> dict:
             "final_url": row.get("final_url"),
             "error": row.get("error"),
             "depth": row.get("depth"),
+            # Carried because `navigation_links` groups by it. This projection is why
+            # the language fix did not work the first time: the field was recorded by
+            # the crawl, read by the classifier, and dropped in between — so every page
+            # arrived declaring nothing and the whole site was one group again. A
+            # projection that silently narrows what a reader can ask is the same class
+            # of bug as the one being fixed.
+            "lang": row.get("lang"),
         }
         if row.get("error") or row.get("status") != 200 or not row.get("html"):
             fetch_errors.append({"url": key, "status": row.get("status"),
@@ -94,6 +101,25 @@ def navigation_links(links: list[dict], pages: dict) -> set:
 
     Deliberately requires a crawl worth generalising from. On two pages "most pages"
     means nothing, and a link on both of them is as likely to be editorial.
+
+    **"Most pages" is asked once per language section, not only once per site.** A
+    translated site has one menu per language, so on a trilingual site of 24 pages no
+    menu entry appears on more than 8 of them — 33%, under any share worth calling
+    sitewide. The whole-site question then answers "no navigation here", every one of
+    the 489 menu links is graded as editorial, and BL-081 reports the header as
+    exact-match anchor spam on a site whose links are fine. That is the same failure
+    the docstring above describes, one level up: the earlier fix taught the check that
+    repetition across pages is a menu, and it still could not see a menu that repeats
+    across a *section*.
+
+    The grouping is the page's declared `<html lang>`, recorded by the crawl. Measured,
+    not inferred from URL shape, because `/en/` is a convention and `lang` is a
+    statement. Pages that declare nothing group together under one key, which is what a
+    monolingual site is — so nothing about a single-language site changes.
+
+    Stuffing still cannot hide in here. A pair with one source page has a reach of one,
+    and one is never more than half of a group that must hold at least four pages to be
+    asked about at all.
     """
     html_pages = [key for key, row in pages.items() if row.get("status") == 200]
     if len(html_pages) < MIN_PAGES_FOR_SITEWIDE:
@@ -101,8 +127,34 @@ def navigation_links(links: list[dict], pages: dict) -> set:
     sources: dict[tuple, set] = defaultdict(set)
     for link in links:
         sources[_pair(link)].add(link["source"])
-    threshold = len(html_pages) * SITEWIDE_PAGE_SHARE
-    return {pair for pair, srcs in sources.items() if len(srcs) > threshold}
+
+    groups: dict[str, set] = defaultdict(set)
+    for key in html_pages:
+        groups[_lang_key(pages[key])].add(key)
+    # The whole crawl is one of the groups asked, so a footer link that does cross every
+    # language is still chrome. Sections too small to generalise from are dropped rather
+    # than answered — the floor means the same thing here as it does site-wide.
+    scopes = [set(html_pages)] + [pages_in for pages_in in groups.values()
+                                  if len(pages_in) >= MIN_PAGES_FOR_SITEWIDE]
+
+    chrome = set()
+    for pair, srcs in sources.items():
+        for scope in scopes:
+            if len(srcs & scope) > len(scope) * SITEWIDE_PAGE_SHARE:
+                chrome.add(pair)
+                break
+    return chrome
+
+
+def _lang_key(row: dict) -> str:
+    """The language section a page belongs to, from what it declares.
+
+    Only the primary subtag: `en-GB` and `en-US` are one navigation, and a site that
+    writes one of each is not two sections. A page declaring nothing gets `""`, which
+    is a real group — on a monolingual site every page lands in it.
+    """
+    lang = (row.get("lang") or "").strip().lower()
+    return lang.split("-")[0] if lang else ""
 
 
 def audit_anchor_text(start_url: str, inventory: dict | None = None, depth: int = 1,

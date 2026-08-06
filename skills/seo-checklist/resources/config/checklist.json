@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "e7d966be23f9",
+  "registry_version": "12b5f87a35f7",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -2751,7 +2751,15 @@
         ],
         "requires": "gsc",
         "assert": {
-          "path": "opportunities",
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
           "none_severity": [
             "critical",
             "high"
@@ -2759,7 +2767,7 @@
         }
       },
       "effort": "low",
-      "fix": "Resolve the issues Search Console reports"
+      "fix": "Resolve what Search Console reports as broken: errors against a submitted sitemap"
     },
     {
       "id": "GO-135",

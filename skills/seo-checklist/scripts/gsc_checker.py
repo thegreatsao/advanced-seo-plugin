@@ -262,6 +262,73 @@ def detect_opportunities(performance_data: list) -> list:
     return opportunities
 
 
+def detect_issues(sitemaps: list) -> list | None:
+    """What Search Console reports as *broken*, which is not what it reports as *possible*.
+
+    `opportunities[]` and this list are different claims and used to be the same field.
+    GO-134 asserted `none_severity` over the opportunities, so "Position 4.0 with 115
+    impressions — within striking distance" arrived as a `high` failure: the site's best
+    result, printed as the first thing to fix. An opportunity is not a defect at any
+    threshold, so no calibration of those numbers could have fixed it — the assertion was
+    reading the wrong field.
+
+    This is the field it should have been reading. Of everything the Search Console API
+    exposes, the sitemap report is the only place it says a thing is *wrong*: a count of
+    errors and warnings Google recorded against a sitemap the owner submitted. Manual
+    actions, Index Coverage and mobile usability are the other three, and none of them has
+    an endpoint — that is why GO-141, GO-142 and MB-099 are `MANUAL` and not wired here.
+
+    Returns `None` — not `[]` — when the sitemap list could not be read, so the item
+    reports `NO_DATA` rather than passing on an empty answer. An unreadable report is not
+    a clean one, and `missing_is: pass` is exactly the mistake this registry is built to
+    avoid.
+    """
+    if not isinstance(sitemaps, list) or any(
+            isinstance(s, dict) and s.get("error") for s in sitemaps):
+        return None
+    issues = []
+    for s in sitemaps:
+        if not isinstance(s, dict):
+            continue
+        path = s.get("path") or "(unnamed sitemap)"
+        # The API returns these as strings ("0"), and `int("0")` is the whole reason
+        # this is not `s.get("errors", 0) > 0`: every count would be truthy.
+        errors = _as_int(s.get("errors"))
+        warnings = _as_int(s.get("warnings"))
+        if errors:
+            issues.append({
+                "type": "sitemap_errors",
+                # basis: external standard — Search Console calls these errors, and an
+                # error means Google did not read part of a sitemap the owner submitted.
+                "severity": "high",
+                "sitemap": path,
+                "errors": errors,
+                "finding": f"{errors} error(s) against submitted sitemap {path}.",
+                "fix": "Open Search Console -> Sitemaps, read the errors for this file, "
+                       "and fix or resubmit it.",
+            })
+        if warnings:
+            issues.append({
+                "type": "sitemap_warnings",
+                # basis: external standard — a warning is Google reporting something it
+                # read anyway, which is why it does not fail the item on its own.
+                "severity": "medium",
+                "sitemap": path,
+                "warnings": warnings,
+                "finding": f"{warnings} warning(s) against submitted sitemap {path}.",
+                "fix": "Read the warnings in Search Console -> Sitemaps; they are usually "
+                       "URLs Google could read but chose not to index.",
+            })
+    return issues
+
+
+def _as_int(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -303,6 +370,12 @@ def main():
     # Sitemaps
     report["sitemaps"] = get_sitemaps(service, args.site_url)
 
+    # What Search Console reports as broken, kept apart from what it reports as
+    # possible. Omitted entirely when the sitemap report could not be read.
+    sitemap_issues = detect_issues(report["sitemaps"])
+    if sitemap_issues is not None:
+        report["issues"] = sitemap_issues
+
     # URL inspection (if requested)
     if args.inspect:
         report["url_inspection"] = get_url_inspection(service, args.site_url, args.inspect)
@@ -325,6 +398,11 @@ def main():
         print(f"\nOpportunities ({len(report['opportunities'])}):")
         for opp in report["opportunities"][:10]:
             print(f"  ⚡ [{opp['type']}] {opp['query'][:40]} — {opp['finding']}")
+
+    if report.get("issues"):
+        print(f"\nIssues Search Console reports ({len(report['issues'])}):")
+        for issue in report["issues"]:
+            print(f"  ! [{issue['severity']}] {issue['finding']}")
 
     if report.get("sitemaps"):
         print(f"\nSitemaps ({len(report['sitemaps'])}):")
