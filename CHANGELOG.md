@@ -88,6 +88,16 @@ only ever see an output committed at the top of the checkout — neither copy wa
 reads the probe's own `probe-*.json` literals and compares by basename, and it fails on
 either file being staged, which was checked by staging them.
 
+**Also after the release: four test files ran 96% of what they define.** `if __name__ ==
+"__main__": unittest.main()` sat above the last class in `test_runner.py`,
+`test_registry.py`, `test_report.py` and `test_translated_sites.py` — the last one added
+in 0.23.0 — so a direct `python tests/<file>.py` executed `main()` before those classes
+existed and reported OK over 58 tests it never ran. `unittest discover` imports the module
+instead, so CI collected all of them and had nothing to report, which is why this survived.
+No test changed; the block moved to the end of each file, and
+`ATestFileRunsEverythingItDefines` parses every `test_*.py` and fails if anything is
+declared after it. 664 -> 665 tests.
+
 The client domain is also out of the two places it had been written by hand:
 `script-output-shapes.md` now says what *kind* of property the Search Console scripts were
 probed against without naming it, and `gsc_links_csv.py`'s branded-anchor example uses a

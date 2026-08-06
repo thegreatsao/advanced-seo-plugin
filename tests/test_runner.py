@@ -2525,10 +2525,6 @@ class OneFetchPerUrl(unittest.TestCase):
         self.assertEqual(left, [], "a run's response cache outlived the run")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class HistoryIsASeries(unittest.TestCase):
     """`.seo-runs/` held every run since 0.1.0 and exactly one was ever read.
 
@@ -2621,3 +2617,13 @@ class HistoryIsASeries(unittest.TestCase):
 
     def test_no_history_is_not_an_error(self):
         self.assertEqual(run_series("nowhere.example", ""), [])
+
+
+# Last statement in the file, and that is load-bearing rather than stylistic: this
+# block sat above `HistoryIsASeries`, so `python tests/test_runner.py` called
+# `unittest.main()` before those nine tests existed and reported 237 passing out of
+# 246 as a full run. `unittest discover` imports the module instead of executing it as
+# `__main__`, so CI was never affected and never said anything. There is a test that
+# this block is last in every test file.
+if __name__ == "__main__":
+    unittest.main()

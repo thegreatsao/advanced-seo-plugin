@@ -204,12 +204,6 @@ class SearchConsoleIssuesAreNotOpportunities(unittest.TestCase):
             self.assertTrue(issue["finding"])
             self.assertTrue(issue["fix"])
             self.assertIn(issue["severity"], ("critical", "high", "medium", "low"))
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class OnePieceOfWorkIsOneRow(unittest.TestCase):
     """`checklist_report.twins_folded` — the reader's list, not the score.
 
@@ -389,3 +383,7 @@ class AProfileMeasuresItsOwnKindOfSite(unittest.TestCase):
         excluded = self.runner.profile_excludes(items, self.local)
         self.assertIn("publication", excluded["CN-056"])
         self.assertNotEqual(excluded["CN-056"], "excluded by profile")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -561,12 +561,6 @@ class TheFixListIsMachineReadable(unittest.TestCase):
                 raw = f.read()
         self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), "no UTF-8 BOM")
         self.assertIn("Заголовок".encode(), raw)
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class EveryStatusReachesEverySurface(unittest.TestCase):
     """A status is not added until every place that lists one knows about it.
 
@@ -907,3 +901,7 @@ class ATranslationIsBoundToTheEnglishItTranslates(unittest.TestCase):
                   encoding="utf-8") as f:
             ids = {i["id"] for i in json.load(f)["items"]}
         self.assertEqual(sorted(ids - stamped), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -333,6 +333,48 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
                          "accident; remove it from the index")
 
 
+class ATestFileRunsEverythingItDefines(unittest.TestCase):
+    """`if __name__ == "__main__": unittest.main()` must be the last statement.
+
+    In `test_runner.py` it was not: it sat above `HistoryIsASeries`, so running that
+    file directly executed `main()` before the class existed and reported "Ran 237
+    tests ... OK" for a file that defines 246. Nine tests about run history — the
+    feature 0.19.0 added — were invisible to anyone checking their work that way, and
+    `unittest discover` imports the module rather than running it as `__main__`, so CI
+    collected all 246 and had nothing to report. A green run that quietly covers 96%
+    of what it names is worse than a red one.
+
+    Checked by parsing rather than by running the files: the question is where a
+    statement sits in the module body, which is exactly what an AST says.
+    """
+
+    def files(self) -> list:
+        here = os.path.dirname(os.path.abspath(__file__))
+        found = sorted(f for f in os.listdir(here) if f.startswith("test_")
+                       and f.endswith(".py"))
+        self.assertGreater(len(found), 5, "no test files found; this would pass on "
+                                          "nothing")
+        return [os.path.join(here, f) for f in found]
+
+    def test_the_main_block_is_the_last_statement(self):
+        late = []
+        for path in self.files():
+            with open(path, encoding="utf-8") as f:
+                body = ast.parse(f.read()).body
+            for i, node in enumerate(body):
+                if not (isinstance(node, ast.If) and ast.dump(node.test).find(
+                        "__name__") != -1):
+                    continue
+                after = [n for n in body[i + 1:]
+                         if isinstance(n, (ast.ClassDef, ast.FunctionDef))]
+                if after:
+                    late.append(f"{os.path.basename(path)}: "
+                                f"{', '.join(n.name for n in after)} defined after "
+                                f"line {node.lineno}")
+        self.assertEqual(late, [], "these are skipped when the file is run directly; "
+                                   "move the __main__ block to the end")
+
+
 class VersionAndChangelog(unittest.TestCase):
     """A changelog nobody is forced to update is a changelog that lies. The failure
     mode is always the same one: the version moves and the entry does not."""
@@ -836,12 +878,6 @@ class GradedRowsCarryWhatTheReportRanksOn(unittest.TestCase):
     def test_every_registry_item_declares_an_effort(self):
         for i in ITEMS:
             self.assertIn(i.get("effort"), VALID_EFFORT, i["id"])
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class APatternNeverReadsAnAddress(unittest.TestCase):
     """`none_matching` over an `issues[]` array must name the field it searches.
 
@@ -967,3 +1003,7 @@ class OneCheckCarriesWeightOnce(unittest.TestCase):
             self.assertTrue(all(i["scores_with"] == carriers[0]["id"]
                                 for i in group if i.get("scores_with")),
                             f"{ids} share a check but do not agree which one scores")
+
+
+if __name__ == "__main__":
+    unittest.main()

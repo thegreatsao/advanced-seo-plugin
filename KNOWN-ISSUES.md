@@ -351,6 +351,35 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **Fixed. Four test files ran 96% of what they defined and said OK.** Found 6 August
+  2026 while reading `test_runner.py` for an unrelated reason, and it is a defect of
+  the test infrastructure rather than of any test: `if __name__ == "__main__":
+  unittest.main()` sat **above** the last class in the file, so `python
+  tests/test_runner.py` called `main()` before that class existed and reported *Ran 237
+  tests ... OK* for a file defining 246. The AST guard written for it then found the
+  same thing in three more files, one of them added the same day:
+
+  | File | Reported | Defines | Hidden |
+  |---|---|---|---|
+  | `test_runner.py` | 237 | 246 | `HistoryIsASeries` — 9 |
+  | `test_registry.py` | 56 | 63 | 2 classes — 7 |
+  | `test_report.py` | 50 | 76 | 6 classes — 26 |
+  | `test_translated_sites.py` | 14 | 30 | 3 classes — 16 |
+
+  **CI was never affected and that is why it lasted.** `unittest discover` imports a
+  module rather than executing it as `__main__`, so the discovery path always collected
+  all 665 while the direct path silently dropped 58. Anyone verifying their own work the
+  quick way — one file, straight from the shell — got a green run over the tests most
+  likely to concern them: the history series, the report surfaces, the translated-site
+  classes.
+
+  `ATestFileRunsEverythingItDefines` in `test_registry.py` parses every `test_*.py` and
+  fails if any class or function is declared after the `__main__` block. Parsed rather
+  than run, because the question is where a statement sits in the module body.
+
+  Independently confirmed by a second reviewer working from the same tree, which is
+  also where the count of 237 comes from.
+
 - **Both items closed — CI-019 in 0.21.0, CN-053 in 0.22.0. What stays open is the
   reason neither was caught here first, and it has since caught two more.**
 
