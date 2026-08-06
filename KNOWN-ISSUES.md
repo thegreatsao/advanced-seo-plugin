@@ -351,6 +351,42 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **Fixed. The one test that guards somebody else's server never started a second
+  process.** `test_the_pacing_state_is_shared_between_processes` opened with
+  `self.assertTrue(os.path.isdir(self.dir) or True)` — an expression with no false
+  case — and then asserted that one process had written *something* into the
+  coordination directory. Cross-process pacing is the whole subject of the test and the
+  whole reason the slot file exists, and it went unmeasured through every release: a
+  limiter that paced each process against itself would have passed. Now three children
+  start together at 5 rps and the gaps between the times they proceed are measured;
+  `test_pacing_off_lets_the_processes_go_together` is the other half, so the first is
+  known to measure pacing rather than the cost of starting interpreters. Verified
+  against the failure mode it names by giving each child its own `RATE_LIMIT_DIR`:
+  gaps 0.000s / 0.001s and the assertion fails, against 0.205s / 0.205s for the real
+  implementation.
+
+- **Fixed. The GSC scenarios accepted a rule that had stopped deciding.** The positive
+  fixtures asserted `verdict in (PASS, NO_DATA)` and the negative ones "at least one
+  item in the group failed". A path renamed out from under an assertion reports
+  `NO_DATA` forever, which satisfies both — and that is the exact defect this file
+  records three times over. All four scenarios now pin the full verdict map:
+  `{GO-139: PASS, KW-070: PASS, KW-071: FAIL, MS-023: WARN}` for cannibalisation,
+  `{CI-010: PASS, GO-135: FAIL}` for an excluded URL. CI-010 passing on a URL Google
+  has not indexed is correct — it asks whether the chosen canonical matches the
+  declared one — and pinning it is what makes that a statement rather than an
+  accident. Verified by dropping `summary` from the output: KW-071 and MS-023 fall to
+  `NO_DATA`, which the old assertion accepted and the map does not.
+
+- **Fixed. The cache-cleanup test made a claim about the machine, not about the run.**
+  It listed the shared temp directory for `seo-http-*` and required none, so a second
+  suite running in parallel failed it with nothing wrong here — reproduced on 3.13.
+  Snapshotting the directory before and after is not enough: a concurrent run creates
+  its cache inside the window, and that still failed. The child now gets its own
+  `TMPDIR`, which `mkdtemp` reads, so the only cache that can appear there is the one
+  under test; and the test asserts the pacing directory *is* in there, so an empty
+  result cannot mean it looked in the wrong place. Verified by running two full suites
+  concurrently: both 666 tests, both OK.
+
 - **Fixed. Four test files ran 96% of what they defined and said OK.** Found 6 August
   2026 while reading `test_runner.py` for an unrelated reason, and it is a defect of
   the test infrastructure rather than of any test: `if __name__ == "__main__":

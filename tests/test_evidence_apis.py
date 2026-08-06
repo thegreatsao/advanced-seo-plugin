@@ -50,6 +50,19 @@ def verdict(item_id: str, output: dict) -> str:
     return FAIL
 
 
+def verdicts(items, output: dict) -> dict:
+    """Every item's verdict at once, so a scenario can pin all of them.
+
+    The GSC scenarios used to accept `PASS` **or** `NO_DATA` on their positive
+    fixtures and "at least one of the group failed" on their negative ones. Both are
+    satisfied by a rule that has stopped deciding anything: a path renamed out from
+    under an assertion reports `NO_DATA` forever, which is the exact failure this
+    file's docstring says the last three defects in this family were. A full map
+    fails on the difference between deciding and not.
+    """
+    return {i["id"]: verdict(i["id"], output) for i in items}
+
+
 def tmpfile(name: str, content) -> str:
     path = os.path.join(tempfile.mkdtemp(), name)
     mode = "wb" if isinstance(content, bytes) else "w"
@@ -320,8 +333,9 @@ class Cannibalization(unittest.TestCase):
             (("proofing times", "https://example.com/guide"), 40, 600, 5.4),
         ]))
         self.assertEqual(out["cannibalized"], [])
-        for item in self.items_for():
-            self.assertIn(verdict(item["id"], out), (PASS, NO_DATA), item["id"])
+        self.assertEqual(verdicts(self.items_for(), out),
+                         {"GO-139": PASS, "KW-070": PASS, "KW-071": PASS,
+                          "MS-023": PASS})
 
     def test_two_urls_ranking_for_one_query_are_found(self):
         out = self.analyze(self.rows([
@@ -335,9 +349,13 @@ class Cannibalization(unittest.TestCase):
         self.assertEqual(found["query"], "sourdough starter")
         self.assertGreaterEqual(found["page_count"], 2)
         self.assertGreaterEqual(len(found["pages"]), 2)
-        failing = [i["id"] for i in self.items_for()
-                   if verdict(i["id"], out) in (FAIL, WARN)]
-        self.assertTrue(failing, f"three URLs on one query decided nothing: {out}")
+        # Pinned per item rather than "something failed": which one fails is the
+        # content of the check. KW-071 reads the spread and fails it; MS-023 counts
+        # cannibalised queries and warns at one; the two branded items are about
+        # whether the site owns its own name, which this fixture does not disturb.
+        self.assertEqual(verdicts(self.items_for(), out),
+                         {"GO-139": PASS, "KW-070": PASS, "KW-071": FAIL,
+                          "MS-023": WARN})
 
     def test_no_credentials_is_undecided_and_says_so(self):
         """Not an empty history. A property nobody could open and a property with no
@@ -385,14 +403,19 @@ class UrlInspection(unittest.TestCase):
 
     def test_an_indexed_url_passes(self):
         out = self.inspect("PASS", "Submitted and indexed")
-        for item in self.items_for():
-            self.assertIn(verdict(item["id"], out), (PASS, NO_DATA), item["id"])
+        self.assertEqual(verdicts(self.items_for(), out),
+                         {"CI-010": PASS, "GO-135": PASS})
 
     def test_a_url_google_has_excluded_does_not(self):
+        """CI-010 passing here is correct and is the reason to pin both. It asks
+        whether Google's chosen canonical matches the declared one, which this URL
+        answers yes to while not being indexed at all — a different question. An
+        assertion of "at least one item failed" would have been satisfied by GO-135
+        alone and would equally have been satisfied if CI-010 had stopped deciding.
+        """
         out = self.inspect("FAIL", "Discovered - currently not indexed")
-        failing = [i["id"] for i in self.items_for()
-                   if verdict(i["id"], out) in (FAIL, WARN)]
-        self.assertTrue(failing, f"an unindexed URL decided nothing: {out}")
+        self.assertEqual(verdicts(self.items_for(), out),
+                         {"CI-010": PASS, "GO-135": FAIL})
 
     def test_no_credentials_is_undecided(self):
         def refuse(*a, **k):

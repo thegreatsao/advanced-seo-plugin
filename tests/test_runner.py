@@ -183,12 +183,67 @@ class RateLimiting(unittest.TestCase):
         self.sh.pace("b.example", rps=2)
         self.assertLess(time.monotonic() - start, 0.2)
 
+    # Three processes at 5 rps: each must wait 0.2s behind the one before it, so the
+    # run costs ~0.4s. Low enough to keep the suite quick, long enough that process
+    # startup jitter cannot manufacture the spacing on its own — startup is tens of
+    # milliseconds and the tolerance below is 0.16s.
+    PACE_CHILDREN = 3
+    PACE_RPS = 5.0
+
+    def _paced_at(self, rps: float) -> list:
+        """Start the children together, return the monotonic times they proceeded.
+
+        `time.monotonic()` is CLOCK_MONOTONIC — one clock per boot, not per process —
+        which is why the slot file can hold one process's timestamp and another can
+        compare against it, and why these numbers are comparable here.
+        """
+        import subprocess
+        code = (
+            "import os, sys, time\n"
+            f"sys.path.insert(0, {SCRIPTS!r})\n"
+            "import lib.safe_http as sh\n"
+            "sh.RATE_LIMIT_DIR = os.environ['PACE_DIR']\n"
+            "sh.pace('shared.example', rps=float(os.environ['PACE_RPS']))\n"
+            "print(time.monotonic())\n"
+        )
+        env = os.environ.copy()
+        env["PACE_DIR"], env["PACE_RPS"] = self.dir, str(rps)
+        procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  text=True, close_fds=False)
+                 for _ in range(self.PACE_CHILDREN)]
+        outs = [p.communicate(timeout=60) for p in procs]
+        for out, err in outs:
+            self.assertTrue(out.strip(), f"a child never paced: {err}")
+        return sorted(float(out) for out, _ in outs)
+
     def test_the_pacing_state_is_shared_between_processes(self):
-        """The scripts are separate processes; an in-process limiter would let
-        eight of them go at once, which is the burst this exists to stop."""
-        self.assertTrue(os.path.isdir(self.dir) or True)
-        self.sh.pace("shared.example", rps=50)
-        self.assertTrue(os.listdir(self.dir), "nothing was written to co-ordinate on")
+        """The scripts are separate processes; an in-process limiter would let eight of
+        them go at once, which is the burst this exists to stop.
+
+        This test used to assert `os.path.isdir(self.dir) or True` — an expression with
+        no false case — and then that *something* had been written to the coordination
+        directory, from one process. It never started a second one, so the one property
+        it is named for went unmeasured through every release: a limiter that paced each
+        process against itself would have passed it. Verified the other way round, by
+        giving each child its own `RATE_LIMIT_DIR`: the gaps collapse to 0.00s and the
+        assertion below fails.
+        """
+        times = self._paced_at(self.PACE_RPS)
+        # strict=False deliberately: pairing a list with its own tail is one shorter.
+        gaps = [b - a for a, b in zip(times, times[1:], strict=False)]
+        interval = 1.0 / self.PACE_RPS
+        self.assertTrue(all(g >= interval * 0.8 for g in gaps),
+                        f"processes did not queue behind each other: gaps {gaps}, "
+                        f"expected each >= {interval * 0.8:.2f}s")
+
+    def test_pacing_off_lets_the_processes_go_together(self):
+        """The other half, so the test above is known to measure pacing rather than
+        the cost of starting three interpreters."""
+        times = self._paced_at(0)
+        self.assertLess(times[-1] - times[0], 1.0 / self.PACE_RPS,
+                        "unpaced processes were spaced anyway; the test above cannot "
+                        "tell pacing from startup")
 
     def test_zero_switches_pacing_off(self):
         os.environ["SEO_MAX_RPS"] = "0"
@@ -2511,6 +2566,18 @@ class OneFetchPerUrl(unittest.TestCase):
         # same `if __name__` entry it gets from the shell.
         launch = ("import os, runpy, sys; os.chdir(sys.argv.pop(1)); "
                   "runpy.run_path(sys.argv.pop(1), run_name='__main__')")
+        # The cache goes to `mkdtemp(prefix="seo-http-")`, so it can only be found by
+        # that prefix — and this test used to look for it in the *shared* temp
+        # directory, which made the assertion a claim about the machine rather than
+        # about this run: a second suite in parallel, or any audit anybody else
+        # started, failed it with nothing wrong here. It did, on 3.13. Giving the
+        # child its own `TMPDIR` is what makes the question answerable: `mkdtemp`
+        # reads it, so the only `seo-http-*` that can appear in there is this run's.
+        # Snapshotting the shared directory before and after is not enough — a
+        # concurrent run creates its cache inside the window.
+        sandbox = tempfile.mkdtemp()
+        env = harness.offline_env()
+        env["TMPDIR"] = sandbox
         with harness.served({"/": self.PAGE, "/robots.txt": (404, "")}) as site:
             out = harness.spawn(
                 [sys.executable, "-c", launch, self.dir,
@@ -2518,10 +2585,14 @@ class OneFetchPerUrl(unittest.TestCase):
                  site.url, "--allow-private", "--max-rps", "50", "--no-history",
                  "--no-prompt", "--quiet", "--only", "crawling_indexing",
                  "--timeout", "60"],
-                env=harness.offline_env(), timeout=300)
+                env=env, timeout=300)
             self.assertEqual(out.returncode, 0, out.stderr[-2000:])
-        left = [d for d in os.listdir(tempfile.gettempdir())
-                if d.startswith("seo-http-")]
+        # Proof that the child really did treat `sandbox` as its temp directory, so an
+        # empty list below cannot mean "looked in the wrong place": pacing writes
+        # `seo-checklist-rate/` into `gettempdir()` and nothing removes it.
+        self.assertIn("seo-checklist-rate", os.listdir(sandbox),
+                      "the child did not use the sandbox as its temp directory")
+        left = [d for d in os.listdir(sandbox) if d.startswith("seo-http-")]
         self.assertEqual(left, [], "a run's response cache outlived the run")
 
 

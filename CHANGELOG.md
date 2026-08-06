@@ -88,6 +88,20 @@ only ever see an output committed at the top of the checkout — neither copy wa
 reads the probe's own `probe-*.json` literals and compares by basename, and it fails on
 either file being staged, which was checked by staging them.
 
+**Three more, from a second reviewer reading the same tree, all of the same shape: a test
+that could not fail.** The cross-process pacing test opened with `assertTrue(... or True)`
+and never started a second process, so the one guard that protects a third party's server
+was never measured — three children now race for one host at 5 rps and the gaps are
+checked, with the pacing-off case as the other half. The Search Console scenarios accepted
+`PASS` **or** `NO_DATA` on good fixtures and "something failed" on bad ones, which a rule
+that has stopped deciding satisfies too; all four now pin the full verdict map. The
+cache-cleanup test asserted that the shared temp directory held no `seo-http-*`, a claim
+about the machine rather than about the run, and failed whenever a second suite ran
+alongside; the child now gets its own `TMPDIR`. Each was verified against the failure it
+names, not just re-run: per-process pacing slots collapse the gaps to 0.001s, dropping
+`summary` from the GSC output drops two items to `NO_DATA`, and two full suites in parallel
+now both report 666 OK where one used to fail.
+
 **Also after the release: four test files ran 96% of what they define.** `if __name__ ==
 "__main__": unittest.main()` sat above the last class in `test_runner.py`,
 `test_registry.py`, `test_report.py` and `test_translated_sites.py` — the last one added
@@ -96,7 +110,7 @@ existed and reported OK over 58 tests it never ran. `unittest discover` imports 
 instead, so CI collected all of them and had nothing to report, which is why this survived.
 No test changed; the block moved to the end of each file, and
 `ATestFileRunsEverythingItDefines` parses every `test_*.py` and fails if anything is
-declared after it. 664 -> 665 tests.
+declared after it. 664 -> 665 tests here, 666 with the pacing-off half above.
 
 The client domain is also out of the two places it had been written by hand:
 `script-output-shapes.md` now says what *kind* of property the Search Console scripts were
