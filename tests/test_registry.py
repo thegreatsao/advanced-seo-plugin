@@ -17,6 +17,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL = os.path.join(ROOT, "skills", "seo-checklist")
 SCRIPTS = os.path.join(SKILL, "scripts")
+TOOLS = os.path.join(SKILL, "tools")
 sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -255,6 +256,12 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
     Read out of the argparse defaults rather than listed here, because a list in a
     test drifts exactly the way `.gitignore` drifted. `git check-ignore` answers the
     question, because reimplementing gitignore matching would be testing this test.
+
+    A run is not the only thing that writes here. `tools/probe_shapes.py` writes two
+    files and only one of them was listed, so its crawl inventory got committed twice:
+    a fixture-server crawl in 0.9.0 and a client site's in 0.25.0. This test named the
+    audit's outputs and no tool's, so the probe's filenames are now read the same way,
+    out of the tool's own literals.
     """
 
     def _defaults(self, script: str) -> dict:
@@ -262,6 +269,18 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
             src = f.read()
         return dict(re.findall(r'add_argument\("--([a-z-]+)"[^)]*?default="([^"]+)"',
                                src))
+
+    def _probe_outputs(self) -> set:
+        """Filenames the probe writes, taken from `probe_shapes.py`.
+
+        The probe declares neither through argparse: the skeleton is a literal at the
+        `open()` call, the inventory a default argument. A `probe-*.json` literal in
+        that file is a file the tool writes, and that is close enough to the real rule
+        to catch the next one.
+        """
+        with open(os.path.join(TOOLS, "probe_shapes.py"), encoding="utf-8") as f:
+            src = f.read()
+        return set(re.findall(r'"(probe-[a-z0-9-]+\.json)"', src))
 
     def outputs(self) -> set:
         runner = self._defaults("checklist_runner.py")
@@ -273,12 +292,16 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
                  os.path.splitext(results)[0] + "-crawl.json"}
         names |= {f"{stem}-{lens}.md"
                   for lens in ("copy", "layout", "locale", "market")}
+        names |= self._probe_outputs()
         return names
 
     def test_every_default_output_is_ignored(self):
         found = self.outputs()
         self.assertIn("checklist-results.json", found,
                       "the defaults were not read; this test would pass on nothing")
+        self.assertIn("probe-raw.json", found,
+                      "the probe's literals were not read; the half of this test "
+                      "that was added because it missed a file would miss it again")
         # `git -C` rather than `cwd=`, and through `harness.spawn` so the binary is
         # resolved to an absolute path: both a `cwd` and a bare executable name put the
         # child on CPython's fork path, where macOS kills it before it execs.
@@ -294,11 +317,20 @@ class AnAuditDoesNotCommitItself(unittest.TestCase):
     def test_none_of_them_is_already_committed(self):
         """The same check from the other end. A pattern added to `.gitignore` does
         nothing for a file already in the index, and that was the second half of the
-        mistake: the ignore list and the index both had to be fixed."""
+        mistake: the ignore list and the index both had to be fixed.
+
+        Compared by basename, because `git ls-files` prints paths and this test used to
+        hold filenames — so it could only ever see an output committed at the top of
+        the checkout. `skills/seo-checklist/probe-inventory.json` was committed one
+        directory down and matched nothing here.
+        """
         proc = harness.spawn(["git", "-C", ROOT, "ls-files"], env=os.environ.copy())
         if proc.returncode != 0:
             self.skipTest("not a git checkout")
-        self.assertEqual(sorted(self.outputs() & set(proc.stdout.split())), [])
+        tracked = {os.path.basename(p) for p in proc.stdout.split()}
+        self.assertEqual(sorted(self.outputs() & tracked), [],
+                         "this is a file some run or tool wrote, committed by "
+                         "accident; remove it from the index")
 
 
 class VersionAndChangelog(unittest.TestCase):

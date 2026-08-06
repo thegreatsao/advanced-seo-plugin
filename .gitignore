@@ -17,7 +17,19 @@ CHECKLIST-REPORT.md
 CHECKLIST.html
 LLM-QUEUE*.md
 .seo-runs/
+
+# `tools/probe_shapes.py` output. The probe is run from this directory too, and it
+# writes twice: the skeleton it exists to produce, and the crawl inventory it takes
+# first so the site-wide items have an input. Only the skeleton was listed here, and
+# the inventory was committed twice over — a crawl of the local fixture server in
+# 0.9.0, which then sat in `scripts/` unread for fifteen releases, and a crawl of a
+# client's live site in 0.25.0, every URL, title and meta description of it. Same
+# drift as the audit outputs above, one directory over, which is also why the test
+# that guards those said nothing: it compared filenames against paths, so it could
+# only see the top of the checkout. It now reads these literals out of the tool and
+# compares by basename.
 probe-raw.json
+probe-inventory.json
 
 # The live-path check in .github/workflows/ci.yml, run by hand. Reproducing that
 # step locally is the only way to know whether it will pass, so it is worth doing

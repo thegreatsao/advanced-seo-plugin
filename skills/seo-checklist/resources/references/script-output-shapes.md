@@ -11,9 +11,10 @@ Check the section before writing a rule.
 
 Machine-probed JSON structure of the evidence scripts, captured by running each one
 with `--json` against a live URL (https://www.plerdy.com/seo-checklist/, WordPress).
-The Search Console scripts were probed separately against a property the key can
-read (`sc-domain:greenvalleymoletai.lt`), since they address a property rather than
-the audited URL. `checklist.json` assert rules are written against these paths —
+The Search Console scripts were probed separately against a private property the key
+is verified on (`sc-domain:<client-domain>`), since they address a property rather than
+the audited URL. Which property is deliberately not written down: it belongs to a
+client, and nothing in these shapes depends on whose site it was. `checklist.json` assert rules are written against these paths —
 re-probe with `tools/probe_shapes.py` after changing any script's output contract.
 
 ```bash
@@ -475,7 +476,8 @@ than fetching them.
 
 ### gsc_cannibalization.py
 
-Requires `gsc` capability. Probed against `sc-domain:greenvalleymoletai.lt`.
+Requires `gsc` capability. Probed against the private property described at the top
+of this file.
 
 `property` — str
 `period.start` / `period.end` — str (`YYYY-MM-DD`)

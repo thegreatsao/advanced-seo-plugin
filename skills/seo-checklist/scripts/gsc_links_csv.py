@@ -153,7 +153,7 @@ def analyze(path: str, site: str = "") -> dict:
     brand_squashed = squash(brand)
     for a in anchors:
         text = a["name"].strip().lower()
-        # "green valley" should count as branded for greenvalleymoletai.lt, so
+        # "river bend" should count as branded for riverbendcafe.example, so
         # compare with spacing and punctuation removed in both directions.
         squashed = squash(text)
         branded = bool(brand_squashed) and bool(squashed) and (

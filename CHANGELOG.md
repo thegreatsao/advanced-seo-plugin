@@ -73,6 +73,27 @@ of them gain `scores_with`, SP-112 and SP-113 lose warn bands that came from rea
 three-band rating on one metric. No item added or removed, no severity changed. 662 -> 664
 tests.
 
+**Correction, after the release: this release committed a client site's crawl.** Verifying
+the new assertions meant re-probing, `tools/probe_shapes.py` writes two files, and
+`.gitignore` listed one of them — so `probe-inventory.json`, 224KB of one audited site's
+URLs, titles and meta descriptions, went into `681f952` and was published. It is out of the
+index, along with a second copy under `scripts/` that a fixture-server probe left behind in
+0.9.0 and nothing has read since. **The history still carries both:** removing a file from
+the index does not remove it from the commits that added it.
+
+`AnAuditDoesNotCommitItself` is the test that exists to prevent exactly this, and it passed
+throughout, for two reasons, both now fixed. It read the audit scripts' argparse defaults
+and no tool's. And it compared bare filenames against `git ls-files` **paths**, so it could
+only ever see an output committed at the top of the checkout — neither copy was. It now
+reads the probe's own `probe-*.json` literals and compares by basename, and it fails on
+either file being staged, which was checked by staging them.
+
+The client domain is also out of the two places it had been written by hand:
+`script-output-shapes.md` now says what *kind* of property the Search Console scripts were
+probed against without naming it, and `gsc_links_csv.py`'s branded-anchor example uses a
+reserved `.example` name. The `GV_SA_KEY` / `gv-sa-key.json` credential paths keep their
+spelling — that is a local file an operator has to keep working, and it names no domain.
+
 ## 0.24.0 — 6 August 2026
 
 **Three defects in the deliverable, all of the same shape: a field written by one layer
