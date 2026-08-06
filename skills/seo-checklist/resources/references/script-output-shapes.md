@@ -1,4 +1,4 @@
-<!-- Updated: 2026-08-05 -->
+<!-- Updated: 2026-08-06 -->
 # Script output shapes
 
 All 57 scripts the registry runs are documented here, plus `site_crawl.py`, which
@@ -515,10 +515,24 @@ Requires `gsc` capability.
 `sitemaps[]` — array
   - item keys: path, type, last_submitted, last_downloaded, is_pending, errors,
     warnings, contents[]
+`issues[]` — array  (**probed empty**: the property's one sitemap reports
+  `errors = "0"`, `warnings = "0"`, so there was nothing to list. Item keys are from
+  `detect_issues` in the script and are exercised by
+  `tests/test_translated_sites.py`, not by this probe — the only entry here whose
+  item keys a probe has not seen.)
+  - item keys: type, severity, sitemap, finding, fix, plus `errors` or `warnings`
+`issues` — **absent entirely** when the sitemap report could not be read, so the item
+  reading it is `NO_DATA` rather than passing on an empty answer. `detect_issues`
+  returns `None` for that case and the key is omitted; an empty array means "read it,
+  nothing wrong".
 
 **Severity here is capitalised** (`"High"`, not `"high"`) — unlike every other
-script. `none_severity` lowercases both sides, so existing rules match; a rule
-written with a raw string comparison would silently never fire.
+script — *except* in `issues[]`, which 0.23.0 added in the lower case the rest of the
+tree uses. `none_severity` lowercases both sides, so both match; a rule written with a
+raw string comparison would silently never fire on one of them.
+
+`errors` and `warnings` in `sitemaps[]` are **strings** (`"0"`), which is why
+`detect_issues` coerces them: `s.get("errors", 0) > 0` is true for `"0"`.
 
 ### gsc_links_csv.py
 
@@ -980,9 +994,14 @@ sitemap URL reachable and this check vacuous.
 `metrics.TTFB.unit` — str
 `metrics.TTFB.label` — str
 `metrics.TTFB.rating` — str
-`field_cwv.verdict` — str  (field data only: pass | fail; the key is absent when CrUX has no sample)
-`field_cwv.measured[]` — array
+`field_cwv.verdict` — str  (field data only: pass | fail | unknown; the key is absent
+  when CrUX has no sample. `unknown` means nothing failed but a band was not
+  recognised — no `value_map` maps it, so the item reads `NO_DATA` rather than claiming
+  a pass over a metric nobody here can grade)
+`field_cwv.measured[]` — array  (which of LCP, INP, CLS the verdict is over)
 `field_cwv.failing[]` — array
+`field_cwv.unknown[]` — array  (present only when a rating fell outside
+  good | needs-improvement | poor)
 `opportunities[]` — array
   - item keys: title, savings_ms, description
 `diagnostics[]` — array
