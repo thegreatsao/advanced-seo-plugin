@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.24.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.25.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -536,12 +536,20 @@ name. A column called `url` would be read as "fix this page".
   decided by hand in `SAME_CHECK` and guarded five ways, names the item that scores —
   the higher-severity one, so nothing is quietly downgraded. The twin still runs and
   still reports; it is out of `weight_registry` as well as the score, so the denominator
-  matches. **`SP-111`/`SP-112` are a ninth pair nobody had counted**, found while ruling
-  on the vocabulary list: both assert `performance_score >= 90` under the title *Check
-  Core Web Vitals in Search Console*, and pointing either at the right evidence would
-  make it identical to SP-108. Left open — see the CWV entry below.
+  matches. **`SP-111`/`SP-112` were a ninth pair nobody had counted**, found while ruling
+  on the vocabulary list: both asserted `performance_score >= 90` under the title *Check
+  Core Web Vitals in Search Console*, and pointing either at the right evidence would make
+  it identical to SP-108. **Closed in 0.25.0, and the objection was the answer.** Identical
+  is what `scores_with` is for: SP-112 and SP-113 are declared twins of SP-108, SP-111 takes
+  the desktop call that nothing asserted before, and `SAME_CHECK` gained a list value to
+  hold a group of three instead of a pair.
 
-- **Open — the vocabulary list is ruled on, and four of the rulings are defects.** The
+- **Two of the four rulings closed in 0.25.0. The vocabulary list is ruled on, and two
+  defects remain.** The three Core Web Vitals items now read `field_cwv.verdict` — the
+  entry below is the original finding, and the paragraph after it records what the repair
+  cost. `CI-002` and `IN-127` are untouched.
+
+  The
   42 unreviewed misses are 0. Fourteen were the tool's own fault: `len(w) > 2` dropped
   `h1`, `h2` and `ga4`, and dropping them from the *assertion* side left those items
   with an empty vocabulary, unable to share a word with anything they asserted. The
@@ -558,6 +566,19 @@ name. A column called `url` would be read as "fix this page".
     Core Web Vitals Thresholds* (`critical`) asserts `metrics.LCP.rating` alone — one
     of the three. Repairing them is a redesign of the group, not four edits, which is
     why 0.22 recorded it instead of doing it in the pass that found it.
+
+    **Repaired in 0.25.0, and it was a smaller redesign than it looked.** All three read
+    `field_cwv.verdict`; SP-111 takes the desktop call, SP-112 and SP-113 are twins of
+    SP-108. Two things fell out of it that the entry above did not anticipate. `metrics`
+    carries CrUX when there is field data and **Lighthouse lab audits when there is not**,
+    so SP-113 was a field item on large sites and a lab item on small ones without saying
+    which — a `critical` PASS about Core Web Vitals earned on a lab number, for every site
+    CrUX has never sampled. Those sites now read `NO_DATA`, which is a breaking change and
+    the honest verdict. And `field_cwv_verdict` graded an unrecognised CrUX band as failing
+    (`rating != "good"`), which only mattered once a `critical` item read it: it would have
+    turned SP-113's `NO_DATA` on an unknown band into a FAIL about a page nobody measured.
+    A failure among graded metrics is now reported and a *pass* beside an unknown band is
+    not.
   - **`CI-002`** *Ensure Important Content Is Indexed* asserts `summary.urls >= 1`. A
     sitemap listing one URL passes a site of five hundred pages, and being in a sitemap
     is not being indexed. The floor it actually checks is GO-136's.

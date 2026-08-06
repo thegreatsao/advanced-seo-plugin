@@ -72,15 +72,24 @@ REVIEWED: dict[str, str] = {
               "summary.urls >= 1 — a sitemap listing one URL passes a site of five "
               "hundred pages, and being in a sitemap is not being indexed. The floor "
               "it actually checks (a sitemap exists and is not empty) is GO-136's.",
-    "SP-111": "DEFECT. Titled 'Check Core Web Vitals (Desktop) in Search Console' and "
-              "asserts performance_score >= 90 — the blended Lighthouse score, which "
-              "mixes TBT and Speed Index and is not Core Web Vitals. The script "
-              "already computes the right thing in `field_cwv`, from CrUX, which is "
-              "the data Search Console shows. This item does not read it.",
-    "SP-112": "DEFECT, and the same one as SP-111 with --strategy mobile. Pointing it "
-              "at `field_cwv.verdict` would make it identical to SP-108 in script, "
-              "args and assertion — so it is not a repair, it is a duplicate pair that "
-              "the source checklist listed twice. Belongs with the eight above.",
+    "SP-111": "FIXED (0.25). Was a defect: titled 'Check Core Web Vitals (Desktop) in "
+              "Search Console' and asserted performance_score >= 90, the blended "
+              "Lighthouse score, which mixes TBT and Speed Index and is not Core Web "
+              "Vitals. It now reads `field_cwv.verdict` with --strategy desktop — CrUX "
+              "split by device, which is what Search Console's report shows. Desktop "
+              "field data had no item asserting it before, so this is not a duplicate.",
+    "SP-112": "FIXED (0.25). The same defect as SP-111 with --strategy mobile, and the "
+              "objection to repairing it was right: reading `field_cwv.verdict` makes it "
+              "identical to SP-108 in script, args and assertion. That is what "
+              "`scores_with` is for — it is declared a twin of SP-108 in SAME_CHECK, "
+              "runs once, scores once, and keeps its own title and status.",
+    "SP-113": "FIXED (0.25). Titled 'Meet Core Web Vitals Thresholds' (critical) with a "
+              "fix text naming all three thresholds, it asserted metrics.LCP.rating — "
+              "one metric — so a page failing CLS passed it. Worse, `metrics` carries "
+              "CrUX when field data exists and Lighthouse lab audits when it does not, "
+              "so the item silently switched data source and awarded a critical PASS on "
+              "a lab number for every site CrUX has no sample for. Now `field_cwv."
+              "verdict`, a twin of SP-108.",
     "IN-127": "DEFECT. 'Use a clear international URL structure' asserts "
               "checks.protocol_consistency.passed — whether the hreflang set mixes "
               "http and https. That is worth checking and it is not URL structure; "

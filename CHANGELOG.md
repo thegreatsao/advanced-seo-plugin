@@ -10,6 +10,69 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.25.0 — 6 August 2026
+
+**Three of the five Core Web Vitals items measured something else, and the group is now
+one measurement asked per device.** This is GO-134's defect in the speed category: the
+right title over the wrong field. It was recorded in 0.22 and deferred as "a redesign of
+the group, not four edits", which was true and turned out to be a smaller redesign than it
+looked.
+
+`performance_score` is Lighthouse's blended lab number — it mixes Total Blocking Time and
+Speed Index — and `SP-111` and `SP-112` asserted `>= 90` on it under the titles *Check Core
+Web Vitals (Desktop / Mobile) in Search Console*. On the café audit the site's real users
+were entirely inside the thresholds — LCP 1974ms, INP 159ms, CLS 0.00, every metric green
+in CrUX — and the report told its owner twice, at `high`, to fix Core Web Vitals. The
+threshold was not miscalibrated; `>= 90` is a number nobody here chose, and no value of it
+turns a blended lab score into Core Web Vitals.
+
+Search Console's CWV report **is** CrUX split by device, and `field_cwv.verdict` is exactly
+that. So:
+
+- `SP-111` reads it with `--strategy desktop`. Desktop field data had no item asserting it
+  in this registry before, which makes this the one genuinely new verdict in the change.
+- `SP-112` reads it with `--strategy mobile`, which makes it identical to `SP-108` in
+  script, args and assertion. 0.22's objection to the repair was correct and pointed at the
+  mechanism that already exists for it: it is declared a twin in `SAME_CHECK`, so the call
+  runs once, the weight counts once, and the item keeps its own title and status.
+- `SP-113` *Meet Core Web Vitals Thresholds* (`critical`) asserted `metrics.LCP.rating` —
+  one metric — while its fix text has always named all three, so **a page failing CLS
+  passed an item titled after all of them.** Also a twin of SP-108 now.
+
+`SAME_CHECK` gained a list value to hold a group of three rather than a pair.
+
+**The `metrics` field switches data source, and SP-113 was the item that hid it.** `metrics`
+carries CrUX when CrUX has a sample and Lighthouse's lab audits when it does not. So
+SP-113 was a field item on large sites and a lab item on small ones, without saying which,
+and it awarded a `critical` PASS about *Core Web Vitals* from a lab number to every site
+CrUX has never sampled. **Those sites now get `NO_DATA` where they used to get a critical
+PASS.** That is a breaking change for whoever read the old number, and by this file's own
+rule it is stated rather than smoothed: Core Web Vitals are field metrics by definition,
+"nobody measured this page's real users" is the honest answer, and the lab measurement of
+the same page has its own three items (SP-214 to SP-216) fed from a browser trace.
+
+**An unrecognised CrUX band is no longer graded as a failure.** `field_cwv_verdict` decided
+failing with `rating != "good"`, so a band this code does not know — a new API category, a
+spelling `CRUX_RATING` misses — counted as failing. That was survivable while only SP-108
+read it and became load-bearing here: SP-113 had its own `value_map` and answered `NO_DATA`
+on an unknown band, and routing it through this function would have converted that honesty
+into a `critical` FAIL about a page nobody had measured. Unknown bands are dropped from the
+grading and named in `unknown`, and the two halves are deliberately asymmetric: **a failure
+among the graded metrics is reported** — one bad metric fails the assessment whatever the
+unknown one is — **while a pass is not**, so nothing-failing-plus-an-unknown-band yields
+`verdict: "unknown"`, which no `value_map` maps and every item reads as `NO_DATA`.
+
+**The blended score keeps its place and stops being a verdict.** It is the only speed signal
+that exists for a page CrUX has no sample for, so the runner lifts it per strategy into
+`lab_performance` and both reports print it under *Worth knowing* — the section 0.23.0 built
+for exactly this shape of fact — named as Lighthouse lab, attributed to Google's network
+rather than the site's visitors, and outside the score, the partition and `--fixes`.
+
+Registry `12b5f87a35f7` -> `8372d12db748`: SP-111, SP-112 and SP-113 change assertion, two
+of them gain `scores_with`, SP-112 and SP-113 lose warn bands that came from reading a
+three-band rating on one metric. No item added or removed, no severity changed. 662 -> 664
+tests.
+
 ## 0.24.0 — 6 August 2026
 
 **Three defects in the deliverable, all of the same shape: a field written by one layer

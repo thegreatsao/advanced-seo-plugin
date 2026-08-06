@@ -651,17 +651,32 @@ item(109, "medium", S, "third_party_script_audit.py", PAGE,
 item(110, "medium", S, "critical_request_chain.py", PAGE,
      ISSUES_ANY(),
      "Shorten the critical request chain", warn=NOTHING_SERIOUS())
+# SP-111 to SP-113 asserted the wrong field under the right title, which is GO-134's
+# defect in the speed group: `performance_score` is Lighthouse's blended lab number, it
+# mixes TBT and Speed Index, and it is not Core Web Vitals. Search Console's CWV report is
+# CrUX split by device, and `field_cwv.verdict` is exactly that — so the title and the
+# assertion now agree, and the threshold a verdict rests on is Google's rather than the
+# unmeasured `>= 90` this registry inherited.
+#
+# The blended score did not need a better threshold; it needed to stop being a verdict. It
+# is reported outside the score, beside the Search Console opportunities, for the reason
+# that section exists: worth knowing is not the same claim as failing.
+#
+# Desktop field data is the one genuinely new thing here — nothing in the registry asserted
+# it before. SP-112 and SP-113 become the same call as SP-108 and are declared twins in
+# SAME_CHECK above rather than counted three times.
 item(111, "high", S, "pagespeed.py", ["{url}", "--strategy", "desktop"],
-     {"path": "performance_score", "gte": 90},
-     "Bring desktop Core Web Vitals into the green",
-     {"path": "performance_score", "gte": 50})
+     {"path": "field_cwv.verdict", "value_map": {"pass": "pass", "fail": "fail"}},
+     "Bring desktop Core Web Vitals into the green")
 item(112, "high", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
-     {"path": "performance_score", "gte": 90},
-     "Bring mobile Core Web Vitals into the green",
-     {"path": "performance_score", "gte": 50})
+     {"path": "field_cwv.verdict", "value_map": {"pass": "pass", "fail": "fail"}},
+     "Bring mobile Core Web Vitals into the green")
+# The fix text has always named all three thresholds; the rule tested one of them, so a
+# page failing CLS passed an item titled "Meet Core Web Vitals Thresholds". `field_cwv`
+# grades LCP, INP and CLS together, which is what both the title and the fix promised.
 item(113, "critical", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
-     RATING("LCP"),
-     "LCP < 2.5s, INP < 200ms, CLS < 0.1", warn=RATING_WARN("LCP"))
+     {"path": "field_cwv.verdict", "value_map": {"pass": "pass", "fail": "fail"}},
+     "LCP < 2.5s, INP < 200ms, CLS < 0.1")
 
 # --- 8. Security ------------------------------------------------------------
 item(114, "critical", S, "domain_safety_check.py", PAGE,
@@ -1120,8 +1135,20 @@ SAME_CHECK = {
     "MD-190": "MB-102",   # video SEO (medium) over "Optimize Video for Mobile" (low)
     "TE-166": "MB-104",   # "Add a Favicon" / "Ensure Favicon Displays in Mobile SERPs"
     "SE-116": "TE-171",   # hacked content & malware / blocklist & Safe-Browsing checks
+    # Three entries for one measurement, and the registry asked the question three times
+    # because the source checklists did. SP-108 *Pass Core Web Vitals (Field Data)* is the
+    # one that says what it measures; SP-112 asks it again per device and SP-113 asks it
+    # again by name. All three now read `field_cwv.verdict` from the same mobile call, so
+    # the plan runs it once and the score counts it once. Both twins keep their status and
+    # their own title: a reader looking up "Meet Core Web Vitals Thresholds" gets an
+    # answer. Severity ties at `critical` and the lower id keeps the weight, which is
+    # SP-108 either way.
+    "SP-108": ["SP-112", "SP-113"],
 }
-SCORES_WITH = {twin: primary for primary, twin in SAME_CHECK.items()}
+# A primary may carry more than one twin: `str` for the pairs, `list` for a group.
+SCORES_WITH = {twin: primary
+               for primary, twins in SAME_CHECK.items()
+               for twin in ([twins] if isinstance(twins, str) else twins)}
 
 
 def build() -> list[dict]:

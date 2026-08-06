@@ -845,6 +845,28 @@ def opportunity_phrase(o: dict, L: "Lang") -> tuple[str, str]:
     return found, L.t(fix_key, fix_en)
 
 
+def lab_performance_lines(data: dict, L: "Lang") -> list[str]:
+    """Lighthouse's blended score, named for what it is and kept out of the score.
+
+    Until 0.25.0 SP-111 and SP-112 asserted `performance_score >= 90` under the title
+    *Check Core Web Vitals in Search Console*, so a site whose real users were entirely
+    inside the thresholds — LCP 1974ms, INP 159ms, CLS 0.00 — was told twice, at `high`,
+    to fix Core Web Vitals. The number stays because it is the only speed signal that
+    exists for a page CrUX has no sample for; what it stops being is a verdict.
+    """
+    lab = data.get("lab_performance") or {}
+    if not lab:
+        return []
+    scores = ", ".join(f"{strategy} {score}" for strategy, score in sorted(lab.items()))
+    return ["", L.t("lab_perf",
+                    "**Lighthouse performance score (lab): {scores}.** Not Core Web "
+                    "Vitals and not scored here — it blends Total Blocking Time and "
+                    "Speed Index into one figure, measured once from Google's network "
+                    "rather than from your visitors. Read it as a hint about where to "
+                    "look; the Core Web Vitals verdict is the field data above."
+                    ).format(scores=scores), ""]
+
+
 def opportunity_section(data: dict, L: "Lang | None" = None) -> list[str]:
     """Search Console's opportunities — worth knowing, and not a verdict about anything.
 
@@ -865,8 +887,14 @@ def opportunity_section(data: dict, L: "Lang | None" = None) -> list[str]:
     L = L or Lang()
     opportunities = [o for o in (data.get("gsc_opportunities") or [])
                      if isinstance(o, dict) and o.get("finding")]
-    if not opportunities:
+    lab = data.get("lab_performance") or {}
+    if not opportunities and not lab:
         return []
+    if not opportunities:
+        # The lab score alone still needs the section, and needs a heading that does not
+        # promise Search Console suggestions it does not have.
+        return [f"## {L.t('worth_knowing', 'Worth knowing')}", ""] + \
+            lab_performance_lines(data, L)
     out = [f"## {L.t('opportunities', 'Worth knowing: what Search Console suggests')}", "",
            L.t("opportunities_note",
                "Not defects, and deliberately not scored. Every line is a query this "
@@ -883,6 +911,7 @@ def opportunity_section(data: dict, L: "Lang | None" = None) -> list[str]:
                    f"| {esc_md(str(o.get('page') or '—'))} "
                    f"| {esc_md(found)} "
                    f"| {esc_md(fix or '—')} |")
+    out += lab_performance_lines(data, L)
     if len(opportunities) > OPPORTUNITY_LIMIT:
         out.append("")
         out.append(L.t("opportunities_more",

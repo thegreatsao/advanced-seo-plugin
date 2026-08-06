@@ -940,6 +940,34 @@ def _timed(key: tuple, timeout: int) -> dict:
     return payload
 
 
+def lab_performance(results: dict) -> dict:
+    """Lighthouse's blended performance score per strategy, lifted out of the payloads.
+
+    Until 0.25.0 this number was a verdict: SP-111 and SP-112 asserted `>= 90` under the
+    title *Check Core Web Vitals in Search Console*. It is not Core Web Vitals — it mixes
+    Total Blocking Time and Speed Index into one figure — and `>= 90` is a threshold
+    nobody here chose. Those items now read `field_cwv.verdict`, which is what Search
+    Console's own report shows.
+
+    The number is still worth having, and it exists for pages CrUX has no sample for,
+    which is most small sites. So it goes where the Search Console opportunities go:
+    printed, attributed, and outside the score. A blended lab score is a hint about where
+    to look, and this registry has separate lab items — SP-214 to SP-216, fed from a real
+    browser trace — for measuring the page properly.
+    """
+    out = {}
+    for key, payload in results.items():
+        if key[0] != "pagespeed.py" or not isinstance(payload, dict):
+            continue
+        score = payload.get("performance_score")
+        if score is None:
+            continue
+        args = list(key[1])
+        strategy = args[args.index("--strategy") + 1] if "--strategy" in args else "?"
+        out[strategy] = score
+    return out
+
+
 def gsc_opportunities(results: dict) -> list:
     """The `opportunities[]` gsc_checker.py found, lifted out of its payload.
 
@@ -2806,6 +2834,9 @@ def main() -> int:
         # data would have thrown away the most useful thing GSC returns, so it lives
         # here instead and the report prints it outside the score and the fix list.
         "gsc_opportunities": gsc_opportunities(results),
+        # Reported, never scored — see lab_performance(). In the artifact because no item
+        # asserts on it any more and nothing else in a run would remember it.
+        "lab_performance": lab_performance(results) or None,
         "items": graded,
     }
 

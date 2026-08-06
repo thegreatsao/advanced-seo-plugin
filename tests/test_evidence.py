@@ -558,15 +558,15 @@ class PageSpeed(unittest.TestCase):
         import pagespeed
         self.ps = pagespeed
 
-    def crux(self, lcp_category="FAST"):
+    def crux(self, lcp_category="FAST", inp_category="FAST", cls_category="FAST"):
         return {
             "loadingExperience": {"metrics": {
                 "LARGEST_CONTENTFUL_PAINT_MS": {"percentile": 1800,
                                                 "category": lcp_category},
                 "INTERACTION_TO_NEXT_PAINT": {"percentile": 120,
-                                              "category": "FAST"},
+                                              "category": inp_category},
                 "CUMULATIVE_LAYOUT_SHIFT_SCORE": {"percentile": 5,
-                                                  "category": "FAST"},
+                                                  "category": cls_category},
                 "FIRST_CONTENTFUL_PAINT_MS": {"percentile": 1200,
                                               "category": "FAST"},
             }},
@@ -604,7 +604,16 @@ class PageSpeed(unittest.TestCase):
         self.assertEqual(out["metrics"]["LCP"]["rating"], "good")
         ok, _ = evaluate({"path": "metrics.LCP.rating", "eq": "fast"}, out)
         self.assertIs(ok, False, "the retired rule still fails a fast page")
-        self.assertEqual(verdict("SP-113", out), PASS)
+        # 0.25.0 changed this deliberately, and it is a breaking change worth naming:
+        # SP-113 used to PASS here. `metrics` carries CrUX when there is field data and
+        # Lighthouse's lab audits when there is not, so an item reading `metrics.LCP`
+        # switched data source without saying so — a `critical` PASS about "Core Web
+        # Vitals", earned on a lab number, on exactly the small sites CrUX has no sample
+        # for. Core Web Vitals are field metrics by definition; with no field data the
+        # honest verdict is the one SP-108 already gave, and the lab measurement of this
+        # same page has its own items (SP-214 to SP-216) fed from a browser trace.
+        self.assertEqual(verdict("SP-113", out), NO_DATA)
+        self.assertEqual(verdict("SP-108", out), NO_DATA)
 
     def test_no_field_data_leaves_sp_108_undecided(self):
         """"CrUX has no sample for this URL" is not "real users had a bad time".
@@ -614,24 +623,57 @@ class PageSpeed(unittest.TestCase):
         self.assertNotIn("field_cwv", out)
         self.assertEqual(verdict("SP-108", out), NO_DATA)
 
-    def test_a_slow_lcp_in_the_field_fails_and_a_borderline_one_warns(self):
+    def test_a_slow_lcp_in_the_field_fails_the_whole_group(self):
+        """SP-108, SP-112 and SP-113 are one measurement as of 0.25.0, so they answer
+        together. SP-113 used to read `metrics.LCP.rating` alone with a three-band warn
+        in the middle; Google's own assessment has no middle — a URL passes only when all
+        of LCP, INP and CLS are `good` — and the middle band came from grading one metric
+        instead of three."""
         slow = self.parse(self.crux(lcp_category="SLOW"))
         self.assertEqual(slow["metrics"]["LCP"]["rating"], "poor")
-        self.assertEqual(verdict("SP-113", slow), FAIL)
         self.assertEqual(slow["field_cwv"]["verdict"], "fail")
         self.assertEqual(slow["field_cwv"]["failing"], ["LCP"])
-        self.assertEqual(verdict("SP-108", slow), FAIL)
+        for item in ("SP-108", "SP-112", "SP-113"):
+            self.assertEqual(verdict(item, slow), FAIL, item)
 
         middling = self.parse(self.crux(lcp_category="AVERAGE"))
         self.assertEqual(middling["metrics"]["LCP"]["rating"], "needs-improvement")
-        self.assertEqual(verdict("SP-113", middling), WARN)
+        self.assertEqual(middling["field_cwv"]["verdict"], "fail")
+        self.assertEqual(verdict("SP-113", middling), FAIL)
+
+    def test_desktop_field_data_is_asserted_by_its_own_item(self):
+        """SP-111's whole point after 0.25.0: nothing in the registry read desktop field
+        data before, because it read Lighthouse's blended desktop score instead."""
+        with open(REGISTRY, encoding="utf-8") as f:
+            registry = {i["id"]: i for i in json.load(f)["items"]}
+        self.assertIn("desktop", registry["SP-111"]["check"]["args"])
+        self.assertEqual(registry["SP-111"]["check"]["assert"]["path"],
+                         "field_cwv.verdict")
+        self.assertIsNone(registry["SP-111"].get("scores_with"),
+                          "desktop field data is not a twin of the mobile item")
 
     def test_an_unknown_rating_is_undecided(self):
-        """The reason these use `value_map`: a band nobody enumerated must not
-        become a verdict. If the API adds a category, the item says so."""
+        """A band nobody enumerated must not become a verdict. `rating != "good"` made
+        one: an unrecognised band graded as failing, which 0.25.0 would have promoted
+        into a `critical` FAIL when SP-113 started reading this verdict. It is dropped
+        from the grading and named in `unknown` instead."""
         out = self.parse(self.crux(lcp_category="GLACIAL"))
         self.assertEqual(out["metrics"]["LCP"]["rating"], "glacial")
-        self.assertEqual(verdict("SP-113", out), NO_DATA)
+        self.assertEqual(out["field_cwv"]["verdict"], "unknown")
+        self.assertEqual(out["field_cwv"]["unknown"], ["LCP"])
+        self.assertEqual(out["field_cwv"]["measured"], ["CLS", "INP"])
+        for item in ("SP-108", "SP-112", "SP-113"):
+            self.assertEqual(verdict(item, out), NO_DATA, item)
+
+    def test_a_known_failure_is_reported_even_beside_an_unknown_band(self):
+        """The asymmetry, and it is the point. One bad metric fails the assessment
+        whatever the unrecognised one turns out to be, so the failure is safe to report —
+        while a *pass* beside an unknown band is not, which is the case above."""
+        out = self.parse(self.crux(lcp_category="GLACIAL", cls_category="SLOW"))
+        self.assertEqual(out["field_cwv"]["verdict"], "fail")
+        self.assertEqual(out["field_cwv"]["failing"], ["CLS"])
+        self.assertEqual(out["field_cwv"]["unknown"], ["LCP"])
+        self.assertEqual(verdict("SP-108", out), FAIL)
 
 
 class DomainSafety(unittest.TestCase):

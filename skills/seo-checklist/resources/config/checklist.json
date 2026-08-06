@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "12b5f87a35f7",
+  "registry_version": "8372d12db748",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -2267,12 +2267,11 @@
         ],
         "requires": "api",
         "assert": {
-          "path": "performance_score",
-          "gte": 90
-        },
-        "warn": {
-          "path": "performance_score",
-          "gte": 50
+          "path": "field_cwv.verdict",
+          "value_map": {
+            "pass": "pass",
+            "fail": "fail"
+          }
         }
       },
       "effort": "medium",
@@ -2295,16 +2294,16 @@
         ],
         "requires": "api",
         "assert": {
-          "path": "performance_score",
-          "gte": 90
-        },
-        "warn": {
-          "path": "performance_score",
-          "gte": 50
+          "path": "field_cwv.verdict",
+          "value_map": {
+            "pass": "pass",
+            "fail": "fail"
+          }
         }
       },
       "effort": "medium",
-      "fix": "Bring mobile Core Web Vitals into the green"
+      "fix": "Bring mobile Core Web Vitals into the green",
+      "scores_with": "SP-108"
     },
     {
       "id": "SP-113",
@@ -2323,24 +2322,16 @@
         ],
         "requires": "api",
         "assert": {
-          "path": "metrics.LCP.rating",
+          "path": "field_cwv.verdict",
           "value_map": {
-            "good": "pass",
-            "needs-improvement": "fail",
-            "poor": "fail"
-          }
-        },
-        "warn": {
-          "path": "metrics.LCP.rating",
-          "value_map": {
-            "good": "pass",
-            "needs-improvement": "pass",
-            "poor": "fail"
+            "pass": "pass",
+            "fail": "fail"
           }
         }
       },
       "effort": "medium",
-      "fix": "LCP < 2.5s, INP < 200ms, CLS < 0.1"
+      "fix": "LCP < 2.5s, INP < 200ms, CLS < 0.1",
+      "scores_with": "SP-108"
     },
     {
       "id": "SE-114",

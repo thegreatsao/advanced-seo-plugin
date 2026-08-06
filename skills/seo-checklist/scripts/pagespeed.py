@@ -102,19 +102,56 @@ CRUX_RATING = {"fast": "good", "average": "needs-improvement", "slow": "poor"}
 CORE_WEB_VITALS = ("LCP", "INP", "CLS")
 
 
+# The three bands CrUX and Lighthouse both grade in, after CRUX_RATING has normalised
+# them. Anything outside this set is a band nobody here enumerated.
+KNOWN_RATINGS = ("good", "needs-improvement", "poor")
+
+
 def field_cwv_verdict(metrics: dict) -> dict | None:
     """Whether real users passed Core Web Vitals — or None when nobody can say.
 
     Returns None when the field data covers none of the three, so the item reading
     this reports NO_DATA. "CrUX has no sample for this URL" is not "the site is
     slow": it usually means the site is small, and SP-108 used to fail it for that.
+
+    **A rating this code does not recognise is not a failure.** `rating != "good"` used
+    to make one: if the API adds a band, or `CRUX_RATING` misses a spelling, the metric
+    was silently graded as failing. It became load-bearing in 0.25.0, when SP-111 to
+    SP-113 stopped reading Lighthouse's blended score and started reading this verdict —
+    SP-113 had its own `value_map` and answered `NO_DATA` on an unrecognised band, and
+    routing it through here would have turned that honesty into a `critical` FAIL on a
+    page nobody had measured. An unrecognised band is dropped from the grading and named
+    in `unknown`, so an item reads `NO_DATA` when that is all there was.
+
+    Pass is over the metrics that *were* graded, and `measured` says which. CrUX
+    publishes no INP for a URL with few interactions, and refusing to answer at all
+    there would throw away a verdict about LCP and CLS that Google itself reports.
+
+    The two halves are deliberately not symmetric. **A failure among the graded metrics
+    is safe to report** — one bad metric fails the assessment whatever the unrecognised
+    one turns out to be. **A pass is not**, so an unrecognised band with nothing failing
+    yields `verdict: "unknown"`, which no `value_map` maps and every item reading it
+    reports as `NO_DATA`. Saying "Core Web Vitals passed" while one of the three is a
+    word this code does not know would be the fabrication the whole field-data rule was
+    written to stop.
     """
-    graded = {k: metrics[k] for k in CORE_WEB_VITALS if k in metrics}
-    if not graded:
+    present = {k: metrics[k] for k in CORE_WEB_VITALS if k in metrics}
+    unknown = sorted(k for k, m in present.items()
+                     if m.get("rating") not in KNOWN_RATINGS)
+    graded = {k: m for k, m in present.items() if k not in unknown}
+    if not graded and not unknown:
         return None
     failing = sorted(k for k, m in graded.items() if m.get("rating") != "good")
-    return {"verdict": "fail" if failing else "pass",
-            "measured": sorted(graded), "failing": failing}
+    if failing:
+        verdict = "fail"
+    elif unknown or not graded:
+        verdict = "unknown"
+    else:
+        verdict = "pass"
+    out = {"verdict": verdict, "measured": sorted(graded), "failing": failing}
+    if unknown:
+        out["unknown"] = unknown
+    return out
 
 
 def parse_pagespeed_response(data: dict[str, Any], url: str, strategy: str = "mobile") -> dict:
