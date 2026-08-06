@@ -153,7 +153,7 @@ resolves itself in a month and until then occupies a line in the fix list, and a
 nobody can do teaches the reader to skim. That looked like the case for a new bucket.
 But age is neither history nor reputation, and `domain_safety_check.py` already reports
 reputation: age was a proxy reached for because the real signal needs a key. It now
-asserts `safe_browsing.matches`, so a clean domain passes at any age, a listed one fails
+asserts `safe_browsing.threats`, so a clean domain passes at any age, a listed one fails
 at any age, and with no `GOOGLE_SAFE_BROWSING_KEY` the field is absent — `NO_DATA`, "we
 could not look", which this vocabulary has always been able to say.
 
