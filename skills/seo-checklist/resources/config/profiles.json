@@ -26,7 +26,21 @@
         "faceted_nav_audit.py",
         "collection_page_checker.py"
       ],
-      "exclude_items": []
+      "exclude_items": [
+        "CN-056",
+        "CN-057"
+      ],
+      "exclude_item_reasons": {
+        "CN-056": "publication and updated dates are an editorial-content signal; a service page for a physical business has no publication date to show",
+        "CN-057": "an author byline is an editorial-content signal; the publisher of a local business page is the business, which LocalBusiness structured data already states"
+      },
+      "script_args": {
+        "duplicate_content.py": [
+          "--thin-words",
+          "150"
+        ]
+      },
+      "script_args_note": "A service page for a physical business says what it does, what it costs and where it is, and then stops. 300 words is the inherited default for a page with something to explain; measured against a real local site it called eight normal service pages thin (menu 189 words, blueberries 220, petting zoo 232) and buried the three that genuinely are (galleries, 74-94 words). 150 fails those three and passes the eight."
     },
     "ecommerce": {
       "label": "Online store",

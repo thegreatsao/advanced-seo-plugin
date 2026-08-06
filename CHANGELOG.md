@@ -10,6 +10,109 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.24.0 — 6 August 2026
+
+**Three defects in the deliverable, all of the same shape: a field written by one layer
+and never read by the next.** 0.23.0's own new section was one of them, which is the
+argument for reviewing a release against a real report rather than against its diff.
+
+**A synonym pair was one row in the score and two rows in the task list.** `scores_with`
+arrived in 0.22.0 so a single defect could not pull the headline down twice — and
+`checklist_report.py` never read that field, not once. So on the 0.23.0 audit one image
+missing an `alt` still produced *Provide Meaningful Image Alt Text* (CI-016) at priority
+6.0 and *Provide Meaningful Alt Text* (MD-186) at 3.0, both `high`, four rows apart in
+the same "what to do first" list and both in `--fixes`. A wrong score is one wrong
+number; a task list with a duplicate sends two people to the same image, or teaches the
+reader that the list has filler in it.
+
+`twins_folded()` folds synonyms in exactly the two places a reader is asked to *act* —
+the priority list and the fix export — and deliberately nowhere else. The full checklist
+still prints every item with its own status, because the twin genuinely ran and its
+verdict is part of the audit log; folding it there would make the registry's item count
+stop adding up. Which half survives is decided before the walk rather than by list order:
+the scoring id is the one the score, the diff and the history all name, so it is the one a
+reader who looks it up will find. Ordering happened to give the right answer for CI-016 /
+MD-186, and "happened to" is not a rule.
+
+**0.23.0's new section spoke English inside a Russian report.** `gsc_checker.py` composes
+`finding` and `fix` as sentences at run time, and the section printed them verbatim, so a
+`--lang ru` report carried seven English rows. Item titles and registry fixes have a door
+into the language file through `item_titles` / `item_fixes`; a string a script wrote has
+no such door, and this section was the first time anything in a report came from one.
+`OPPORTUNITY_PHRASE` keys on the opportunity's `type` — a stable identifier, never the
+sentence — and rebuilds it from `position`, `ctr` and `impressions`, which are already
+separate fields beside it. An unknown type falls back to what the script said, in English:
+worse than a translation, much better than an empty cell. A test asserts every type
+`detect_opportunities` can emit has a phrase, so adding a fourth one there cannot silently
+ship English.
+
+**A test skipped itself for eleven releases while reporting that there was nothing to
+test.** `test_the_property_string_is_passed_through_untouched` probed
+`hasattr(gsc_checker, "fetch_search_analytics")` — a name the module has never had — and
+on failing to find it skipped with *"gsc_checker has no single-call entry point to
+exercise"*. The entry point is `get_performance_data`, and `main()` calls it. A probe for a
+function that does not exist reports the **subject** as missing, and the suite printed
+`OK (skipped=1)` over an untested call into Search Console. It now exercises the real
+function and asserts both the property string and the parsed rows. The suite has no skips.
+
+**`KNOWN-ISSUES.md` was carrying two stale entries, in the file whose whole purpose is an
+honest ledger.** CI-019 was listed `Open` three releases after 0.21.0 fixed it — it
+reports `PASS` on the same café now. The duplicate-items entry said "both halves score",
+which stopped being true in 0.22.0 and was replaced by a defect it did not mention: the
+weight was deduplicated and the reader's list was not. Both corrected at the top of their
+entries rather than at the end, because that section is what a person reads before
+defending a verdict to a client.
+
+What stays open from the CI-019 entry is the half worth keeping: **no fixture here was
+built without consulting the registry, and that is where these keep coming from.** Four
+items have now been found by auditing a real site — CI-019, CN-053, GO-134, BL-081 — and
+zero by the good-site sweep. Two of the four are invisible on any monolingual fixture, and
+every fixture here is monolingual.
+
+**A profile can now say what a kind of site is measured *against*, not only which items
+are out of scope for it.** Three findings on the café audit were properties of the
+checklist rather than defects of the site, and all three came from one assumption: that a
+page has something to explain.
+
+- `CN-039` *Eliminate Low-Value/Thin Pages* reported **14 thin pages of 24** against the
+  inherited 300-word default. A service page for a physical business says what it does,
+  what it costs and where it is, and then stops: the menu is 189 words, the blueberry page
+  220, the petting zoo 232. The three pages a person would actually call thin — the
+  galleries, 74 to 94 words — were buried in a list of eleven that were fine.
+- `CN-056` *Show Publication and Updated Dates* and `CN-057` *Show Author and Publisher
+  Clearly* (`high`) are editorial-content signals. A café's grill page has no publication
+  date and no byline, and adding either would be theatre.
+
+`profiles.json` gains `script_args`, and `local` passes `duplicate_content.py
+--thin-words 150`. It lands in **argv**, which matters: the number is in the run log, two
+profiles produce two different plan keys, and `duplicate_content.py` echoes it into
+`summary.thin_words_threshold` so a verdict says what it was measured against. A moved
+threshold no evidence string mentions is worse than a wrong threshold. On the café: 14
+FAIL -> **3 WARN**, and the three are the galleries.
+
+The 150 is not a better guess than the 300 — it is a number chosen against an observed
+site and it says so. Both are `convention`; neither is `measured`. What changed is that
+the checklist stops asking a five-page local business to write like a blog.
+
+`exclude_items` gains `exclude_item_reasons`, and a test refuses an exclusion without one.
+An exclusion by category names the category, an exclusion by script names the script, and
+an exclusion by id used to say only *"excluded by profile"* — the one exclusion a reader
+cannot reconstruct, on the only surface where narrowing scope has to argue for itself.
+**Narrowing scope is the one operation here that raises the score**, and on this audit it
+did: 83/100 over 128 items became 85/100 over 126. Two points of that is scope, not the
+site, and the report's own diff says which items left.
+
+`CN-068` *Strengthen Authorship & E-E-A-T Signals* was left failing on purpose. E-E-A-T
+for a local business is real — an owner with a name, an address, reviews, a history — and
+excluding it would be the exclusion this mechanism exists to prevent.
+
+Also recorded rather than fixed: `THIN_CONTENT_THRESHOLDS` holds five entries and only
+`["default"]` has ever been read, because the page-type detection the other four need does
+not exist. `location_page: 350` has been dead since import.
+
+Registry unchanged at `12b5f87a35f7`: no item changed its assertion. 643 -> 662 tests, and
+one of the 643 was a skip that is now a test.
+
 ## 0.23.0 — 6 August 2026
 
 **Two items reported the wrong thing, and both were found by auditing a real site

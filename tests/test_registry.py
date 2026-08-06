@@ -525,6 +525,37 @@ class Profiles(unittest.TestCase):
             for i in p["exclude_items"]:
                 self.assertIn(i, ids, f"{name} excludes unknown item {i}")
 
+    def test_every_excluded_item_says_why(self):
+        """An exclusion by category names the category and one by script names the
+        script. An exclusion by id has nothing a reader can reconstruct, so the profile
+        has to say it: narrowing scope is the one operation in this tool that raises the
+        score, and it must argue for itself on the surface where it happens."""
+        for name, p in self.profiles.items():
+            reasons = p.get("exclude_item_reasons") or {}
+            for i in p["exclude_items"]:
+                self.assertIn(i, reasons, f"{name} excludes {i} with no reason given")
+                self.assertGreater(len(reasons[i]), 30,
+                                   f"{name}'s reason for {i} is too short to be one")
+            for i in reasons:
+                self.assertIn(i, p["exclude_items"],
+                              f"{name} explains {i}, which it does not exclude")
+
+    def test_profile_script_args_name_scripts_the_registry_uses(self):
+        """A threshold moved for a script no item runs moves nothing, silently."""
+        scripts = {(i.get("check") or {}).get("script") for i in ITEMS} - {None}
+        for name, p in self.profiles.items():
+            for script, extra in (p.get("script_args") or {}).items():
+                self.assertIn(script, scripts,
+                              f"{name} passes args to unused script {script}")
+                self.assertTrue(extra, f"{name} passes an empty arg list to {script}")
+                self.assertTrue(all(isinstance(a, str) for a in extra))
+
+    def test_a_profile_that_moves_a_threshold_explains_it(self):
+        for name, p in self.profiles.items():
+            if p.get("script_args"):
+                self.assertGreater(len(p.get("script_args_note", "")), 60,
+                                   f"{name} moves a threshold without saying why")
+
     def test_no_profile_excludes_a_critical_item(self):
         """Profiles narrow scope; they must not be a way to hide hard failures."""
         sys.path.insert(0, SCRIPTS)

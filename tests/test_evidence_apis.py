@@ -419,11 +419,14 @@ class SearchConsoleSummary(unittest.TestCase):
         site with no search traffic. The registrable-domain fix lives in the runner;
         this asserts the script does not re-derive one of its own.
         """
-        service = _Query(rows=[{"keys": ["q"], "clicks": 1, "impressions": 2,
-                                "ctr": 0.5, "position": 1.0}])
-        rows = self.mod.fetch_search_analytics(
-            service, "sc-domain:example.com", ["query"], 28) \
-            if hasattr(self.mod, "fetch_search_analytics") else None
-        if rows is None:
-            self.skipTest("gsc_checker has no single-call entry point to exercise")
+        service = _Query(rows=[{"keys": ["q", "https://example.com/"], "clicks": 1,
+                                "impressions": 2, "ctr": 0.5, "position": 1.0}])
+        # `get_performance_data`, not `fetch_search_analytics`. This test skipped itself
+        # for eleven releases on `hasattr(mod, "fetch_search_analytics")` — a name the
+        # module never had — and said so as "gsc_checker has no single-call entry point to
+        # exercise", which was false: `main()` calls this one. A probe for a function that
+        # does not exist reports the *subject* as missing, and the suite printed
+        # "OK (skipped=1)" over an untested call into Search Console.
+        result = self.mod.get_performance_data(service, "sc-domain:example.com", days=28)
         self.assertEqual(service.calls[0][1], "sc-domain:example.com")
+        self.assertEqual([r["query"] for r in result["data"]], ["q"])

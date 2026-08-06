@@ -419,6 +419,58 @@ FIX_COLUMNS = ("id", "status", "severity", "effort", "priority", "category",
                "title", "what_to_do", "evidence", "audited_url")
 
 
+def twins_folded(items: list[dict], keep_status: tuple = FIX_STATUSES) -> list[dict]:
+    """One row per piece of work, for the two lists a reader acts on.
+
+    `scores_with` marks an item as a synonym of another: two registry entries asking one
+    question, kept because both source checklists asked it, with only one of them
+    carrying weight. 0.22 built that so a single defect could not pull the headline down
+    twice, and stopped there — the scorer consults `scores_with` and **nothing in this
+    file ever did**. So the weight was right and the reader still saw the work twice: one
+    image missing an `alt` produced *Provide Meaningful Image Alt Text* (CI-016) at
+    priority 6.0 and *Provide Meaningful Alt Text* (MD-186) at 3.0, both `high`, in the
+    same "what to do first" list and the same `--fixes` export.
+
+    Two rows for one job is worse in a task list than in a score. A score that is wrong
+    is one wrong number; a fix list with a duplicate sends two people to the same image,
+    or teaches the reader that the list contains filler.
+
+    Folded only where a reader is being asked to *do* something — the priority list and
+    the fix export. The full checklist still prints every item with its own status,
+    because the twin genuinely ran and its verdict is part of the audit log; hiding it
+    there would make the registry's item count stop adding up.
+
+    The survivor is the item that carries the weight, i.e. the one nothing points at.
+    When the twin has the more informative status the fold still keeps the scoring item,
+    because that is the one the score, the diff and the history all name.
+    """
+    # `scores_with` points from the silent twin to the scoring one, so following it once
+    # is enough; a chain would be a registry defect and a test forbids it. Which id
+    # survives is decided before the walk rather than by list order: the scoring item is
+    # the one the score, the diff and the history all name, so a reader who looks it up
+    # finds it. Ordering happened to give the right answer here — CI-016 sorts before
+    # MD-186 — and "happened to" is not a rule.
+    listed = {i["id"] for i in items if i["status"] in keep_status}
+    survivor = {}
+    for item in items:
+        if item["status"] not in keep_status:
+            continue
+        anchor = item.get("scores_with") or item["id"]
+        survivor.setdefault(anchor, anchor if anchor in listed else item["id"])
+
+    folded, taken = [], set()
+    for item in items:
+        if item["status"] not in keep_status:
+            folded.append(item)
+            continue
+        anchor = item.get("scores_with") or item["id"]
+        if anchor in taken or item["id"] != survivor[anchor]:
+            continue
+        taken.add(anchor)
+        folded.append(item)
+    return folded
+
+
 def fix_rows(data: dict) -> list[dict]:
     """The actionable items, flat, ordered the way the report orders them.
 
@@ -435,7 +487,7 @@ def fix_rows(data: dict) -> list[dict]:
     `url` column a reader would reasonably misread as "fix this page".
     """
     rows = []
-    for item in data.get("items", []):
+    for item in twins_folded(data.get("items", [])):
         if item["status"] not in FIX_STATUSES:
             continue
         rows.append({
@@ -740,6 +792,59 @@ def provenance_warnings(data: dict, L: "Lang | None" = None) -> list[str]:
     return out
 
 
+# Each opportunity's own words, rebuilt from its `type` and its numbers.
+#
+# `gsc_checker.py` writes `finding` and `fix` as English sentences and 0.23.0 printed them
+# straight into the report, so a Russian report carried seven English rows. Item titles and
+# registry fixes go through `item_titles` / `item_fixes` in the language file; a string a
+# script composed at run time has no such door, and this section was the first time
+# anything in a report came from one.
+#
+# Keyed on `type`, which is a stable identifier, never on the sentence. `position`, `ctr`
+# and `impressions` are separate fields beside it, so the sentence is rebuilt rather than
+# parsed. An unknown type falls back to whatever the script said, in English — worse than
+# a translation, much better than an empty cell.
+OPPORTUNITY_PHRASE = {
+    "striking_distance": (
+        ("opp_striking", "Position {position} with {impressions} impressions — within "
+                         "striking distance."),
+        ("opp_striking_fix", "Optimise the page for this query: put it in the H1 or an "
+                             "H2, answer it in more depth, link to the page from "
+                             "elsewhere on the site."),
+    ),
+    "low_ctr_top_position": (
+        ("opp_low_ctr", "Position {position} but only {ctr}% of searchers click — "
+                        "something above the result is answering for you."),
+        ("opp_low_ctr_fix", "Answer the query in 40-55 words directly under a heading, "
+                            "and rewrite the title and description to say what the page "
+                            "gives."),
+    ),
+    "high_impressions_low_ctr": (
+        ("opp_high_imps", "{impressions} impressions and {ctr}% clicks — the title and "
+                          "description are not earning the click."),
+        ("opp_high_imps_fix", "Rewrite the title so it names both the thing and the "
+                              "benefit, and make the description promise what the page "
+                              "delivers."),
+    ),
+}
+
+
+def opportunity_phrase(o: dict, L: "Lang") -> tuple[str, str]:
+    """One opportunity's finding and fix, in the reader's language where there is one."""
+    phrase = OPPORTUNITY_PHRASE.get(str(o.get("type") or ""))
+    if not phrase:
+        return str(o.get("finding") or ""), str(o.get("fix") or "")
+    (found_key, found_en), (fix_key, fix_en) = phrase
+    numbers = {k: o.get(k, "?") for k in ("position", "ctr", "impressions")}
+    try:
+        found = L.t(found_key, found_en).format(**numbers)
+    except (KeyError, IndexError, ValueError):
+        # A translation carrying a placeholder this data has no field for must not lose
+        # the row. The English sentence the script wrote is still true.
+        found = str(o.get("finding") or "")
+    return found, L.t(fix_key, fix_en)
+
+
 def opportunity_section(data: dict, L: "Lang | None" = None) -> list[str]:
     """Search Console's opportunities — worth knowing, and not a verdict about anything.
 
@@ -773,10 +878,11 @@ def opportunity_section(data: dict, L: "Lang | None" = None) -> list[str]:
            f"| {L.t('query', 'Query')} | {L.t('page', 'Page')} | {L.t('finding', 'What it says')} "
            f"| {L.t('what_to_do', 'What to do')} |", "|---|---|---|---|"]
     for o in opportunities[:OPPORTUNITY_LIMIT]:
+        found, fix = opportunity_phrase(o, L)
         out.append(f"| {esc_md(str(o.get('query') or '—'))} "
                    f"| {esc_md(str(o.get('page') or '—'))} "
-                   f"| {esc_md(str(o.get('finding')))} "
-                   f"| {esc_md(str(o.get('fix') or '—'))} |")
+                   f"| {esc_md(found)} "
+                   f"| {esc_md(fix or '—')} |")
     if len(opportunities) > OPPORTUNITY_LIMIT:
         out.append("")
         out.append(L.t("opportunities_more",
@@ -902,7 +1008,10 @@ def render_markdown(data: dict, L: Lang | None = None) -> str:
         sc = f"{cat['score']}/100" if cat["score"] is not None else "—"
         out.append(f"| {cat['label']} | {sc} | {cat['decided']} | {c.get(FAIL, 0)} |")
 
-    fails = sorted((i for i in data["items"] if i["status"] in (FAIL, WARN)),
+    # Folded, because this list asks the reader to do things and a synonym pair is one
+    # thing. The full checklist below still prints both halves with their own statuses.
+    fails = sorted((i for i in twins_folded(data["items"], (FAIL, WARN))
+                    if i["status"] in (FAIL, WARN)),
                    key=lambda i: (-priority_of(i), SEVERITY_ORDER.get(i["severity"], 9)))
     if fails:
         quick = [i for i in fails if i.get("effort") == "low"]
@@ -1355,7 +1464,8 @@ def render_html(data: dict, L: Lang | None = None) -> str:
         parts.append("</section>")
 
     # -- Layer 3: what to do, as cards ------------------------------------------
-    todo = sorted((i for i in data["items"] if i["status"] in (FAIL, WARN)),
+    todo = sorted((i for i in twins_folded(data["items"], (FAIL, WARN))
+                   if i["status"] in (FAIL, WARN)),
                   key=lambda i: (-priority_of(i), SEVERITY_ORDER.get(i["severity"], 9)))
     if todo:
         quick = [i for i in todo if i.get("effort") == "low"]
@@ -1594,13 +1704,15 @@ def render_html(data: dict, L: Lang | None = None) -> str:
     opportunities = [o for o in (data.get("gsc_opportunities") or [])
                      if isinstance(o, dict) and o.get("finding")]
     if opportunities:
+        phrased = [(o, *opportunity_phrase(o, L))
+                   for o in opportunities[:OPPORTUNITY_LIMIT]]
         rows = "".join(
             f'<div class="row"><div class="sev">GSC</div>'
             f'<div><div class="ttl">{html.escape(str(o.get("query") or "—"))}</div>'
-            f'<div class="ev">{html.escape(str(o.get("finding")))} '
+            f'<div class="ev">{html.escape(found)} '
             f'&middot; {html.escape(str(o.get("page") or ""))}<br>'
-            f'{html.escape(str(o.get("fix") or ""))}</div></div></div>'
-            for o in opportunities[:OPPORTUNITY_LIMIT])
+            f'{html.escape(fix)}</div></div></div>'
+            for o, found, fix in phrased)
         parts.append(fold(
             L.t("opportunities", "Worth knowing: what Search Console suggests"),
             '<p class="note">'

@@ -107,7 +107,8 @@ def duplicate_descriptions(pages: dict) -> list:
 # ---------------------------------------------------------------------------
 
 def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
-                      fetch_error: str | None = None) -> dict:
+                      fetch_error: str | None = None,
+                      thin_words: int | None = None) -> dict:
     """
     Detect exact and near-duplicate pages.
     Returns report with exact dupes, near-dupes, and thin content.
@@ -195,7 +196,12 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
         if data["noindex"]:
             continue
         wc = data["word_count"]
-        threshold = THIN_CONTENT_THRESHOLDS["default"]
+        # Only `["default"]` is ever read: the other four entries in
+        # THIN_CONTENT_THRESHOLDS need a page-type detector that does not exist, so
+        # `location_page: 350` and its neighbours have been unreachable since import.
+        # `thin_words` is how the number actually moves — passed per site profile, and
+        # recorded in `summary` below so a verdict says what it was measured against.
+        threshold = thin_words or THIN_CONTENT_THRESHOLDS["default"]
         if wc < threshold:
             thin_pages.append({
                 "type": "thin_content",
@@ -222,6 +228,10 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
             "exact_duplicate_groups": len(exact_dupes),
             "near_duplicate_pairs": len(near_dupes),
             "thin_pages": len(thin_pages),
+            # The number the verdict was reached against. Without it "thin_pages = 14"
+            # is unarguable: a reader cannot tell 14 short pages from a threshold set
+            # for a different kind of site.
+            "thin_words_threshold": thin_words or THIN_CONTENT_THRESHOLDS["default"],
             "duplicate_description_groups": len(duplicate_descriptions(pages)),
             "avg_word_count": round(
                 sum(p["word_count"] for p in pages.values()) / max(1, len(pages))
@@ -246,6 +256,12 @@ def main():
     parser.add_argument("--max-pages", type=int, default=50, help="Max pages to crawl (default: 50)")
     parser.add_argument("--threshold", type=float, default=0.85,
                         help="Jaccard similarity threshold for near-duplicates (default: 0.85)")
+    parser.add_argument("--thin-words", type=int, default=0,
+                        help="Word count below which a page counts as thin (default: "
+                             f"{THIN_CONTENT_THRESHOLDS['default']}). Site profiles pass "
+                             "this: a local business service page says what it does and "
+                             "stops, and the default is written for a page with "
+                             "something to explain.")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
@@ -255,7 +271,8 @@ def main():
     print(f"{len(pages)} page(s) with content. Analyzing...", file=sys.stderr)
 
     report = detect_duplicates(pages, similarity_threshold=args.threshold,
-                               fetch_error=inventory.get("fetch_error"))
+                               fetch_error=inventory.get("fetch_error"),
+                               thin_words=args.thin_words or None)
 
     if args.json:
         print(json.dumps(report, indent=2))

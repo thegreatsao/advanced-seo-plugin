@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.23.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.24.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -351,8 +351,18 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
-- **Open — CI-019 fails every site that does not sell anything, and its own fix text
-  cannot satisfy it.** Found on a live audit of a Lithuanian café, 5 August 2026, where
+- **Both items closed — CI-019 in 0.21.0, CN-053 in 0.22.0. What stays open is the
+  reason neither was caught here first, and it has since caught two more.**
+
+  This entry was left saying `Open` about CI-019 through three releases after it was
+  fixed. On the 0.23.0 audit of the same café it reports **PASS**. A file whose purpose
+  is an honest ledger of defects carried a stale one, in the section a reader consults
+  before defending a verdict — so the correction belongs at the top of the entry rather
+  than at the end of it. What follows is the original finding, kept because the reasoning
+  is what generalises.
+
+  **CI-019 failed every site that did not sell anything, and its own fix text could not
+  satisfy it.** Found on a live audit of a Lithuanian café, 5 August 2026, where
   it reported `high`/FAIL naming `/cart`, `/checkout`, `/login` and `/search`. All four
   return **404**. The site has no shop and no login.
 
@@ -392,6 +402,16 @@ name. A column called `url` would be read as "fix this page".
   fixes that; a second fixture built *without* consulting the registry would, and is not
   written.
 
+  **0.23.0 is the evidence that this half is the one worth keeping open.** Two more
+  defects arrived the same way — from a real site, not from the sweep. `GO-134` graded a
+  striking-distance opportunity as a `high` failure, and `BL-081` reported a trilingual
+  site's navigation menu as anchor spam because "appears on most pages" was asked once of
+  the whole site and a translated site has one menu per language. Neither is visible on a
+  monolingual fixture, and no fixture here is multilingual. That is now four items found
+  by auditing something the registry was not written against, and zero found by the
+  sweep. **The missing fixture is not a nice-to-have; it is where these keep coming
+  from.**
+
   **It was not a single case, and the same run proved it.** CN-053 is titled *Avoid
   Critical Content in iFrames*, its fix text says "Do not hide critical content inside
   iframes", and its assertion is `raw.word_count >= 300`. **It counts words.** Nothing in
@@ -424,7 +444,19 @@ name. A column called `url` would be read as "fix this page".
     matched a port number in 0.19.1, and the runner's soft-404 guard carries the warning
     in writing. Each time it was found by a test that happened to look, never by a rule.
 
-- **Open — four items are two items, written twice, and both halves score.** `CI-017` and
+- **Closed in two halves — the weight in 0.22.0, the reader's own list in 0.24.0.** The
+  header below said "both halves score" and was half stale for two releases: `scores_with`
+  stopped the double weight, and **nothing in `checklist_report.py` ever read that field**,
+  so the priority list and the `--fixes` export kept printing both twins. On the 0.23.0
+  audit one image missing an `alt` still produced *Provide Meaningful Image Alt Text* at
+  priority 6.0 and *Provide Meaningful Alt Text* at 3.0, both `high`, four rows apart in
+  the same list. A wrong score is one wrong number; a task list with a duplicate sends two
+  people to the same image. `twins_folded()` now folds synonyms in the two places a reader
+  is asked to *act* — and deliberately nowhere else: the full checklist still prints every
+  item with its own status, because the twin ran and its verdict is part of the log.
+
+  The original finding follows. **Four items were two items, written twice, and both
+  halves scored.** `CI-017` and
   `TE-181` are both titled *Validate HTML (W3C)*, both call `html_validator.py` with the
   same arguments, and both assert `summary.errors == 0`; they differ in category and in
   the wording of the fix. `CI-016` and `MD-186` are the same pair for alt text —

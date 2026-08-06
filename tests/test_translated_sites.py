@@ -1,4 +1,4 @@
-"""The two defects a real trilingual site found, pinned so they cannot come back.
+"""The defects a real trilingual site found, pinned so they cannot come back.
 
 Both were reported by auditing the café — 24 pages, three languages, one of the plainest
 link structures a site can have. It collected a `high` failure for its best search
@@ -15,9 +15,19 @@ monolingual fixture, which is why neither was caught by 629 tests:
 The scope test below is the load-bearing one: it fails on any future rule that asks the
 sitewide question only once, however that rule is written.
 
-Offline. `navigation_links` and `detect_issues` are pure functions over a crawl
-inventory and a sitemap list, so neither test needs a fixture site or a network.
+Two more defects came out of fixing those, and are pinned here too because they share the
+cause — a field read by one layer and dropped by the next:
+
+- `anchors_from_inventory` projected five fields per page into the rows the classifier
+  reads and `lang` was not one of them, so the fix above did nothing on a live site while
+  every unit test of it passed.
+- `scores_with` marked synonym items so a defect could not score twice, and nothing in
+  `checklist_report.py` read it, so the fix list still printed both twins.
+
+Offline. Everything under test is a pure function over a crawl inventory, a sitemap list
+or a graded item list, so nothing here needs a fixture site or a network.
 """
+import json
 import os
 import sys
 import unittest
@@ -27,6 +37,7 @@ SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
 sys.path.insert(0, SCRIPTS)
 
 import anchor_text_audit  # noqa: E402
+import checklist_report  # noqa: E402
 import gsc_checker  # noqa: E402
 
 
@@ -197,3 +208,184 @@ class SearchConsoleIssuesAreNotOpportunities(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OnePieceOfWorkIsOneRow(unittest.TestCase):
+    """`checklist_report.twins_folded` — the reader's list, not the score.
+
+    `scores_with` arrived in 0.22.0 and only the scorer read it, so a synonym pair
+    counted once in the headline and twice in the list a person works from: one image
+    missing an `alt` produced CI-016 at priority 6.0 and MD-186 at 3.0, both `high`.
+    """
+
+    def items(self, status="FAIL"):
+        return [
+            {"id": "CI-016", "status": status, "severity": "high", "effort": "low",
+             "category_label": "Crawling & Indexing", "title": "Alt text", "fix": "f",
+             "evidence": "missing_alt = 1"},
+            {"id": "MD-186", "status": status, "severity": "high", "effort": "low",
+             "scores_with": "CI-016", "category_label": "Images / Video",
+             "title": "Alt text again", "fix": "f", "evidence": "missing_alt = 1"},
+            {"id": "CN-040", "status": status, "severity": "medium", "effort": "low",
+             "category_label": "Content", "title": "Privacy policy", "fix": "f",
+             "evidence": "0 links"},
+        ]
+
+    def test_a_synonym_pair_is_one_row(self):
+        folded = checklist_report.twins_folded(self.items())
+        self.assertEqual([i["id"] for i in folded], ["CI-016", "CN-040"])
+
+    def test_the_survivor_is_the_item_that_carries_the_weight(self):
+        """Not "whichever came first". The scoring id is the one the score, the diff and
+        the history all name, so it is the one a reader can look up."""
+        reversed_order = list(reversed(self.items()))
+        folded = checklist_report.twins_folded(reversed_order)
+        self.assertIn("CI-016", [i["id"] for i in folded])
+        self.assertNotIn("MD-186", [i["id"] for i in folded])
+
+    def test_the_twin_survives_alone_when_the_scoring_item_is_not_listed(self):
+        """CI-016 passing and MD-186 failing is a registry defect, not a reason to drop
+        the only row describing real work."""
+        items = [i for i in self.items() if i["id"] != "CI-016"]
+        folded = checklist_report.twins_folded(items)
+        self.assertEqual([i["id"] for i in folded], ["MD-186", "CN-040"])
+
+    def test_items_outside_the_fix_statuses_are_untouched(self):
+        """The fold is for lists of work. A PASS, a NO_DATA and an N/A keep their rows
+        wherever they are printed."""
+        folded = checklist_report.twins_folded(self.items(status="PASS"))
+        self.assertEqual(len(folded), 3)
+
+    def test_the_fix_export_folds_and_the_full_log_does_not(self):
+        data = {"url": "https://example.com/", "items": self.items()}
+        rows = checklist_report.fix_rows(data)
+        self.assertEqual([r["id"] for r in rows], ["CI-016", "CN-040"])
+        self.assertEqual(len(data["items"]), 3, "fix_rows must not mutate the log")
+
+
+class AnOpportunitySpeaksTheReadersLanguage(unittest.TestCase):
+    """`checklist_report.opportunity_phrase`.
+
+    0.23.0 printed `gsc_checker.py`'s English `finding` and `fix` straight into the
+    report, so a Russian report carried seven English rows: item titles have a door into
+    the language file and a sentence a script composed at run time did not.
+    """
+
+    def test_a_known_type_is_rebuilt_from_its_numbers(self):
+        found, fix = checklist_report.opportunity_phrase(
+            {"type": "striking_distance", "position": 4.2, "impressions": 60,
+             "finding": "English from the script", "fix": "English fix"},
+            checklist_report.Lang())
+        self.assertIn("4.2", found)
+        self.assertIn("60", found)
+        self.assertNotEqual(found, "English from the script")
+        self.assertTrue(fix)
+
+    def test_an_unknown_type_falls_back_to_what_the_script_said(self):
+        """Worse than a translation, much better than an empty cell."""
+        found, fix = checklist_report.opportunity_phrase(
+            {"type": "something_new", "finding": "English from the script",
+             "fix": "English fix"}, checklist_report.Lang())
+        self.assertEqual(found, "English from the script")
+        self.assertEqual(fix, "English fix")
+
+    def test_every_shipped_opportunity_type_has_a_phrase(self):
+        """The three `gsc_checker.detect_opportunities` can emit. A type added there
+        without one here silently falls back to English."""
+        import inspect
+        source = inspect.getsource(gsc_checker.detect_opportunities)
+        emitted = {line.split('"')[3] for line in source.splitlines()
+                   if '"type":' in line}
+        self.assertEqual(emitted - set(checklist_report.OPPORTUNITY_PHRASE), set())
+
+    def test_a_translation_with_an_unknown_placeholder_keeps_the_row(self):
+        class Broken(checklist_report.Lang):
+            def t(self, key, default):
+                return "{nonexistent}" if key.startswith("opp_") else default
+
+        found, _ = checklist_report.opportunity_phrase(
+            {"type": "striking_distance", "position": 4.2, "impressions": 60,
+             "finding": "English from the script"}, Broken())
+        self.assertEqual(found, "English from the script")
+
+
+class AProfileMeasuresItsOwnKindOfSite(unittest.TestCase):
+    """`local` moves the thin-content threshold and drops two editorial items.
+
+    Both were reported on the café audit as defects of the site and are properties of the
+    checklist: 300 words is the inherited default for a page with something to explain, and
+    publication dates and author bylines are editorial-content signals. A service page for a
+    physical business says what it does, what it costs and where it is, and then stops.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, SCRIPTS)
+        import checklist_runner
+        import duplicate_content
+        self.runner = checklist_runner
+        self.dupes = duplicate_content
+        with open(os.path.join(ROOT, "skills", "seo-checklist", "resources", "config",
+                               "profiles.json"), encoding="utf-8") as f:
+            self.local = json.load(f)["profiles"]["local"]
+
+    def pages(self):
+        """The café's own shape: three near-empty galleries, five normal service pages."""
+        sizes = {"/gallery": 83, "/en/gallery": 94, "/ru/gallery": 87,
+                 "/menu": 189, "/blueberries": 220, "/petting-zoo": 232,
+                 "/bbq": 273, "/fishing": 297}
+        return {f"https://example.com{path}": {
+                    "word_count": words, "noindex": False, "text_hash": str(words),
+                    "signature": None, "title": path, "meta_description": path}
+                for path, words in sizes.items()}
+
+    def test_the_default_threshold_calls_every_service_page_thin(self):
+        """Why the number had to move: 8 of 8 pages fail, and the finding is useless."""
+        report = self.dupes.detect_duplicates(self.pages())
+        self.assertEqual(report["summary"]["thin_pages"], 8)
+        self.assertEqual(report["summary"]["thin_words_threshold"], 300)
+
+    def test_the_local_threshold_keeps_the_pages_a_person_would_call_thin(self):
+        report = self.dupes.detect_duplicates(self.pages(), thin_words=150)
+        thin = sorted(p["url"].rsplit("/", 1)[-1] for p in report["thin_content"])
+        self.assertEqual(thin, ["gallery", "gallery", "gallery"])
+        self.assertEqual(report["summary"]["thin_words_threshold"], 150)
+
+    def test_the_moved_threshold_is_in_the_evidence_trail(self):
+        """A verdict reached against a changed number must say the number. Otherwise
+        "thin_pages = 3" cannot be argued with by anybody reading the report."""
+        report = self.dupes.detect_duplicates(self.pages(), thin_words=150)
+        self.assertIn("thin_words_threshold", report["summary"])
+
+    def test_the_local_profile_passes_its_threshold_to_the_script(self):
+        self.assertEqual(self.local["script_args"]["duplicate_content.py"],
+                         ["--thin-words", "150"])
+
+    def test_profile_args_reach_the_plan_as_argv(self):
+        """Not a config a script reads on its own: it lands in argv, so it lands in the
+        run log, and two runs of one site with different profiles are two plan keys."""
+        items = [{"id": "CN-039", "source": "script", "severity": "high",
+                  "check": {"script": "duplicate_content.py", "requires": "crawl",
+                            "args": ["{url}"]}}]
+        ctx = {"url": "https://example.com/"}
+        plan, skipped = self.runner.build_plan(
+            items, ctx, {"offline", "fetch", "crawl"}, "live",
+            profile_args={"duplicate_content.py": ["--thin-words", "150"]})
+        self.assertEqual(skipped, {})
+        (script, args), = plan.keys()
+        self.assertEqual(script, "duplicate_content.py")
+        self.assertEqual(list(args), ["https://example.com/", "--thin-words", "150"])
+
+    def test_the_two_editorial_items_are_out_of_scope_with_a_reason(self):
+        self.assertEqual(self.local["exclude_items"], ["CN-056", "CN-057"])
+        for item_id in ("CN-056", "CN-057"):
+            reason = self.local["exclude_item_reasons"][item_id]
+            self.assertIn("editorial", reason)
+
+    def test_an_excluded_item_carries_the_profiles_words_not_a_shrug(self):
+        """`excluded by profile` told a reader nothing, on the surface where narrowing
+        scope has to justify itself."""
+        items = [{"id": "CN-056", "category": "content", "severity": "medium",
+                  "check": {"script": "freshness_checker.py"}}]
+        excluded = self.runner.profile_excludes(items, self.local)
+        self.assertIn("publication", excluded["CN-056"])
+        self.assertNotEqual(excluded["CN-056"], "excluded by profile")

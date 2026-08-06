@@ -848,7 +848,8 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                preskip: dict[str, tuple[str, str]] | None = None,
                has_gsc: bool = False,
                rejected: dict[str, str] | None = None,
-               opt_in: dict[str, list[str]] | None = None
+               opt_in: dict[str, list[str]] | None = None,
+               profile_args: dict[str, list[str]] | None = None
                ) -> tuple[dict[tuple, list[str]], dict[str, tuple[str, str]]]:
     """Map each unique (script, args) to the item ids that depend on it.
 
@@ -913,6 +914,14 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
         # do — the same distinction as `--allow-private`, which is why neither lives
         # in checklist.json.
         args += (opt_in or {}).get(chk["script"], [])
+        # A third kind of argument, and the three are worth keeping apart. Registry args
+        # say what an item needs in order to be decided. `opt_in` says what this run is
+        # permitted to do. These say what this *kind of site* is measured against: a
+        # local business service page is not short for a page with something to explain,
+        # and 300 words is the default for the second one. It lands in argv, so it is in
+        # the run log, and the script echoes it into its own summary — a moved threshold
+        # that no evidence string mentions is worse than the wrong threshold.
+        args += (profile_args or {}).get(chk["script"], [])
         plan.setdefault((chk["script"], tuple(args)), []).append(it["id"])
     return plan, skipped
 
@@ -1701,11 +1710,16 @@ def profile_excludes(items: list[dict], profile: dict) -> dict[str, str]:
     cats = set(profile.get("exclude_categories", []))
     scripts = set(profile.get("exclude_scripts", []))
     ids = set(profile.get("exclude_items", []))
+    # Why this profile drops this id, in the profile's own words. An item excluded by
+    # category names the category and one excluded by script names the script; an item
+    # excluded by id used to say only "excluded by profile" — the one exclusion a reader
+    # cannot reconstruct, on the only surface where narrowing scope has to justify itself.
+    reasons = profile.get("exclude_item_reasons") or {}
     out = {}
     for it in items:
         script = (it.get("check") or {}).get("script")
         if it["id"] in ids:
-            out[it["id"]] = "excluded by profile"
+            out[it["id"]] = reasons.get(it["id"], "excluded by profile")
         elif it["category"] in cats:
             out[it["id"]] = f"category {it['category']} does not apply to this site type"
         elif script and script in scripts:
@@ -2621,8 +2635,12 @@ def main() -> int:
                          if s.get("truncated") else ""), file=sys.stderr)
 
     opt_in = {"server_log_audit.py": ["--verify-bots"]} if a.verify_bots else {}
+    prof_args = {k: list(v) for k, v in (profile.get("script_args") or {}).items()}
     plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path),
-                               rejected, opt_in)
+                               rejected, opt_in, prof_args)
+    if prof_args and not a.quiet:
+        for script, extra in sorted(prof_args.items()):
+            print(f"  profile {a.profile}: {script} {' '.join(extra)}", file=sys.stderr)
     if not a.quiet:
         script_backed = sum(1 for i in items if i["source"] == "script")
         print(f"  {script_backed} script-backed items -> {len(plan)} unique runs"
@@ -2674,7 +2692,8 @@ def main() -> int:
                 continue
             pctx = dict(ctx, url=page_url, html=page_html)
             pplan, pskip = build_plan(page_items, pctx, caps, mode, preskip,
-                                      bool(gsc_path), opt_in=opt_in)
+                                      bool(gsc_path), opt_in=opt_in,
+                                      profile_args=prof_args)
             presults = execute(pplan, a.workers, a.timeout, True)
             per_page.append(grade(page_items, pplan, presults, pskip, bool(gsc_path)))
             if os.path.exists(page_html):
@@ -2760,6 +2779,10 @@ def main() -> int:
         # the libraries, and until 0.14.0 the choice was made by import order and
         # recorded nowhere.
         "html_parser": html_parser(),
+        # What the profile changed about how this site was measured, as opposed to
+        # which items it took out of scope. A threshold moved silently is a verdict
+        # nobody can argue with.
+        "profile_args": prof_args or None,
         "sample": a.sample,
         "sampled_urls": sampled_urls,
         "scores": score(graded),
