@@ -10,6 +10,59 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.26.0 — 7 August 2026
+
+**The two items this file has called defects since 0.22 now check what they are named
+after.** Both were left open on the same argument — that each needed a new check rather
+than a new assertion — and both turned out to be one check each.
+
+**CI-002 *Ensure Important Content Is Indexed* asserted that a sitemap listed at least one
+URL.** Submission is not indexation: a sitemap with one entry passed a site of five hundred
+pages, however much of it Google had dropped, and the floor it actually tested — a sitemap
+exists and is not empty — is GO-136's. It now asserts `indexed` from URL Inspection, which
+is Google's own answer and the only place that answer exists.
+
+The narrowing is the honest half of the trade and is stated rather than hidden: URL
+Inspection answers for **one** page, the audited one, while the title says "content".
+Whole-site coverage is the Index Coverage report, which the Search Console API has never
+exposed, and the available substitutes are worse than a narrow truth — counting pages with
+impressions would fail every indexed page nobody has searched for yet. **Sites audited
+without a `gsc` capability get `NO_DATA` where they used to get a `high` PASS**, which is
+this file's rule about honest breakage: nobody had measured indexation, and now the report
+says so instead of crediting a sitemap for it.
+
+**Pointing an assertion at `indexed` found that the field could not carry one.** It was
+pre-seeded with `None` in the result dict, two lines below a comment explaining why
+`canonical_match` must not be — `truthy` reads `None` as a *failing value*, not as missing.
+So the first run of the new test reported a page as **not indexed** at `high` for a
+property nobody could open. `indexed` is now assigned only when the coverage wording is
+recognised, exactly as `canonical_match` is. The defect had been there since URL Inspection
+arrived and was invisible because no rule read the field.
+
+**IN-127 *Use a Clear International URL Structure* asserted whether the hreflang set mixed
+http and https.** A real defect under the wrong name: a site running every locale on
+`?lang=` passed *Use a Clear International URL Structure*. `hreflang_checker.py` gained
+`check_url_structure`, which answers `ccTLD`, `subdomain`, `subdirectory`, `parameter`,
+`mixed`, `single` or `unmarked`. # basis: external standard — Google Search Central,
+"Managing multi-regional and multilingual sites", which names the first three and says URL
+parameters "are not recommended".
+
+It reads **each alternate against its own hreflang code** rather than comparing alternates
+with each other, which was the first attempt and was wrong on the case that matters:
+`example.com/de/` beside `fr.example.com/` differs in the host, so component comparison
+called a mixture a subdomain structure and passed it. `single` and `unmarked` carry no
+`passed` key at all, so one alternate — or a set whose URLs do not encode their locales,
+`en-GB` on `.uk` — is `NO_DATA` rather than credited with a structure. A default locale at
+the root beside `/de/` and `/fr/` reads as subdirectory, which is the commonest shape there
+is.
+
+Protocol consistency is still computed, still reported and still counted in the severity
+tally; **no item asserts it now**. An ungraded signal is the smaller problem — the larger
+one was an item asserting it under somebody else's title.
+
+Registry `8372d12db748` -> `18948c09ef94`: CI-002 changes script, capability and assertion;
+IN-127 changes assertion. No item added or removed, no severity changed. 666 -> 676 tests.
+
 ## 0.25.0 — 6 August 2026
 
 **Three of the five Core Web Vitals items measured something else, and the group is now

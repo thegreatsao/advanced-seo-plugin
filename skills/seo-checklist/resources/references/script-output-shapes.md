@@ -574,18 +574,23 @@ property. Quota: 2000 inspections per property per day.
 `last_crawl_time` — str (ISO-8601 with `Z`)
 `crawled_as` — str (`MOBILE` / `DESKTOP`)
 `google_canonical` / `user_canonical` — str | null
-`canonical_match` — bool | null
-`indexed` — bool | null
+`canonical_match` — bool, **absent** when the page declares no canonical
+`indexed` — bool, **absent** when the coverage wording is unrecognised or the API
+  never answered
 `sitemaps[]` — array of str
 `referring_urls` — int
 `rich_results_verdict` — str | null
 `issues[]` — array
 `error` — str | null
 
-Both tri-state fields are null on purpose. `canonical_match` is null when the page
-declares no canonical — there is nothing to disagree with. `indexed` is null when
-the coverage wording is unrecognised, because an unfamiliar string must not be read
-as "not indexed". Either way the item lands on `NO_DATA`.
+Both fields are **omitted**, not null, when they have no answer: `canonical_match` when
+the page declares no canonical — there is nothing to disagree with — and `indexed` when
+the coverage wording is unrecognised or the API never answered, because an unfamiliar
+string must not be read as "not indexed". The distinction is the whole point and it is
+not cosmetic: `truthy` reads `null` as a **failing value**, so a pre-seeded `None`
+reports a defect about a page nobody measured. `canonical_match` was fixed for that
+reason; `indexed` carried the same defect unnoticed until 0.26.0 pointed CI-002 at it,
+because until then no rule read it. Absent, both land on `NO_DATA`.
 
 ### hreflang_checker.py
 
@@ -605,6 +610,12 @@ as "not indexed". Either way the item lands on `NO_DATA`.
 `checks.x_default.detail` — str
 `checks.protocol_consistency.passed` — bool
 `checks.protocol_consistency.detail` — str
+`checks.url_structure.passed` — bool — **absent** when `structure` is `single`, so a
+  page with one alternate is `NO_DATA` rather than credited with a structure
+`checks.url_structure.structure` — str (`ccTLD` / `subdomain` / `subdirectory` /
+  `parameter` / `mixed` / `single`)
+`checks.url_structure.detail` — str, on the passing and the `single` cases
+`checks.url_structure.finding` / `.fix` / `.severity` — str, on the failing two
 `checks.canonical_alignment.passed` — bool
 `checks.canonical_alignment.detail` — str
 `language_code_issues[]` — array

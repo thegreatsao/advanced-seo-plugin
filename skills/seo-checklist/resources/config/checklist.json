@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "8372d12db748",
+  "registry_version": "18948c09ef94",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -121,18 +121,22 @@
       "severity": "high",
       "source": "script",
       "check": {
-        "script": "sitemap_checker.py",
+        "script": "gsc_url_inspection.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--property",
+          "{gsc_property}",
+          "--credentials",
+          "{gsc_credentials}"
         ],
-        "requires": "crawl",
+        "requires": "gsc",
         "assert": {
-          "path": "summary.urls",
-          "gte": 1
+          "path": "indexed",
+          "truthy": true
         }
       },
       "effort": "low",
-      "fix": "Index only valuable templates: categories, product pages, articles"
+      "fix": "Get the page indexed: remove noindex, allow crawling, then request indexing in Search Console. Submit only valuable templates — categories, product pages, articles"
     },
     {
       "id": "CI-003",
@@ -2618,12 +2622,12 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "checks.protocol_consistency.passed",
+          "path": "checks.url_structure.passed",
           "truthy": true
         }
       },
       "effort": "high",
-      "fix": "Use a clear international URL structure"
+      "fix": "Put every locale on one of the three structures Google supports — subdirectories (/de/), subdomains (de.example.com) or country-code domains (example.de) — not on a URL parameter and not on a mixture"
     },
     {
       "id": "IN-128",

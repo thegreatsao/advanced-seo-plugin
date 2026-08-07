@@ -86,13 +86,18 @@ def analyze(inspected_url: str, site_url: str, credentials: str, lang: str) -> d
         "crawled_as": None,
         "google_canonical": None,
         "user_canonical": None,
-        # Deliberately not pre-seeded with None. The comparison below already says
-        # the right thing — "a page that declares no canonical has nothing to
-        # disagree with Google about, so the comparison is absent rather than
-        # passing" — but None is not absent: `truthy` reads it as a *failing value*,
-        # so CI-010 reported "Google chose a different canonical" both for a page
-        # with no canonical at all and for a run where the API never answered.
-        "indexed": None,
+        # `canonical_match` and `indexed` are both deliberately absent here rather
+        # than pre-seeded with None. The comparisons below already say the right thing
+        # — "a page that declares no canonical has nothing to disagree with Google
+        # about, so the comparison is absent rather than passing" — but None is not
+        # absent: `truthy` reads it as a *failing value*, so CI-010 reported "Google
+        # chose a different canonical" both for a page with no canonical at all and
+        # for a run where the API never answered.
+        #
+        # `indexed` was pre-seeded here through 0.25.0, which was harmless only while
+        # nothing asserted it. When CI-002 was re-pointed at it in 0.26.0 the first
+        # test to run said so: a property nobody could open reported the page as **not
+        # indexed**, at `high`, rather than reporting that nobody had asked.
         "sitemaps": [],
         "referring_urls": 0,
         "rich_results_verdict": None,
@@ -136,7 +141,11 @@ def analyze(inspected_url: str, site_url: str, credentials: str, lang: str) -> d
     rich = inspection.get("richResultsResult", {})
     result["rich_results_verdict"] = rich.get("verdict")
 
-    result["indexed"] = classify_coverage(result["coverage_state"])
+    # Assigned only when the coverage wording is recognised, for the reason above: an
+    # unfamiliar string is "nobody here can read this", not "not indexed".
+    coverage = classify_coverage(result["coverage_state"])
+    if coverage is not None:
+        result["indexed"] = coverage
 
     # A page that declares no canonical has nothing to disagree with Google
     # about, so the comparison is absent rather than passing.
@@ -150,7 +159,7 @@ def analyze(inspected_url: str, site_url: str, credentials: str, lang: str) -> d
             "message": f"Google chose {gc} as canonical, the page declares {uc} — "
                        f"signals for this URL consolidate elsewhere",
         })
-    if result["indexed"] is False:
+    if result.get("indexed") is False:
         result["issues"].append({
             "severity": "critical",
             "message": f"not indexed: {result['coverage_state']}",
@@ -211,7 +220,7 @@ def main():
     print(f"  property:      {result['property']}")
     print(f"  verdict:       {result['verdict']}")
     print(f"  coverage:      {result['coverage_state']}")
-    print(f"  indexed:       {result['indexed']}")
+    print(f"  indexed:       {result.get('indexed', 'unknown')}")
     print(f"  robots.txt:    {result['robots_txt_state']}")
     print(f"  indexing:      {result['indexing_state']}")
     print(f"  fetch:         {result['page_fetch_state']}")

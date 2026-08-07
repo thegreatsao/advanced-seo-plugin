@@ -68,10 +68,17 @@ REVIEWED: dict[str, str] = {
     # really is an intrusive interstitial, and no token-overlap test will ever know
     # that. Those are marked OK. Four are not.
 
-    "CI-002": "DEFECT. 'Ensure important content is indexed' asserts "
-              "summary.urls >= 1 — a sitemap listing one URL passes a site of five "
-              "hundred pages, and being in a sitemap is not being indexed. The floor "
-              "it actually checks (a sitemap exists and is not empty) is GO-136's.",
+    "CI-002": "FIXED (0.26). Was a defect: asserted summary.urls >= 1, so a sitemap "
+              "listing one URL passed a site of five hundred pages, and being in a "
+              "sitemap is not being indexed — the floor it checked (a sitemap exists "
+              "and is not empty) is GO-136's. It now asserts `indexed` from URL "
+              "Inspection, Google's own answer. Narrower than the title in one respect, "
+              "stated rather than hidden: it answers for the audited page, because "
+              "whole-site coverage is the Index Coverage report and the API has never "
+              "exposed it. Not a duplicate of GO-135 (`issues`, which also covers "
+              "robots blocks, fetch failures and canonical conflicts) nor of CI-010 "
+              "(`canonical_match`) — a page can be indexed with issues, or unindexed "
+              "with a matching canonical, and both are pinned in the 0.26 tests.",
     "SP-111": "FIXED (0.25). Was a defect: titled 'Check Core Web Vitals (Desktop) in "
               "Search Console' and asserted performance_score >= 90, the blended "
               "Lighthouse score, which mixes TBT and Speed Index and is not Core Web "
@@ -90,10 +97,16 @@ REVIEWED: dict[str, str] = {
               "so the item silently switched data source and awarded a critical PASS on "
               "a lab number for every site CrUX has no sample for. Now `field_cwv."
               "verdict`, a twin of SP-108.",
-    "IN-127": "DEFECT. 'Use a clear international URL structure' asserts "
-              "checks.protocol_consistency.passed — whether the hreflang set mixes "
-              "http and https. That is worth checking and it is not URL structure; "
-              "subdirectory vs subdomain vs ccTLD is what the title names.",
+    "IN-127": "FIXED (0.26). Was a defect: asserted checks.protocol_consistency.passed "
+              "— whether the hreflang set mixes http and https — which is worth "
+              "checking and is not URL structure, so a site with every locale on "
+              "`?lang=` passed. It now asserts checks.url_structure.passed, which reads "
+              "each alternate against its own hreflang code and answers ccTLD, "
+              "subdomain, subdirectory, parameter, mixed, single or unmarked. The last "
+              "three carry no `passed` key, so a set whose URLs do not encode their "
+              "locale is NO_DATA rather than credited with a structure. Protocol "
+              "consistency is still computed and still counted in the severity tally; "
+              "no item asserts it now.",
 
     "CI-015": "OK. rows.0.status < 500 is exactly '5xx server errors', spelled in "
               "numbers instead of words.",

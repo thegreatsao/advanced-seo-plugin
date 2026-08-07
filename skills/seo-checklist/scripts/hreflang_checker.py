@@ -327,6 +327,122 @@ def check_x_default(tags: list[dict]) -> dict:
     return {"passed": True, "detail": f"x-default present → {x_defaults[0]['url']}"}
 
 
+def locale_tokens(lang: str) -> set:
+    """The spellings of one hreflang value that can appear inside a URL.
+
+    `de-DE` can be written `de-de`, `de_de` or reduced to either subtag, and all four
+    are found in the wild.
+    """
+    lang = lang.strip().lower()
+    parts = {p for p in re.split(r"[-_]", lang) if p}
+    return {t for t in parts | {lang, lang.replace("-", "_")} if t}
+
+
+def locale_lives_in(lang: str, url: str) -> str:
+    """Where this alternate carries its own locale: the component that holds its code.
+
+    Read from the tag rather than by comparing alternates with each other, which is the
+    second attempt at this. Comparing components finds which one *varies*, and that is
+    a different question with the same answer most of the time: `example.com/de/`
+    beside `fr.example.com/` varies in the host, so component comparison called the set
+    a subdomain structure when one locale is in the path and the other in the host —
+    the exact mixture this check exists to name.
+
+    Returns "" when the locale code appears nowhere in the URL. That is a legitimate
+    and very common case rather than a defect: the default locale usually sits at the
+    root, `https://example.com/` for `en` beside `/de/` and `/fr/`.
+    """
+    tokens = locale_tokens(lang)
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().rstrip(".").split(":")[0]
+    labels = host.split(".")
+    if len(labels) > 1 and labels[-1] in tokens:
+        return "ccTLD"
+    if len(labels) > 2 and labels[0] in tokens:
+        return "subdomain"
+    segments = [s for s in parsed.path.split("/") if s]
+    if segments and segments[0].lower() in tokens:
+        return "subdirectory"
+    if parsed.query:
+        values = {v.lower() for pair in parsed.query.split("&")
+                  for v in pair.split("=")[1:]}
+        if values & tokens:
+            return "parameter"
+    return ""
+
+
+def url_structure_of(tags: list[dict]) -> str:
+    """`ccTLD`, `subdomain`, `subdirectory`, `parameter`, `mixed`, `single`, `unmarked`.
+
+    `x-default` is excluded: it names no locale, so it cannot carry one.
+
+    A region whose ccTLD is spelled differently from its subtag — `en-GB` on `.uk`,
+    `ja` on `.jp` — reads as unmarked and is skipped rather than guessed at. A set where
+    one alternate is readable still decides; a set where none is comes back `unmarked`,
+    and the item reports NO_DATA rather than inventing a structure.
+    """
+    graded, places = 0, set()
+    for tag in tags:
+        lang, url = (tag.get("lang") or "").strip(), tag.get("url") or ""
+        if not lang or not url or lang.lower() == "x-default":
+            continue
+        graded += 1
+        where = locale_lives_in(lang, url)
+        if where:
+            places.add(where)
+    if graded < 2:
+        return "single"
+    if not places:
+        return "unmarked"
+    return places.pop() if len(places) == 1 else "mixed"
+
+
+def check_url_structure(tags: list[dict]) -> dict:
+    """Check 9: the international URL structure is one of the three Google supports.
+
+    # basis: external standard — Google Search Central, "Managing multi-regional and
+    # multilingual sites", which lists country-code top-level domains, subdomains and
+    # subdirectories as the ways to structure locale URLs and says URL parameters
+    # "are not recommended" because they are hard to segment by and users cannot read
+    # the locale out of them.
+
+    This is what IN-127 *Use a Clear International URL Structure* was supposed to
+    assert through 0.25.0. It asserted `checks.protocol_consistency.passed` instead —
+    whether the hreflang set mixes http and https — which is a real defect under
+    somebody else's name and says nothing about structure. A site with every locale on
+    `?lang=` and one on a subdomain passed it.
+    """
+    structure = url_structure_of(tags)
+    if structure in ("single", "unmarked"):
+        # One alternate, or none whose URL carries its own locale code. There is no
+        # structure to read, and inventing a verdict for it is what the old assertion
+        # did — so no `passed` key, and the item reports NO_DATA.
+        return {"structure": structure,
+                "detail": ("Only one locale alternate; no structure to assess."
+                           if structure == "single" else
+                           "No alternate carries its locale code in the URL, so the "
+                           "structure cannot be read from the hreflang set.")}
+    if structure == "mixed":
+        return {
+            "passed": False, "structure": structure, "severity": "Medium",
+            "finding": "The hreflang set mixes locale URL schemes, so no single rule "
+                       "says where a locale lives.",
+            "fix": "Pick one of ccTLDs, subdomains or subdirectories and move every "
+                   "locale onto it.",
+        }
+    if structure == "parameter":
+        return {
+            "passed": False, "structure": structure, "severity": "Medium",
+            "finding": "Locales are distinguished by a URL parameter, which Google "
+                       "does not recommend and cannot be geo-targeted in Search "
+                       "Console.",
+            "fix": "Move locales onto subdirectories (/de/), subdomains "
+                   "(de.example.com) or country-code domains (example.de).",
+        }
+    return {"passed": True, "structure": structure,
+            "detail": f"Locales are separated by {structure}."}
+
+
 def check_protocol_consistency(tags: list[dict]) -> dict:
     """Check 7: All URLs in the hreflang set must use the same protocol."""
     protocols = {urlparse(t["url"]).scheme for t in tags if t["url"]}
@@ -510,6 +626,9 @@ def run_hreflang_check(url: str, verify_returns: bool = False) -> dict:
 
     # Check 7 — Protocol consistency
     results["checks"]["protocol_consistency"] = check_protocol_consistency(tags)
+
+    # Check 9 — International URL structure (what IN-127 reads)
+    results["checks"]["url_structure"] = check_url_structure(tags)
 
     # Check 6 — Canonical alignment
     results["checks"]["canonical_alignment"] = check_canonical_alignment(soup, tags, final_url)

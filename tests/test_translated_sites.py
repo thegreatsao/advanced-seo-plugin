@@ -385,5 +385,121 @@ class AProfileMeasuresItsOwnKindOfSite(unittest.TestCase):
         self.assertNotEqual(excluded["CN-056"], "excluded by profile")
 
 
+class ALocaleLivesInOnePartOfTheURL(unittest.TestCase):
+    """IN-127 *Use a Clear International URL Structure*, which read protocol consistency.
+
+    Through 0.25.0 the item asserted `checks.protocol_consistency.passed` — whether the
+    hreflang set mixes http and https. That is a real defect and it is not this item's:
+    a site running every locale on `?lang=` passed *Use a Clear International URL
+    Structure* as long as it used https for all of them.
+
+    # basis: external standard — Google Search Central, "Managing multi-regional and
+    # multilingual sites": ccTLDs, subdomains and subdirectories are the structures it
+    # supports, and URL parameters "are not recommended".
+    """
+
+    def setUp(self):
+        import hreflang_checker
+        self.mod = hreflang_checker
+
+    def tags(self, *urls):
+        return [{"lang": f"l{n}", "url": u} for n, u in enumerate(urls)]
+
+    def verdict(self, tags):
+        """The item's own answer, through the runner's evaluator rather than by
+        reading `passed` — the wiring between the script and the rule is half of what
+        broke here before."""
+        import checklist_runner
+        with open(os.path.join(ROOT, "skills", "seo-checklist", "resources", "config",
+                               "checklist.json"), encoding="utf-8") as f:
+            rule = {i["id"]: i for i in json.load(f)["items"]}["IN-127"]["check"]
+        out = {"checks": {"url_structure": self.mod.check_url_structure(tags)}}
+        ok, _ = checklist_runner.evaluate(rule["assert"], out)
+        return {None: "NO_DATA", True: "PASS", False: "FAIL"}[ok]
+
+    def structures(self):
+        return {
+            "ccTLD": ("https://example.de/", "https://example.fr/"),
+            "subdomain": ("https://de.example.com/", "https://fr.example.com/"),
+            "subdirectory": ("https://example.com/de/", "https://example.com/fr/"),
+            "parameter": ("https://example.com/?lang=de",
+                          "https://example.com/?lang=fr"),
+        }
+
+    def langs(self, urls, langs=("de", "fr")):
+        return [{"lang": lang, "url": url}
+                for lang, url in zip(langs, urls, strict=True)]
+
+    def test_each_supported_structure_is_recognised(self):
+        for expected, urls in self.structures().items():
+            self.assertEqual(self.mod.url_structure_of(self.langs(urls)), expected,
+                             urls)
+
+    def test_the_default_locale_at_the_root_does_not_confuse_the_reading(self):
+        """The commonest shape there is: English at `/`, everything else under its
+        code. The English URL carries no locale, which is not a defect and must not
+        make the set unreadable."""
+        tags = [{"lang": "en", "url": "https://example.com/"},
+                {"lang": "de", "url": "https://example.com/de/"},
+                {"lang": "fr", "url": "https://example.com/fr/"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "subdirectory")
+
+    def test_a_region_spelled_differently_from_its_domain_is_not_guessed_at(self):
+        """`en-GB` on `.uk`, `ja` on `.jp`: the code and the domain do not match as
+        strings, and no table here maps one to the other. Alone, that set reads as
+        unmarked and the item declines to answer — which is the limit stated rather
+        than a structure invented. One readable alternate is enough to decide.
+        """
+        alone = [{"lang": "en-GB", "url": "https://example.uk/"},
+                 {"lang": "ja", "url": "https://example.jp/"}]
+        self.assertEqual(self.mod.url_structure_of(alone), "unmarked")
+        self.assertEqual(self.verdict(alone), "NO_DATA")
+        with_one_readable = alone + [{"lang": "fr", "url": "https://example.fr/"}]
+        self.assertEqual(self.mod.url_structure_of(with_one_readable), "ccTLD")
+
+    def test_x_default_names_no_locale_and_is_not_counted(self):
+        tags = [{"lang": "x-default", "url": "https://example.com/"},
+                {"lang": "de", "url": "https://example.com/de/"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "single")
+
+    def test_the_three_google_supports_pass(self):
+        for name in ("ccTLD", "subdomain", "subdirectory"):
+            self.assertEqual(self.verdict(self.langs(self.structures()[name])),
+                             "PASS", name)
+
+    def test_a_parameter_fails(self):
+        self.assertEqual(self.verdict(self.langs(self.structures()["parameter"])),
+                         "FAIL")
+
+    def test_a_mixture_fails_where_comparing_components_called_it_a_subdomain(self):
+        """German in the path, French on a subdomain. Both alternates differ from each
+        other in the host, so a reading based on *which component varies* answers
+        "subdomain" and passes the item. Reading each tag against its own locale gives
+        two places and one verdict: mixed."""
+        tags = [{"lang": "de", "url": "https://example.com/de/"},
+                {"lang": "fr", "url": "https://fr.example.com/"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "mixed")
+        self.assertEqual(self.verdict(tags), "FAIL")
+
+    def test_one_alternate_decides_nothing(self):
+        """No `passed` key at all, so the item is NO_DATA. A site with one alternate
+        has no structure, and crediting it with one is the failure this item is being
+        repaired for."""
+        one = [{"lang": "de", "url": "https://example.com/de/"}]
+        single = self.mod.check_url_structure(one)
+        self.assertNotIn("passed", single)
+        self.assertEqual(single["structure"], "single")
+        self.assertEqual(self.verdict(one), "NO_DATA")
+
+    def test_mixed_protocols_no_longer_decide_this_item(self):
+        """The old assertion, kept as a test so the repair cannot quietly undo itself.
+        These two differ in protocol and share a structure; the item is about the
+        structure, and the protocol defect belongs to a check of its own."""
+        tags = [{"lang": "de", "url": "http://example.com/de/"},
+                {"lang": "fr", "url": "https://example.com/fr/"}]
+        self.assertIs(self.mod.check_protocol_consistency(tags)["passed"], False)
+        self.assertEqual(self.verdict(tags), "PASS")
+
+
 if __name__ == "__main__":
     unittest.main()

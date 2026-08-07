@@ -609,10 +609,28 @@ name. A column called `url` would be read as "fix this page".
   the desktop call that nothing asserted before, and `SAME_CHECK` gained a list value to
   hold a group of three instead of a pair.
 
-- **Two of the four rulings closed in 0.25.0. The vocabulary list is ruled on, and two
-  defects remain.** The three Core Web Vitals items now read `field_cwv.verdict` — the
-  entry below is the original finding, and the paragraph after it records what the repair
-  cost. `CI-002` and `IN-127` are untouched.
+- **All four rulings are closed. Three Core Web Vitals items in 0.25.0, `CI-002` and
+  `IN-127` in 0.26.0.** The entry below is the original finding; the paragraphs after it
+  record what each repair cost.
+
+  Both of the last two were deferred on the same argument — "that is a new check, not a
+  new assertion" — and both were one check each. `CI-002` now asserts `indexed` from URL
+  Inspection instead of counting sitemap entries, which makes it Google's answer rather
+  than the site's own claim, and `NO_DATA` without a `gsc` capability rather than a `high`
+  PASS for owning a sitemap. `IN-127` now asserts `checks.url_structure.passed`, computed
+  by reading each alternate against its own hreflang code. Two things fell out of the
+  work and are worth naming here:
+
+  - **`indexed` could not carry an assertion when one arrived.** It was pre-seeded with
+    `None` in `gsc_url_inspection.py`, two lines under a comment explaining why
+    `canonical_match` must not be, and `truthy` reads `None` as a failing value. The
+    first run of the new test reported a page as not indexed, at `high`, for a property
+    nobody could open. A field nothing reads is a field nobody has checked.
+  - **Protocol consistency lost its grader.** It was what `IN-127` asserted, it is still
+    computed and still counted in the severity tally, and no item asserts it now. No item
+    in this registry is titled for it, and an ungraded signal is a smaller problem than an
+    item grading it under the wrong name — but it is a gap, recorded rather than tidied
+    away.
 
   The
   42 unreviewed misses are 0. Fourteen were the tool's own fault: `len(w) > 2` dropped
@@ -644,12 +662,14 @@ name. A column called `url` would be read as "fix this page".
     turned SP-113's `NO_DATA` on an unknown band into a FAIL about a page nobody measured.
     A failure among graded metrics is now reported and a *pass* beside an unknown band is
     not.
-  - **`CI-002`** *Ensure Important Content Is Indexed* asserts `summary.urls >= 1`. A
-    sitemap listing one URL passes a site of five hundred pages, and being in a sitemap
-    is not being indexed. The floor it actually checks is GO-136's.
-  - **`IN-127`** *Use a Clear International URL Structure* asserts whether the hreflang
+  - **`CI-002`** *Ensure Important Content Is Indexed* asserted `summary.urls >= 1`. A
+    sitemap listing one URL passed a site of five hundred pages, and being in a sitemap
+    is not being indexed. The floor it actually checked is GO-136's. **Fixed in 0.26.0**
+    — see the top of this entry.
+  - **`IN-127`** *Use a Clear International URL Structure* asserted whether the hreflang
     set mixes http and https. Worth checking, and it is not URL structure —
-    subdirectory against subdomain against ccTLD is what the title names.
+    subdirectory against subdomain against ccTLD is what the title names. **Fixed in
+    0.26.0** — see the top of this entry.
 
   Two more are weak rather than wrong and are written down as such: `MB-093` grades a
   `critical` "responsive layout" on the presence of a viewport meta tag, which a

@@ -962,12 +962,17 @@ class Robots(unittest.TestCase):
 
 
 class Sitemap(unittest.TestCase):
-    """CI-002 `summary.urls`, GO-136 `issues`, GO-138 `issues` (with --fetch-urls)."""
+    """GO-136 `issues`, GO-138 `issues` (with --fetch-urls).
+
+    CI-002 read `summary.urls >= 1` here until 0.26.0 — one URL present in a sitemap,
+    asserted under *Ensure Important Content Is Indexed*. Submission is not indexation,
+    and `summary.urls` is still counted and still reported; no item grades it, because
+    no item in this registry is about how many URLs a sitemap lists.
+    """
 
     def test_a_clean_sitemap_reports_its_urls_and_no_serious_issue(self):
         good = out("sitemap")
         self.assertEqual(good["summary"]["urls"], 3)
-        self.assertEqual(verdict("CI-002", good), PASS)
         self.assertEqual(verdict("GO-136", good), PASS)
 
     def test_a_probed_path_that_does_not_exist_is_not_an_issue(self):
@@ -1664,13 +1669,26 @@ class JavascriptRender(unittest.TestCase):
 
 
 class Hreflang(unittest.TestCase):
-    """IN-121 `checks.x_default.passed`, IN-127 `checks.protocol_consistency.passed`,
+    """IN-121 `checks.x_default.passed`, IN-127 `checks.url_structure.passed`,
     IN-128 `checks.self_reference.passed`, IN-122 `summary.critical`."""
 
     def test_correct_hreflang_passes_each_named_check(self):
         good = out("hreflang")
-        for item_id in ("IN-121", "IN-127", "IN-128", "IN-122"):
+        for item_id in ("IN-121", "IN-128", "IN-122"):
             self.assertEqual(verdict(item_id, good), PASS, item_id)
+
+    def test_the_fixture_carries_no_locale_in_its_urls_so_in_127_declines(self):
+        """The fixture's alternates are `/intl.html` and `/de.html` — filenames on one
+        host, with the locale in neither the host, the first path segment nor a
+        parameter. There is no international URL structure there to grade, so IN-127
+        answers NO_DATA rather than crediting the fixture with one. The graded
+        structures are exercised in `test_translated_sites.py`, against tag sets rather
+        than against a served page, because what decides the item is where each locale
+        sits in its own URL.
+        """
+        good = out("hreflang")
+        self.assertEqual(good["checks"]["url_structure"]["structure"], "unmarked")
+        self.assertEqual(verdict("IN-127", good), NO_DATA)
 
     def test_a_missing_x_default_fails_the_item_that_reads_it(self):
         self.assertIs(out("hreflang_bad")["checks"]["x_default"]["passed"], False)

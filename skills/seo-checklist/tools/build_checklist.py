@@ -236,9 +236,23 @@ item(1, "critical", S, "indexability_matrix.py", PAGE,
      {"path": "rows", "field": "verdict",
       "value_map": {"indexable": "pass", "not_indexable": "fail"}},
      "Remove noindex, allow crawling in robots.txt, add internal links, submit the URL in GSC")
-item(2, "high", S, "sitemap_checker.py", PAGE,
-     {"path": "summary.urls", "gte": 1},
-     "Index only valuable templates: categories, product pages, articles")
+# Indexation is a fact only Google holds, so this item now asks Google. It asserted
+# `summary.urls >= 1` from sitemap_checker — one URL present in a sitemap, which is
+# submission and not indexation, and passed any site with a sitemap at all however much
+# of it Google had dropped.
+#
+# The narrowing is deliberate and is the honest half of the trade: URL Inspection
+# answers for **one** page, the audited one, while the title says "content". Whole-site
+# coverage is the Index Coverage report, which the Search Console API has never exposed,
+# and every available substitute is worse than a narrow truth — counting pages with
+# impressions would fail every indexed page nobody has searched for yet. `indexed` is
+# null when the coverage wording is unrecognised, and the item is NO_DATA without a
+# `gsc` capability, which is what "nobody measured this" should look like.
+item(2, "high", S, "gsc_url_inspection.py", INSPECTARG,
+     {"path": "indexed", "truthy": True},
+     "Get the page indexed: remove noindex, allow crawling, then request indexing in "
+     "Search Console. Submit only valuable templates — categories, product pages, "
+     "articles")
 item(3, "critical", S, "indexability_matrix.py", PAGE,
      {"path": "rows.0.status", "eq": 200},
      "Canonical URL must return 200 OK across all variants (http/https, www/non-www)")
@@ -724,9 +738,21 @@ item(123, "medium", S, "parse_html.py", HTMLARG,
 item(124, "medium", M, fix="Do not force geo or language redirects")
 item(125, "low", M, fix="Define target international markets and audiences")
 item(126, "medium", L, fix="Translations must be high quality and human-reviewed")
+# Reads the structure it is named for. It asserted `checks.protocol_consistency.passed`
+# — whether the hreflang set mixes http and https — a real defect under the wrong
+# title, which a site running every locale on `?lang=` passed.
+#
+# `check_url_structure` classifies the set as ccTLD, subdomain, subdirectory,
+# parameter, mixed or single, and grades the last three: parameter and mixed fail,
+# single carries no `passed` key at all, so a page with one alternate is NO_DATA rather
+# than credited with a structure it does not have. Protocol consistency stays in the
+# output and in the severity tally; no item asserts it now, and an ungraded signal is
+# the smaller problem — see KNOWN-ISSUES §6.
 item(127, "medium", S, "hreflang_checker.py", PAGE,
-     {"path": "checks.protocol_consistency.passed", "truthy": True},
-     "Use a clear international URL structure")
+     {"path": "checks.url_structure.passed", "truthy": True},
+     "Put every locale on one of the three structures Google supports — "
+     "subdirectories (/de/), subdomains (de.example.com) or country-code domains "
+     "(example.de) — not on a URL parameter and not on a mixture")
 item(128, "medium", S, "hreflang_checker.py", PAGE,
      {"path": "checks.self_reference.passed", "truthy": True},
      "Serve the correct localized page")

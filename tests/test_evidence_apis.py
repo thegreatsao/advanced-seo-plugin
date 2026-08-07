@@ -371,8 +371,16 @@ class Cannibalization(unittest.TestCase):
 
 
 class UrlInspection(unittest.TestCase):
-    """The two items reading `gsc_url_inspection.py` — Google's own answer about
-    whether a URL is indexed, which is the only place that answer exists."""
+    """The three items reading `gsc_url_inspection.py` — Google's own answer about
+    whether a URL is indexed, which is the only place that answer exists.
+
+    CI-002 joined them in 0.26.0 and immediately found that `indexed` was pre-seeded
+    with `None` in the result, two lines under a comment explaining why
+    `canonical_match` must not be: a `truthy` rule reads `None` as a failing value, so
+    a property nobody could open reported the page as **not indexed** at `high`. The
+    field is assigned only when the coverage wording is recognised, and
+    `test_no_credentials_is_undecided` is the test that says so.
+    """
 
     def setUp(self):
         import gsc_url_inspection
@@ -404,7 +412,7 @@ class UrlInspection(unittest.TestCase):
     def test_an_indexed_url_passes(self):
         out = self.inspect("PASS", "Submitted and indexed")
         self.assertEqual(verdicts(self.items_for(), out),
-                         {"CI-010": PASS, "GO-135": PASS})
+                         {"CI-002": PASS, "CI-010": PASS, "GO-135": PASS})
 
     def test_a_url_google_has_excluded_does_not(self):
         """CI-010 passing here is correct and is the reason to pin both. It asks
@@ -415,7 +423,7 @@ class UrlInspection(unittest.TestCase):
         """
         out = self.inspect("FAIL", "Discovered - currently not indexed")
         self.assertEqual(verdicts(self.items_for(), out),
-                         {"CI-010": PASS, "GO-135": FAIL})
+                         {"CI-002": FAIL, "CI-010": PASS, "GO-135": FAIL})
 
     def test_no_credentials_is_undecided(self):
         def refuse(*a, **k):
