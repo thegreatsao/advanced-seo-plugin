@@ -10,6 +10,63 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.27.0 — 8 August 2026
+
+**The SSRF guard reached 54 of the 55 scripts, and the one it missed is the one that
+opens its own socket.** `checklist_runner` states the rule in a comment beside the
+switch that carries it: "55 scripts in 55 processes each call `assert_safe_url` for
+themselves, so the allowance has to travel with them." `tls_certificate.py` did not.
+It needs the handshake rather than a response body, so it never fetches through
+`safe_get` — and `safe_get` is where every other script picks the guard up. It took a
+host and a port straight from argv and handed them to `socket.create_connection`.
+
+**What that meant in practice: `--allow-private` was not a switch this script had.**
+An audit that had not been given the flag could still reach `127.0.0.1`, an RFC 1918
+staging box, or `169.254.169.254` — the cloud instance metadata address that is blocked
+even *with* the allowance, because link-local is deliberately absent from
+`PRIVATE_ALLOWED_NETWORKS`. Nothing showed it. The script returned a well-formed result
+either way, which is the shape every defect in this file has.
+
+`assert_safe_url` is now called once before the first handshake, which covers both
+passes. A blocked address returns without `valid` — **NO_DATA to SE-118, not
+`valid: False`** — because "we were not allowed to look" and "we looked and the
+certificate is bad" are different claims and only the second is a fact about the site.
+Importing `safe_http` costs this script nothing: `requests` is optional inside it and
+`assert_safe_url` reaches only `socket` and `ipaddress`, so the file keeps the
+stdlib-only property that lets it run where `requests` is not installed.
+
+Two tests, both directions, in the pattern `test_runner.PrivateAddresses` set: loopback
+refused when the run was not given the allowance, and the metadata address refused when
+it was. Both were confirmed to fail with the guard removed — the second by spending
+fifteen seconds timing out against 169.254.169.254, which is the defect demonstrating
+itself.
+
+**`_load_source` was copied into eleven scripts, and the copies had drifted into two
+versions — one of them wrong.** Six tested `Path(source).is_file()`; five tested
+`os.path.exists(source)`, which is also true of a directory, so those five raised
+`IsADirectoryError` on an archive directory instead of falling through to `load_html`.
+Eleven copies of five lines is how one defect gets to live in five files and not in the
+other six. It is now `seo_common.load_source`, on the `is_file` reading, and the scripts
+import it.
+
+**`script-output-shapes.md` documented seven scripts that do not exist.** Four had full
+output-shape sections — `product_schema_checker.py`, `review_schema_checker.py`,
+`readability.py`, `x_robots_header_checker.py` — and three more were listed in the
+"scripts needing extra required args" table. The `readability.py` section described
+`has_loop` and `has_mixed_protocol`, which are `redirect_checker`'s fields: the section
+was not merely stale, it was wrong about a script that was not there.
+
+`audit_assertions.py` never caught this because it audits paths only for scripts the
+registry names, and a section nothing points at is checked by nobody — the same blind
+spot 0.8.0's hand-maintained sweep had. Removed; 63 sections down to 59, which is what
+is on disk. **The gate that would keep it that way — every `### <script>.py` here exists,
+and every script the registry names has a section — is not written yet, and until it is
+this will drift again.**
+
+Registry `18948c09ef94` unchanged: no item added, removed, re-pointed or re-graded. This
+release changes how three scripts behave and what one reference document claims, not what
+the checklist asserts. 676 -> 678 tests.
+
 ## 0.26.0 — 7 August 2026
 
 **The two items this file has called defects since 0.22 now check what they are named

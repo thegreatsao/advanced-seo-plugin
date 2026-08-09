@@ -101,5 +101,53 @@ class TlsCertificate(unittest.TestCase):
         self.assertTrue(any(i["severity"] == "critical" for i in out["issues"]), out)
 
 
+class TheGuardReachesThisScriptToo(unittest.TestCase):
+    """The SSRF guard, on the one script that opens its own socket.
+
+    Every other evidence script fetches through `safe_get`, which calls
+    `assert_safe_url` on the way in. This one needs the handshake rather than a
+    response body, so it connects itself — and until this pair of tests it was the
+    single place in the tree where a host from argv reached `create_connection`
+    unguarded. The runner states the rule as one switch for the whole run: "55 scripts
+    in 55 processes each call assert_safe_url for themselves, so the allowance has to
+    travel with them." A script the switch does not reach makes that claim false, and
+    nothing shows it, because the script still returns a well-formed result.
+
+    Both directions, for the reason `test_runner.PrivateAddresses` gives: a guard that
+    never opens cannot audit a staging box, and a guard that opens too far reads cloud
+    instance metadata into an artifact.
+    """
+
+    METADATA = "169.254.169.254"       # AWS/GCP/Azure instance metadata
+
+    def test_loopback_is_refused_when_the_run_was_not_given_the_allowance(self):
+        """The fixture the rest of this file relies on, minus the flag.
+
+        Those tests reach it because `offline_env` sets `SEO_ALLOW_PRIVATE=1`. Take it
+        away and the same URL must not be reachable — otherwise the flag is decoration
+        and none of them proves anything about the guard.
+        """
+        env = tls_env()
+        env.pop("SEO_ALLOW_PRIVATE", None)
+        with served({"/": "<html><body>ok</body></html>"}, tls=True) as site:
+            out = run(site.url, env)
+        self.assertNotIn("valid", out)                     # NO_DATA, not a verdict
+        self.assertIn("error", out)
+        self.assertIn("--allow-private", out["error"])     # the refusal names the way through
+
+    def test_the_metadata_address_stays_blocked_even_with_the_allowance(self):
+        """`--allow-private` widens to fixtures and staging boxes, not to link-local.
+
+        169.254.0.0/16 is deliberately absent from `PRIVATE_ALLOWED_NETWORKS`, so this
+        is refused in both modes. Asserted here and not only in `test_runner` because
+        that suite proves it about `assert_safe_url`; what is being proved here is that
+        a script holding its own socket calls it at all.
+        """
+        out = run(f"https://{self.METADATA}/", offline_env())
+        self.assertNotIn("valid", out)
+        self.assertIn("error", out)
+        self.assertIn("SafeHTTPError", out["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

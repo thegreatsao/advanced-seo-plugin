@@ -25,6 +25,17 @@ import sys
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+# The SSRF guard every other evidence script gets for free by fetching through
+# `safe_get`. This one cannot: `ssl` needs the handshake itself, not a response body,
+# so it opens its own socket and the guard has to be called by hand. Importing
+# `safe_http` costs nothing here — `requests` is optional inside it and
+# `assert_safe_url` reaches only `socket` and `ipaddress`, so this file keeps the
+# stdlib-only property that lets it run where `requests` is not installed.
+try:
+    from lib.safe_http import SafeHTTPError, assert_safe_url
+except ImportError:
+    from scripts.lib.safe_http import SafeHTTPError, assert_safe_url
+
 # basis: convention — the point of asking is to renew before it bites, and a month
 # is the shortest notice on which a human process (procurement, a change window)
 # reliably fits. Let's Encrypt renews at 30 days remaining for the same reason.
@@ -54,7 +65,8 @@ def _flatten(pairs: object) -> dict:
 
 
 def inspect(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
-    parsed = urlparse(url if "://" in url else f"https://{url}")
+    target = url if "://" in url else f"https://{url}"
+    parsed = urlparse(target)
     host = parsed.hostname
     port = parsed.port or 443
 
@@ -71,6 +83,23 @@ def inspect(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
     # our own request, reported as if it were a fact about the site.
     if parsed.scheme == "http":
         out["reason"] = "URL is http:// — no certificate is served on this scheme"
+        return out
+
+    # The runner states the rule for the whole run — "55 scripts in 55 processes each
+    # call assert_safe_url for themselves, so the allowance has to travel with them" —
+    # and this script was the one that did not. It takes a host and a port straight from
+    # argv and hands them to `create_connection`, so `--allow-private` never reached it
+    # and loopback, RFC 1918 and the cloud metadata address were all reachable from an
+    # audit that had not been given the switch. Guarding here rather than at each
+    # `create_connection` covers both passes below: same host, same port.
+    #
+    # A blocked address is not a fact about a certificate, so this returns without
+    # `valid` — NO_DATA to SE-118, the same shape as the refused connection below,
+    # rather than a `valid: False` that would read as "this site's certificate is bad".
+    try:
+        assert_safe_url(target)
+    except SafeHTTPError as exc:
+        out["error"] = f"SafeHTTPError: {exc}"
         return out
 
     # Pass one: a verifying handshake. This is the verdict.

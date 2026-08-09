@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 from urllib.parse import urlparse
 
-from seo_common import load_html, parse_html
+from seo_common import load_source, parse_html
 
 
 CLAIM_RE = re.compile(
@@ -21,13 +20,6 @@ HIGH_TRUST_HOST_RE = re.compile(
     r"((^|\.)gov(\.|$)|(^|\.)edu$|who\.int$|nih\.gov$|cdc\.gov$|worldbank\.org$|oecd\.org$|wikipedia\.org$)",
     re.I,
 )
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    if os.path.exists(source):
-        with open(source, "r", encoding="utf-8") as fh:
-            return fh.read(), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _walk_json(value):
@@ -59,7 +51,7 @@ def _schema_entity_signals(schema_items: list) -> dict:
 
 
 def check_citation_readiness(source: str, timeout: int = 15) -> dict:
-    html, url, fetched = _load_source(source, timeout)
+    html, url, fetched = load_source(source, timeout)
     parsed = parse_html(html, url)
     soup = parsed["soup"]
     page_host = urlparse(url).netloc if url else ""

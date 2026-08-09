@@ -6,10 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import BeautifulSoup, fetch_url, load_html, normalize_url, require_bs4
+from seo_common import BeautifulSoup, fetch_url, load_source, normalize_url, require_bs4
 
 
 # basis: inherited — 100KB for one font file, present at import. A full-weight Latin
@@ -18,13 +17,6 @@ from seo_common import BeautifulSoup, fetch_url, load_html, normalize_url, requi
 LARGE_FONT_BYTES = 100_000
 
 FONT_EXTENSIONS = (".woff2", ".woff", ".ttf", ".otf", ".eot")
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    path = Path(source)
-    if path.is_file():
-        return path.read_text(encoding="utf-8"), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _font_format(url: str) -> str:
@@ -50,7 +42,7 @@ def _extract_font_faces(css: str) -> list[dict]:
 
 
 def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
-    html, url, fetched = _load_source(source, timeout=timeout)
+    html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
     soup = BeautifulSoup(html or "", "html.parser")
     issues = []

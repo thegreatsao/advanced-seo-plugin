@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 
@@ -283,6 +284,26 @@ def load_html(source: str, timeout: int = 15) -> tuple[str, str, dict]:
     with open(source, "r", encoding="utf-8") as fh:
         html = fh.read()
     return html, "", {"url": source, "status": None, "headers": {}, "error": None}
+
+
+def load_source(source: str, timeout: int = 15) -> tuple[str, str, dict]:
+    """`load_html`, but a path that exists on disk wins over anything else.
+
+    `load_html` decides by shape: something matching `https?://`, or a dotted token
+    with no slash, is treated as a URL. That is right for a bare `example.com` and
+    wrong for `./example.com.html` or an archive directory whose name carries a dot —
+    both are files, and both would be fetched.
+
+    Eleven scripts carried this same five-line wrapper, byte for byte, because each
+    one accepts `--source` as either a URL or a saved page. Written once here so a
+    change to how a source is resolved is one change rather than eleven, and so the
+    next script that needs it has somewhere to find it.
+    """
+    path = Path(source)
+    if path.is_file():
+        return (path.read_text(encoding="utf-8"), "",
+                {"url": source, "status": None, "headers": {}, "error": None})
+    return load_html(source, timeout=timeout)
 
 
 def html_parser() -> str:

@@ -17,8 +17,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import (fetch_url, likely_lcp_candidate, load_html,
-                        parse_html)
+from seo_common import fetch_url, likely_lcp_candidate, load_source, parse_html
 
 
 MODERN_FORMATS = {"avif", "webp"}
@@ -33,13 +32,6 @@ MODERN_MIME = {f"image/{fmt}" for fmt in MODERN_FORMATS}
 #  `> 250_000` in the middle of a loop, which is why no inventory of thresholds could
 #  find it. A number nothing can name is a number nobody can argue with
 LARGE_IMAGE_BYTES = 250_000
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    path = Path(source)
-    if path.is_file():
-        return path.read_text(encoding="utf-8"), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _extension(src: str) -> str:
@@ -75,7 +67,7 @@ def _local_size(src: str, html_source: str) -> int | None:
 
 
 def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
-    html, url, fetched = _load_source(source, timeout=timeout)
+    html, url, fetched = load_source(source, timeout=timeout)
     parsed = parse_html(html, url)
     images = []
     issues = []

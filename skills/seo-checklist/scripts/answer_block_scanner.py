@@ -22,10 +22,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 
-from seo_common import load_html, parse_html
+from seo_common import load_source, parse_html
 
 
 QUESTION_RE = re.compile(r"^(what|why|how|when|where|who|which|can|does|is|are)\b|\?$", re.I)
@@ -77,13 +76,6 @@ SIGNAL_POINTS = {"direct_answer": 20, "definition": 12, "list": 10, "table": 12}
 # basis: convention — the score is a 0-100 readout for a report, so it saturates
 # rather than rewarding a page for its twentieth list.
 SCORE_MAX = 100
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    if os.path.exists(source):
-        with open(source, "r", encoding="utf-8") as fh:
-            return fh.read(), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _word_count(text: str) -> int:
@@ -161,7 +153,7 @@ def _answer_after(heading):
 
 
 def scan_answer_blocks(source: str, timeout: int = 15) -> dict:
-    html, url, fetched = _load_source(source, timeout)
+    html, url, fetched = load_source(source, timeout)
     parsed = parse_html(html, url)
     soup = parsed["soup"]
 

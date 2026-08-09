@@ -1,4 +1,4 @@
-<!-- Updated: 2026-08-06 -->
+<!-- Updated: 2026-08-08 -->
 # Script output shapes
 
 All 57 scripts the registry runs are documented here, plus `site_crawl.py`, which
@@ -70,9 +70,6 @@ for that page. Use `--no-http-cache` for an isolated timing.
 |---|---|---|
 | `robots_path_tester.py` | positional `paths` | registry passes `/search /cart /checkout /login` |
 | `indexnow_checker.py` | `--key` | optional; `NO_DATA` unless key configured |
-| `competitor_gap.py` | `--competitor` | LLM/user supplies competitor URL |
-| `content_decay_detector.py` | crashes without input data | needs GSC export; `NO_DATA` otherwise |
-| `validate_schema.py` | exits 0 with empty stdout | use `schema_required_props.py` instead |
 
 ---
 
@@ -1069,34 +1066,6 @@ sitemap URL reachable and this check vacuous.
 `open_graph.og:image:width` — str
 `open_graph.og:image:height` — str
 
-### product_schema_checker.py
-
-`products` — int
-`rows[]` — array
-`issues[]` — array
-`source` — str
-`final_url` — str
-
-### readability.py
-
-`word_count` — int
-`sentence_count` — int
-`paragraph_count` — int
-`syllable_count` — int
-`avg_sentence_length` — float
-`avg_paragraph_length` — float
-`avg_syllables_per_word` — float
-`flesch_reading_ease` — float
-`flesch_kincaid_grade` — float
-`reading_level` — str
-`estimated_reading_time_min` — float
-`complex_words` — int
-`complex_word_pct` — float
-`issues[]` — array
-`recommendations[]` — array
-`sentence_rewrites[]` — array
-  - item keys: current, suggested, current_word_count, target_word_count
-
 ### redirect_checker.py
 
 `url` — str
@@ -1109,15 +1078,6 @@ sitemap URL reachable and this check vacuous.
 `has_mixed_protocol` — bool
 `issues[]` — array
 `error` — NoneType
-
-### review_schema_checker.py
-
-`reviews` — int
-`aggregate_ratings` — int
-`rows[]` — array
-`issues[]` — array
-`source` — str
-`final_url` — str
 
 ### rich_results_guard.py
 
@@ -1436,10 +1396,3 @@ the scheme. Three shapes, and the difference between them is the whole contract:
 `issues[]` — array
 `source` — str
 `final_url` — str
-
-### x_robots_header_checker.py
-
-`count` — int
-`rows[]` — array
-  - item keys: url, status, final_url, x_robots_tag, directives, indexing_effect, follow_effect, archive_effect, snippet_rules, error
-

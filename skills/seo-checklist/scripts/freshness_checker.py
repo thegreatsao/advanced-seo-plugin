@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 from datetime import date, datetime
 
-from seo_common import load_html, parse_html
+from seo_common import load_source, parse_html
 
 
 # basis: inherited — 730 days, present at import. Two years is the point at which a
@@ -25,13 +24,6 @@ DATE_RE = re.compile(
 )
 YEAR_RE = re.compile(r"\b(20\d{2}|19\d{2})\b")
 STAT_RE = re.compile(r"\b(\d+(?:\.\d+)?%|\$[\d,.]+|\d[\d,.]+\s+(?:users|customers|people|studies|respondents|pages))\b", re.I)
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    if os.path.exists(source):
-        with open(source, "r", encoding="utf-8") as fh:
-            return fh.read(), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -73,7 +65,7 @@ def _schema_dates(schema_items: list) -> dict[str, list[str]]:
 
 def check_freshness(source: str, timeout: int = 15, today: date | None = None) -> dict:
     today = today or date.today()
-    html, url, fetched = _load_source(source, timeout)
+    html, url, fetched = load_source(source, timeout)
     parsed = parse_html(html, url)
     soup = parsed["soup"]
     body = parsed.get("body_text", "")

@@ -266,20 +266,24 @@ class WhereTheParsersActuallyDiverge(unittest.TestCase):
     def scan(self, html: str, parser: str) -> dict:
         """`answer_block_scanner` over fixed markup with a fixed parser.
 
-        The patch goes at `seo_common.BeautifulSoup` and `_load_source`, so the script
+        The patch goes at `seo_common.BeautifulSoup` and `load_source`, so the script
         runs its real logic over a document it cannot fetch and a parser it did not
         choose. Restored in `finally` because leaving either patched changes every
         test that runs after this one in the same process.
+
+        Patched on the module that imported it, not on `seo_common`: the scripts do
+        `from seo_common import load_source`, so each holds its own reference and
+        rebinding the source module would not reach them.
         """
         import answer_block_scanner as scanner
-        saved_load, saved_bs = scanner._load_source, seo_common.BeautifulSoup
-        scanner._load_source = lambda source, timeout: (html, "https://example.com/", {})
+        saved_load, saved_bs = scanner.load_source, seo_common.BeautifulSoup
+        scanner.load_source = lambda source, timeout: (html, "https://example.com/", {})
         seo_common.BeautifulSoup = (
             lambda markup, _p, _parser=parser: bs4.BeautifulSoup(markup, _parser))
         try:
             return scanner.scan_answer_blocks("https://example.com/")
         finally:
-            scanner._load_source, seo_common.BeautifulSoup = saved_load, saved_bs
+            scanner.load_source, seo_common.BeautifulSoup = saved_load, saved_bs
 
     PICTURE = """<picture><source srcset="a.webp" type="image/webp">
 <source srcset="a.avif"><img src="a.jpg" alt="A"></picture>"""

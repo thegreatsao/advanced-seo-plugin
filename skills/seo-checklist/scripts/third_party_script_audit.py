@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import BeautifulSoup, fetch_url, load_html, require_bs4, same_host
+from seo_common import BeautifulSoup, fetch_url, load_source, require_bs4, same_host
 
 
 KNOWN_TAGS = {
@@ -34,12 +33,6 @@ MANY_THIRD_PARTY_SCRIPTS = 8
 # basis: inherited — 300KB of third-party JavaScript, present at import.
 THIRD_PARTY_BYTES_WARN = 300_000
 
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    path = Path(source)
-    if path.is_file():
-        return path.read_text(encoding="utf-8"), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
-
 
 def _script_category(src: str) -> str | None:
     host = urlparse(src).netloc.lower()
@@ -58,7 +51,7 @@ def _is_third_party(src: str, page_url: str) -> bool:
 
 
 def audit(source: str, fetch_scripts: bool = False, timeout: int = 15) -> dict:
-    html, url, fetched = _load_source(source, timeout=timeout)
+    html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
     soup = BeautifulSoup(html or "", "html.parser")
     scripts = []

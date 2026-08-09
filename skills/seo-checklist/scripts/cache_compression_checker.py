@@ -14,7 +14,7 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_request
 
-from seo_common import BeautifulSoup, load_html, normalize_url, require_bs4
+from seo_common import BeautifulSoup, load_source, normalize_url, require_bs4
 
 
 # basis: inherited — one week of `max-age` for a fingerprinted static asset, present at
@@ -27,13 +27,6 @@ STATIC_IMMUTABLE_MAX_AGE = 2_592_000
 
 STATIC_EXTENSIONS = (".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".woff2", ".woff")
 TEXT_EXTENSIONS = (".html", ".css", ".js", ".mjs", ".json", ".xml", ".svg", ".txt")
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    path = Path(source)
-    if path.is_file():
-        return path.read_text(encoding="utf-8"), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _is_url(value: str) -> bool:
@@ -112,7 +105,7 @@ def _check_url(url: str, timeout: int) -> dict:
 
 def audit(source: str, include_assets: bool = False, timeout: int = 15, max_assets: int = 25) -> dict:
     if not _is_url(source):
-        html, url, fetched = _load_source(source, timeout=timeout)
+        html, url, fetched = load_source(source, timeout=timeout)
         require_bs4()
         soup = BeautifulSoup(html or "", "html.parser")
         return {
@@ -124,7 +117,7 @@ def audit(source: str, include_assets: bool = False, timeout: int = 15, max_asse
             "fetch_error": fetched.get("error"),
         }
 
-    html, url, fetched = _load_source(source, timeout=timeout)
+    html, url, fetched = load_source(source, timeout=timeout)
     resources = [_check_url(url or source, timeout)]
     if include_assets and html:
         require_bs4()

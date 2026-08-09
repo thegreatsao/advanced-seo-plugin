@@ -6,17 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import BeautifulSoup, fetch_url, load_html, normalize_url, require_bs4, same_host
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    path = Path(source)
-    if path.is_file():
-        return path.read_text(encoding="utf-8"), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
+from seo_common import (BeautifulSoup, fetch_url, load_source, normalize_url,
+                        require_bs4,
+                        same_host)
 
 
 def _is_cross_origin(url: str, page_url: str) -> bool:
@@ -33,7 +27,7 @@ def _imports_from_css(css: str, base_url: str) -> list[str]:
 
 
 def audit(source: str, fetch_css: bool = False, timeout: int = 15) -> dict:
-    html, url, fetched = _load_source(source, timeout=timeout)
+    html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
     soup = BeautifulSoup(html or "", "html.parser")
     preloads = set()

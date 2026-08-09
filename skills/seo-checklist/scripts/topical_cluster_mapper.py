@@ -6,24 +6,16 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import re
 from collections import Counter, defaultdict
 
-from seo_common import load_html, normalize_url, parse_html
+from seo_common import load_source, normalize_url, parse_html
 
 
 STOPWORDS = {
     "the", "and", "for", "with", "from", "that", "this", "your", "you", "how", "what", "why", "are", "was",
     "has", "have", "can", "into", "guide", "best", "top", "page", "home", "about", "contact", "our",
 }
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    if os.path.exists(source):
-        with open(source, "r", encoding="utf-8") as fh:
-            return fh.read(), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _topic_from_text(text: str) -> str:
@@ -59,7 +51,7 @@ def _rows_from_csv(path: str) -> list[dict]:
 
 
 def _row_from_source(source: str, timeout: int) -> dict:
-    html, url, _ = _load_source(source, timeout)
+    html, url, _ = load_source(source, timeout)
     parsed = parse_html(html, url)
     title = parsed.get("title") or " ".join(parsed.get("headings", {}).get("h1", []))
     topic = _topic_from_text(f"{title} {' '.join(sum((v for v in parsed.get('headings', {}).values()), []))}")

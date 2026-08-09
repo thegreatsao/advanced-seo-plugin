@@ -15,7 +15,7 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_request
 
-from seo_common import load_html, normalize_url, parse_html
+from seo_common import load_source, normalize_url, parse_html
 
 
 # basis: inherited — 100, present at import, and a unit guess rather than a limit:
@@ -29,13 +29,6 @@ def _is_url(value: str) -> bool:
     if Path(value).is_file():
         return False
     return urlparse(value).scheme in ("http", "https") or ("." in value and "/" not in value)
-
-
-def _load_source(source: str, timeout: int) -> tuple[str, str, dict]:
-    path = Path(source)
-    if path.is_file():
-        return path.read_text(encoding="utf-8"), "", {"url": source, "status": None, "headers": {}, "error": None}
-    return load_html(source, timeout=timeout)
 
 
 def _load_lighthouse(path: str) -> dict:
@@ -134,7 +127,7 @@ def _fetch_ttfb(url: str, timeout: int) -> tuple[int | None, dict, str | None]:
 
 
 def analyze_source(source: str, timeout: int = 15) -> dict:
-    html, final_url, fetched = _load_source(source, timeout=timeout)
+    html, final_url, fetched = load_source(source, timeout=timeout)
     parsed = parse_html(html, final_url or source)
     image = _candidate_lcp_image(parsed)
     ttfb_ms = None
