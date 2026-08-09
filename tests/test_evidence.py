@@ -16,6 +16,7 @@ they are pinned below with the item id.
 Offline: no fixture site, no network, no API key. The HTTP layer is stubbed at
 `seo_common.fetch_url` or `lib.safe_http.safe_get`, whichever the script uses.
 """
+import ast
 import json
 import os
 import sys
@@ -55,6 +56,29 @@ def verdict(item_id: str, output: dict) -> str:
     if warn and evaluate(warn, output)[0]:
         return WARN
     return FAIL
+
+
+class SharedHelpersStayShared(unittest.TestCase):
+    def test_no_script_carries_its_own_fetch_html(self):
+        """The gate on Task 1 of 0.27.1, not the fix.
+
+        Three scripts had drifted copies — two returned a bare string, one a tuple;
+        two printed to stderr, one did not. They agree now because there is one of
+        them. A fourth copy would be invisible again: each one works, and the
+        divergence only shows when two scripts disagree about the same page.
+        """
+        offenders = []
+        for name in sorted(os.listdir(SCRIPTS)):
+            if not name.endswith(".py") or name == "seo_common.py":
+                continue
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as f:
+                tree = ast.parse(f.read(), filename=name)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name in (
+                        "fetch_html", "walk_json", "_walk_json"):
+                    offenders.append(f"{name}:{node.lineno} defines {node.name}")
+        self.assertEqual(offenders, [], "import it from seo_common instead: "
+                                        + "; ".join(offenders))
 
 
 PAGE = """<!doctype html>

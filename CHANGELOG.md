@@ -10,6 +10,42 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.27.1 — five helpers become three, and two of the four "duplicates" were not
+
+**Three drifted `fetch_html` functions and three identical JSON walkers made one
+change mean six edits, while the audit that found them overstated two other
+duplicates.** `seo_common.fetch_html` now owns the guarded request and returns the
+body with its post-redirect URL. The two callers that used to return only the body
+drop the URL explicitly, and the hreflang caller keeps its old 10-second default and
+silent failures with `quiet=True`; consolidation does not change any caller's timeout
+or stderr contract. The three byte-for-byte `_walk_json` recursions are now the public
+`seo_common.walk_json`, and a structural test rejects another script-local copy of
+either helper.
+
+`hreflang_checker.fetch_robots_txt` was not a second implementation of the live
+`robots_checker` function. It had no caller and returned a bare string; the live
+function returns the nine-key robots audit dictionary, and `seo_common.fetch_robots`
+has a third contract again. The dead function is deleted and `robots_checker` is
+unchanged rather than folded into a helper that would alter its output shape.
+
+`checklist_runner.html_parser` was not a second parser decision either. It is the
+lazy, defensive wrapper around `seo_common.html_parser` that keeps archive mode
+importable without optional parser dependencies. The wrapper remains, and a test now
+proves an unimportable `seo_common` costs the artifact its parser label rather than
+costing the run.
+
+The runner's argument surface, mode decision, Search Console gate and console report
+now sit in `build_parser`, `resolve_mode`, `resolve_gsc` and `print_report`. Registry
+loading stays in `main`: the proposed two-value extraction overlooked two live outputs,
+the registry schema version and normalized `--only` categories, and hiding either in a
+side effect would make the calling convention less honest rather than more readable.
+The entry fetch, profile, artifact, crawl and payload blocks still thread their state
+into one another and remain together deliberately.
+
+Registry `18948c09ef94` unchanged. Archive-mode artifacts are identical after removing
+run timestamps; every one of the 214 item `id`/`status` pairs is identical. 681 -> 683
+tests.
+
 ## 0.27.0 — 8 August 2026
 
 **The SSRF guard reached 54 of the 55 scripts, and the one it missed is the one that

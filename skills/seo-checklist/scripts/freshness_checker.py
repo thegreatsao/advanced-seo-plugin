@@ -8,7 +8,7 @@ import json
 import re
 from datetime import date, datetime
 
-from seo_common import load_source, parse_html
+from seo_common import load_source, parse_html, walk_json
 
 
 # basis: inherited — 730 days, present at import. Two years is the point at which a
@@ -43,20 +43,10 @@ def _parse_date(value: str | None) -> date | None:
     return None
 
 
-def _walk_json(value):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk_json(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_json(child)
-
-
 def _schema_dates(schema_items: list) -> dict[str, list[str]]:
     dates = {"datePublished": [], "dateModified": []}
     for item in schema_items:
-        for node in _walk_json(item):
+        for node in walk_json(item):
             for key in dates:
                 if isinstance(node.get(key), str):
                     dates[key].append(node[key])

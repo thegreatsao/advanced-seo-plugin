@@ -8,7 +8,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import load_source, parse_html
+from seo_common import load_source, parse_html, walk_json
 
 
 CLAIM_RE = re.compile(
@@ -22,22 +22,12 @@ HIGH_TRUST_HOST_RE = re.compile(
 )
 
 
-def _walk_json(value):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk_json(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_json(child)
-
-
 def _schema_entity_signals(schema_items: list) -> dict:
     names = set()
     same_as = set()
     types = set()
     for item in schema_items:
-        for node in _walk_json(item):
+        for node in walk_json(item):
             if node.get("@type"):
                 types.add(str(node["@type"]))
             if node.get("name"):

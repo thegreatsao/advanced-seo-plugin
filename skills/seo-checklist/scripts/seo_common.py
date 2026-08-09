@@ -25,10 +25,10 @@ except ImportError:  # pragma: no cover - exercised by users without deps
 
 try:
     from lib.safe_http import (AGENTIC_SEO_USER_AGENT, RobotsDisallowed,
-                               safe_request)
+                               safe_get, safe_request)
 except ImportError:
     from scripts.lib.safe_http import (AGENTIC_SEO_USER_AGENT, RobotsDisallowed,
-                                       safe_request)
+                                       safe_get, safe_request)
 
 
 USER_AGENT = AGENTIC_SEO_USER_AGENT
@@ -306,6 +306,29 @@ def load_source(source: str, timeout: int = 15) -> tuple[str, str, dict]:
     return load_html(source, timeout=timeout)
 
 
+def fetch_html(url: str, timeout: int = 15, quiet: bool = False) -> tuple[str, str]:
+    """Fetch a page and say where it ended up. `("", url)` on any failure.
+
+    Three scripts carried this, and the three had drifted into three contracts: two
+    returned the body alone and threw the final URL away, one returned both; two
+    printed the exception to stderr, one swallowed it. The tuple is the honest
+    shape — `hreflang_checker` needs the post-redirect URL to judge whether an
+    alternate points back, and a caller that does not need it drops it. `quiet`
+    keeps the silent caller silent, because a helper that starts writing to stderr
+    inside a per-alternate loop turns one page's audit into forty lines of noise.
+
+    The guard travels with `safe_get`, as it does everywhere else — see
+    `lib.safe_http`. Nothing here reaches the network by another route.
+    """
+    try:
+        resp = safe_get(url, timeout=timeout)
+        return resp.text, resp.url
+    except Exception as exc:  # noqa: BLE001 — an unreachable page is data, not a crash
+        if not quiet:
+            print(f"Error fetching {url}: {exc}", file=sys.stderr)
+        return "", url
+
+
 def html_parser() -> str:
     """Which parser reads every page in this run. One decision, in one place.
 
@@ -345,6 +368,22 @@ def html_parser() -> str:
         # the runner reports which parser ran. The structural checks are the ones
         # that differ — the divergence table in tests/test_parser.py says how.
         return "html.parser"
+
+
+def walk_json(value):
+    """Every dict in a JSON tree, in document order, parents before children.
+
+    Three schema readers each carried this recursion verbatim. Public here — the
+    leading underscore in the three copies meant "private to this script", and the
+    thing it names is now the shared way this repository walks JSON-LD.
+    """
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from walk_json(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk_json(child)
 
 
 def parse_html(html: str, base_url: str = "") -> dict:

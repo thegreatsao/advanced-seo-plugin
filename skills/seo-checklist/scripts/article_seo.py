@@ -33,10 +33,10 @@ except ImportError:
 
 try:
     from lib.safe_http import safe_get
-    from seo_common import THIN_CONTENT_WORDS
+    from seo_common import THIN_CONTENT_WORDS, fetch_html
 except ImportError:
     from scripts.lib.safe_http import safe_get
-    from scripts.seo_common import THIN_CONTENT_WORDS
+    from scripts.seo_common import THIN_CONTENT_WORDS, fetch_html
 
 
 # ---------------------------------------------------------------------------
@@ -105,19 +105,6 @@ DEPRECATED_SCHEMA = {
     "LearningVideo", "ClaimReview", "VehicleListing", "PracticeProblems",
 }
 RESTRICTED_SCHEMA = {"FAQPage"}  # government / healthcare only
-
-
-# ---------------------------------------------------------------------------
-# Fetch
-# ---------------------------------------------------------------------------
-
-def fetch_html(url: str) -> str:
-    """Fetch raw HTML from a URL."""
-    try:
-        return safe_get(url, timeout=15).text
-    except Exception as exc:
-        print(f"Error fetching {url}: {exc}", file=sys.stderr)
-        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -593,7 +580,7 @@ def main():
     parser.add_argument("--no-autocomplete", action="store_true", help="Skip Google Autocomplete lookup")
     args = parser.parse_args()
 
-    html = fetch_html(args.url)
+    html = fetch_html(args.url, timeout=15)[0]
     if not html:
         out = {"error": "Failed to fetch URL", "url": args.url}
         print(json.dumps(out) if args.json else f"Error: Failed to fetch {args.url}")

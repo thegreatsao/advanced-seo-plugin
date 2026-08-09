@@ -34,9 +34,11 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from lib.safe_http import safe_get, safe_head
+    from lib.safe_http import safe_head
+    from seo_common import fetch_html
 except ImportError:
-    from scripts.lib.safe_http import safe_get, safe_head
+    from scripts.lib.safe_http import safe_head
+    from scripts.seo_common import fetch_html
 
 
 # ---------------------------------------------------------------------------
@@ -98,26 +100,6 @@ COMMON_REGION_MISTAKES = {
 }
 
 # ---------------------------------------------------------------------------
-# Fetch helpers
-# ---------------------------------------------------------------------------
-
-def fetch_html(url: str, timeout: int = 10) -> tuple[str, str]:
-    """Return (html, final_url) after fetching. Returns ('', url) on error."""
-    try:
-        resp = safe_get(url, timeout=timeout)
-        return resp.text, resp.url
-    except Exception:
-        return "", url
-
-
-def fetch_robots_txt(base_url: str) -> str:
-    parsed = urlparse(base_url)
-    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
-    html, _ = fetch_html(robots_url, timeout=6)
-    return html
-
-
-# ---------------------------------------------------------------------------
 # Hreflang tag extraction
 # ---------------------------------------------------------------------------
 
@@ -174,7 +156,7 @@ def check_sitemap_hreflang(base_url: str) -> dict:
     """Check /sitemap.xml for xhtml:link hreflang attributes."""
     parsed = urlparse(base_url)
     sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
-    html, _ = fetch_html(sitemap_url, timeout=8)
+    html, _ = fetch_html(sitemap_url, timeout=8, quiet=True)
     if not html:
         return {"found": False, "url": sitemap_url}
 
@@ -509,7 +491,7 @@ def check_return_tags(
     for alt_tag in non_self:
         alt_url = alt_tag["url"]
         time.sleep(0.5)  # polite crawl delay
-        alt_html, _ = fetch_html(alt_url, timeout=timeout)
+        alt_html, _ = fetch_html(alt_url, timeout=timeout, quiet=True)
         if not alt_html:
             issues.append({
                 "passed": None,
@@ -576,7 +558,7 @@ def check_canonical_alignment(soup: BeautifulSoup, tags: list[dict], page_url: s
 
 def run_hreflang_check(url: str, verify_returns: bool = False) -> dict:
     """Run all 8 hreflang checks and return a structured report."""
-    html, final_url = fetch_html(url)
+    html, final_url = fetch_html(url, timeout=10, quiet=True)
     if not html:
         return {"error": f"Failed to fetch URL: {url}", "url": url}
 

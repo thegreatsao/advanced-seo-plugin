@@ -2248,7 +2248,7 @@ def archive_entry(archive_dir: str, entry: str) -> str:
     return ""
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Run the SEO checklist registry against a URL")
     ap.add_argument("url")
     ap.add_argument("--registry", default=REGISTRY)
@@ -2353,7 +2353,112 @@ def main() -> int:
                     help="Search Console property (default: sc-domain:<registrable domain>). "
                          "Must be one the service account can read — it is not always the "
                          "same string as the audited URL.")
-    a = ap.parse_args()
+    return ap
+
+
+def resolve_mode(a) -> tuple[str, set[str]]:
+    mode = a.mode or ("archive" if a.archive else "live")
+    if a.archive and mode != "archive":
+        print(f"--archive given but --mode {mode}: archive files will be ignored",
+              file=sys.stderr)
+    return mode, set(MODE_CAPS[mode])
+
+
+def resolve_gsc(a, caps, mode) -> str:
+    gsc_path = find_gsc_credentials(a.gsc_credentials)
+    # Search Console is an external API, so it is offered only by modes allowed
+    # to reach external services at all. Without this gate a key that merely
+    # happens to sit on disk pulls `archive` — documented as making no network
+    # calls whatsoever — into querying Google about the audited property.
+    if gsc_path and "api" not in caps:
+        if not a.quiet:
+            print(f"  GSC credentials found, but {mode} mode makes no network "
+                  f"calls; Search Console items report N/A", file=sys.stderr)
+        return ""
+    return gsc_path
+
+
+def print_report(payload, a, hist, crawl_path, diff_note) -> None:
+    mode = payload["mode"]
+    audit_url = payload["url"]
+    entry_error = payload.get("entry_error") or ""
+    entry_guard = payload.get("entry_guard") or ""
+    s = payload["scores"]
+    print(f"\nMode: {mode}   GSC: {'yes' if payload['gsc_credentials_found'] else 'no'}")
+    if entry_error:
+        print(f"UNREACHABLE: {audit_url} could not be read — {entry_error}.")
+        print(f"No score: nothing about this site was measured. "
+              f"{s['decided']}/{s['total_items']} items decided.")
+    else:
+        print(f"SEO Score: {s['seo_score']}/100 — over {s['decided']} items, "
+              f"{s['weight_pct']}% of the weight in scope")
+    # The partition, not a percentage. Every item is in one line and the lines add
+    # up to the registry, which is the property a reader can check by eye.
+    p, w = s["partition"], s["waiting_on_you"]
+    waiting = ""
+    if p["waiting_on_you"]:
+        halves = [f"{w['llm_pending']} unanswered LLM item(s)" if w["llm_pending"] else "",
+                  f"{w['needs_input']} missing input(s)" if w["needs_input"] else ""]
+        waiting = "   (" + ", ".join(h for h in halves if h) + ")"
+    print(f"  decided          {p['decided']:>4}")
+    print(f"  waiting on you   {p['waiting_on_you']:>4}{waiting}")
+    print(f"  needs a person   {p['needs_a_person']:>4}")
+    print(f"  undecided        {p['undecided']:>4}")
+    if p["not_applicable"]:
+        print(f"  not applicable   {p['not_applicable']:>4}")
+    print(f"  {'':<15}  ---- {s['total_items']} items in the registry")
+    if payload["requested_url"]:
+        print(f"Redirected: {payload['requested_url']} -> {audit_url} "
+              f"(another host; the destination was audited)")
+    if a.allow_private and mode != "archive":
+        # Printed even under --quiet, which suppresses the header: the one line a
+        # reader needs to know this is not the public site must not be optional.
+        # Archive mode is excluded because it makes no requests at all, and a
+        # caveat about a network the run never touched is noise dressed as candour.
+        print("Private addresses allowed (--allow-private): this run could reach a "
+              "host that is not on the public internet. If it did, these verdicts "
+              "describe a local or staging copy, not what a visitor sees.")
+    if entry_guard and not entry_error:
+        print(f"WARNING: the entry page looks like {entry_guard.replace('_', ' ')} "
+              f"and was audited anyway (--no-page-guard). Every verdict above "
+              f"describes that page, not the site.")
+    if payload["script_failures"]:
+        parts = ", ".join(f"{n} {kind}" for kind, n in payload["script_failures"].items())
+        print(f"Script failures: {parts}"
+              + ("  — timeouts are retryable: raise --timeout or lower --workers"
+                 if "timeout" in payload["script_failures"] else ""))
+    c = payload.get("crawl")
+    if c and c.get("broken"):
+        print(f"\nBroken URLs ({len(c['broken'])}):")
+        for row in c["broken"][:10]:
+            where = (f" — linked from {row['linked_from'][0]}"
+                     + (f" and {len(row['linked_from']) - 1} other page(s)"
+                        if len(row["linked_from"]) > 1 else "")
+                     if row.get("linked_from") else " — in the sitemap only")
+            print(f"  [{row['status'] or 'no response'}] {row['url']}{where}")
+        if len(c["broken"]) > BROKEN_URLS_SHOWN:
+            print(f"  … {len(c['broken']) - BROKEN_URLS_SHOWN} more in {c['inventory']}")
+    print(f"\nResults: {os.path.abspath(a.json_out)}")
+    if crawl_path and os.path.exists(crawl_path):
+        print(f"Crawl:   {os.path.abspath(crawl_path)}")
+    if hist:
+        print(f"History: {hist}")
+    if a.diff:
+        d = payload.get("diff")
+        if d is None:
+            print("Diff: no previous run for this domain")
+        elif not d:
+            print("Diff: no status changes since the previous run")
+        else:
+            print(f"\nChanged since previous run ({len(d)}):")
+            for c in d:
+                print(f"  {c['from']} -> {c['to']}  {c['id']} {c['title']}")
+        if diff_note:
+            print(f"Diff scope: {diff_note}")
+
+
+def main() -> int:
+    a = build_parser().parse_args()
 
     # Passed to the evidence scripts through the environment, because they are
     # separate processes and the pacing they share is keyed on it.
@@ -2367,26 +2472,13 @@ def main() -> int:
     if a.allow_private:
         os.environ["SEO_ALLOW_PRIVATE"] = "1"
 
-    mode = a.mode or ("archive" if a.archive else "live")
-    if a.archive and mode != "archive":
-        print(f"--archive given but --mode {mode}: archive files will be ignored",
-              file=sys.stderr)
-    caps = set(MODE_CAPS[mode])
+    mode, caps = resolve_mode(a)
 
     http_cache = ""
     if caps & {"fetch", "crawl", "api"} and not a.no_http_cache:
         http_cache = open_http_cache()
 
-    gsc_path = find_gsc_credentials(a.gsc_credentials)
-    # Search Console is an external API, so it is offered only by modes allowed
-    # to reach external services at all. Without this gate a key that merely
-    # happens to sit on disk pulls `archive` — documented as making no network
-    # calls whatsoever — into querying Google about the audited property.
-    if gsc_path and "api" not in caps:
-        if not a.quiet:
-            print(f"  GSC credentials found, but {mode} mode makes no network "
-                  f"calls; Search Console items report N/A", file=sys.stderr)
-        gsc_path = ""
+    gsc_path = resolve_gsc(a, caps, mode)
 
     with open(a.registry, encoding="utf-8") as f:
         registry = json.load(f)
@@ -2906,78 +2998,7 @@ def main() -> int:
     with open(a.json_out, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    s = payload["scores"]
-    print(f"\nMode: {mode}   GSC: {'yes' if gsc_path else 'no'}")
-    if entry_error:
-        print(f"UNREACHABLE: {audit_url} could not be read — {entry_error}.")
-        print(f"No score: nothing about this site was measured. "
-              f"{s['decided']}/{s['total_items']} items decided.")
-    else:
-        print(f"SEO Score: {s['seo_score']}/100 — over {s['decided']} items, "
-              f"{s['weight_pct']}% of the weight in scope")
-    # The partition, not a percentage. Every item is in one line and the lines add
-    # up to the registry, which is the property a reader can check by eye.
-    p, w = s["partition"], s["waiting_on_you"]
-    waiting = ""
-    if p["waiting_on_you"]:
-        halves = [f"{w['llm_pending']} unanswered LLM item(s)" if w["llm_pending"] else "",
-                  f"{w['needs_input']} missing input(s)" if w["needs_input"] else ""]
-        waiting = "   (" + ", ".join(h for h in halves if h) + ")"
-    print(f"  decided          {p['decided']:>4}")
-    print(f"  waiting on you   {p['waiting_on_you']:>4}{waiting}")
-    print(f"  needs a person   {p['needs_a_person']:>4}")
-    print(f"  undecided        {p['undecided']:>4}")
-    if p["not_applicable"]:
-        print(f"  not applicable   {p['not_applicable']:>4}")
-    print(f"  {'':<15}  ---- {s['total_items']} items in the registry")
-    if payload["requested_url"]:
-        print(f"Redirected: {payload['requested_url']} -> {audit_url} "
-              f"(another host; the destination was audited)")
-    if a.allow_private and mode != "archive":
-        # Printed even under --quiet, which suppresses the header: the one line a
-        # reader needs to know this is not the public site must not be optional.
-        # Archive mode is excluded because it makes no requests at all, and a
-        # caveat about a network the run never touched is noise dressed as candour.
-        print("Private addresses allowed (--allow-private): this run could reach a "
-              "host that is not on the public internet. If it did, these verdicts "
-              "describe a local or staging copy, not what a visitor sees.")
-    if entry_guard and not entry_error:
-        print(f"WARNING: the entry page looks like {entry_guard.replace('_', ' ')} "
-              f"and was audited anyway (--no-page-guard). Every verdict above "
-              f"describes that page, not the site.")
-    if payload["script_failures"]:
-        parts = ", ".join(f"{n} {kind}" for kind, n in payload["script_failures"].items())
-        print(f"Script failures: {parts}"
-              + ("  — timeouts are retryable: raise --timeout or lower --workers"
-                 if "timeout" in payload["script_failures"] else ""))
-    c = payload.get("crawl")
-    if c and c.get("broken"):
-        print(f"\nBroken URLs ({len(c['broken'])}):")
-        for row in c["broken"][:10]:
-            where = (f" — linked from {row['linked_from'][0]}"
-                     + (f" and {len(row['linked_from']) - 1} other page(s)"
-                        if len(row["linked_from"]) > 1 else "")
-                     if row.get("linked_from") else " — in the sitemap only")
-            print(f"  [{row['status'] or 'no response'}] {row['url']}{where}")
-        if len(c["broken"]) > BROKEN_URLS_SHOWN:
-            print(f"  … {len(c['broken']) - BROKEN_URLS_SHOWN} more in {c['inventory']}")
-    print(f"\nResults: {os.path.abspath(a.json_out)}")
-    if crawl_path and os.path.exists(crawl_path):
-        print(f"Crawl:   {os.path.abspath(crawl_path)}")
-    if hist:
-        print(f"History: {hist}")
-    if a.diff:
-        d = payload.get("diff")
-        if d is None:
-            print("Diff: no previous run for this domain")
-        elif not d:
-            print("Diff: no status changes since the previous run")
-        else:
-            print(f"\nChanged since previous run ({len(d)}):")
-            for c in d:
-                print(f"  {c['from']} -> {c['to']}  {c['id']} {c['title']}")
-        if diff_note:
-            print(f"Diff scope: {diff_note}")
+    print_report(payload, a, hist, crawl_path, diff_note)
     return 0
 
 

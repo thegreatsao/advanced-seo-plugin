@@ -27,8 +27,10 @@ except ImportError:
 
 try:
     from lib.safe_http import safe_get, safe_head
+    from seo_common import fetch_html
 except ImportError:
     from scripts.lib.safe_http import safe_get, safe_head
+    from scripts.seo_common import fetch_html
 
 # Authoritative sameAs targets (ranked by KG signal strength)
 SAMEAS_PLATFORMS = {
@@ -43,18 +45,6 @@ SAMEAS_PLATFORMS = {
     "facebook.com": {"name": "Facebook", "priority": "Low", "kg_signal": "Weak"},
     "instagram.com": {"name": "Instagram", "priority": "Low", "kg_signal": "Weak"},
 }
-
-
-# ---------------------------------------------------------------------------
-# Fetch
-# ---------------------------------------------------------------------------
-
-def fetch_html(url: str, timeout: int = 12) -> str:
-    try:
-        return safe_get(url, timeout=timeout).text
-    except Exception as exc:
-        print(f"Error fetching {url}: {exc}", file=sys.stderr)
-        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +320,7 @@ def check_nap_consistency(soup: BeautifulSoup, entities: list) -> list:
 
 def run_entity_check(url: str, entity_name: str = "", kg_api_key: str = "") -> dict:
     """Run full entity SEO check."""
-    html = fetch_html(url)
+    html = fetch_html(url, timeout=12)[0]
     if not html:
         return {"error": f"Failed to fetch {url}", "url": url}
 

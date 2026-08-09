@@ -8,7 +8,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import load_source, parse_html
+from seo_common import load_source, parse_html, walk_json
 
 
 CREDENTIAL_RE = re.compile(
@@ -23,20 +23,10 @@ FIRST_HAND_RE = re.compile(
 )
 
 
-def _walk_json(value):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk_json(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_json(child)
-
-
 def _schema_values(schema_items: list, keys: set[str]) -> list[str]:
     values = []
     for item in schema_items:
-        for node in _walk_json(item):
+        for node in walk_json(item):
             for key in keys:
                 value = node.get(key)
                 if isinstance(value, str):

@@ -42,6 +42,7 @@ import json
 import os
 import sys
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
@@ -211,6 +212,18 @@ class TheChoiceIsDeliberate(unittest.TestCase):
         """A reader comparing two runs that disagree has to be able to rule this out."""
         from checklist_runner import html_parser as recorded
         self.assertEqual(recorded(), seo_common.html_parser())
+
+    def test_an_unimportable_seo_common_costs_a_label_and_not_the_run(self):
+        """Why the import stays inside the function, asserted rather than commented.
+
+        The runner is importable without bs4 or lxml on purpose: `--archive` has to
+        run on a bare checkout, and this label is one field in the artifact. Hoisting
+        `from seo_common import html_parser` to module level would read as a tidy-up
+        and would turn a missing optional dependency into a runner that cannot start.
+        """
+        import checklist_runner
+        with mock.patch.dict(sys.modules, {"seo_common": None}):
+            self.assertEqual(checklist_runner.html_parser(), "unknown")
 
     def test_both_html_parsing_entry_points_agree(self):
         """`parse_html.py` had its own copy of the import-order test, so one audit
