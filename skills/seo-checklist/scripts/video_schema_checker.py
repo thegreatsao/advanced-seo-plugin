@@ -8,17 +8,11 @@ import re
 from typing import Any
 
 from schema_required_props import extract_schema_documents, find_schema_nodes
-from seo_common import issue, print_json_or_text
+from seo_common import as_list, issue, print_json_or_text
 
 
 ISO_DURATION_RE = re.compile(r"^P(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
-
-
-def as_list(value: Any) -> list[Any]:
-    if value is None:
-        return []
-    return value if isinstance(value, list) else [value]
 
 
 def check_video_schema(documents: list[Any]) -> dict[str, Any]:

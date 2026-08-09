@@ -34,6 +34,17 @@ importable without optional parser dependencies. The wrapper remains, and a test
 proves an unimportable `seo_common` costs the artifact its parser label rather than
 costing the run.
 
+**Two shared decisions still had two homes after the first pass.** The byte-identical
+`_is_url` functions are now `seo_common.is_url`, and the two spellings of `as_list`
+are now `seo_common.as_list`; both callers keep their existing behaviour for files,
+URLs and JSON-LD scalars. The structural gate now rejects all six public and
+formerly-private spellings of the four shared helpers it protects.
+
+**`seo_common` called itself a bag of small helpers rather than the scripts' public
+API, so copying one looked as legitimate as importing it.** Its module contract now
+states the one-copy rule, groups the shared surface, and explains the flat and
+package-compatible import forms that the scripts need in their two execution modes.
+
 The runner's argument surface, mode decision, Search Console gate and console report
 now sit in `build_parser`, `resolve_mode`, `resolve_gsc` and `print_report`. Registry
 loading stays in `main`: the proposed two-value extraction overlooked two live outputs,

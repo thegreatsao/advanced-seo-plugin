@@ -8,14 +8,13 @@ import json
 import re
 import time
 from pathlib import Path
-from urllib.parse import urlparse
 
 try:
     from lib.safe_http import safe_request
 except ImportError:
     from scripts.lib.safe_http import safe_request
 
-from seo_common import load_source, normalize_url, parse_html
+from seo_common import is_url, load_source, normalize_url, parse_html
 
 
 # basis: inherited — 100, present at import, and a unit guess rather than a limit:
@@ -24,12 +23,6 @@ from seo_common import load_source, normalize_url, parse_html
 #  100ms of navigation is rare enough that treating the value as seconds is the safer
 #  reading. Wrong for a very fast resource, which is the trade.
 MS_IF_ABOVE = 100
-
-def _is_url(value: str) -> bool:
-    if Path(value).is_file():
-        return False
-    return urlparse(value).scheme in ("http", "https") or ("." in value and "/" not in value)
-
 
 def _load_lighthouse(path: str) -> dict:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -133,7 +126,7 @@ def analyze_source(source: str, timeout: int = 15) -> dict:
     ttfb_ms = None
     headers = {}
     error = fetched.get("error")
-    if _is_url(source) and final_url:
+    if is_url(source) and final_url:
         ttfb_ms, headers, timing_error = _fetch_ttfb(final_url, timeout)
         error = error or timing_error
 

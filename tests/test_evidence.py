@@ -59,13 +59,13 @@ def verdict(item_id: str, output: dict) -> str:
 
 
 class SharedHelpersStayShared(unittest.TestCase):
-    def test_no_script_carries_its_own_fetch_html(self):
-        """The gate on Task 1 of 0.27.1, not the fix.
+    def test_no_script_carries_its_own_copy_of_a_shared_helper(self):
+        """Shared helpers have one definition, in seo_common, not one per caller.
 
-        Three scripts had drifted copies — two returned a bare string, one a tuple;
-        two printed to stderr, one did not. They agree now because there is one of
-        them. A fourth copy would be invisible again: each one works, and the
-        divergence only shows when two scripts disagree about the same page.
+        Each copied helper worked on its own; the defect appeared only when copies
+        drifted or when the same policy had to change in several places. Keep both
+        public and formerly-private spellings here, because a future script-local
+        copy would most likely restore the leading underscore.
         """
         offenders = []
         for name in sorted(os.listdir(SCRIPTS)):
@@ -75,7 +75,8 @@ class SharedHelpersStayShared(unittest.TestCase):
                 tree = ast.parse(f.read(), filename=name)
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name in (
-                        "fetch_html", "walk_json", "_walk_json"):
+                        "fetch_html", "walk_json", "_walk_json", "is_url",
+                        "_is_url", "as_list"):
                     offenders.append(f"{name}:{node.lineno} defines {node.name}")
         self.assertEqual(offenders, [], "import it from seo_common instead: "
                                         + "; ".join(offenders))

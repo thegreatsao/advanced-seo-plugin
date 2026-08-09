@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from pathlib import Path
 from urllib.parse import urlparse
 
 try:
@@ -14,7 +13,7 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_request
 
-from seo_common import BeautifulSoup, load_source, normalize_url, require_bs4
+from seo_common import BeautifulSoup, is_url, load_source, normalize_url, require_bs4
 
 
 # basis: inherited — one week of `max-age` for a fingerprinted static asset, present at
@@ -27,12 +26,6 @@ STATIC_IMMUTABLE_MAX_AGE = 2_592_000
 
 STATIC_EXTENSIONS = (".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".woff2", ".woff")
 TEXT_EXTENSIONS = (".html", ".css", ".js", ".mjs", ".json", ".xml", ".svg", ".txt")
-
-
-def _is_url(value: str) -> bool:
-    if Path(value).is_file():
-        return False
-    return urlparse(value).scheme in ("http", "https") or ("." in value and "/" not in value)
 
 
 def _asset_urls(soup, page_url: str = "") -> list[str]:
@@ -104,7 +97,7 @@ def _check_url(url: str, timeout: int) -> dict:
 
 
 def audit(source: str, include_assets: bool = False, timeout: int = 15, max_assets: int = 25) -> dict:
-    if not _is_url(source):
+    if not is_url(source):
         html, url, fetched = load_source(source, timeout=timeout)
         require_bs4()
         soup = BeautifulSoup(html or "", "html.parser")

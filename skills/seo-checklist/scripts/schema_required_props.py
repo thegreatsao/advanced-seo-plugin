@@ -10,7 +10,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-from seo_common import issue, load_html, parse_html, print_json_or_text
+from seo_common import as_list, issue, load_html, parse_html, print_json_or_text
 
 
 REQUIRED_PROPS: dict[str, set[str]] = {
@@ -56,14 +56,6 @@ PLACEHOLDER_MARKERS = ("REPLACE", "TODO", "INSERT", "example.com", "lorem ipsum"
 # (which matches the string "BreadcrumbList") failed every site with a working
 # breadcrumb. Two accuse-everybody defects in the same six lines.
 PLACEHOLDER_BRACKETS = re.compile(r"\[[A-Z][A-Z0-9 _/-]{2,}\]")
-
-
-def as_list(value: Any) -> list[Any]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return value
-    return [value]
 
 
 def schema_type_names(value: Any) -> list[str]:

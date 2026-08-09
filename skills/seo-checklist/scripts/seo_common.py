@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
-"""Small shared helpers for standalone SEO CLI scripts."""
+"""The public shared API for the standalone SEO CLI scripts.
+
+If a script needs one of these helpers, it imports it. A second copy is a defect,
+not a convenience; ``test_no_script_carries_its_own_copy_of_a_shared_helper``
+enforces that rule for the helpers that have already escaped into copies.
+
+HTTP and source resolution are ``require_requests``, ``fetch_url``, ``fetch_html``,
+the ``safe_get`` re-export, ``read_urls``, ``load_html``, ``load_source`` and
+``is_url``. URL handling is ``normalize_url``, ``origin``, ``clean_url`` and
+``same_host``. HTML and image handling is the ``BeautifulSoup`` dependency handle,
+``require_bs4``, ``html_parser``, ``parse_html``, ``is_responsive_fill_image``,
+``srcset_urls``, ``picture_sources`` and ``likely_lcp_candidate``. Robots and
+sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
+``discover_sitemap_urls`` and ``parse_sitemap_xml``. JSON-LD uses ``walk_json`` and
+``as_list``. Output and directive handling is ``issue``, ``extract_directives`` and
+``print_json_or_text``. The shared policy constants are ``USER_AGENT``,
+``HTML_CTYPES``, ``XML_CTYPES``, ``THIN_CONTENT_WORDS``, ``LCP_MIN_AREA`` and
+``CONVENTIONAL_SITEMAP_PATHS``.
+
+Scripts launched directly use ``from seo_common import x``. A script that must also
+work when imported as ``scripts.foo`` uses the dual-path ``try/except ImportError``
+form and falls back to ``from scripts.seo_common import x``; the package import has
+a different module root, so both spellings are necessary there.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +33,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 
 try:
@@ -286,6 +309,22 @@ def load_html(source: str, timeout: int = 15) -> tuple[str, str, dict]:
     return html, "", {"url": source, "status": None, "headers": {}, "error": None}
 
 
+def is_url(value: str) -> bool:
+    """Whether `value` names something to fetch rather than something to open.
+
+    A file on disk wins over any spelling: `--source example.com/page.html` is a URL,
+    but if that path exists it is the file that was meant. The bare-domain clause is
+    what lets `--source example.com` work without a scheme, and the `"/" not in value`
+    guard is what stops `blog/post.html` being mistaken for one.
+
+    Two scripts carried this identically. It decides whether a run reaches the network
+    at all, which is not a decision that should have had two homes.
+    """
+    if Path(value).is_file():
+        return False
+    return urlparse(value).scheme in ("http", "https") or ("." in value and "/" not in value)
+
+
 def load_source(source: str, timeout: int = 15) -> tuple[str, str, dict]:
     """`load_html`, but a path that exists on disk wins over anything else.
 
@@ -384,6 +423,18 @@ def walk_json(value):
     elif isinstance(value, list):
         for child in value:
             yield from walk_json(child)
+
+
+def as_list(value: Any) -> list[Any]:
+    """A JSON-LD value as a list, whether it arrived as one, as a scalar, or not at all.
+
+    Schema.org permits a bare value anywhere a list is allowed, so every reader of
+    JSON-LD needs this and two of them had written it — with `None` folding to `[]`
+    rather than `[None]`, which is the part worth having in one place.
+    """
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
 
 
 def parse_html(html: str, base_url: str = "") -> dict:
