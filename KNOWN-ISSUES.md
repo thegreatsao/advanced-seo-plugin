@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.25.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.28.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -219,16 +219,18 @@ to hang one on. All of them are named now:
 | unnamed | 77 | **0** | a bare literal, with nowhere to carry a basis at all |
 
 Since 0.27.2, `measured` is enforced as `corpus=<what>; date=<YYYY-MM-DD>;
-method=<how>` rather than accepted as free prose; this makes the label checkable but
-does not claim that any threshold has been measured, because none has.
+method=<how>` rather than accepted as free prose. The first calibrated family landed
+in 0.28.0: six CSS-minification decisions measured against 527 files and 173 exact
+source/minified pairs from 19 pinned packages.
 
 **Two findings, and the second one is why the naming was worth the diff.**
 
-*Zero `measured`.* Not one threshold in this tree was arrived at by measurement; every
-number is either somebody else's standard, a judgement, or an inheritance. That was the
-suspicion this section carried since it was written, and it is a figure now.
+*Six `measured`.* The CSS-minification family is the first real user of the measured
+gate. The full inventory now reads standard 6, measured 6, convention 36 and inherited
+70; 118 verdict-affecting numbers in all, because naming the formerly bare 10.8%
+minification-saving multiplier made one consequential number visible for the first time.
 
-*`inherited` is 75 and not 14.* The unnamed literals were not a random scatter — 59 of
+*`inherited` is 70 and not 14.* The unnamed literals were not a random scatter — 59 of
 the 77 were already present in the initial commit. So the honest statement is that
 **roughly two thirds of the numbers this registry's verdicts rest on arrived with
 borrowed code and have never been examined by anybody here**, and the old 14 read that
@@ -354,6 +356,23 @@ verdict without carrying its address, and a site-level check has no single page 
 name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
+
+- **Line-wrapped minified CSS reads as unminified.** The pinned corpus labels
+  `bulma-1.0.2/css/versions/bulma-prefixed.min.css` as minified, but its line wrapping
+  leaves it at only 37.13 bytes per line and 392 indented lines in the first 400. No
+  bytes-per-line boundary fixes that conjunction: lowering 180 below 37 still leaves
+  the indentation signal false, and it also crosses authored source such as
+  `codicons-0.0.36/dist/codicon.css` at 47.09 bytes per line. This needs a different
+  signal or classifier shape, not a tuned constant.
+
+- **`wasted_bytes` counts uncompressed bytes visitors normally do not pay.** Across
+  173 source/minified pairs, only 10.824% of the aggregate raw-byte saving survives
+  gzip. The median of per-package pair medians is 7.188%; the pooled pair median is
+  14.402%, and individual pairs span 1.796%-49.640%. A medium finding at 20KB of raw
+  whitespace therefore represents about 2.2KB over the wire at the aggregate rate:
+  roughly a ninefold overstatement on a gzip-serving site. The threshold remains
+  measured against its current meaning here; redefining the field and its output is a
+  separate verdict-changing change.
 
 - **Fixed. The one test that guards somebody else's server never started a second
   process.** `test_the_pacing_state_is_shared_between_processes` opened with

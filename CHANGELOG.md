@@ -10,6 +10,46 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.28.0 — CSS minification gets the first measured threshold family
+
+The five CSS-minification constants and the unnamed multiplier behind
+`wasted_bytes` are now measured against 527 labelled CSS files and 173 exact
+source/minified pairs from 19 pinned npm packages. The committed report records every
+tarball hash, package-relative observation, split signal distribution, pair saving and
+gzip result; the calibration tool can reproduce it from the network or compare it with
+the live constants entirely offline. Tests bind all six constants to that artifact and
+validate its dated, hashed manifest and all six `basis: measured` declarations.
+
+The two corpus groups are deliberate. Generated Sass/PostCSS source clusters much more
+tightly than authored CSS, so build output alone would teach the classifier that normal
+hand-written stylesheets are minified. The full corpus keeps 180 bytes/line, 8% comments,
+20 indented lines, the 20KB warning and the 2KB small-file cutoff. It also says what
+those values do less well than their old comments claimed: comments change only two
+classifications and both are false negatives; 20 is arbitrary in a broad equivalent
+indent band; and the sub-2KB population is 170 files from only five packages, led by
+98 `animate.css` animation fragments and 41 `tachyons` source partials. Those packaging
+conventions do not establish a general property of small stylesheets.
+
+The package-weighted paired estimate contradicts the inherited 20-30% saving claim: the
+median of per-package medians is 18.918%, so the estimate moves from 0.25 to 0.189.
+Package weighting matters because `@picocss/pico` supplies 119 of 173 pairs through
+closely related variants; the pooled file median is 10.773%, effectively that one build
+pipeline's median. Keeping pico but giving each package one equal-weight observation
+fixes the pseudo-replication without shrinking the corpus. The change moves when
+`wasted_bytes` crosses the medium finding and requires a minor release. The full corpus
+also contradicts three pilot predictions: two source-labelled one-line files exceed
+180 bytes/line, gzip retains 10.824% of aggregate savings (the median of package medians
+is 7.188% and the pooled pair median 14.402%, not the pilot's 3.2%-8.5%), and the
+package-weighted paired estimate differs from the pilot's ~16.5%. The line-wrapped
+Bulma false negative and the uncompressed meaning of `wasted_bytes` are recorded in
+[KNOWN-ISSUES.md](KNOWN-ISSUES.md).
+
+The threshold inventory now recognizes named multiplicative estimates, closing the
+blind spot that hid the old bare `0.25`. This makes the honest total 118 rather than the
+handoff's arithmetically impossible predicted 117: standard 6, measured 6, convention
+36, inherited 70, presentation 12. The other 70 inherited thresholds are untouched.
+Registry `18948c09ef94` unchanged. 686 -> 690 tests.
+
 ## 0.27.2 — the one kind of threshold that is evidence now has to prove it
 
 `basis: measured` no longer passes by carrying arbitrary prose. Its comment must name

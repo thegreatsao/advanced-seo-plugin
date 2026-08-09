@@ -35,37 +35,60 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get
 
-# The three signals of minified CSS, all present at import and all inherited. Any one
-# alone is weak — a long licence header raises bytes-per-line, a build that strips
-# comments without joining lines lowers the comment share — so they are read together.
-# basis: inherited — 180 bytes per line, present at import. Source CSS averages well
-#  under 100.
+# The three signals of minified CSS are read together. A corpus containing authored
+# CSS as well as generated build output matters here: generated source alone is much
+# more tightly formatted and would make hand-written CSS look minified.
+# basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=filename-labelled signal distributions
+# 165/174 minified files cross 180. Two source-labelled one-line distribution files
+# also cross it, while lowering the boundary would add false positives without fixing
+# line-wrapped minified CSS; 180 stays as a deliberately wide boundary.
 MINIFIED_BYTES_PER_LINE = 180
-# basis: inherited — under 8% comments, present at import.
+# basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=comment-conjunct ablation over labelled files
+# The conjunct changes only two classifications, both false negatives on minified
+# PureCSS carrying large comments. It barely discriminates; 8% is retained, not vindicated.
 MINIFIED_COMMENT_SHARE = 0.08
-# basis: inherited — fewer than 20 indented lines in the first 400, present at import.
+# basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=indent-signal distribution over labelled files
+# Every file that passes the other two signals has at most two indented lines, so any
+# boundary from 3 through 20 gives the same corpus answer. Twenty is arbitrary in it.
 MINIFIED_MAX_INDENTED = 20
-# basis: inherited — 20KB recoverable, present at import: the point at which minifying
-#  is worth a medium finding rather than a note.
+# basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=paired raw-byte and gzip-byte savings
+# 10.8% of aggregate raw-byte saving survives gzip; the median of per-package pair
+# medians is 7.2% (the pooled pair median is 14.4%). The 20KB threshold remains an
+# uncompressed convention pending a separate change to what it counts.
 WASTED_BYTES_WARN = 20000
 
+# basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=median of per-package medians for paired raw-byte saving
+# Across 12 package pipelines the median of paired-file medians is 18.918%; equal
+# package weight prevents prolific build variants from becoming extra observations.
+MINIFICATION_SAVINGS_FRACTION = 0.189
+
 MAX_SHEETS = 12
-# basis: inherited — 2KB, present at import. Below it the minified/unminified ratio is
-#  dominated by the licence header
-SMALL_FILE_BYTES = 2048  # too small for the ratio to mean anything
+# basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=label and classifier results below the byte cutoff
+# The 170 sub-2KB files come from only five packages: 98 animate.css single-animation
+# fragments plus its two source support files, 41 tachyons source partials, 19 PureCSS
+# files, six sanitize.css files and four 98.css files. That is packaging convention,
+# not a general small-CSS population; 159 are source-labelled and 11 minified.
+SMALL_FILE_BYTES = 2048  # suppress files too small to matter
 RE_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 
 
-def looks_minified(css: str) -> tuple[bool, float]:
-    """Return (minified, bytes_per_line). Minified CSS packs many rules per
-    line; source CSS averages well under 100 bytes per line."""
+def minification_signals(css: str) -> tuple[float, float, int]:
+    """Return the three structural signals consumed by ``looks_minified``."""
     if not css.strip():
-        return True, 0.0
+        return 0.0, 0.0, 0
     lines = css.count("\n") + 1
     ratio = len(css) / lines
     comments = sum(len(m) for m in RE_COMMENT.findall(css))
     comment_pct = comments / len(css) if css else 0
     indented = sum(1 for ln in css.split("\n")[:400] if ln[:2] in ("  ", "\t "))
+    return ratio, comment_pct, indented
+
+
+def looks_minified(css: str) -> tuple[bool, float]:
+    """Return (minified, bytes_per_line) from the three structural signals."""
+    if not css.strip():
+        return True, 0.0
+    ratio, comment_pct, indented = minification_signals(css)
     # Any one signal alone is weak evidence; together they are decisive.
     minified = (ratio > MINIFIED_BYTES_PER_LINE
                 and comment_pct < MINIFIED_COMMENT_SHARE
@@ -116,8 +139,8 @@ def check(url: str, timeout: int = 15) -> dict:
                 row["minified"], row["ratio"] = looks_minified(css)
                 if not row["minified"]:
                     result["unminified_count"] += 1
-                    # Minification typically removes 20-30% of source CSS.
-                    result["wasted_bytes"] += int(row["bytes"] * 0.25)
+                    result["wasted_bytes"] += int(
+                        row["bytes"] * MINIFICATION_SAVINGS_FRACTION)
             result["checked"] += 1
         except Exception as exc:
             row["error"] = str(exc)[:160]

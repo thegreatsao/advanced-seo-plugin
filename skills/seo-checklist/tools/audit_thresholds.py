@@ -16,8 +16,9 @@ makes "written down beside it" checkable rather than aspirational.
     python3 tools/audit_thresholds.py            # the inventory, and the gaps
     python3 tools/audit_thresholds.py --check    # non-zero if any basis declaration is invalid
 
-**The convention.** A module-level numeric constant that a comparison reads is a
-threshold, and it must carry a line of the form
+**The convention.** A module-level numeric constant that a comparison or a
+verdict-affecting multiplicative estimate reads is a threshold, and it must carry a
+line of the form
 
     # basis: <kind> — <what it rests on>
 
@@ -224,7 +225,7 @@ def basis_issues(path: str) -> list[dict]:
 
 
 def named_thresholds(path: str) -> list[dict]:
-    """Module-level numeric constants that a comparison in this file reads."""
+    """Module-level numeric constants that a verdict comparison or estimate reads."""
     with open(path, encoding="utf-8") as fh:
         src = fh.read()
     lines = src.splitlines()
@@ -253,6 +254,12 @@ def named_thresholds(path: str) -> list[dict]:
                 and node.func.id in ("min", "max"):
             for arg in node.args:
                 compared |= _names_in(arg)
+        # A multiplicative estimate can move a verdict without appearing in an
+        # ordering comparison itself. `MINIFICATION_SAVINGS_FRACTION` estimates raw
+        # bytes saved; the estimated total is compared with a severity threshold.
+        # Missing it was the same blind spot as a bare multiplier, only with a name.
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+            compared |= _names_in(node)
         # A numeric table whose values are looked up at all. Following the value to
         # the comparison would need dataflow the AST does not give for free, and the
         # cost of not trying was concrete: `cwv_metrics.THRESHOLDS` holds Google's

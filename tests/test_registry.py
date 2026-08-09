@@ -7,11 +7,13 @@ something checks.
 """
 import ast
 import contextlib
+import datetime
 import importlib.util
 import io
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -300,6 +302,78 @@ def over(result):
         # The first version of this test used lowercase keys, matched nothing, and
         # passed — which is the failure it exists to catch, one level up.
         self.assertEqual(compared, 4)
+
+    def test_a_measured_css_threshold_matches_its_committed_measurement(self):
+        report_path = os.path.join(TOOLS, "calibration", "css-minification.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        sys.path.insert(0, SCRIPTS)
+        import css_minify_check
+
+        self.assertEqual(len(report["constants"]), 6,
+                         "the report no longer covers the full CSS threshold family")
+        for name, evidence in report["constants"].items():
+            self.assertTrue(hasattr(css_minify_check, name), name)
+            self.assertEqual(getattr(css_minify_check, name), evidence["value"],
+                             f"{name} drifted away from its committed measurement")
+
+    def test_a_measured_css_constant_is_not_dominated_by_one_package(self):
+        report_path = os.path.join(TOOLS, "calibration", "css-minification.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        sys.path.insert(0, SCRIPTS)
+        import css_minify_check
+
+        by_package = report["pair_statistics"]["by_package"]
+        self.assertGreater(len(by_package), 1,
+                           "pair evidence collapsed to one build pipeline")
+        evidence = report["constants"]["MINIFICATION_SAVINGS_FRACTION"]
+        package_level = evidence["estimators"]["package_level"]
+        weights = [row["weight_fraction"]
+                   for row in package_level["by_package"].values()]
+        self.assertAlmostEqual(sum(weights), 1.0, places=5)
+        self.assertLessEqual(max(weights), 0.5,
+                             "one package supplies a majority of estimator weight")
+
+        raw_by_package = {}
+        for pair in report["pairs"]:
+            raw_by_package.setdefault(pair["package"], []).append(
+                pair["saving_fraction"])
+        independently_computed = statistics.median(
+            statistics.median(values) for values in raw_by_package.values())
+        self.assertAlmostEqual(package_level["value"], independently_computed,
+                               places=6)
+        self.assertEqual(css_minify_check.MINIFICATION_SAVINGS_FRACTION,
+                         round(independently_computed, 3))
+        pooled = statistics.median(
+            pair["saving_fraction"] for pair in report["pairs"])
+        self.assertNotEqual(css_minify_check.MINIFICATION_SAVINGS_FRACTION,
+                            round(pooled, 3),
+                            "the constant reverted to the package-dominated pool")
+
+    def test_the_calibration_report_names_a_real_corpus(self):
+        report_path = os.path.join(TOOLS, "calibration", "css-minification.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        self.assertGreater(len(report["manifest"]), 0)
+        datetime.datetime.strptime(report["generated"], "%Y-%m-%d")
+        for entry in report["manifest"]:
+            self.assertTrue(entry.get("version"), entry)
+            self.assertRegex(entry.get("sha256", ""), r"^[0-9a-f]{64}$", entry)
+            self.assertGreater(entry.get("css_file_count", 0), 0, entry)
+
+    def test_the_measured_basis_lines_point_at_the_report(self):
+        path = os.path.join(SCRIPTS, "css_minify_check.py")
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        measured = [(lineno, line) for lineno, line in enumerate(lines, 1)
+                    if "basis: measured" in line]
+        self.assertEqual(len(measured), 6, measured)
+        self.assertEqual(self._tool().basis_issues(path), [],
+                         "use audit_thresholds.py's measured-basis validator")
+        for lineno, line in measured:
+            self.assertIn("corpus=tools/calibration/css-minification.json", line,
+                          f"line {lineno} does not name the committed report")
 
 
 class AnAuditDoesNotCommitItself(unittest.TestCase):

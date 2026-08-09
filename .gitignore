@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 
+# Pinned npm tarballs unpacked/read by the CSS threshold calibration tool. The
+# dated measurement is committed; the downloaded packages are reproducible input.
+.calibration-cache/
+
 # Audit output. An audit writes into whatever directory it is run from, and this
 # repository is the obvious place to run one, so every file a run can produce has to
 # be listed here or it ends up in a commit. Two of them did.
