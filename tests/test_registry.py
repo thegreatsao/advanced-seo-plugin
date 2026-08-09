@@ -276,6 +276,16 @@ def over(result):
             f"{self.UNNAMED_CEILING}. A threshold with no name cannot carry a basis, "
             f"so name it — or raise this ceiling deliberately and say why")
 
+    def test_a_sort_order_is_presentation_not_a_verdict_number(self):
+        at = self._tool()
+        named, _ = at.scan()
+        severity_order = [t for t in named if t["name"] == "SEVERITY_ORDER"]
+        self.assertEqual(len(severity_order), 1, severity_order)
+        self.assertEqual(severity_order[0]["kind"], "presentation")
+        verdict_inventory = [t["name"] for t in named
+                             if t["kind"] in at.VERDICT_KINDS]
+        self.assertNotIn("SEVERITY_ORDER", verdict_inventory)
+
     def test_the_two_copies_of_googles_cwv_bands_agree(self):
         """`cwv_metrics` reads a local trace and `pagespeed` reads CrUX, and each
         holds its own copy of the published bands. Two copies of one standard drift,

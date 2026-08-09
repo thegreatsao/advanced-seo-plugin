@@ -210,13 +210,14 @@ carry a stated basis, checked in CI. 0.13.0 could see 36 of them; 77 more were
 comparisons against a bare literal, which cannot carry a basis because there is no name
 to hang one on. All of them are named now:
 
-| Basis | 0.13.0 | 0.15.0 | What it means |
-|---|---|---|---|
-| `standard` | 4 | 6 | an external published authority, named — Google's Core Web Vitals bands, the sitemaps.org URL limit, HSTS preload's one-year `max-age` |
-| `measured` | **0** | **0** | calibrated against something, and the text says what against |
-| `convention` | 18 | 32 | a judgement made here, stated as one: a round number because a line had to be somewhere |
-| `inherited` | 14 | **75** | arrived with the borrowed code and has not been examined |
-| unnamed | 77 | **0** | a bare literal, with nowhere to carry a basis at all |
+| Basis | 0.13.0 | 0.15.0 | 0.28.1 | What it means |
+|---|---|---|---|---|
+| `standard` | 4 | 6 | 9 | an external published authority, named — Google's Core Web Vitals bands, the sitemaps.org URL limit, HSTS preload's one-year `max-age`, Flesch's Reading Ease bands |
+| `measured` | **0** | **0** | **6** | calibrated against something, and the text says what against |
+| `convention` | 18 | 32 | 36 | a judgement made here, stated as one: a round number because a line had to be somewhere |
+| `inherited` | 14 | **75** | **66** | arrived with the borrowed code and has not been examined |
+| `presentation` | — | 11 | 13 | decides what is printed after the verdict is already computed |
+| unnamed | 77 | **0** | **0** | a bare literal, with nowhere to carry a basis at all |
 
 Since 0.27.2, `measured` is enforced as `corpus=<what>; date=<YYYY-MM-DD>;
 method=<how>` rather than accepted as free prose. The first calibrated family landed
@@ -226,17 +227,17 @@ source/minified pairs from 19 pinned packages.
 **Two findings, and the second one is why the naming was worth the diff.**
 
 *Six `measured`.* The CSS-minification family is the first real user of the measured
-gate. The full inventory now reads standard 6, measured 6, convention 36 and inherited
-70; 118 verdict-affecting numbers in all, because naming the formerly bare 10.8%
-minification-saving multiplier made one consequential number visible for the first time.
+gate. The full inventory now reads standard 9, measured 6, convention 36 and inherited
+66; 117 verdict-affecting numbers in all. Another 13 are presentation choices, excluded
+because they are read only after the verdict is already computed.
 
-*`inherited` is 70 and not 14.* The unnamed literals were not a random scatter — 59 of
+*`inherited` is 66 and not 14.* The unnamed literals were not a random scatter — 59 of
 the 77 were already present in the initial commit. So the honest statement is that
-**roughly two thirds of the numbers this registry's verdicts rest on arrived with
-borrowed code and have never been examined by anybody here**, and the old 14 read that
-way only because the other 61 had nowhere to carry a label. An inventory that undercounts
-in the flattering direction is the failure this file exists to prevent, and it did it to
-itself for two releases.
+**more than half of the numbers this registry's verdicts rest on still carry an
+unexamined inherited basis**, and the old 14 read more reassuringly only because 61
+more thresholds had nowhere to carry a label. An inventory that undercounts in the
+flattering direction is the failure this file exists to prevent, and it did it to itself
+for two releases.
 
 `inherited` is assigned from evidence rather than memory: a constant counts as inherited
 when `git show <initial commit>` finds it already there. The list includes the ones that
@@ -265,10 +266,10 @@ Three things fell out of the naming pass, each of which is the argument for it:
   counting only ordering comparisons on the named side, so the two halves of one tool
   disagreed about what a threshold is.
 
-A fifth kind, `presentation`, covers the eleven numbers that decide what is *printed* and
-never what is decided, and is kept out of the total above — a report listing three
-linking pages instead of four is a report making a different choice, not an audit
-reaching a different verdict.
+A fifth kind, `presentation`, covers the 13 numbers that decide what is *printed* and
+never what is decided, and is kept out of the total above. `SEVERITY_ORDER` is now a
+live example: changing which severity is listed first changes the report's order after
+the verdicts exist; it cannot make the audit reach a different verdict.
 
 0.9.0 is the evidence that this is not theoretical. Sharing one crawl changed *how
 many pages* the anchor-text check reads, and BL-081's threshold — five identical

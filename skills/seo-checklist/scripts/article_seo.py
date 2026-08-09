@@ -43,10 +43,11 @@ except ImportError:
 # Constants
 # ---------------------------------------------------------------------------
 
-# Every threshold in this file is `inherited`: article_seo.py arrived from
-# Agentic-SEO-Skill and not one of these numbers was decided here. Naming them does not
-# calibrate them — it makes them arguable, which is the step that was missing while they
-# were literals scattered through 600 lines.
+# Most thresholds in this file are `inherited`: article_seo.py arrived from
+# Agentic-SEO-Skill and those numbers were not decided here. The three Flesch Reading
+# Ease boundaries are the exception. Naming the rest does not calibrate them — it makes
+# them arguable, which is the step that was missing while they were literals scattered
+# through 600 lines.
 
 # basis: inherited — 8 words, present at import. Filters navigation entries and captions
 #  out of the paragraph list so readability is measured on prose.
@@ -54,14 +55,18 @@ MIN_PARAGRAPH_WORDS = 8
 # basis: inherited — present at import, and part of the Flesch syllable estimate rather
 #  than a verdict: a word of three letters or fewer is counted as one syllable.
 SHORT_WORD_LETTERS = 3
-# basis: inherited — Flesch Reading Ease bands, present at import. 70 and 50 are the
-#  ordinary textbook cut-offs for "easy" and "plain English", which puts them closer to
-#  `standard` than the rest of this file; left inherited because no edition of Flesch is
-#  cited here and the audience labels attached to them are this tool's own wording.
+# basis: standard — 70 is a Flesch Reading Ease boundary; Flesch, R. (1948), "A new
+#  readability yardstick", Journal of Applied Psychology, 32(3), 221-233. Flesch's table
+#  has seven bands and this file has three, so the grouping and the audience wording are
+#  this tool's own; only the boundary is his.
 READABILITY_EASY = 70
-READABILITY_MEDIUM = 50   # basis: inherited — the lower band of the pair above
-# basis: inherited — 30, present at import. Below it the text is reported as very
-#  difficult to read, which is a claim about audience rather than a Flesch band.
+# basis: standard — 50 is a Flesch Reading Ease boundary, same source as READABILITY_EASY
+#  above: Flesch, R. (1948), Journal of Applied Psychology, 32(3), 221-233. The band it
+#  opens is Flesch's "fairly difficult"; calling it medium is this tool's wording.
+READABILITY_MEDIUM = 50
+# basis: standard — 30 is a Flesch Reading Ease boundary, same source as READABILITY_EASY
+#  above: Flesch, R. (1948), Journal of Applied Psychology, 32(3), 221-233. Below it is
+#  Flesch's bottom band; reporting that as "very difficult to read" is this tool's wording.
 READABILITY_HARD = 30
 # basis: inherited — a unigram has to appear more than three times to be a keyword
 #  candidate, present at import.

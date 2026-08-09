@@ -41,9 +41,8 @@ BAR_WARN_SCORE = 85          # basis: presentation — the upper band of the pai
 CAVEAT_LIST_SHOWN = 4
 LINKED_FROM_SHOWN = 3        # basis: presentation — the same, for a broken-URL row
 
-# basis: inherited — present at import. Only a sort order, so a wrong answer changes
-#  what is listed first rather than any verdict — which is why it is the least urgent of
-#  the inherited numbers
+# basis: presentation — present at import. Only a sort order, so a wrong answer changes
+#  what is listed first rather than any verdict.
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 STATUS_ICON = {PASS: "PASS", FAIL: "FAIL", WARN: "WARN",
                NO_DATA: "NO DATA", NEEDS_INPUT: "NEED INPUT", MANUAL: "MANUAL",

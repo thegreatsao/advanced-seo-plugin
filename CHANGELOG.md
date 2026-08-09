@@ -10,6 +10,21 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.28.1 — four thresholds carry the right kind
+
+Four existing thresholds are **relabelled, not measured**; no value changes and no
+verdict moves. `SEVERITY_ORDER` is `presentation`, because all thirteen uses order
+complete report or export collections after their verdicts exist. The 70, 50 and 30
+Flesch Reading Ease boundaries are `standard`, with the 1948 primary source named on
+each declaration; the script's three-way grouping and audience wording remain its own.
+
+Two other candidates were considered and rejected. `SEVERITY_WEIGHT` and `EFFORT_COST`
+stay `inherited`: `tools/audit_score_sensitivity.py` establishes that they *matter*, not
+that they are *right*, while `measured` means calibrated against something. The
+inventory is now standard 9, measured 6, convention 36, inherited 66 and presentation
+13: 117 verdict-affecting numbers in all. Registry `18948c09ef94` unchanged. 690 -> 691
+tests.
+
 ## 0.28.0 — CSS minification gets the first measured threshold family
 
 The five CSS-minification constants and the unnamed multiplier behind
