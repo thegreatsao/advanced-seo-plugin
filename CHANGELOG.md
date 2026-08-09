@@ -59,9 +59,10 @@ was not merely stale, it was wrong about a script that was not there.
 `audit_assertions.py` never caught this because it audits paths only for scripts the
 registry names, and a section nothing points at is checked by nobody — the same blind
 spot 0.8.0's hand-maintained sweep had. Removed; 63 sections down to 59, which is what
-is on disk. **The gate that would keep it that way — every `### <script>.py` here exists,
-and every script the registry names has a section — is not written yet, and until it is
-this will drift again.**
+is on disk. The gate now checks both directions: every `### <script>.py` here exists,
+and every script the registry or runner names has a section. A second gate checks that
+every script which can open a connection reaches the private-network guard, and that
+its written exemption list has no stale entries.
 
 Registry `18948c09ef94` unchanged: no item added, removed, re-pointed or re-graded. This
 release changes how three scripts behave and what one reference document claims, not what

@@ -575,6 +575,132 @@ class RegistryDocs(unittest.TestCase):
         undocumented = sorted(s for s in named if f"### {s}" not in doc)
         self.assertEqual(undocumented, [], f"undocumented: {undocumented}")
 
+    def test_every_documented_script_exists(self):
+        """The other direction, and the one nothing was checking.
+
+        The two tests above ask whether every script has a section. Neither asks
+        whether every section has a script, so a section outlives the script it
+        describes and nothing says so: `audit_assertions.py` only follows paths for
+        scripts the *registry* names, and a section nothing points at is read by
+        nobody. Seven had accumulated by 0.26 — `product_schema_checker.py`,
+        `review_schema_checker.py`, `readability.py` and `x_robots_header_checker.py`
+        with full output shapes, three more in the missing-args table.
+
+        The `readability.py` section is why this is worth a gate rather than a
+        cleanup. It listed `has_loop` and `has_mixed_protocol`, which are
+        `redirect_checker`'s fields — so it was not merely describing a script that
+        had gone, it was describing it wrongly, and an assertion written against it
+        would have been written against nothing.
+        """
+        with open(SHAPES, encoding="utf-8") as f:
+            doc = f.read()
+        documented = set(re.findall(r"^### (\S+\.py)$", doc, re.M))
+        self.assertTrue(documented, "no '### <script>.py' sections found; the "
+                                    "reference changed shape and this test with it")
+        missing = sorted(s for s in documented
+                         if not os.path.exists(os.path.join(SCRIPTS, s)))
+        self.assertEqual(missing, [], f"documented but not on disk: {missing}")
+
+
+class NetworkAccessGoesThroughTheGuard(unittest.TestCase):
+    """Every script that can open a connection must be able to be stopped.
+
+    The runner states the rule beside the switch that carries it — "55 scripts in 55
+    processes each call assert_safe_url for themselves, so the allowance has to travel
+    with them" — and `--allow-private` is one decision for a whole run precisely
+    because a run that reaches a private address in one script and not another cannot
+    be described honestly in an artifact.
+
+    Scripts pick the guard up transitively by fetching through `safe_get`. A script
+    that opens its own socket does not, and `tls_certificate.py` did exactly that
+    until 0.27: host and port straight from argv into `socket.create_connection`, with
+    the flag never reaching it. Nothing showed it, because the script kept returning a
+    well-formed result. This is that defect as a class rather than as one file.
+    """
+
+    # Modules that can open a connection. `urllib.parse` is deliberately absent:
+    # urlparse and urljoin are string handling, nearly every script imports them, and
+    # a gate that flags them is a gate somebody switches off within a week.
+    NETWORK_MODULES = ("socket", "ssl", "requests", "httpx", "urllib.request",
+                       "http.client", "ftplib", "smtplib")
+
+    # Exemptions, each with the reason written down. A bare list would rot into a
+    # place to put things; the reason is what a future reader argues with.
+    ALLOWED = {
+        "lib/safe_http.py":
+            "is the guard. assert_safe_url lives here.",
+        "server_log_audit.py":
+            "resolves IP addresses read out of an operator's log file (reverse and "
+            "forward DNS, for --verify-bots). It fetches no URL and takes no host "
+            "from a page, so there is no request for the guard to refuse.",
+        "gsc_url_inspection.py":
+            "talks to Search Console through google-api-client, which owns its own "
+            "transport and trust. The socket import sets a global timeout so a hung "
+            "API call cannot stall the run.",
+    }
+
+    def _scripts(self):
+        for name in sorted(os.listdir(SCRIPTS)):
+            if name.endswith(".py"):
+                yield name, os.path.join(SCRIPTS, name)
+        lib = os.path.join(SCRIPTS, "lib")
+        for name in sorted(os.listdir(lib)):
+            if name.endswith(".py"):
+                yield f"lib/{name}", os.path.join(lib, name)
+
+    def _network_imports(self, path):
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        found = set()
+        reaches_guard = False
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            for name in names:
+                if name == "safe_http" or name.endswith(".safe_http"):
+                    reaches_guard = True
+                if any(name == m or name.startswith(m + ".")
+                       for m in self.NETWORK_MODULES):
+                    found.add(name)
+        return found, reaches_guard
+
+    def test_a_script_that_can_open_a_connection_reaches_the_guard(self):
+        """Import `lib.safe_http`, or be exempt in writing. There is no third case."""
+        unguarded = {}
+        for name, path in self._scripts():
+            imports, reaches_guard = self._network_imports(path)
+            if not imports or name in self.ALLOWED:
+                continue
+            if not reaches_guard:
+                unguarded[name] = sorted(imports)
+        self.assertEqual(unguarded, {}, (
+            f"these reach the network without reaching the guard: {unguarded}. "
+            f"Either fetch through lib.safe_http (safe_get, or assert_safe_url "
+            f"before opening the socket yourself), or add the script to ALLOWED "
+            f"above with the reason it cannot."))
+
+    def test_the_exemption_list_has_no_stale_entries(self):
+        """An allow-list nobody prunes stops being a list of exceptions and becomes a
+        place to put things. A script that no longer needs the exemption — because it
+        moved to `safe_http`, or stopped touching the network at all — has to come
+        off, or the next reader inherits a permission nobody granted."""
+        stale = []
+        for name in sorted(self.ALLOWED):
+            path = os.path.join(SCRIPTS, name)
+            if not os.path.exists(path):
+                stale.append(f"{name} (no such script)")
+                continue
+            imports, reaches_guard = self._network_imports(path)
+            if not imports:
+                stale.append(f"{name} (imports nothing that opens a connection)")
+            elif name != "lib/safe_http.py" and reaches_guard:
+                stale.append(f"{name} (now goes through safe_http)")
+        self.assertEqual(stale, [], f"exemptions no longer needed: {stale}")
+
 
 class Profiles(unittest.TestCase):
     def setUp(self):
