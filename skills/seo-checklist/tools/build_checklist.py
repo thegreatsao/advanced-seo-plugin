@@ -1053,7 +1053,7 @@ EXTRA = [
      {"path": "rows", "field": "alignment",
       "value_map": {"documented": "pass", "robots_only": "pass",
                     "allowed_without_llms_txt": "fail"}},
-     "Declare explicit rules for GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"),
+     "Declare explicit rules for GPTBot, OAI-SearchBot, OAI-AdsBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"),
     ("GEO-004", "geo_ai", "Answer blocks present for AEO", "medium", S,
      "answer_block_scanner.py", PAGE, {"path": "score", "gte": 70},
      "Add direct answers, definitions, lists and tables for featured snippets"),

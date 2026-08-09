@@ -27,7 +27,9 @@ except ImportError:
 # AI crawlers to check for explicit management
 AI_CRAWLERS = [
     "GPTBot",
+    "OAI-SearchBot",
     "ChatGPT-User",
+    "OAI-AdsBot",
     "ClaudeBot",
     "PerplexityBot",
     "Google-Extended",

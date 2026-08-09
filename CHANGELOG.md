@@ -10,6 +10,28 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.29.0 — OpenAI's four crawler tokens, not one
+
+**GEO-003 was checking one OpenAI token out of four and calling the answer a policy.**
+`GPTBot` trains, `OAI-SearchBot` and `ChatGPT-User` answer, and `OAI-AdsBot` fetches the
+landing page of a ChatGPT ad; they are separate robots.txt tokens and blocking one does
+not block the others. A site that disallowed `OAI-SearchBot` while allowing `GPTBot` had
+its AI-search visibility cut off and passed, because the matrix never asked. All four are
+now in `ai_crawler_policy_matrix.py`, `robots_checker.py` and `robots_path_tester.py`,
+and GEO-003's remediation names them. **This deliberately changes some GEO-003 verdicts**,
+in both directions: a site that declared only `GPTBot` no longer speaks for the rest.
+
+`OAI-AdsBot` is the one that is not an SEO check at all. Disallowing it does not cost a
+ranking — it gets the site's ChatGPT ads **rejected at review**, a failure no other item
+here surfaces and one that reads as an unexplained approval problem in a tool nobody
+would think to point at robots.txt. It is checked where robots.txt is read and
+deliberately **excluded** from `server_log_audit.py`'s `AI_BOTS`, on the reasoning that
+file already applies to `AdsBot-Google`: its visits measure ad review, not reach, and
+folding them into an AI-crawler count would inflate a number read as visibility.
+
+Registry `18948c09ef94` -> `666f511a91ad`; the Russian GEO-003 fix was re-read and
+re-stamped. 691 tests, unchanged.
+
 ## 0.28.1 — four thresholds carry the right kind
 
 Four existing thresholds are **relabelled, not measured**; no value changes and no

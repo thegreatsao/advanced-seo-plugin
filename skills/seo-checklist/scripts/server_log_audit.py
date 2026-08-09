@@ -79,6 +79,11 @@ SEARCH_BOTS = {
 # crawl for ad quality and AdSense, not for the index, and counting their requests
 # as crawl budget would mix a spend nobody can act on into a number that is supposed
 # to be actionable. They land in `other`, where they are still visible.
+#
+# `OAI-AdsBot` is absent for the same reason: it fetches the landing page of a ChatGPT
+# ad, so its visits measure ad review and not AI-search visibility, and folding them in
+# here would inflate a figure read as reach. Whether it is *allowed* is a robots.txt
+# question, and `ai_crawler_policy_matrix.py` answers it.
 AI_BOTS = {
     "gptbot": "GPTBot",
     "oai-searchbot": "OAI-SearchBot",

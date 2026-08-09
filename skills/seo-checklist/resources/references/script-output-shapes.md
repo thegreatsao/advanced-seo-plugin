@@ -1098,7 +1098,9 @@ sitemap URL reachable and this check vacuous.
 `user_agents.*.disallow[]` — array
 `sitemaps[]` — array
 `ai_crawler_status.GPTBot` — str
+`ai_crawler_status.OAI-SearchBot` — str
 `ai_crawler_status.ChatGPT-User` — str
+`ai_crawler_status.OAI-AdsBot` — str
 `ai_crawler_status.ClaudeBot` — str
 `ai_crawler_status.PerplexityBot` — str
 `ai_crawler_status.Google-Extended` — str
@@ -1155,7 +1157,7 @@ Under `--probe` only, and absent without it:
   - `decisions.<agent>.allowed` — bool
   - `decisions.<agent>.rule` — str (`"no matching rule"` when nothing matched)
   - `allowed_for[]` — the agents allowed to fetch this URL
-  - agents: Googlebot, Bingbot, GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, …
+  - agents: Googlebot, Bingbot, GPTBot, OAI-SearchBot, ChatGPT-User, OAI-AdsBot, …
 
 **No `issues[]` and no `summary`** — unlike almost every other script. Rules have
 to walk `rows[].decisions` directly; there is no aggregate to assert against.

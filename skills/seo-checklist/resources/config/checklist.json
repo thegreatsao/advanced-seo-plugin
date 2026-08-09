@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "18948c09ef94",
+  "registry_version": "666f511a91ad",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -4168,7 +4168,7 @@
         }
       },
       "effort": "medium",
-      "fix": "Declare explicit rules for GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"
+      "fix": "Declare explicit rules for GPTBot, OAI-SearchBot, OAI-AdsBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"
     },
     {
       "id": "GEO-004",

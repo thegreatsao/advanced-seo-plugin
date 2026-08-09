@@ -9,7 +9,12 @@ import json
 from seo_common import fetch_robots, fetch_url, normalize_url, origin, robots_allowed
 
 
-AI_CRAWLERS = ["GPTBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot", "Bytespider", "Amazonbot"]
+# OpenAI splits its fetching across four tokens and blocking one does not block the
+# others: `GPTBot` trains, `OAI-SearchBot` and `ChatGPT-User` answer, and `OAI-AdsBot`
+# fetches the landing page of a ChatGPT ad. The last one is here because the failure it
+# causes is not an SEO one — a site that disallows it has its ads **rejected at review**,
+# which no other check in this registry would surface.
+AI_CRAWLERS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "OAI-AdsBot", "ClaudeBot", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot", "Bytespider", "Amazonbot"]
 
 
 def matrix(site: str, paths: list[str] | None = None, timeout: int = 15) -> dict:

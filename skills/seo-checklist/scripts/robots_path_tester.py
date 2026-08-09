@@ -20,7 +20,7 @@ except ImportError:
     from scripts.lib.safe_http import default_headers, safe_get
 
 
-DEFAULT_AGENTS = ["Googlebot", "Bingbot", "GPTBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"]
+DEFAULT_AGENTS = ["Googlebot", "Bingbot", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "OAI-AdsBot", "ClaudeBot", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"]
 
 # basis: standard — the two places a crawler is told not to index a page it has been
 # allowed to fetch. `<meta name="robots">` per RFC 9309's surrounding practice and the
