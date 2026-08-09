@@ -10,6 +10,22 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.27.2 — the one kind of threshold that is evidence now has to prove it
+
+`basis: measured` no longer passes by carrying arbitrary prose. Its comment must name
+the corpus, measurement date and method, and the date must be a real `YYYY-MM-DD` date.
+The gate explains the exact form to write and reports the source line and malformed
+field; it does not change a threshold or claim that one has been measured.
+
+A `basis:` marker whose kind is absent or outside the documented five now fails the
+same CI audit instead of disappearing from its inventory. The three existing
+`external standard` markers turned out not to annotate numeric thresholds at all: two
+described Search Console severity strings and one cited URL-structure guidance in a
+function docstring. Their prose remains, without the threshold-only marker.
+
+The inventory is unchanged: standard 6, measured 0, convention 36, inherited 75,
+presentation 12. Registry `18948c09ef94` unchanged. 683 -> 686 tests.
+
 ## 0.27.1 — five helpers become three, and two of the four "duplicates" were not
 
 **Three drifted `fetch_html` functions and three identical JSON walkers made one

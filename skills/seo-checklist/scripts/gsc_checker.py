@@ -298,7 +298,7 @@ def detect_issues(sitemaps: list) -> list | None:
         if errors:
             issues.append({
                 "type": "sitemap_errors",
-                # basis: external standard — Search Console calls these errors, and an
+                # Search Console calls these errors, and an
                 # error means Google did not read part of a sitemap the owner submitted.
                 "severity": "high",
                 "sitemap": path,
@@ -310,7 +310,7 @@ def detect_issues(sitemaps: list) -> list | None:
         if warnings:
             issues.append({
                 "type": "sitemap_warnings",
-                # basis: external standard — a warning is Google reporting something it
+                # A warning is Google reporting something it
                 # read anyway, which is why it does not fail the item on its own.
                 "severity": "medium",
                 "sitemap": path,

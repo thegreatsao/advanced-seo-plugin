@@ -218,6 +218,10 @@ to hang one on. All of them are named now:
 | `inherited` | 14 | **75** | arrived with the borrowed code and has not been examined |
 | unnamed | 77 | **0** | a bare literal, with nowhere to carry a basis at all |
 
+Since 0.27.2, `measured` is enforced as `corpus=<what>; date=<YYYY-MM-DD>;
+method=<how>` rather than accepted as free prose; this makes the label checkable but
+does not claim that any threshold has been measured, because none has.
+
 **Two findings, and the second one is why the naming was worth the diff.**
 
 *Zero `measured`.* Not one threshold in this tree was arrived at by measurement; every

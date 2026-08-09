@@ -382,7 +382,7 @@ def url_structure_of(tags: list[dict]) -> str:
 def check_url_structure(tags: list[dict]) -> dict:
     """Check 9: the international URL structure is one of the three Google supports.
 
-    # basis: external standard — Google Search Central, "Managing multi-regional and
+    # Google Search Central, "Managing multi-regional and
     # multilingual sites", which lists country-code top-level domains, subdomains and
     # subdirectories as the ways to structure locale URLs and says URL parameters
     # "are not recommended" because they are hard to segment by and users cannot read

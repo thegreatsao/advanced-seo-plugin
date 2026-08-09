@@ -6,12 +6,15 @@ an item whose script was never shipped does the same. Nothing surfaces unless
 something checks.
 """
 import ast
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -185,6 +188,17 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
         import audit_thresholds
         return audit_thresholds
 
+    def _run_check(self, source):
+        at = self._tool()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thresholds.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(source)
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                status = at.main(["--check"], paths=[path])
+        return status, stdout.getvalue(), stderr.getvalue()
+
     def test_no_named_threshold_is_bare(self):
         at = self._tool()
         named, _ = at.scan()
@@ -205,6 +219,51 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
         named, _ = at.scan()
         thin = [t["name"] for t in named if len(t["why"]) < 25]
         self.assertEqual(thin, [], f"these state a kind and no reason: {thin}")
+
+    def test_a_measured_threshold_must_name_what_it_was_measured_against(self):
+        bad = """\
+# basis: measured — we measured it
+LIMIT = 3
+def over(value):
+    return value > LIMIT
+"""
+        status, stdout, stderr = self._run_check(bad)
+        self.assertNotEqual(status, 0)
+        self.assertIn("Measured, but without a reproducible measurement", stdout)
+        self.assertIn("corpus=<what was measured>", stderr)
+
+        good = """\
+# basis: measured — method=sorted observations; corpus=50 audit runs; date=2026-08-09. Recheck yearly.
+LIMIT = 3
+def over(value):
+    return value > LIMIT
+"""
+        status, stdout, stderr = self._run_check(good)
+        self.assertEqual(status, 0, stdout + stderr)
+
+    def test_a_measured_threshold_needs_a_real_date(self):
+        for value in ("last tuesday", "2026-13-01"):
+            with self.subTest(date=value):
+                source = f"""\
+# basis: measured — corpus=50 audit runs; date={value}; method=sorted observations
+LIMIT = 3
+def over(result):
+    return result > LIMIT
+"""
+                status, stdout, stderr = self._run_check(source)
+                self.assertNotEqual(status, 0)
+                self.assertIn("date", stdout)
+                self.assertIn("date=<YYYY-MM-DD>", stderr)
+
+    def test_a_basis_kind_outside_the_vocabulary_is_an_error_not_a_silent_drop(self):
+        for declaration, detail in (("external standard — published elsewhere", "external"),
+                                    ("", "no basis kind follows the colon")):
+            with self.subTest(declaration=declaration or "bare"):
+                status, stdout, stderr = self._run_check(f"# basis: {declaration}\n")
+                self.assertNotEqual(status, 0)
+                self.assertIn("outside the documented five-kind vocabulary", stdout)
+                self.assertIn(detail, stdout)
+                self.assertIn("standard|measured|convention|inherited|presentation", stderr)
 
     def test_the_unnamed_count_has_not_grown(self):
         at = self._tool()

@@ -14,7 +14,7 @@ instead of arguing with a verdict whose grounds are invisible. This tool is what
 makes "written down beside it" checkable rather than aspirational.
 
     python3 tools/audit_thresholds.py            # the inventory, and the gaps
-    python3 tools/audit_thresholds.py --check    # non-zero if any named one is bare
+    python3 tools/audit_thresholds.py --check    # non-zero if any basis declaration is invalid
 
 **The convention.** A module-level numeric constant that a comparison reads is a
 threshold, and it must carry a line of the form
@@ -28,7 +28,8 @@ distinction between them is the whole point:
               Vitals bands, an RFC, a WCAG level. The number is not ours and a reader
               can go and check it.
   measured    Calibrated against something, and the text says against what. This is
-              the only kind that is evidence rather than judgement.
+              the only kind that is evidence rather than judgement. Required form:
+              # basis: measured — corpus=<what was measured>; date=<YYYY-MM-DD>; method=<how>
   convention  A judgement made here. A round number, chosen because a line had to be
               somewhere. Saying so is the point: it invites the argument instead of
               hiding from it.
@@ -56,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import datetime
 import os
 import re
 import sys
@@ -67,12 +69,15 @@ SCRIPTS = os.path.join(SKILL, "scripts")
 BASIS = re.compile(
     r"#\s*basis:\s*(standard|measured|convention|inherited|presentation)\s*[—-]\s*(\S.*)",
     re.I)
+MEASURED_FIELD = re.compile(r"^\s*([a-z]+)\s*=\s*([^;]*\S)\s*$", re.I)
+BASIS_MARKER = re.compile(r"#\s*basis:\s*", re.I)
 KINDS = ("standard", "measured", "convention", "inherited", "presentation")
 # The four that decide a verdict. `presentation` is named and checked like the rest and
 # then kept out of this total, because the number §2 of KNOWN-ISSUES quotes is meant to
 # be "how much of the registry rests on numbers nobody here decided", and a truncation
 # length is not part of that.
 VERDICT_KINDS = ("standard", "measured", "convention", "inherited")
+MEASURED_KEYS = frozenset({"corpus", "date", "method"})
 
 # Numbers that are not thresholds, and excluding them is what keeps this tool worth
 # reading. An HTTP status code is an identity, not a limit: `status == 404` asks which
@@ -145,6 +150,77 @@ def _basis_for(src_lines: list[str], lineno: int) -> tuple[str, str]:
             return match.group(1).lower(), match.group(2).strip()
         i -= 1
     return "", ""
+
+
+def _measured_problem(tail: str) -> str:
+    """Return why a measured tail is not reproducible, or an empty string."""
+    fields: dict[str, tuple[str, int]] = {}
+    problems = []
+    parts = tail.split(";")
+    for index, part in enumerate(parts):
+        match = MEASURED_FIELD.fullmatch(part)
+        if not match:
+            problems.append(f"field {index + 1} is not a non-empty key=value field")
+            continue
+        key, value = match.group(1).lower(), match.group(2).strip()
+        if key not in MEASURED_KEYS:
+            problems.append(f"unknown field {key!r}")
+        elif key in fields:
+            problems.append(f"field {key!r} appears more than once")
+        else:
+            fields[key] = (value, index)
+
+    missing = sorted(MEASURED_KEYS - fields.keys())
+    if missing:
+        problems.append("missing " + ", ".join(missing))
+
+    if "date" in fields:
+        value, index = fields["date"]
+        # Only the last field may carry the optional prose suffix. A period or em
+        # dash is the boundary; the ISO date itself remains the value we validate.
+        if index == len(parts) - 1:
+            date_match = re.fullmatch(
+                r"(\d{4}-\d{2}-\d{2})(?:\s*(?:—|\.)\s*.*)?", value)
+        else:
+            date_match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})", value)
+        if not date_match:
+            problems.append(f"date {value!r} is not YYYY-MM-DD")
+        else:
+            try:
+                datetime.date.fromisoformat(date_match.group(1))
+            except ValueError:
+                problems.append(f"date {date_match.group(1)!r} is not a real date")
+    return "; ".join(problems)
+
+
+def basis_issues(path: str) -> list[dict]:
+    """Malformed measured declarations and basis kinds outside the vocabulary."""
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+
+    out = []
+    for lineno, line in enumerate(lines, 1):
+        marker = BASIS_MARKER.search(line)
+        if not marker:
+            continue
+        rest = line[marker.end():].strip()
+        kind_match = re.match(r"[a-z]+", rest, re.I)
+        kind = kind_match.group(0).lower() if kind_match else ""
+        where = {"file": os.path.relpath(path, SKILL), "line": lineno}
+        if kind not in KINDS:
+            out.append({**where, "type": "unknown", "kind": kind or "(none)",
+                        "detail": (f"{kind!r} is not one of {', '.join(KINDS)}"
+                                   if kind else "no basis kind follows the colon")})
+            continue
+        if kind != "measured":
+            continue
+        match = BASIS.search(line)
+        problem = (_measured_problem(match.group(2).strip()) if match else
+                   "missing a non-empty tail after the dash")
+        if problem:
+            out.append({**where, "type": "measured", "kind": kind,
+                        "detail": problem})
+    return out
 
 
 def named_thresholds(path: str) -> list[dict]:
@@ -236,41 +312,57 @@ def unnamed_thresholds(path: str) -> list[dict]:
     return out
 
 
-def scan() -> tuple[list[dict], list[dict]]:
-    named, unnamed = [], []
+def _script_paths() -> list[str]:
+    paths = []
     for folder in (SCRIPTS, os.path.join(SCRIPTS, "lib")):
         for entry in sorted(os.listdir(folder)):
-            if not entry.endswith(".py") or entry == "__init__.py":
-                continue
-            path = os.path.join(folder, entry)
-            named += named_thresholds(path)
-            unnamed += unnamed_thresholds(path)
+            if entry.endswith(".py") and entry != "__init__.py":
+                paths.append(os.path.join(folder, entry))
+    return paths
+
+
+def scan(paths: list[str] | None = None) -> tuple[list[dict], list[dict]]:
+    named, unnamed = [], []
+    for path in paths if paths is not None else _script_paths():
+        named += named_thresholds(path)
+        unnamed += unnamed_thresholds(path)
     return named, unnamed
 
 
-def main() -> int:
+def scan_basis_issues(paths: list[str] | None = None) -> list[dict]:
+    out = []
+    for path in paths if paths is not None else _script_paths():
+        out += basis_issues(path)
+    return out
+
+
+def main(argv: list[str] | None = None, paths: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Inventory every number a verdict depends on",
         epilog=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true",
-                    help="exit non-zero if a named threshold has no basis")
+                    help="exit non-zero if a threshold basis is absent or malformed")
     ap.add_argument("--unnamed", action="store_true",
                     help="list the comparisons against a bare number")
     ap.add_argument("--kind", default="", choices=("", *KINDS),
                     help="list only thresholds of this kind")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
-    named, unnamed = scan()
+    source_paths = paths if paths is not None else _script_paths()
+    named, unnamed = scan(source_paths)
+    issues = scan_basis_issues(source_paths)
     bare = [t for t in named if not t["kind"]]
     by_kind = {k: [t for t in named if t["kind"] == k] for k in KINDS}
+    measured_issues = [i for i in issues if i["type"] == "measured"]
+    unknown_issues = [i for i in issues if i["type"] == "unknown"]
 
-    if a.kind:
+    if a.kind and not a.check:
         for t in by_kind[a.kind]:
             print(f"  {t['file']}:{t['line']}  {t['name']}\n      {t['why']}")
         print(f"\n{len(by_kind[a.kind])} {a.kind} threshold(s)")
         return 0
 
-    if a.unnamed:
+    if a.unnamed and not a.check:
         for t in unnamed:
             print(f"  {t['file']}:{t['line']}  {t['value']}   {t['source']}")
         print(f"\n{len(unnamed)} comparison(s) against a bare number")
@@ -286,6 +378,29 @@ def main() -> int:
     print(f"{len(unnamed)} threshold(s) still unnamed — a comparison against a bare "
           f"number cannot carry a basis, so the first step for those is a constant")
 
+    failed = False
+    if measured_issues:
+        print("\nMeasured, but without a reproducible measurement:")
+        for issue in measured_issues:
+            print(f"  {issue['file']}:{issue['line']}  {issue['detail']}")
+        if a.check:
+            print("\nWrite `# basis: measured — corpus=<what was measured>; "
+                  "date=<YYYY-MM-DD>; method=<how>`. The corpus says what the number "
+                  "describes, the date makes staleness visible, and the method makes "
+                  "the measurement repeatable.", file=sys.stderr)
+            failed = True
+
+    if unknown_issues:
+        print("\nBasis lines outside the documented five-kind vocabulary:")
+        for issue in unknown_issues:
+            print(f"  {issue['file']}:{issue['line']}  {issue['detail']}")
+        if a.check:
+            print("\nWrite `# basis: standard|measured|convention|inherited|"
+                  "presentation — why`. If the comment does not describe a numeric "
+                  "threshold, describe it without the `# basis:` marker so it cannot "
+                  "silently look like one.", file=sys.stderr)
+            failed = True
+
     if bare:
         print("\nNamed, and resting on nothing stated:")
         for t in bare:
@@ -296,8 +411,8 @@ def main() -> int:
                   "arrived with borrowed code and has not been examined is a to-do "
                   "with a name, which is worth more than a number with neither.",
                   file=sys.stderr)
-            return 1
-    return 0
+            failed = True
+    return int(failed)
 
 
 if __name__ == "__main__":
