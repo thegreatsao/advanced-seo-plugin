@@ -71,17 +71,18 @@ READABILITY_HARD = 30
 # basis: inherited — a unigram has to appear more than three times to be a keyword
 #  candidate, present at import.
 MIN_UNIGRAM_COUNT = 3
-# basis: inherited — SERP truncation, present at import. **The check and its own advice
-#  disagree**: these accept 30-65 characters while the fix text beside them asks for
-#  50-60, so a 35-character title passes and is then told to expand. Recorded rather
-#  than reconciled, because deciding which pair is right is a calibration and this pass
-#  was an inventory.
+# basis: convention — a pixel truncation budget establishes no minimum: 30 characters
+#  is retained as this project's editorial judgement that a shorter title is unlikely
+#  to identify the page adequately, without pretending font metrics prove that claim.
 TITLE_MIN_CHARS = 30
-TITLE_MAX_CHARS = 65   # basis: inherited — the upper bound of the pair above
-# basis: inherited — the same for meta descriptions, present at import, with the same
-#  disagreement: the check accepts 100-165 and the advice asks for 120-155.
+# basis: measured — corpus=tools/calibration/serp-length.json; date=2026-08-10; method=ordinary composition in Arial using frequency-weighted glyph advances at 20px fitted to the assumed 600px desktop budget. The 65-character capacity is exact only for the declared average mix: Arial's measured ASCII-letter advances vary 4.25x, so capitals can truncate sooner and narrow lowercase text can leave room.
+TITLE_MAX_CHARS = 65
+# basis: convention — a pixel truncation budget establishes no minimum: 100 characters
+#  is retained as this project's editorial judgement that a shorter description may
+#  undersell the page, not as a result measured from glyph widths.
 META_MIN_CHARS = 100
-META_MAX_CHARS = 165   # basis: inherited — the upper bound of the pair above
+# basis: measured — corpus=tools/calibration/serp-length.json; date=2026-08-10; method=ordinary composition in Arial using frequency-weighted glyph advances at 14px fitted to the assumed 920px desktop budget. The budget is a third-party observation, not a Google-published limit — if it is wrong, 144 is wrong.
+META_MAX_CHARS = 144
 # basis: inherited — 1000 words, present at import: the "may be thin for a blog post"
 #  line, itself below the 1500 the fix text asks for.
 BLOG_THIN_WORDS = 1000
@@ -509,19 +510,19 @@ def detect_seo_issues(content: dict, structured_data: list, readability: dict) -
 
     # Title checks
     if not title:
-        issues.append({"severity": "Critical", "area": "Title", "finding": "No <title> tag found.", "fix": "Add a descriptive title tag (50-60 chars)."})
+        issues.append({"severity": "Critical", "area": "Title", "finding": "No <title> tag found.", "fix": "Add a descriptive title tag (30-65 characters)."})
     elif len(title) < TITLE_MIN_CHARS:
-        issues.append({"severity": "Warning", "area": "Title", "finding": f"Title too short ({len(title)} chars).", "fix": "Expand title to 50-60 characters with primary keyword near the start."})
+        issues.append({"severity": "Warning", "area": "Title", "finding": f"Title too short ({len(title)} chars).", "fix": "Expand title to at least 30 characters with the primary keyword near the start."})
     elif len(title) > TITLE_MAX_CHARS:
-        issues.append({"severity": "Warning", "area": "Title", "finding": f"Title may be truncated in SERPs ({len(title)} chars).", "fix": "Keep title under 60 characters."})
+        issues.append({"severity": "Warning", "area": "Title", "finding": f"Title may be truncated in SERPs ({len(title)} chars).", "fix": "Keep title at or below 65 characters."})
 
     # Meta description
     if not meta:
-        issues.append({"severity": "Warning", "area": "Meta Description", "finding": "No meta description found.", "fix": "Add a compelling 120-155 character meta description with a CTA."})
+        issues.append({"severity": "Warning", "area": "Meta Description", "finding": "No meta description found.", "fix": "Add a compelling 100-144 character meta description with a CTA."})
     elif len(meta) < META_MIN_CHARS:
-        issues.append({"severity": "Warning", "area": "Meta Description", "finding": f"Meta description too short ({len(meta)} chars).", "fix": "Expand to 120-155 characters."})
+        issues.append({"severity": "Warning", "area": "Meta Description", "finding": f"Meta description too short ({len(meta)} chars).", "fix": "Expand to at least 100 characters."})
     elif len(meta) > META_MAX_CHARS:
-        issues.append({"severity": "Warning", "area": "Meta Description", "finding": f"Meta description may be truncated ({len(meta)} chars).", "fix": "Keep under 155 characters."})
+        issues.append({"severity": "Warning", "area": "Meta Description", "finding": f"Meta description may be truncated ({len(meta)} chars).", "fix": "Keep at or below 144 characters."})
 
     # H1
     if not h1s:

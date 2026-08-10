@@ -8,5 +8,6 @@ requests>=2.31
 # playwright>=1.44
 
 # Development:
+# fonttools>=4.0
 # pytest>=8.0
 # ruff>=0.5

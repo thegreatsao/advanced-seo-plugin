@@ -1,0 +1,804 @@
+{
+  "calibration_decisions": {
+    "META_MAX_CHARS": {
+      "alternatives": {
+        "capacities_by_mix_in_arial": {
+          "all_caps": 98,
+          "lowercase_heavy_prose": 147,
+          "ordinary_title_case": 144
+        },
+        "capacities_for_ordinary_composition_by_font": {
+          "Arial": 144,
+          "Georgia": 144,
+          "Times New Roman": 158,
+          "Verdana": 126
+        }
+      },
+      "capacity": 144,
+      "font": "Arial",
+      "limitation": "Verdana at ordinary composition holds about 126 description characters; a lower-capacity rendering font than Arial would therefore make even the calibrated 144-character bound permissive.",
+      "mix": "ordinary_title_case",
+      "surface": "desktop_description"
+    },
+    "TITLE_MAX_CHARS": {
+      "alternatives": {
+        "capacities_by_mix_in_arial": {
+          "all_caps": 45,
+          "lowercase_heavy_prose": 67,
+          "ordinary_title_case": 65
+        },
+        "capacities_for_ordinary_composition_by_font": {
+          "Arial": 65,
+          "Georgia": 66,
+          "Times New Roman": 72,
+          "Verdana": 57
+        }
+      },
+      "capacity": 65,
+      "font": "Arial",
+      "mix": "ordinary_title_case",
+      "surface": "desktop_title"
+    },
+    "minimums": "Pixel budgets establish truncation ceilings, not editorial minimums; TITLE_MIN_CHARS and META_MIN_CHARS remain explicit conventions.",
+    "mobile": "Reported as sensitivity evidence only; no threshold is calibrated to the mobile description budget in this change."
+  },
+  "constants": {
+    "META_MAX_CHARS": {
+      "basis": "measured",
+      "recommended_value": 144,
+      "value": 144
+    },
+    "META_MIN_CHARS": {
+      "basis": "convention",
+      "recommended_value": 100,
+      "value": 100
+    },
+    "TITLE_MAX_CHARS": {
+      "basis": "measured",
+      "recommended_value": 65,
+      "value": 65
+    },
+    "TITLE_MIN_CHARS": {
+      "basis": "convention",
+      "recommended_value": 30,
+      "value": 30
+    }
+  },
+  "findings": {
+    "arial_all_caps": {
+      "pixels_per_character": 13.315385,
+      "sixty_character_width_pixels": 798.9231
+    },
+    "arial_description": {
+      "desktop_characters_budget_holds": 144,
+      "mobile_characters_budget_holds": 106,
+      "ordinary_composition_pixels_per_character": 6.368584,
+      "prior_165_desktop_budget_overshoot_fraction": 0.142192,
+      "prior_165_width_pixels": 1050.81636,
+      "prior_advice_155_desktop_budget_overshoot_fraction": 0.072968,
+      "prior_advice_155_width_pixels": 987.13052
+    },
+    "arial_title": {
+      "characters_budget_holds": 65,
+      "next_character_count": 66,
+      "next_character_count_width_pixels": 600.466548,
+      "ordinary_title_case_pixels_per_character": 9.097978,
+      "title_max_width_pixels": 591.36856
+    },
+    "font_sensitivity": {
+      "arial_is_bracketed": true,
+      "desktop_description_capacity_range": [
+        126,
+        158
+      ],
+      "desktop_title_capacity_range": [
+        57,
+        72
+      ],
+      "narrower_than_arial": "Times New Roman",
+      "verdana_ordinary_description_capacity": 126,
+      "wider_than_arial": "Verdana"
+    }
+  },
+  "fonts": [
+    {
+      "measurements": {
+        "desktop_description": {
+          "budget_pixels": 920,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 98,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1342.190809,
+                "META_MIN_CHARS": 932.076951,
+                "TITLE_MAX_CHARS": 605.850018,
+                "TITLE_MIN_CHARS": 279.623085
+              },
+              "pixels_per_character": 9.32077
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 147,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 898.08999,
+                "META_MIN_CHARS": 623.673604,
+                "TITLE_MAX_CHARS": 405.387843,
+                "TITLE_MIN_CHARS": 187.102081
+              },
+              "pixels_per_character": 6.236736
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 144,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 917.076168,
+                "META_MIN_CHARS": 636.85845,
+                "TITLE_MAX_CHARS": 413.957992,
+                "TITLE_MIN_CHARS": 191.057535
+              },
+              "pixels_per_character": 6.368584
+            }
+          },
+          "font_size_pixels": 14
+        },
+        "desktop_title": {
+          "budget_pixels": 600,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 45,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1917.415441,
+                "META_MIN_CHARS": 1331.538501,
+                "TITLE_MAX_CHARS": 865.500026,
+                "TITLE_MIN_CHARS": 399.46155
+              },
+              "pixels_per_character": 13.315385
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 67,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1282.985699,
+                "META_MIN_CHARS": 890.962291,
+                "TITLE_MAX_CHARS": 579.125489,
+                "TITLE_MIN_CHARS": 267.288687
+              },
+              "pixels_per_character": 8.909623
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 65,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1310.108811,
+                "META_MIN_CHARS": 909.797785,
+                "TITLE_MAX_CHARS": 591.36856,
+                "TITLE_MIN_CHARS": 272.939336
+              },
+              "pixels_per_character": 9.097978
+            }
+          },
+          "font_size_pixels": 20
+        },
+        "mobile_description": {
+          "budget_pixels": 680,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 72,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1342.190809,
+                "META_MIN_CHARS": 932.076951,
+                "TITLE_MAX_CHARS": 605.850018,
+                "TITLE_MIN_CHARS": 279.623085
+              },
+              "pixels_per_character": 9.32077
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 109,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 898.08999,
+                "META_MIN_CHARS": 623.673604,
+                "TITLE_MAX_CHARS": 405.387843,
+                "TITLE_MIN_CHARS": 187.102081
+              },
+              "pixels_per_character": 6.236736
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 106,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 917.076168,
+                "META_MIN_CHARS": 636.85845,
+                "TITLE_MAX_CHARS": 413.957992,
+                "TITLE_MIN_CHARS": 191.057535
+              },
+              "pixels_per_character": 6.368584
+            }
+          },
+          "font_size_pixels": 14
+        }
+      },
+      "name": "Arial",
+      "path": "/System/Library/Fonts/Supplemental/Arial.ttf",
+      "raw_glyph_spread": {
+        "14px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 14,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "fixed_string_width_pixels": 186.621094,
+            "glyph": "i",
+            "glyph_width_pixels": 3.110352
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 792.832031,
+            "glyph": "W",
+            "glyph_width_pixels": 13.213867
+          },
+          "width_ratio": 4.248352
+        },
+        "20px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 20,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "fixed_string_width_pixels": 266.601562,
+            "glyph": "i",
+            "glyph_width_pixels": 4.443359
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 1132.617188,
+            "glyph": "W",
+            "glyph_width_pixels": 18.876953
+          },
+          "width_ratio": 4.248352
+        }
+      },
+      "sha256": "525979822591a3447cfc49d943d6f7683508e25543407871c0ed8fed05fd2bd9",
+      "units_per_em": 2048
+    },
+    {
+      "measurements": {
+        "desktop_description": {
+          "budget_pixels": 920,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 97,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1365.577775,
+                "META_MIN_CHARS": 948.317899,
+                "TITLE_MAX_CHARS": 616.406634,
+                "TITLE_MIN_CHARS": 284.49537
+              },
+              "pixels_per_character": 9.483179
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 128,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1033.294861,
+                "META_MIN_CHARS": 717.565876,
+                "TITLE_MAX_CHARS": 466.417819,
+                "TITLE_MIN_CHARS": 215.269763
+              },
+              "pixels_per_character": 7.175659
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 126,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1046.818103,
+                "META_MIN_CHARS": 726.957016,
+                "TITLE_MAX_CHARS": 472.522061,
+                "TITLE_MIN_CHARS": 218.087105
+              },
+              "pixels_per_character": 7.26957
+            }
+          },
+          "font_size_pixels": 14
+        },
+        "desktop_title": {
+          "budget_pixels": 600,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 44,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1950.825393,
+                "META_MIN_CHARS": 1354.739856,
+                "TITLE_MAX_CHARS": 880.580906,
+                "TITLE_MIN_CHARS": 406.421957
+              },
+              "pixels_per_character": 13.547399
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 58,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1476.135516,
+                "META_MIN_CHARS": 1025.094108,
+                "TITLE_MAX_CHARS": 666.31117,
+                "TITLE_MIN_CHARS": 307.528233
+              },
+              "pixels_per_character": 10.250941
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 57,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1495.454434,
+                "META_MIN_CHARS": 1038.510023,
+                "TITLE_MAX_CHARS": 675.031515,
+                "TITLE_MIN_CHARS": 311.553007
+              },
+              "pixels_per_character": 10.3851
+            }
+          },
+          "font_size_pixels": 20
+        },
+        "mobile_description": {
+          "budget_pixels": 680,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 71,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1365.577775,
+                "META_MIN_CHARS": 948.317899,
+                "TITLE_MAX_CHARS": 616.406634,
+                "TITLE_MIN_CHARS": 284.49537
+              },
+              "pixels_per_character": 9.483179
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 94,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1033.294861,
+                "META_MIN_CHARS": 717.565876,
+                "TITLE_MAX_CHARS": 466.417819,
+                "TITLE_MIN_CHARS": 215.269763
+              },
+              "pixels_per_character": 7.175659
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 93,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1046.818103,
+                "META_MIN_CHARS": 726.957016,
+                "TITLE_MAX_CHARS": 472.522061,
+                "TITLE_MIN_CHARS": 218.087105
+              },
+              "pixels_per_character": 7.26957
+            }
+          },
+          "font_size_pixels": 14
+        }
+      },
+      "name": "Verdana",
+      "path": "/System/Library/Fonts/Supplemental/Verdana.ttf",
+      "raw_glyph_spread": {
+        "14px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 14,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "fixed_string_width_pixels": 230.507812,
+            "glyph": "i",
+            "glyph_width_pixels": 3.841797
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 830.566406,
+            "glyph": "W",
+            "glyph_width_pixels": 13.842773
+          },
+          "width_ratio": 3.603203
+        },
+        "20px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 20,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "fixed_string_width_pixels": 329.296875,
+            "glyph": "i",
+            "glyph_width_pixels": 5.488281
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 1186.523438,
+            "glyph": "W",
+            "glyph_width_pixels": 19.775391
+          },
+          "width_ratio": 3.603203
+        }
+      },
+      "sha256": "0da8c12f3e15d95585434d2cf294b3113a3e3fc84bf9ba9d64f2ef834ef4bd98",
+      "units_per_em": 2048
+    },
+    {
+      "measurements": {
+        "desktop_description": {
+          "budget_pixels": 920,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 97,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1355.695683,
+                "META_MIN_CHARS": 941.455335,
+                "TITLE_MAX_CHARS": 611.945968,
+                "TITLE_MIN_CHARS": 282.436601
+              },
+              "pixels_per_character": 9.414553
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 148,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 895.048753,
+                "META_MIN_CHARS": 621.561634,
+                "TITLE_MAX_CHARS": 404.015062,
+                "TITLE_MIN_CHARS": 186.46849
+              },
+              "pixels_per_character": 6.215616
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 144,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 914.188076,
+                "META_MIN_CHARS": 634.85283,
+                "TITLE_MAX_CHARS": 412.65434,
+                "TITLE_MIN_CHARS": 190.455849
+              },
+              "pixels_per_character": 6.348528
+            }
+          },
+          "font_size_pixels": 14
+        },
+        "desktop_title": {
+          "budget_pixels": 600,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 44,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1936.708119,
+                "META_MIN_CHARS": 1344.936194,
+                "TITLE_MAX_CHARS": 874.208526,
+                "TITLE_MIN_CHARS": 403.480858
+              },
+              "pixels_per_character": 13.449362
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 67,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1278.641076,
+                "META_MIN_CHARS": 887.945192,
+                "TITLE_MAX_CHARS": 577.164375,
+                "TITLE_MIN_CHARS": 266.383557
+              },
+              "pixels_per_character": 8.879452
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 66,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1305.982965,
+                "META_MIN_CHARS": 906.932615,
+                "TITLE_MAX_CHARS": 589.5062,
+                "TITLE_MIN_CHARS": 272.079784
+              },
+              "pixels_per_character": 9.069326
+            }
+          },
+          "font_size_pixels": 20
+        },
+        "mobile_description": {
+          "budget_pixels": 680,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 72,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1355.695683,
+                "META_MIN_CHARS": 941.455335,
+                "TITLE_MAX_CHARS": 611.945968,
+                "TITLE_MIN_CHARS": 282.436601
+              },
+              "pixels_per_character": 9.414553
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 109,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 895.048753,
+                "META_MIN_CHARS": 621.561634,
+                "TITLE_MAX_CHARS": 404.015062,
+                "TITLE_MIN_CHARS": 186.46849
+              },
+              "pixels_per_character": 6.215616
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 107,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 914.188076,
+                "META_MIN_CHARS": 634.85283,
+                "TITLE_MAX_CHARS": 412.65434,
+                "TITLE_MIN_CHARS": 190.455849
+              },
+              "pixels_per_character": 6.348528
+            }
+          },
+          "font_size_pixels": 14
+        }
+      },
+      "name": "Georgia",
+      "path": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+      "raw_glyph_spread": {
+        "14px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 14,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll",
+            "fixed_string_width_pixels": 240.351562,
+            "glyph": "l",
+            "glyph_width_pixels": 4.005859
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 819.492188,
+            "glyph": "W",
+            "glyph_width_pixels": 13.658203
+          },
+          "width_ratio": 3.409556
+        },
+        "20px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 20,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll",
+            "fixed_string_width_pixels": 343.359375,
+            "glyph": "l",
+            "glyph_width_pixels": 5.722656
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 1170.703125,
+            "glyph": "W",
+            "glyph_width_pixels": 19.511719
+          },
+          "width_ratio": 3.409556
+        }
+      },
+      "sha256": "4f54eb299fccea7f103edeb0d92437359bfd4441811d53222b82b335369f6218",
+      "units_per_em": 2048
+    },
+    {
+      "measurements": {
+        "desktop_description": {
+          "budget_pixels": 920,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 100,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1314.322254,
+                "META_MIN_CHARS": 912.723787,
+                "TITLE_MAX_CHARS": 593.270462,
+                "TITLE_MIN_CHARS": 273.817136
+              },
+              "pixels_per_character": 9.127238
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 162,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 813.892432,
+                "META_MIN_CHARS": 565.203078,
+                "TITLE_MAX_CHARS": 367.382,
+                "TITLE_MIN_CHARS": 169.560923
+              },
+              "pixels_per_character": 5.652031
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 158,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 835.962566,
+                "META_MIN_CHARS": 580.52956,
+                "TITLE_MAX_CHARS": 377.344214,
+                "TITLE_MIN_CHARS": 174.158868
+              },
+              "pixels_per_character": 5.805296
+            }
+          },
+          "font_size_pixels": 14
+        },
+        "desktop_title": {
+          "budget_pixels": 600,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 46,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1877.60322,
+                "META_MIN_CHARS": 1303.891125,
+                "TITLE_MAX_CHARS": 847.529231,
+                "TITLE_MIN_CHARS": 391.167337
+              },
+              "pixels_per_character": 13.038911
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 74,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1162.703474,
+                "META_MIN_CHARS": 807.432968,
+                "TITLE_MAX_CHARS": 524.831429,
+                "TITLE_MIN_CHARS": 242.22989
+              },
+              "pixels_per_character": 8.07433
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 72,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1194.232238,
+                "META_MIN_CHARS": 829.327943,
+                "TITLE_MAX_CHARS": 539.063163,
+                "TITLE_MIN_CHARS": 248.798383
+              },
+              "pixels_per_character": 8.293279
+            }
+          },
+          "font_size_pixels": 20
+        },
+        "mobile_description": {
+          "budget_pixels": 680,
+          "composition_mixes": {
+            "all_caps": {
+              "characters_budget_holds": 74,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 1314.322254,
+                "META_MIN_CHARS": 912.723787,
+                "TITLE_MAX_CHARS": 593.270462,
+                "TITLE_MIN_CHARS": 273.817136
+              },
+              "pixels_per_character": 9.127238
+            },
+            "lowercase_heavy_prose": {
+              "characters_budget_holds": 120,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 813.892432,
+                "META_MIN_CHARS": 565.203078,
+                "TITLE_MAX_CHARS": 367.382,
+                "TITLE_MIN_CHARS": 169.560923
+              },
+              "pixels_per_character": 5.652031
+            },
+            "ordinary_title_case": {
+              "characters_budget_holds": 117,
+              "constant_widths_pixels": {
+                "META_MAX_CHARS": 835.962566,
+                "META_MIN_CHARS": 580.52956,
+                "TITLE_MAX_CHARS": 377.344214,
+                "TITLE_MIN_CHARS": 174.158868
+              },
+              "pixels_per_character": 5.805296
+            }
+          },
+          "font_size_pixels": 14
+        }
+      },
+      "name": "Times New Roman",
+      "path": "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+      "raw_glyph_spread": {
+        "14px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 14,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "fixed_string_width_pixels": 233.378906,
+            "glyph": "i",
+            "glyph_width_pixels": 3.889648
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 792.832031,
+            "glyph": "W",
+            "glyph_width_pixels": 13.213867
+          },
+          "width_ratio": 3.397188
+        },
+        "20px": {
+          "fixed_string_length": 60,
+          "font_size_pixels": 20,
+          "glyph_domain": "ASCII letters A-Z and a-z; spaces excluded",
+          "narrowest": {
+            "fixed_string": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "fixed_string_width_pixels": 333.398438,
+            "glyph": "i",
+            "glyph_width_pixels": 5.556641
+          },
+          "widest": {
+            "fixed_string": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+            "fixed_string_width_pixels": 1132.617188,
+            "glyph": "W",
+            "glyph_width_pixels": 18.876953
+          },
+          "width_ratio": 3.397188
+        }
+      },
+      "sha256": "f3b4ffff71c2a0c7227d37497683b2498fb2d0a4e8beae26f022e3ccfcaabfa3",
+      "units_per_em": 2048
+    }
+  ],
+  "generated": "2026-08-10",
+  "inputs": {
+    "composition_mixes": {
+      "all_caps": {
+        "lowercase": 0.0,
+        "space": 0.0,
+        "uppercase": 1.0
+      },
+      "lowercase_heavy_prose": {
+        "lowercase": 0.84,
+        "space": 0.16,
+        "uppercase": 0.0
+      },
+      "ordinary_title_case": {
+        "lowercase": 0.79,
+        "space": 0.16,
+        "uppercase": 0.05
+      }
+    },
+    "english_letter_frequency": {
+      "name": "fixed English A-Z frequency percentages embedded in calibrate_serp_length.py",
+      "percentages": {
+        "a": 8.167,
+        "b": 1.492,
+        "c": 2.782,
+        "d": 4.253,
+        "e": 12.702,
+        "f": 2.228,
+        "g": 2.015,
+        "h": 6.094,
+        "i": 6.966,
+        "j": 0.153,
+        "k": 0.772,
+        "l": 4.025,
+        "m": 2.406,
+        "n": 6.749,
+        "o": 7.507,
+        "p": 1.929,
+        "q": 0.095,
+        "r": 5.987,
+        "s": 6.327,
+        "t": 9.056,
+        "u": 2.758,
+        "v": 0.978,
+        "w": 2.36,
+        "x": 0.15,
+        "y": 1.974,
+        "z": 0.074
+      },
+      "status": "declared_input_not_finding"
+    },
+    "font_sizes_pixels": {
+      "desktop_description": 14,
+      "desktop_title": 20,
+      "mobile_description": 14
+    },
+    "font_stand_in": {
+      "primary": "Arial",
+      "sensitivity_fonts": [
+        "Verdana",
+        "Georgia",
+        "Times New Roman"
+      ],
+      "status": "assumed_input_not_google_font"
+    },
+    "pixel_budgets": {
+      "status": "assumed_input_not_google_published",
+      "surfaces": {
+        "desktop_description": 920,
+        "desktop_title": 600,
+        "mobile_description": 680
+      },
+      "weakest_link": "If a reported pixel budget is wrong, every character capacity derived from it is wrong."
+    }
+  },
+  "method": {
+    "capacity": "floor(pixel budget / pixels per character)",
+    "extreme_string": "60 repetitions of the narrowest or widest ASCII letter glyph",
+    "glyph_width": "horizontal advance from the font hmtx table, scaled by unitsPerEm",
+    "kerning": "not applied; the proxy uses individual glyph advances",
+    "mix_width": "frequency-weighted letter advance combined with declared case and space shares"
+  },
+  "selection_rule": "ordinary composition in Arial"
+}

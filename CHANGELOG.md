@@ -10,6 +10,57 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.30.0 — SERP character limits admit that truncation is pixels
+
+`META_MAX_CHARS` moves from 165 to the measured Arial desktop capacity of 144.
+This deliberately changes verdicts: descriptions from 145 through 165 characters
+now warn where they passed before. The title ceiling stays 65; at the declared
+ordinary-title-case mix 65 characters measure 591.37px and 66 measure 600.47px
+against the assumed 600px desktop budget. At the same mix, 144 description characters
+measure 917.08px and 145 measure 923.44px against the assumed 920px desktop budget.
+Advice now names the exact enforced 30-65 title and 100-144 description ranges, so a
+passing 35-character title is no longer simultaneously told to expand to 50 and no
+description advice names 155.
+
+Both ceilings use one selection rule: ordinary composition in Arial, chosen as the
+representative mix rather than the most favourable one. Arial's all-caps, ordinary and
+lowercase-heavy mixes would respectively hold 45, 65 and 67 title characters, and 98,
+144 and 147 description characters. Selecting the most favourable mix consistently
+would therefore have produced 67 and 147 instead. The committed report records those
+alternatives and the ordinary-mix result in every sensitivity font, so the choice can
+be audited without rerunning the font measurement.
+
+The committed report measures four real font files, records their hashes, and crosses
+three composition mixes with desktop-title, desktop-description and mobile-description
+surfaces. Arial is bracketed by wider Verdana and narrower Times New Roman: title
+capacity spans 57-72 and desktop-description capacity 126-158 across the four fonts
+under the selected ordinary mix. Verdana holds about 126 ordinary-composition
+description characters, so a lower-capacity rendering font than Arial would make even
+the corrected 144-character bound permissive.
+That spread is the result, not noise hidden behind one average. At 20px Arial's
+narrowest ASCII letter (`i`, 4.443px) and widest (`W`, 18.877px) differ 4.25x, and
+60 frequency-weighted capitals occupy 798.92px. A character ceiling is consequently
+useful for the declared average text and cannot be exact for every title.
+
+The 600px desktop-title, 920px desktop-description and 680px mobile-description
+budgets are explicitly assumed third-party observations, not Google-published facts;
+Arial is explicitly a stand-in for Google's own rendering family. If either input is
+wrong, its derived character capacity is wrong. The two minimums therefore become
+`convention`, not `measured`: a truncation budget says nothing about how much copy is
+editorially enough, so 30 and 100 remain disclosed project judgements.
+
+The full font run supersedes the pilot's approximations. It gets 591.37px rather than
+about 596px for the 65-character title mix. Under the selected ordinary mix it holds
+144 desktop and 106 mobile description characters; the pilot's lowercase-heavy
+comparison measures 147 and 109 rather than about 146 and 108. In the selected mix the
+old 165 description characters measure 1,050.82px (14.22% over budget), and the old
+155-character advice still fails at 987.13px (7.30% over). The full all-caps mix is
+798.92px for 60 characters rather than about 794px, and its lowercase-heavy
+52-character counterpart is 463.30px rather than the pilot's roughly 402px. The full
+run remains the source of both selected ceilings: 65 and 144. `fonttools` is
+development-only and no audit imports it. Registry `666f511a91ad` unchanged.
+693 -> 697 tests.
+
 ## 0.29.1 — the 100KB font warning gets evidence, not a new value
 
 `LARGE_FONT_BYTES` remains 100,000 after measurement against 3,241 font files from

@@ -396,6 +396,109 @@ def over(result):
             self.assertTrue(entry.get("version"), entry)
             self.assertRegex(entry.get("sha256", ""), r"^[0-9a-f]{64}$", entry)
 
+    def test_the_serp_length_thresholds_match_their_committed_measurement(self):
+        report_path = os.path.join(TOOLS, "calibration", "serp-length.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        sys.path.insert(0, SCRIPTS)
+        import article_seo
+
+        measured = {name: row for name, row in report["constants"].items()
+                    if row["basis"] == "measured"}
+        self.assertEqual(set(measured), {"TITLE_MAX_CHARS", "META_MAX_CHARS"})
+        for name, evidence in measured.items():
+            self.assertEqual(getattr(article_seo, name), evidence["value"],
+                             f"{name} drifted away from its committed measurement")
+            self.assertEqual(evidence["value"], evidence["recommended_value"],
+                             f"{name} does not implement the measured capacity")
+
+    def test_the_serp_constants_come_from_one_selection_rule(self):
+        report_path = os.path.join(TOOLS, "calibration", "serp-length.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        sys.path.insert(0, SCRIPTS)
+        import article_seo
+
+        self.assertEqual(report.get("selection_rule"),
+                         "ordinary composition in Arial")
+        fonts = {font["name"]: font for font in report["fonts"]}
+        measured = {name for name, row in report["constants"].items()
+                    if row["basis"] == "measured"}
+        self.assertEqual(measured, {"TITLE_MAX_CHARS", "META_MAX_CHARS"})
+        for name in measured:
+            decision = report["calibration_decisions"][name]
+            self.assertEqual(decision["font"], "Arial", name)
+            self.assertEqual(decision["mix"], "ordinary_title_case", name)
+            selected_capacity = fonts[decision["font"]]["measurements"][
+                decision["surface"]]["composition_mixes"][decision["mix"]][
+                    "characters_budget_holds"]
+            alternatives = decision["alternatives"]
+            expected_mixes = {
+                mix: row["characters_budget_holds"]
+                for mix, row in fonts["Arial"]["measurements"][
+                    decision["surface"]]["composition_mixes"].items()
+            }
+            expected_fonts = {
+                font_name: font["measurements"][decision["surface"]][
+                    "composition_mixes"]["ordinary_title_case"][
+                        "characters_budget_holds"]
+                for font_name, font in fonts.items()
+            }
+            self.assertEqual(alternatives["capacities_by_mix_in_arial"],
+                             expected_mixes, name)
+            self.assertEqual(
+                alternatives["capacities_for_ordinary_composition_by_font"],
+                expected_fonts, name)
+            self.assertEqual(decision["capacity"], selected_capacity, name)
+            self.assertEqual(report["constants"][name]["value"],
+                             selected_capacity, name)
+            self.assertEqual(getattr(article_seo, name), selected_capacity, name)
+
+    def test_the_serp_report_names_its_assumed_inputs(self):
+        report_path = os.path.join(TOOLS, "calibration", "serp-length.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+
+        inputs = report["inputs"]
+        self.assertEqual(inputs["pixel_budgets"]["status"],
+                         "assumed_input_not_google_published")
+        self.assertEqual(inputs["pixel_budgets"]["surfaces"], {
+            "desktop_title": 600,
+            "desktop_description": 920,
+            "mobile_description": 680,
+        })
+        self.assertEqual(inputs["english_letter_frequency"]["status"],
+                         "declared_input_not_finding")
+        self.assertEqual(len(inputs["english_letter_frequency"]["percentages"]), 26)
+        self.assertGreater(len(report["fonts"]), 1,
+                           "one font cannot show font-choice sensitivity")
+        self.assertGreater(len(inputs["composition_mixes"]), 1,
+                           "one composition cannot show text sensitivity")
+        for font in report["fonts"]:
+            self.assertRegex(font["sha256"], r"^[0-9a-f]{64}$", font)
+
+    def test_the_title_advice_matches_the_title_check(self):
+        sys.path.insert(0, SCRIPTS)
+        import article_seo
+
+        def title_fix(title):
+            content = {"title": title, "meta_description": "m" * 120,
+                       "h1": ["Heading"], "images": [], "author": "Author",
+                       "publish_date": "2026-08-10"}
+            issues = article_seo.detect_seo_issues(
+                content, [], {"word_count": article_seo.BLOG_THIN_WORDS})
+            return next(issue["fix"] for issue in issues if issue["area"] == "Title")
+
+        minimum = article_seo.TITLE_MIN_CHARS
+        maximum = article_seo.TITLE_MAX_CHARS
+        self.assertEqual(title_fix(""),
+                         f"Add a descriptive title tag ({minimum}-{maximum} characters).")
+        self.assertEqual(title_fix("x" * (minimum - 1)),
+                         f"Expand title to at least {minimum} characters with the "
+                         "primary keyword near the start.")
+        self.assertEqual(title_fix("x" * (maximum + 1)),
+                         f"Keep title at or below {maximum} characters.")
+
     def test_the_measured_basis_lines_point_at_the_report(self):
         path = os.path.join(SCRIPTS, "css_minify_check.py")
         with open(path, encoding="utf-8") as f:
