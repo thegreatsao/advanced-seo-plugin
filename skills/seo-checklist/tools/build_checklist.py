@@ -1053,7 +1053,12 @@ EXTRA = [
      {"path": "rows", "field": "alignment",
       "value_map": {"documented": "pass", "robots_only": "pass",
                     "allowed_without_llms_txt": "fail"}},
-     "Declare explicit rules for GPTBot, OAI-SearchBot, OAI-AdsBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"),
+     "Declare per-token rules for training, answer retrieval and ad review. Treat "
+     "ClaudeBot as training; handle Claude-User and Claude-SearchBot separately. "
+     "PerplexityBot feeds search, while Perplexity-User generally ignores robots.txt. "
+     "Google-Extended covers Gemini training and grounding, not AI Overviews or AI "
+     "Mode. Applebot-Extended controls training; Applebot answer use follows "
+     "nosnippet"),
     ("GEO-004", "geo_ai", "Answer blocks present for AEO", "medium", S,
      "answer_block_scanner.py", PAGE, {"path": "score", "gte": 70},
      "Add direct answers, definitions, lists and tables for featured snippets"),

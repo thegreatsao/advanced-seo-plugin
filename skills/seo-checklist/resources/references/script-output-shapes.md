@@ -102,7 +102,11 @@ for that page. Use `--no-http-cache` for an isolated timing.
 `llms_txt_url` — str
 `llms_txt_status` — int
 `rows[]` — array
-  - item keys: crawler, policy, paths, llms_txt_available, alignment
+  - item keys: crawler, scope, honours_robots_txt, policy, paths,
+    llms_txt_available, alignment
+  - `honours_robots_txt` is false for a documented user fetcher that generally ignores
+    robots.txt; its `policy` is `not_enforced`, while `paths` retains the site's stated
+    rules instead of presenting them as restrictions the fetcher will obey.
 
 ### anchor_text_audit.py
 

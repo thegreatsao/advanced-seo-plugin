@@ -1078,6 +1078,71 @@ class Indexability(unittest.TestCase):
         self.assertTrue(rows)
         self.assertTrue(all("alignment" in row for row in rows))
 
+    def test_every_ai_crawler_has_a_scope_and_both_reach_scopes_are_present(self):
+        """The values may be renamed, but training and answer fetching must remain
+        distinct populated groups rather than collapsing back into one token list."""
+        import ai_crawler_policy_matrix as matrix
+
+        self.assertTrue(matrix.AI_CRAWLERS)
+        rows = {row["crawler"]: row for row in out("aicrawl")["rows"]}
+        self.assertEqual(set(rows), set(matrix.AI_CRAWLERS))
+        self.assertTrue(all(row.get("scope") for row in rows.values()))
+        self.assertTrue(all(isinstance(row.get("honours_robots_txt"), bool)
+                            for row in rows.values()))
+        training = {crawler for crawler, row in rows.items()
+                    if row["scope"] == matrix.MODEL_TRAINING_SCOPE}
+        answers = {crawler for crawler, row in rows.items()
+                   if row["scope"] == matrix.ANSWER_FEEDING_SCOPE}
+        self.assertTrue(training)
+        self.assertTrue(answers)
+
+    def test_anthropic_and_perplexity_tokens_keep_their_distinct_scopes(self):
+        import ai_crawler_policy_matrix as matrix
+
+        expected = {
+            "ClaudeBot": matrix.MODEL_TRAINING_SCOPE,
+            "Claude-User": matrix.ANSWER_FEEDING_SCOPE,
+            "Claude-SearchBot": matrix.ANSWER_FEEDING_SCOPE,
+            "PerplexityBot": matrix.ANSWER_FEEDING_SCOPE,
+            "Perplexity-User": matrix.ANSWER_FEEDING_SCOPE,
+        }
+        self.assertEqual({token: matrix.AI_CRAWLERS[token].scope for token in expected},
+                         expected)
+
+    def test_claudebot_collects_training_data_instead_of_feeding_answers(self):
+        """A direct regression guard: reverting only ClaudeBot's old classification
+        must fail even while both broad scope groups remain populated."""
+        import ai_crawler_policy_matrix as matrix
+
+        self.assertEqual(matrix.AI_CRAWLERS["ClaudeBot"].scope,
+                         matrix.MODEL_TRAINING_SCOPE)
+        self.assertNotEqual(matrix.AI_CRAWLERS["ClaudeBot"].scope,
+                            matrix.ANSWER_FEEDING_SCOPE)
+
+    def test_a_fetcher_that_ignores_robots_txt_is_flagged_in_the_output(self):
+        import ai_crawler_policy_matrix as matrix
+
+        rows = {row["crawler"]: row for row in out("aicrawl")["rows"]}
+        user_fetch = rows["Perplexity-User"]
+        self.assertIs(user_fetch["honours_robots_txt"], False)
+        self.assertEqual(user_fetch["policy"], matrix.NOT_ENFORCED_POLICY)
+
+    def test_applebot_is_included_because_it_can_feed_ai_answer_context(self):
+        """Apple documents search crawling and AI-answer context under Applebot;
+        Applebot-Extended is the separate training-use control."""
+        import ai_crawler_policy_matrix as matrix
+
+        self.assertEqual(matrix.AI_CRAWLERS["Applebot"].scope,
+                         matrix.ANSWER_FEEDING_SCOPE)
+
+    def test_google_extended_does_not_control_search_answers(self):
+        """Google's robots.txt token controls Gemini training and grounding, while
+        AI Overviews and AI Mode follow the ordinary controls for Search."""
+        import ai_crawler_policy_matrix as matrix
+
+        self.assertNotEqual(matrix.AI_CRAWLERS["Google-Extended"].scope,
+                            matrix.ANSWER_FEEDING_SCOPE)
+
 
 class LlmsTxt(unittest.TestCase):
     """GEO-001 `exists`, GEO-002 `quality.score`."""

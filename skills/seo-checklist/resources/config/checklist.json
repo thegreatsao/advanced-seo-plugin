@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "666f511a91ad",
+  "registry_version": "f7dc6c5d1f5b",
   "item_count": 214,
   "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
   "categories": [
@@ -4168,7 +4168,7 @@
         }
       },
       "effort": "medium",
-      "fix": "Declare explicit rules for GPTBot, OAI-SearchBot, OAI-AdsBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot"
+      "fix": "Declare per-token rules for training, answer retrieval and ad review. Treat ClaudeBot as training; handle Claude-User and Claude-SearchBot separately. PerplexityBot feeds search, while Perplexity-User generally ignores robots.txt. Google-Extended covers Gemini training and grounding, not AI Overviews or AI Mode. Applebot-Extended controls training; Applebot answer use follows nosnippet"
     },
     {
       "id": "GEO-004",

@@ -10,6 +10,37 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.31.0 — Google-Extended is not an AI Overviews control
+
+**This is the same defect 0.29.0 fixed for OpenAI, repeated across three vendors.**
+The AI crawler matrix treated one robots.txt token as a vendor's whole AI policy. Every
+row now carries a machine-readable scope separating model training, answer retrieval
+and ad landing-page review. `Google-Extended` is classified with model training: it
+governs Gemini training and grounding in Gemini Apps and Vertex AI, and it is not an
+HTTP user-agent.
+
+Anthropic documents three independent tokens. `ClaudeBot` is now correctly classified
+as training collection; `Claude-User` handles user-requested retrieval; and
+`Claude-SearchBot` crawls to improve search answers. Perplexity likewise separates
+search indexing under `PerplexityBot` from user-requested retrieval under
+`Perplexity-User`. The latter generally ignores robots.txt, so each row now says
+whether its token honours robots.txt and its policy is reported as `not_enforced`
+instead of confidently claiming that a declared restriction will be obeyed.
+
+Apple's documentation puts `Applebot` on both sides of the old boundary: it crawls for
+Spotlight, Siri and Safari, and that data may also provide current context for
+AI-generated answers. It is included as answer feeding for that reason. `nosnippet`
+controls answer use, while the non-crawling `Applebot-Extended` token controls training
+use.
+
+**No robots.txt token controls AI Overviews or AI Mode.** Those Search features follow
+`Googlebot` access and the ordinary snippet directives. GEO-003's English and Russian
+remediation now says so instead of implying that a `Google-Extended` rule settles the
+question, and now names the Anthropic, Perplexity and Apple splits. The assertion and
+item set are unchanged; this release corrects the claims and expands the matrix output
+contract rather than adding a new check. Registry `666f511a91ad` -> `f7dc6c5d1f5b`.
+699 -> 705 tests.
+
 ## 0.30.1 — nine GSC thresholds get a written refusal
 
 Nine inherited Search Console thresholds now name the evidence that is missing rather
