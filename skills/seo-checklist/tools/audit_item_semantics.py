@@ -21,6 +21,14 @@ disallows exactly the four paths CI-019 tests, with a comment saying so.
 
 Exit 1 on any duplicate, or on an unreviewed vocabulary miss. Reviewing an item is
 writing down which of the three is wrong, or that none of them is.
+
+Neither question is about POLARITY, and this tool does not answer it. A title phrased
+as the failure state rather than the desired one — GEO-008 in 0.32.0, caught by hand —
+shares its assertion's vocabulary perfectly and inverts what a PASS means. The
+heuristic for it was measured and rejected: 23 of 215 titles fire and all 23 are
+correct, only 34.4% of items assert a bounded path it could read at all, and inside
+that it catches only failure-state titles reusing the assertion's own word. See
+KNOWN-ISSUES §6 for the numbers. A title's side of its subject is read by a person.
 """
 
 from __future__ import annotations
