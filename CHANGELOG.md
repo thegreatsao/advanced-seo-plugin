@@ -10,6 +10,33 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.32.1 — the gate reads an item's subject, never its side of it
+
+**`audit_item_semantics.py` cannot tell a title that states the desired state from one
+that states the failure.** It asks whether an item asserts about what its title names.
+It has never asked whether a PASS means what the title says, and the two answers come
+apart when the title is phrased as the defect: the subject matches, the verdict
+inverts, and the item reports the opposite of what it found.
+
+GEO-008 was drafted that way inside 0.32.0 — *"This page or marked text is restricted
+in Google AI answers and result snippets together"* over `snippet_controls.restricted`
+`falsy: true`, so it passed exactly when the page was not restricted. The vocabulary
+check was satisfied by the very word that made the title wrong. Corrected by hand
+before it landed; the other 214 titles state the desired state.
+
+The heuristic for catching it — a title should not repeat the last segment of a path
+the assertion requires to be absent or bounded — was written and measured against the
+registry, and is **not** shipped. 23 of 215 titles fire and all 23 are correct, because
+naming the defect is what a remediation title does. Only 74 items assert a
+negative-polarity path at all, a 34.4% ceiling, and inside it the rule catches one of
+four plausible phrasings of GEO-008's own defect. KNOWN-ISSUES §6 records the numbers,
+the refinement that gets false positives down to two and why its verb list is fitted to
+the corpus it was tuned on, and states plainly that no reliable check exists.
+
+Documentation only. No script, registry, assertion or verdict changes: registry stays
+`03fb71754eb2` at 215 items, and a run produces exactly what 0.32.0 produced. 712 tests,
+ruff, five registry gates and four calibration checks green.
+
 ## 0.32.0 — ordinary snippet directives govern Google's AI answers too
 
 **GEO-008 checks the only documented control over whether page content appears in

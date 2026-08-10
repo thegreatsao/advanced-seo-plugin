@@ -358,6 +358,65 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **A title can name the right subject and still state the wrong side of it, and no
+  gate here reads polarity.** `audit_item_semantics.py` answers whether an item
+  asserts *about* what its title names. It has never answered whether a PASS means
+  what the title says. The two questions come apart when a title is phrased as the
+  failure rather than the desired state: subject matches, verdict inverts, and the
+  item reports the opposite of what it found.
+
+  GEO-008 shipped that way inside 0.32.0. The draft title was *"This page or marked
+  text is restricted in Google AI answers and result snippets together"* over an
+  assertion of `rows.0.snippet_controls.restricted` `falsy: true` — so the item
+  passed exactly when the page was *not* restricted, while its title told the reader
+  it was. The vocabulary check was satisfied, and satisfied by the very word that
+  made the title wrong: `restricted` appears on both sides, which is what that check
+  is looking for. Corrected by hand before landing to *"Snippet directives leave the
+  page usable in AI answers and result snippets"*. Every other one of the 215 titles
+  states the desired state; this is one occurrence, not a pattern, and it was caught
+  by a person re-reading the item rather than by anything in CI.
+
+  **The cheap heuristic was written and measured, and it is not worth shipping.** The
+  rule: when passing requires a path to be absent or bounded — `falsy`, `eq: 0`,
+  `lte`, `lt`, `none_matching`, `none_severity` — that path's last segment names the
+  defect, so a title repeating that segment names the defect too. Measured against
+  the registry:
+
+  - **It is almost all false alarm.** 23 of 215 titles fire, and all 23 are correct —
+    *Fix Broken Images* over `broken_image_count == 0`, *Eliminate Internal Duplicate
+    Content* over `exact_duplicate_groups == 0`, *Avoid Intrusive Interstitials on
+    Mobile*. They name the defect because they are remediation instructions, which is
+    the house style for two thirds of this registry.
+  - **Suppressing those needs a list fitted to them.** What separates the 23 from the
+    defect is grammatical mood, not vocabulary: an imperative verb in first position.
+    Adding a 25-verb allowlist plus a negation guard, and requiring the whole final
+    path segment rather than one token of it, does catch the 0.32.0 draft and leaves
+    2 false positives — SP-214 *LCP within budget in a local trace (lab)* and SP-215
+    *CLS within budget*. But the verb list was written by reading the 23 titles it
+    must not flag, so it is fitted to them: a future title opening *Prevent* or *Trim*
+    is a false alarm on the day it is written.
+  - **Its ceiling is a third of the registry, and it misses most phrasings inside
+    that.** Only 74 of 215 items assert a negative-polarity path at all — 34.4%. Of
+    four plausible ways to write GEO-008's defect, it catches the one that happens to
+    reuse the assertion's own word; *suppressed*, *blocked from quoting* and *shut the
+    page out of* all pass silently.
+
+  So: more false alarms than findings, one-in-four recall inside a 34.4% ceiling, and
+  the one component doing the discriminating overfitted to the corpus it was tuned on.
+  **A reliable check is not possible and none is implemented.** Polarity is a claim
+  English prose makes about a JSON predicate, and no token-overlap test decides it —
+  the same objection §2 makes about vocabulary, one level harder, because here the
+  words match and the meaning is still inverted.
+
+  What makes this class distinct from every other registry defect recorded in this
+  file: **nothing executable is a witness to it.** A mis-titled item of the 0.20
+  family asserts the wrong field, so some fixture eventually disagrees with it. Here
+  the script is right, the assertion is right, and both fixtures answer correctly —
+  the good one passes, the broken one warns. Only the sentence is wrong, and the test
+  suite has no reader. The line is held by reading each new title against its
+  assertion at the moment it is written, and by this entry saying that out loud
+  rather than leaving CI's silence to be read as coverage.
+
 - **Nine Search Console thresholds are examined and deliberately not calibrated.**
   The pilot evidence is one small property, roughly ten thousand impressions over
   sixteen months: 501 query-by-page rows, of which 26 clear 50 impressions, 15 clear
