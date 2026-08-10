@@ -372,6 +372,30 @@ def over(result):
             self.assertRegex(entry.get("sha256", ""), r"^[0-9a-f]{64}$", entry)
             self.assertGreater(entry.get("css_file_count", 0), 0, entry)
 
+    def test_the_font_threshold_matches_its_committed_measurement(self):
+        report_path = os.path.join(TOOLS, "calibration", "font-weight.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        sys.path.insert(0, SCRIPTS)
+        import font_audit
+
+        self.assertEqual(font_audit.LARGE_FONT_BYTES,
+                         report["constant"]["value"],
+                         "LARGE_FONT_BYTES drifted away from its measurement")
+
+    def test_the_font_calibration_report_names_a_real_corpus(self):
+        report_path = os.path.join(TOOLS, "calibration", "font-weight.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        self.assertGreater(len(report["manifest"]), 0)
+        datetime.datetime.strptime(report["generated"], "%Y-%m-%d")
+        self.assertEqual({entry.get("arm") for entry in report["manifest"]},
+                         {"A", "B"},
+                         "both subsetted/control and full-face arms are required")
+        for entry in report["manifest"]:
+            self.assertTrue(entry.get("version"), entry)
+            self.assertRegex(entry.get("sha256", ""), r"^[0-9a-f]{64}$", entry)
+
     def test_the_measured_basis_lines_point_at_the_report(self):
         path = os.path.join(SCRIPTS, "css_minify_check.py")
         with open(path, encoding="utf-8") as f:

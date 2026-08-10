@@ -10,6 +10,32 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.29.1 — the 100KB font warning gets evidence, not a new value
+
+`LARGE_FONT_BYTES` remains 100,000 after measurement against 3,241 font files from
+eight pinned npm packages. The corpus separates 3,214 `@fontsource` WOFF2/WOFF files
+from 27 full `@expo-google-fonts` TTF faces, records every tarball hash and file label,
+and leaves a wide observed gap: ordinary subsetted files end at 66,856 bytes and full
+TTFs begin at 309,828. The threshold's exact location inside that gap is indifferent
+on this corpus, so changing it would add precision without changing an answer.
+
+The old rationale was half wrong: **100KB does not detect a non-WOFF2 face.** The 150
+Latin/latin-ext WOFF controls have a 17,352-byte median and 47,440-byte maximum, with
+none crossing the threshold; `font_audit.py`'s separate extension check is the format
+signal. Their paired WOFF2 population has an 18,656-byte median and 34,520-byte maximum,
+confirming the other half of the rationale with 2.9x headroom at the ceiling.
+
+All 27 full TTFs cross: Inter spans 309,828-316,716 bytes and Noto Sans spans
+401,372-561,488. The full run contradicts the pilot's Inter comparison: the required
+Latin-plus-latin-ext Inter WOFF2 distribution has a 28,094-byte median, making the
+median-to-median gap 11.2x rather than about 17x. It also moves the pilot's claimed
+47KB-310KB empty band's lower endpoint to 66,856 because an ordinary CJK WOFF control
+reaches that size. Nine of the 1,125 Noto Sans JP WOFF2 files cross, exactly the
+un-ranged `japanese` fallback at each weight rather than any of its 120 numbered
+unicode-range subsets, with a maximum of 1,158,688 bytes; the WOFF control repeats
+those nine crossings and reaches 1,605,444 bytes. Registry `666f511a91ad` unchanged.
+691 -> 693 tests.
+
 ## 0.29.0 — OpenAI's four crawler tokens, not one
 
 **GEO-003 was checking one OpenAI token out of four and calling the answer a policy.**

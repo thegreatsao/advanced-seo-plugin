@@ -11,9 +11,9 @@ from urllib.parse import urlparse
 from seo_common import BeautifulSoup, fetch_url, load_source, normalize_url, require_bs4
 
 
-# basis: inherited — 100KB for one font file, present at import. A full-weight Latin
-#  WOFF2 lands well under it, so the number is a smell for an unsubsetted or non-WOFF2
-#  face rather than a budget.
+# basis: measured — corpus=tools/calibration/font-weight.json; date=2026-08-10; method=file byte distributions over pinned npm packages.
+#  WOFF2 ceiling 34,520 bytes; retained in the empty 66,856-309,828 byte band. It does
+#  not detect non-WOFF2 faces — the separate extension check below does.
 LARGE_FONT_BYTES = 100_000
 
 FONT_EXTENSIONS = (".woff2", ".woff", ".ttf", ".otf", ".eot")

@@ -25,19 +25,17 @@ from __future__ import annotations
 import argparse
 import ast
 import gzip
-import hashlib
-import io
 import json
 import os
 import sys
-import tarfile
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
+
+from corpus_fetch import CACHE, fetch_package, package_basename, tarball_url
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(HERE)
 SCRIPTS = os.path.join(SKILL_DIR, "scripts")
-CACHE = os.path.join(HERE, ".calibration-cache")
 REPORT = os.path.join(HERE, "calibration", "css-minification.json")
 REPORT_RELATIVE = "tools/calibration/css-minification.json"
 
@@ -104,37 +102,6 @@ def _offline_constants() -> dict:
     return values
 
 
-def _basename(package: str) -> str:
-    return package.rsplit("/", 1)[-1]
-
-
-def _tarball_url(package: str, version: str) -> str:
-    base = _basename(package)
-    return f"https://registry.npmjs.org/{package}/-/{base}-{version}.tgz"
-
-
-def _cache_path(package: str, version: str) -> str:
-    safe = package.replace("@", "").replace("/", "-")
-    return os.path.join(CACHE, f"{safe}-{version}.tgz")
-
-
-def _fetch(package: str, version: str) -> bytes:
-    path = _cache_path(package, version)
-    if os.path.exists(path):
-        with open(path, "rb") as fh:
-            return fh.read()
-    from lib.safe_http import safe_get
-
-    url = _tarball_url(package, version)
-    print(f"fetching {package}@{version}", file=sys.stderr)
-    response = safe_get(url, timeout=60, max_response_bytes=64 * 1024 * 1024)
-    data = response.content
-    os.makedirs(CACHE, exist_ok=True)
-    with open(path, "wb") as fh:
-        fh.write(data)
-    return data
-
-
 def _label(path: str) -> str:
     name = PurePosixPath(path).name.lower()
     return "minified" if name.endswith((".min.css", "-min.css")) else "source"
@@ -152,7 +119,7 @@ def _display_path(package: str, version: str, member_name: str) -> str:
     parts = PurePosixPath(member_name).parts
     if parts and parts[0] == "package":
         parts = parts[1:]
-    return str(PurePosixPath(f"{_basename(package)}-{version}", *parts))
+    return str(PurePosixPath(f"{package_basename(package)}-{version}", *parts))
 
 
 def _round(value: float) -> float:
@@ -252,16 +219,12 @@ def _sides(values: list[float], value: float, condition: str) -> dict:
 
 def _measure_package(spec: dict) -> tuple[dict, list[dict], list[dict]]:
     package, version, group = spec["package"], spec["version"], spec["group"]
-    archive = _fetch(package, version)
-    digest = hashlib.sha256(archive).hexdigest()
-    raw_files = {}
-    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tf:
-        for member in tf.getmembers():
-            if not member.isfile() or not member.name.lower().endswith(".css"):
-                continue
-            handle = tf.extractfile(member)
-            if handle is not None:
-                raw_files[member.name] = handle.read()
+    fetched, raw_files = fetch_package(
+        package,
+        version,
+        lambda path: path.lower().endswith(".css"),
+        cache_dir=CACHE,
+    )
 
     files = []
     by_archive_path = {}
@@ -313,8 +276,8 @@ def _measure_package(spec: dict) -> tuple[dict, list[dict], list[dict]]:
 
     manifest = {
         **spec,
-        "tarball": _tarball_url(package, version),
-        "sha256": digest,
+        "tarball": tarball_url(package, version),
+        "sha256": fetched["sha256"],
         "css_file_count": len(files),
         "paired_file_count": len(pairs),
     }
