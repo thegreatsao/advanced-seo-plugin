@@ -10,6 +10,32 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.32.0 — ordinary snippet directives govern Google's AI answers too
+
+**GEO-008 checks the only documented control over whether page content appears in
+Google's AI answers.** Each indexability row now reports `nosnippet` from `robots` and
+`googlebot` meta tags or `X-Robots-Tag`, the effective `max-snippet` integer with every
+source that supplied it, and the number of `data-nosnippet` attributes in the HTML.
+`max-snippet:-1` is unlimited and passes; `max-snippet:0` suppresses the snippet and
+warns. When sources disagree, the smallest non-negative limit wins, so an unlimited
+directive cannot erase a restriction from another source.
+
+The new item states the coupling the setting creates: the same directive restricts a
+page or marked passage in Google's AI answers and in its ordinary result snippet, and
+Google provides no setting that separates the two. A restriction is a legitimate
+editorial choice, so GEO-008 uses the registry's `warn` branch. Clean pages `PASS` and
+every detected restriction is `WARN`; the item cannot return `FAIL`. Live response
+fixtures cover meta and header delivery, `-1`, `0`, `data-nosnippet`, a clean page and
+the complete no-`FAIL` contract.
+
+CI-004 is retitled from *Allow Indexing via Meta Robots / X-Robots-Tag* to *Allow
+Indexing via Meta Robots*, matching the saved HTML that `parse_html.py` actually reads.
+It does not fetch the page a second time to recover headers. `X-Robots-Tag: noindex`
+continues to be fetched and enforced by `indexability_matrix.py` under CI-001, including
+the existing header-specific evidence test.
+
+Registry `f7dc6c5d1f5b` -> `03fb71754eb2`; 214 -> 215 items. 705 -> 712 tests.
+
 ## 0.31.0 — Google-Extended is not an AI Overviews control
 
 **This is the same defect 0.29.0 fixed for OpenAI, repeated across three vendors.**

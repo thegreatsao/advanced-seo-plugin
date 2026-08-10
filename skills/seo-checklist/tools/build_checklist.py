@@ -1072,6 +1072,17 @@ EXTRA = [
      "indexnow_checker.py", ["{url}", "--key", "{indexnow_key}"],
      {"path": "key_valid", "truthy": True},
      "Configure IndexNow for instant reindexing in Bing/Yandex"),
+    # Stated as the desired state, like every other title in this registry: the item
+    # reads PASS as "the title is true of this page". Phrased as the failure instead —
+    # "this page is restricted…" — a PASS would assert the opposite of what it found.
+    ("GEO-008", "geo_ai",
+     "Snippet directives leave the page usable in AI answers and result snippets",
+     "medium", S, "indexability_matrix.py", PAGE,
+     {"path": "rows.0.snippet_controls.restricted", "falsy": True},
+     "Review the reported nosnippet, max-snippet or data-nosnippet source. The same "
+     "directive restricts Google's AI answers and ordinary result snippets; there is "
+     "no setting that separates them",
+     {"path": "rows.0.snippet_controls.restricted", "truthy": True}),
     ("TECH-001", "technical", "Modern schema types only (no HowTo/FAQ misuse)", "high", S,
      "rich_results_guard.py", PAGE, {"path": "summary.warnings", "eq": 0},
      "Remove HowTo (deprecated) and FAQPage outside gov/health sites"),
@@ -1274,7 +1285,7 @@ def main() -> int:
         "version": 1,
         "registry_version": registry_version,
         "item_count": len(items),
-        "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
+        "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
         "categories": [{"key": k, "prefix": p, "label": label}
                        for k, p, label, _ in CATEGORIES]
                       + [{"key": "geo_ai", "prefix": "GEO", "label": "GEO / AI Search"}],

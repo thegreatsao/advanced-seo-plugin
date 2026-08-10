@@ -1,10 +1,10 @@
 # seo-checklist
 
-A deterministic SEO audit for Claude Code. One fixed registry of 214 checks, run
+A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.31.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.32.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -26,7 +26,7 @@ whatever the model remembered.
 
 This plugin separates the two halves of that problem.
 
-`resources/config/checklist.json` is the contract: 214 items, each naming what
+`resources/config/checklist.json` is the contract: 215 items, each naming what
 answers it — a script plus an assertion over that script's output, a Search
 Console call, a language-model judgement, or a human. Nothing in the registry is
 executable; assertions are declarative and interpreted by the runner. Coverage is
@@ -37,12 +37,12 @@ was computed over, and beneath it every item lands in exactly one bucket named f
 whose action moves it:
 
 ```
-SEO Score 69/100 — over 106 items, 55% of the weight in scope
-  decided           106
+SEO Score 69/100 — over 107 items, 55% of the weight in scope
+  decided           107
   waiting on you     49   (36 unanswered LLM items, 13 missing inputs)
   needs a person     34
   undecided          25
-                   ---- 214 items in the registry
+                   ---- 215 items in the registry
 ```
 
 There was a single `Coverage %` until 0.16 and removing it was the point: it added
@@ -54,7 +54,7 @@ nobody.
 
 ## What is in the registry
 
-214 items: the [Plerdy 200-point checklist](https://www.plerdy.com/seo-checklist/) plus 14
+215 items: the [Plerdy 200-point checklist](https://www.plerdy.com/seo-checklist/) plus 15
 checks it does not cover — GEO/AI search, `llms.txt`, AI-crawler policy, IndexNow,
 schema guards, and lab Core Web Vitals from a local trace.
 
@@ -65,7 +65,7 @@ schema guards, and lab Core Web Vitals from a local trace.
 | a human | 32 |
 | Search Console, with no API to answer it, so a person opens the UI | 3 |
 
-146 script-backed items collapse to **55 unique process launches** — the runner
+147 script-backed items collapse to **55 unique process launches** — the runner
 deduplicates, so `pagespeed.py` runs once, not seven times.
 
 Nine items moved from script to judgement in August 2026 as a correction, not a
@@ -359,7 +359,7 @@ client's report is the same category of mistake as showing them a stack trace: t
 old report did it in every row of every table.
 
 Explanations live in the translation files rather than the code, per category
-rather than per item — sixteen texts can be kept true, and 214 would drift out of
+rather than per item — sixteen texts can be kept true, and 215 would drift out of
 step with a generated registry the first time an item changed.
 
 **Client-facing reports are English-only in 0.2.0.** `--lang ru` translates the

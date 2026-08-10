@@ -28,8 +28,10 @@ SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
 REGISTRY = os.path.join(ROOT, "skills", "seo-checklist", "resources", "config",
                         "checklist.json")
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from checklist_runner import NO_DATA, PASS, FAIL, WARN, evaluate  # noqa: E402
+from harness import allow_loopback, served  # noqa: E402
 
 
 def registry_rule(item_id: str) -> dict:
@@ -227,6 +229,85 @@ class IndexabilityMatrix(unittest.TestCase):
         out = self.ix.evaluate(["https://example.com/page"], "https://example.com/")
         self.assertIn("x-robots-tag noindex", out["rows"][0]["blockers"])
         self.assertEqual(verdict("CI-001", out), FAIL)
+
+
+class SnippetControls(unittest.TestCase):
+    """GEO-008 reads both response surfaces through the real fixture server."""
+
+    def check(self, response):
+        import indexability_matrix as ix
+        saved = ix.urls_from_sitemaps
+        ix.urls_from_sitemaps = lambda *a, **k: set()
+        try:
+            with served({"/": response}) as site, allow_loopback():
+                return ix.evaluate([site.url], site.url)
+        finally:
+            ix.urls_from_sitemaps = saved
+
+    def test_meta_delivered_nosnippet_warns_and_reads_googlebot(self):
+        html = PAGE.replace(
+            "</head>", '<meta name="googlebot" content="nosnippet"></head>')
+        out = self.check(html)
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertIs(controls["nosnippet"], True)
+        self.assertEqual(controls["nosnippet_sources"], ["meta googlebot"])
+        self.assertEqual(verdict("GEO-008", out), WARN)
+
+    def test_header_delivered_nosnippet_warns(self):
+        out = self.check((200, {"X-Robots-Tag": "nosnippet"}, PAGE))
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["nosnippet_sources"], ["x-robots-tag"])
+        self.assertEqual(verdict("GEO-008", out), WARN)
+
+    def test_max_snippet_minus_one_is_unlimited_and_passes(self):
+        html = PAGE.replace(
+            "</head>", '<meta name="robots" content="max-snippet:-1"></head>')
+        out = self.check(html)
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["max_snippet"], -1)
+        self.assertIs(controls["restricted"], False)
+        self.assertEqual(verdict("GEO-008", out), PASS)
+
+    def test_max_snippet_zero_suppresses_snippets_and_warns(self):
+        out = self.check((200, {"X-Robots-Tag": "max-snippet: 0"}, PAGE))
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["max_snippet"], 0)
+        self.assertIs(controls["restricted"], True)
+        self.assertEqual(verdict("GEO-008", out), WARN)
+
+    def test_data_nosnippet_is_detected_and_counted(self):
+        html = PAGE.replace("<p>Some prose.</p>",
+                            "<p data-nosnippet>Hidden prose.</p>"
+                            "<span data-nosnippet>Hidden detail.</span>")
+        out = self.check(html)
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["data_nosnippet_count"], 2)
+        self.assertEqual(controls["data_nosnippet_sources"],
+                         ["html data-nosnippet attribute"])
+        self.assertEqual(verdict("GEO-008", out), WARN)
+
+    def test_a_clean_page_passes(self):
+        out = self.check(PAGE)
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertIs(controls["restricted"], False)
+        self.assertEqual(verdict("GEO-008", out), PASS)
+
+    def test_the_item_never_returns_fail(self):
+        cases = [
+            PAGE,
+            PAGE.replace("</head>",
+                         '<meta name="robots" content="nosnippet"></head>'),
+            (200, {"X-Robots-Tag": "nosnippet"}, PAGE),
+            PAGE.replace("</head>",
+                         '<meta name="robots" content="max-snippet:-1"></head>'),
+            PAGE.replace("</head>",
+                         '<meta name="robots" content="max-snippet:0"></head>'),
+            PAGE.replace("<p>Some prose.</p>",
+                         "<p data-nosnippet>Hidden prose.</p>"),
+        ]
+        for response in cases:
+            with self.subTest(response=str(response)[:80]):
+                self.assertNotEqual(verdict("GEO-008", self.check(response)), FAIL)
 
 
 class CanonicalChecker(unittest.TestCase):

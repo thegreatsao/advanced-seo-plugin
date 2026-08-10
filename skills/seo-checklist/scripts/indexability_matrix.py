@@ -5,17 +5,68 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+
+from bs4 import BeautifulSoup
 
 from seo_common import (
     discover_sitemap_urls,
     fetch_robots,
     fetch_url,
+    html_parser,
     parse_html,
     parse_sitemap_xml,
     read_urls,
     robots_allowed,
     normalize_url,
 )
+
+
+MAX_SNIPPET_RE = re.compile(r"\bmax-snippet\s*:\s*(-?\d+)", re.I)
+NOSNIPPET_RE = re.compile(r"\bnosnippet\b", re.I)
+
+
+def snippet_controls(html_text: str, x_robots_tag: str | None) -> dict:
+    """Snippet restrictions Google reads from this response, with their sources."""
+    directives = []
+    data_nosnippet_count = 0
+    if html_text:
+        soup = BeautifulSoup(html_text, html_parser())
+        for tag in soup.find_all("meta"):
+            name = str(tag.get("name") or "").strip().lower()
+            if name in ("robots", "googlebot"):
+                directives.append((f"meta {name}", str(tag.get("content") or "")))
+        data_nosnippet_count = len(soup.find_all(attrs={"data-nosnippet": True}))
+    if x_robots_tag:
+        directives.append(("x-robots-tag", str(x_robots_tag)))
+
+    nosnippet_sources = sorted({source for source, value in directives
+                                 if NOSNIPPET_RE.search(value)})
+    max_snippets = [
+        {"source": source, "value": int(match.group(1))}
+        for source, value in directives
+        for match in MAX_SNIPPET_RE.finditer(value)
+    ]
+    limited = [entry["value"] for entry in max_snippets if entry["value"] >= 0]
+    if limited:
+        # Multiple directives combine at the most restrictive value. In particular,
+        # zero suppresses the snippet; -1 means unlimited and cannot override it.
+        effective_max = min(limited)
+    elif any(entry["value"] == -1 for entry in max_snippets):
+        effective_max = -1
+    else:
+        effective_max = max_snippets[0]["value"] if max_snippets else None
+
+    return {
+        "restricted": bool(nosnippet_sources or limited or data_nosnippet_count),
+        "nosnippet": bool(nosnippet_sources),
+        "nosnippet_sources": nosnippet_sources,
+        "max_snippet": effective_max,
+        "max_snippet_sources": max_snippets,
+        "data_nosnippet_count": data_nosnippet_count,
+        "data_nosnippet_sources": (["html data-nosnippet attribute"]
+                                    if data_nosnippet_count else []),
+    }
 
 
 def urls_from_sitemaps(site: str, timeout: int) -> set[str]:
@@ -40,8 +91,10 @@ def evaluate(urls: list[str], site: str | None = None, timeout: int = 15) -> dic
         xrobots = headers.get("x-robots-tag") or headers.get("X-Robots-Tag")
         html = {}
         ctype = headers.get("content-type", "")
-        if fetched.get("text") and "html" in ctype:
-            html = parse_html(fetched["text"], fetched.get("url") or url)
+        html_text = (fetched.get("text") or "") if "html" in ctype else ""
+        if html_text:
+            html = parse_html(html_text, fetched.get("url") or url)
+        snippets = snippet_controls(html_text, xrobots)
         blockers = []
         if not allowed:
             blockers.append("robots.txt disallow")
@@ -61,6 +114,7 @@ def evaluate(urls: list[str], site: str | None = None, timeout: int = 15) -> dic
             "robots_rule": robots_rule,
             "meta_robots": html.get("meta_robots"),
             "x_robots_tag": xrobots,
+            "snippet_controls": snippets,
             "canonical": html.get("canonical"),
             "in_sitemap": url in sitemap_urls,
             "redirects": fetched.get("redirect_chain", []),

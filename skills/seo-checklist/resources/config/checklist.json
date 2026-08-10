@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "registry_version": "f7dc6c5d1f5b",
-  "item_count": 214,
-  "source": "Plerdy SEO Checklist (200) + 11 beyond-Plerdy checks",
+  "registry_version": "03fb71754eb2",
+  "item_count": 215,
+  "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
     {
       "key": "crawling_indexing",
@@ -165,7 +165,7 @@
       "plerdy_ref": 4,
       "category": "crawling_indexing",
       "category_label": "Crawling & Indexing",
-      "title": "Allow Indexing via Meta Robots / X-Robots-Tag",
+      "title": "Allow Indexing via Meta Robots",
       "severity": "critical",
       "source": "script",
       "check": {
@@ -4261,6 +4261,32 @@
       },
       "effort": "medium",
       "fix": "Configure IndexNow for instant reindexing in Bing/Yandex"
+    },
+    {
+      "id": "GEO-008",
+      "plerdy_ref": null,
+      "category": "geo_ai",
+      "category_label": "GEO / AI Search",
+      "title": "Snippet directives leave the page usable in AI answers and result snippets",
+      "severity": "medium",
+      "source": "script",
+      "check": {
+        "script": "indexability_matrix.py",
+        "args": [
+          "{url}"
+        ],
+        "requires": "crawl",
+        "assert": {
+          "path": "rows.0.snippet_controls.restricted",
+          "falsy": true
+        },
+        "warn": {
+          "path": "rows.0.snippet_controls.restricted",
+          "truthy": true
+        }
+      },
+      "effort": "medium",
+      "fix": "Review the reported nosnippet, max-snippet or data-nosnippet source. The same directive restricts Google's AI answers and ordinary result snippets; there is no setting that separates them"
     },
     {
       "id": "TECH-001",

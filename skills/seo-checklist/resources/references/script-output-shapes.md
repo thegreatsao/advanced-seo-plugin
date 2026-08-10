@@ -745,7 +745,12 @@ one — the script refuses the file instead.
 `count` — int
 `fetch_error` — NoneType or str (no URL answered; three `critical` items read `rows.0`)
 `rows[]` — array
-  - item keys: url, final_url, status, robots_allowed, robots_rule, meta_robots, x_robots_tag, canonical, in_sitemap, redirects, verdict, blockers, error
+  - item keys: url, final_url, status, robots_allowed, robots_rule, meta_robots, x_robots_tag, snippet_controls, canonical, in_sitemap, redirects, verdict, blockers, error
+`rows[].snippet_controls` — object
+  - keys: restricted, nosnippet, nosnippet_sources, max_snippet,
+    max_snippet_sources, data_nosnippet_count, data_nosnippet_sources
+  - `max_snippet` is the effective integer: -1 is unlimited, 0 suppresses the
+    snippet, and the smallest non-negative value wins when sources disagree
 
 ### indexnow_checker.py
 

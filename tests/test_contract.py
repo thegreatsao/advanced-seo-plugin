@@ -467,6 +467,7 @@ class TheBrokenSiteFailsWhatItWasBuiltToFail(unittest.TestCase):
     def test_noindex_is_reported_as_not_indexable(self):
         for item_id in ("CI-001", "CI-004"):
             self.assertMoved(item_id, PASS, (FAIL,))
+        self.assertMoved("GEO-008", PASS, (WARN,))
 
     def test_a_canonical_pointing_at_another_domain_fails(self):
         self.assertMoved("CI-009", PASS, (FAIL,))

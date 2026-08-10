@@ -1,7 +1,7 @@
 ---
 name: seo-checklist
 description: >
-  Deterministic SEO audit against a fixed 214-item registry. Every item gets a
+  Deterministic SEO audit against a fixed 215-item registry. Every item gets a
   status and nothing is silently skipped, so two audits of the same site check
   the same things. Use when the user asks for a checklist audit, a full SEO
   checklist, reproducible coverage, a comparison against a previous run, or an
@@ -10,8 +10,8 @@ description: >
 
 # Checklist Audit
 
-`resources/config/checklist.json` holds **214 items** — the Plerdy 200-point
-checklist plus 14 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
+`resources/config/checklist.json` holds **215 items** — the Plerdy 200-point
+checklist plus 15 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
 policy, IndexNow, schema guards, lab Core Web Vitals). Each item names what
 answers it: a script and an
 assertion over that script's output, a Search Console call, a language-model

@@ -12,7 +12,7 @@
   "1": "Ensure URL Is Indexed",
   "2": "Ensure Important Content Is Indexed",
   "3": "Page Returns 200 (OK) Status Code",
-  "4": "Allow Indexing via Meta Robots / X-Robots-Tag",
+  "4": "Allow Indexing via Meta Robots",
   "5": "Do Not Block the URL in robots.txt",
   "6": "Declare Sitemap Location in robots.txt",
   "7": "Submit Sitemap to Search Engines",
