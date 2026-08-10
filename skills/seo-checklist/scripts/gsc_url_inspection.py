@@ -227,7 +227,7 @@ def main():
     print(f"  last crawl:    {result['last_crawl_time']}")
     print(f"  Google canon:  {result['google_canonical']}")
     print(f"  page canon:    {result['user_canonical']}")
-    print(f"  canon match:   {result['canonical_match']}")
+    print(f"  canon match:   {result.get('canonical_match', 'unknown')}")
     for i in result["issues"]:
         print(f"  [{i['severity']}] {i['message']}")
 

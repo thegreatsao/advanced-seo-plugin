@@ -2088,3 +2088,7 @@ class IndexNow(unittest.TestCase):
         bad = out("indexnow_bad")
         self.assertIs(bad["checks"]["key_file"]["passed"], False)
         self.assertEqual(verdict("GEO-007", bad), FAIL)
+
+
+if __name__ == "__main__":
+    unittest.main()

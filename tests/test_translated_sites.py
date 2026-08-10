@@ -457,6 +457,24 @@ class ALocaleLivesInOnePartOfTheURL(unittest.TestCase):
         with_one_readable = alone + [{"lang": "fr", "url": "https://example.fr/"}]
         self.assertEqual(self.mod.url_structure_of(with_one_readable), "ccTLD")
 
+    def test_an_unreadable_host_mixed_with_a_subdirectory_fails(self):
+        tags = [{"lang": "en-GB", "url": "https://example.uk/"},
+                {"lang": "fr", "url": "https://example.com/fr/"}]
+        result = self.mod.check_url_structure(tags)
+        self.assertEqual(result["structure"], "mixed")
+        self.assertIs(result["passed"], False)
+        self.assertIn("https://example.uk/", result["finding"])
+        self.assertEqual(self.verdict(tags), "FAIL")
+
+    def test_an_unreadable_nonroot_path_mixed_with_a_subdirectory_fails(self):
+        tags = [{"lang": "en", "url": "https://example.com/about"},
+                {"lang": "fr", "url": "https://example.com/fr/"}]
+        result = self.mod.check_url_structure(tags)
+        self.assertEqual(result["structure"], "mixed")
+        self.assertIs(result["passed"], False)
+        self.assertIn("https://example.com/about", result["finding"])
+        self.assertEqual(self.verdict(tags), "FAIL")
+
     def test_x_default_names_no_locale_and_is_not_counted(self):
         tags = [{"lang": "x-default", "url": "https://example.com/"},
                 {"lang": "de", "url": "https://example.com/de/"}]

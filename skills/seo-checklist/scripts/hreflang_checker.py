@@ -353,30 +353,76 @@ def locale_lives_in(lang: str, url: str) -> str:
     return ""
 
 
+def _url_structure_reading(tags: list[dict]) -> tuple[str, list[str]]:
+    """Return the structure and URLs that make a confident reading impossible."""
+    graded: list[tuple[str, str]] = []
+    readable: list[tuple[str, str]] = []
+    unreadable: list[str] = []
+    for tag in tags:
+        lang, url = (tag.get("lang") or "").strip(), tag.get("url") or ""
+        if not lang or not url or lang.lower() == "x-default":
+            continue
+        graded.append((lang, url))
+        where = locale_lives_in(lang, url)
+        if where:
+            readable.append((url, where))
+        else:
+            unreadable.append(url)
+
+    if len(graded) < 2:
+        return "single", []
+    places = {where for _url, where in readable}
+    if not places:
+        return "unmarked", []
+    if len(places) > 1:
+        return "mixed", [url for _lang, url in graded]
+
+    structure = next(iter(places))
+    # An unreadable locale on a host-based scheme does not contradict the scheme:
+    # `en-GB` on .uk and `ja` on .jp remain visibly separate hosts even though their
+    # hreflang spelling does not match the ccTLD string.
+    if structure in ("ccTLD", "subdomain"):
+        return structure, []
+
+    if structure == "subdirectory":
+        # A subdirectory scheme means one host. An unreadable URL is compatible only
+        # when it is the bare default root on that same host.
+        hosts = [(urlparse(url).hostname or "").lower()
+                 for url, _where in readable]
+        primary_host = hosts[0]
+        incompatible = [
+            url for (url, _where), host in zip(readable, hosts, strict=True)
+            if host != primary_host
+        ]
+        for url in unreadable:
+            parsed = urlparse(url)
+            segments = [segment for segment in parsed.path.split("/") if segment]
+            bare_root = not segments and not parsed.query
+            if not (bare_root and (parsed.hostname or "").lower() == primary_host):
+                incompatible.append(url)
+        if incompatible:
+            return "mixed", incompatible
+        return structure, []
+
+    # Parameters already fail IN-127. An unreadable alternate does not establish that
+    # it follows even that scheme, so report and name the mixture explicitly.
+    if unreadable:
+        return "mixed", unreadable
+    return structure, []
+
+
 def url_structure_of(tags: list[dict]) -> str:
     """`ccTLD`, `subdomain`, `subdirectory`, `parameter`, `mixed`, `single`, `unmarked`.
 
     `x-default` is excluded: it names no locale, so it cannot carry one.
 
     A region whose ccTLD is spelled differently from its subtag — `en-GB` on `.uk`,
-    `ja` on `.jp` — reads as unmarked and is skipped rather than guessed at. A set where
-    one alternate is readable still decides; a set where none is comes back `unmarked`,
-    and the item reports NO_DATA rather than inventing a structure.
+    `ja` on `.jp` — reads as unmarked rather than guessed at. It is compatible with a
+    host-based reading, and a bare root on the same host is compatible with a
+    subdirectory reading. Any other unreadable alternate makes the set mixed: ignoring
+    it would let one readable URL award a PASS to a contradictory set.
     """
-    graded, places = 0, set()
-    for tag in tags:
-        lang, url = (tag.get("lang") or "").strip(), tag.get("url") or ""
-        if not lang or not url or lang.lower() == "x-default":
-            continue
-        graded += 1
-        where = locale_lives_in(lang, url)
-        if where:
-            places.add(where)
-    if graded < 2:
-        return "single"
-    if not places:
-        return "unmarked"
-    return places.pop() if len(places) == 1 else "mixed"
+    return _url_structure_reading(tags)[0]
 
 
 def check_url_structure(tags: list[dict]) -> dict:
@@ -394,7 +440,7 @@ def check_url_structure(tags: list[dict]) -> dict:
     somebody else's name and says nothing about structure. A site with every locale on
     `?lang=` and one on a subdomain passed it.
     """
-    structure = url_structure_of(tags)
+    structure, incompatible = _url_structure_reading(tags)
     if structure in ("single", "unmarked"):
         # One alternate, or none whose URL carries its own locale code. There is no
         # structure to read, and inventing a verdict for it is what the old assertion
@@ -405,10 +451,11 @@ def check_url_structure(tags: list[dict]) -> dict:
                            "No alternate carries its locale code in the URL, so the "
                            "structure cannot be read from the hreflang set.")}
     if structure == "mixed":
+        named = ", ".join(incompatible)
         return {
             "passed": False, "structure": structure, "severity": "Medium",
             "finding": "The hreflang set mixes locale URL schemes, so no single rule "
-                       "says where a locale lives.",
+                       f"says where a locale lives. Conflicting URL(s): {named}",
             "fix": "Pick one of ccTLDs, subdomains or subdirectories and move every "
                    "locale onto it.",
         }

@@ -1110,3 +1110,15 @@ Recorded here because they get mistaken for defects:
   where it costs least.
 - **Coverage below 100% on a real run.** That is the metric working. An audit that
   reported 100% coverage would be hiding the questions it could not answer.
+
+## Fixed in 0.33.0
+
+- **A guard checked the shape of an entry point only when one existed.** The AST
+  test required an existing `if __name__ == "__main__"` block to come last, but did
+  not require test files to have that block. `test_evidence_apis.py` and
+  `test_evidence_scripts.py` therefore exited successfully after running zero tests
+  directly, while discovery kept CI green. This is the same absence-pattern failure
+  already recorded in §6 for `meta_keywords`: validating a present value says
+  nothing when the whole value is missing. The guard now requires the entry point in
+  every test file as well as checking its position; both files run their full suites
+  directly.

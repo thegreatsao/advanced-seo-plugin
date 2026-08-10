@@ -16,6 +16,7 @@ defects in this family were.
 Offline: no credentials, no network, no API key. `test_evidence_scripts.script_env`
 clears them for the subprocess runs; here the stub is the boundary.
 """
+import contextlib
 import io
 import json
 import os
@@ -435,6 +436,26 @@ class UrlInspection(unittest.TestCase):
         for item in self.items_for():
             self.assertEqual(verdict(item["id"], out), NO_DATA, item["id"])
 
+    def test_text_output_survives_a_response_without_canonicals(self):
+        payload = {"inspectionResult": {"indexStatusResult": {
+            "verdict": "PASS",
+            "coverageState": "Submitted and indexed",
+            "robotsTxtState": "ALLOWED",
+            "indexingState": "INDEXING_ALLOWED",
+            "pageFetchState": "SUCCESSFUL",
+        }}}
+        self.mod.build_service = lambda *a, **k: _Query(inspection=payload)
+        saved_argv = sys.argv
+        sys.argv = ["gsc_url_inspection.py", "https://example.com/",
+                    "--property", "sc-domain:example.com"]
+        output = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(output):
+                self.mod.main()
+        finally:
+            sys.argv = saved_argv
+        self.assertIn("canon match:   unknown", output.getvalue())
+
 
 class SearchConsoleSummary(unittest.TestCase):
     """`gsc_checker.py`, which is the one that builds the service every other Search
@@ -461,3 +482,7 @@ class SearchConsoleSummary(unittest.TestCase):
         result = self.mod.get_performance_data(service, "sc-domain:example.com", days=28)
         self.assertEqual(service.calls[0][1], "sc-domain:example.com")
         self.assertEqual([r["query"] for r in result["data"]], ["q"])
+
+
+if __name__ == "__main__":
+    unittest.main()

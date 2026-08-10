@@ -10,6 +10,33 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.33.0 — unreadable evidence can no longer award a clean result
+
+These defects were found and written by an earlier pass whose release was never
+landed, and are rescued here from the reading copy after being re-derived against the
+current tree.
+
+**Every test file now runs when invoked directly.** The AST guard checked that an
+existing `unittest.main()` came last but never required one to exist.
+`test_evidence_apis.py` and `test_evidence_scripts.py` consequently exited 0 after
+running none of the 17 and 128 tests they defined. The strengthened guard first failed
+naming both files; final main blocks now run 18 and 128 tests respectively, including
+the URL Inspection regression below.
+
+**IN-127 no longer discards the alternate that disproves its URL-structure verdict.**
+An unreadable alternate such as `en-GB -> example.uk/` is compatible with a host-based
+scheme, or with a subdirectory scheme only when it is the bare default root on the
+same host. Otherwise the set is `mixed`, and the finding names the incompatible URL.
+This deliberately changes contradictory sets that previously returned IN-127 `PASS`
+as `subdirectory` to `FAIL` as `mixed`.
+
+**The standalone URL Inspection command no longer crashes when Google supplies no
+canonical pair.** `analyze()` deliberately omits `canonical_match` in that case, but
+the text renderer indexed the optional key and raised `KeyError`. The renderer now
+prints `unknown`; the JSON path remains unchanged.
+
+Registry `03fb71754eb2` unchanged at 215 items. 712 -> 716 tests.
+
 ## 0.32.0 — ordinary snippet directives govern Google's AI answers too
 
 **GEO-008 checks the only documented control over whether page content appears in

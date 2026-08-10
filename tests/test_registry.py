@@ -670,6 +670,22 @@ class ATestFileRunsEverythingItDefines(unittest.TestCase):
                                           "nothing")
         return [os.path.join(here, f) for f in found]
 
+    def test_every_test_file_has_a_main_block(self):
+        missing = []
+        for path in self.files():
+            with open(path, encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+            main_blocks = [node for node in tree.body
+                           if isinstance(node, ast.If)
+                           and "__name__" in ast.dump(node.test)]
+            if not main_blocks:
+                tests = sum(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                            and node.name.startswith("test_")
+                            for node in ast.walk(tree))
+                missing.append(f"{os.path.basename(path)} ({tests} tests)")
+        self.assertEqual(missing, [], "direct execution runs zero tests in: "
+                                     + ", ".join(missing))
+
     def test_the_main_block_is_the_last_statement(self):
         late = []
         for path in self.files():
