@@ -451,6 +451,13 @@ class ALocaleLivesInOnePartOfTheURL(unittest.TestCase):
         self.assertEqual(self.mod.url_structure_of(tags), "subdirectory")
         self.assertEqual(self.verdict(tags), "PASS")
 
+    def test_an_unprefixed_default_locale_inner_page_matches_prefixed_routes(self):
+        tags = [{"lang": "lt", "url": "https://example.lt/bbq"},
+                {"lang": "en", "url": "https://example.lt/en/bbq/"},
+                {"lang": "ru", "url": "https://example.lt/ru/bbq"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "subdirectory")
+        self.assertEqual(self.verdict(tags), "PASS")
+
     def test_separate_matching_cctlds_remain_a_cctld_scheme(self):
         tags = [{"lang": "de", "url": "https://example.de/"},
                 {"lang": "fr", "url": "https://example.fr/"}]
@@ -501,6 +508,16 @@ class ALocaleLivesInOnePartOfTheURL(unittest.TestCase):
         self.assertEqual(result["structure"], "mixed")
         self.assertIs(result["passed"], False)
         self.assertIn("https://example.com/about", result["finding"])
+        self.assertEqual(self.verdict(tags), "FAIL")
+
+    def test_an_unreadable_path_under_another_locale_prefix_stays_mixed(self):
+        tags = [{"lang": "lt", "url": "https://example.com/en/bbq"},
+                {"lang": "en", "url": "https://example.com/en/other"},
+                {"lang": "ru", "url": "https://example.com/ru/bbq"}]
+        result = self.mod.check_url_structure(tags)
+        self.assertEqual(result["structure"], "mixed")
+        self.assertIs(result["passed"], False)
+        self.assertIn("https://example.com/en/bbq", result["finding"])
         self.assertEqual(self.verdict(tags), "FAIL")
 
     def test_x_default_names_no_locale_and_is_not_counted(self):

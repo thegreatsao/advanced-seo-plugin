@@ -376,7 +376,7 @@ def _locale_lives_in_path_or_query(lang: str, url: str) -> str:
 def _url_structure_reading(tags: list[dict]) -> tuple[str, list[str]]:
     """Return the structure and URLs that make a confident reading impossible."""
     graded: list[tuple[str, str]] = []
-    readable: list[tuple[str, str]] = []
+    readable: list[tuple[str, str, str]] = []
     unreadable: list[str] = []
     for tag in tags:
         lang, url = (tag.get("lang") or "").strip(), tag.get("url") or ""
@@ -395,13 +395,13 @@ def _url_structure_reading(tags: list[dict]) -> tuple[str, list[str]]:
         if len(locales_by_host.get(host, set())) > 1 and where in ("ccTLD", "subdomain"):
             where = _locale_lives_in_path_or_query(lang, url)
         if where:
-            readable.append((url, where))
+            readable.append((lang, url, where))
         else:
             unreadable.append(url)
 
     if len(graded) < 2:
         return "single", []
-    places = {where for _url, where in readable}
+    places = {where for _lang, _url, where in readable}
     if not places:
         return "unmarked", []
     if len(places) > 1:
@@ -415,20 +415,36 @@ def _url_structure_reading(tags: list[dict]) -> tuple[str, list[str]]:
         return structure, []
 
     if structure == "subdirectory":
-        # A subdirectory scheme means one host. An unreadable URL is compatible only
-        # when it is the bare default root on that same host.
+        # A subdirectory scheme means one host. Its default locale may omit the
+        # prefix throughout its route tree, but that is evidence of this scheme only
+        # when the resulting path equals a readable alternate's route after that
+        # alternate's own locale prefix is removed.
         hosts = [(urlparse(url).hostname or "").lower()
-                 for url, _where in readable]
+                 for _lang, url, _where in readable]
         primary_host = hosts[0]
         incompatible = [
-            url for (url, _where), host in zip(readable, hosts, strict=True)
+            url for (_lang, url, _where), host in zip(readable, hosts, strict=True)
             if host != primary_host
         ]
+
+        def normalised_path(path: str) -> str:
+            return (path or "/").rstrip("/") or "/"
+
+        unprefixed_routes = set()
+        for (lang, url, _where), host in zip(readable, hosts, strict=True):
+            if host != primary_host:
+                continue
+            path = urlparse(url).path.lstrip("/")
+            prefix, separator, remainder = path.partition("/")
+            if prefix.lower() in locale_tokens(lang):
+                stripped = f"/{remainder}" if separator else "/"
+                unprefixed_routes.add(normalised_path(stripped))
+
         for url in unreadable:
             parsed = urlparse(url)
-            segments = [segment for segment in parsed.path.split("/") if segment]
-            bare_root = not segments and not parsed.query
-            if not (bare_root and (parsed.hostname or "").lower() == primary_host):
+            same_host = (parsed.hostname or "").lower() == primary_host
+            route_match = normalised_path(parsed.path) in unprefixed_routes
+            if not (same_host and route_match):
                 incompatible.append(url)
         if incompatible:
             return "mixed", incompatible
@@ -448,9 +464,10 @@ def url_structure_of(tags: list[dict]) -> str:
 
     A region whose ccTLD is spelled differently from its subtag — `en-GB` on `.uk`,
     `ja` on `.jp` — reads as unmarked rather than guessed at. It is compatible with a
-    host-based reading, and a bare root on the same host is compatible with a
-    subdirectory reading. Any other unreadable alternate makes the set mixed: ignoring
-    it would let one readable URL award a PASS to a contradictory set.
+    host-based reading. An unprefixed path on the same host is compatible with a
+    subdirectory reading only when it equals a readable alternate's path after that
+    alternate's locale prefix is removed. Any other unreadable alternate makes the set
+    mixed: ignoring it would let one readable URL award a PASS to a contradictory set.
     """
     return _url_structure_reading(tags)[0]
 

@@ -10,6 +10,26 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.36.0 — the default locale's whole unprefixed route tree
+
+IN-127 changes FAIL -> PASS for every site whose default locale is unprefixed while
+its other locales use same-host subdirectories. The compatibility rule now compares
+normalized paths: an unreadable alternate is compatible only when its path equals a
+readable alternate's path after removing that readable alternate's locale prefix.
+Trailing slashes are equivalent and query strings do not participate in the comparison.
+
+The rule does not accept any unmarked same-host path. The deliberate 0.33.0 mixed case
+is preserved: `/about` beside `/fr/` remains FAIL because the prefix-stripped readable
+route is `/`. An unreadable URL under another locale's prefix remains mixed as well;
+the implementation never strips the unreadable path itself.
+
+The live-site rerun changes IN-127 from FAIL on 7/8 pages to PASS on 8/8,
+with structure `subdirectory`. No other item verdict moves. Score remains 86/100 and
+coverage remains 62% (516/826 applicable weight) against the 0.35.0 `-after` run.
+Registry `07e64f9c9fc6` is unchanged: this release repairs evidence interpretation, not
+the checklist contract. 740 -> 742 tests, with the inner-route regression observed
+failing before the implementation and the 0.33.0 guard kept green.
+
 ## 0.35.0 — seven defects exposed by one live multilingual audit
 
 All seven defects were found by auditing one live trilingual local-business site on a matching-language ccTLD, not by a fixture.

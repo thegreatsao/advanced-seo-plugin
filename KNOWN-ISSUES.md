@@ -358,18 +358,18 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
-- **The 0.35.0 ccTLD repair remains too narrow for inner default-locale pages.** The
-  reproduced homepage set now reads correctly: `lt` at `example.lt/` beside `/en/`
-  and `/ru/` is a subdirectory scheme. The live proof contradicted the predicted
-  site-wide PASS, though: seven sampled inner-page sets still call an unmarked LT URL
-  such as `/bbq` incompatible with `/en/bbq` and `/ru/bbq`. The preserved 0.33.0
-  compatibility rule accepts only a bare default root, not the default locale's
-  unprefixed route tree.
+- **Closed in 0.36.0: the default locale's whole unprefixed route tree is compatible
+  with a subdirectory scheme.** The 0.35.0 repair accepted only the root: `example.lt/`
+  beside `/en/` and `/ru/` passed, while `/bbq` beside `/en/bbq` and `/ru/bbq` failed.
+  The final rule accepts an unreadable same-host alternate only when its normalized
+  path equals a readable alternate's path with that readable alternate's locale prefix
+  removed. It compares paths without query strings and treats trailing slashes as
+  equivalent.
 
-  Fixing this properly means identifying one unprefixed default-locale tree without
-  turning a genuinely unrelated unmarked path into evidence for a subdirectory
-  scheme. That is a second mixed-set decision, beyond 0.35.0's explicit rule to
-  discard only spurious host-based readings and leave the existing logic unchanged.
+  This is deliberately narrower than accepting any unmarked same-host path. The
+  0.33.0 guard remains: `/about` beside `/fr/` is still `mixed` and fails, because
+  stripping `/fr/` produces `/`, not `/about`. An unreadable path under another
+  locale's prefix also remains `mixed`; the unreadable path itself is never stripped.
 
 - **Contact routes are now language-neutral; the institutional-link vocabulary is
   still English-only.** CN-044 accepts `tel:` and `mailto:` links in any language, so
