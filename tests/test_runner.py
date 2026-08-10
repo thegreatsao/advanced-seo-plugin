@@ -22,6 +22,7 @@ sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import harness  # noqa: E402
+import checklist_runner as runner  # noqa: E402
 
 from checklist_runner import (  # noqa: E402
     ANCHOR_RE, FAIL, FAILURE_LABEL, GSC_UNAVAILABLE, LLM_PENDING, MANUAL, NA,
@@ -80,6 +81,50 @@ class Evaluate(unittest.TestCase):
     def test_none_severity_missing_array_is_undecided(self):
         self.assertIsNone(
             evaluate({"path": "issues", "none_severity": ["high"]}, {})[0])
+
+
+class ApplicabilityRules(unittest.TestCase):
+    def item(self, item_id="MD-190", scores_with=""):
+        item = {"id": item_id, "plerdy_ref": 190, "category": "media",
+                "category_label": "Images / Video", "title": "Video SEO",
+                "severity": "medium", "source": "script", "effort": "medium",
+                "fix": "f", "check": {
+                    "script": "video_schema_checker.py", "requires": "fetch",
+                    "applies_when": {"path": "videos", "gt": 0},
+                    "assert": {"path": "issues", "none_severity":
+                               ["critical", "high", "medium"]}}}
+        if scores_with:
+            item["scores_with"] = scores_with
+        return item
+
+    def graded(self, items, data):
+        key = ("video_schema_checker.py", ("https://example.com/",))
+        plan = {key: [item["id"] for item in items]}
+        return grade(items, plan, {key: data}, {}, False)
+
+    def test_a_failed_applicability_rule_is_not_applicable_with_a_reason(self):
+        row = self.graded([self.item()], {"videos": 0, "issues": []})[0]
+        self.assertEqual(row["status"], NA)
+        self.assertEqual(row["evidence"], "no video on the page (`videos = 0`)")
+
+    def test_a_matching_applicability_rule_grades_the_assertion_normally(self):
+        row = self.graded([self.item()], {"videos": 1, "issues": []})[0]
+        self.assertEqual(row["status"], PASS)
+
+    def test_an_item_without_applies_when_is_unchanged(self):
+        item = self.item()
+        del item["check"]["applies_when"]
+        row = self.graded([item], {"videos": 0, "issues": []})[0]
+        self.assertEqual(row["status"], PASS)
+
+    def test_a_twin_pair_becomes_not_applicable_together_and_scores_once(self):
+        primary = self.item("MD-190")
+        twin = self.item("MB-102", scores_with="MD-190")
+        rows = self.graded([primary, twin], {"videos": 0, "issues": []})
+        self.assertEqual([row["status"] for row in rows], [NA, NA])
+        scored = score(rows)
+        self.assertEqual(scored["partition"]["not_applicable"], 2)
+        self.assertEqual(scored["applicable"], 0)
 
     def test_none_matching_scans_nested_structures(self):
         data = {"meta_robots": "index, follow"}
@@ -454,9 +499,11 @@ class PrivateAddresses(unittest.TestCase):
         reader to open a script that is working correctly."""
         items = [{"id": "SP-108", "check": {"script": "pagespeed.py", "requires": "api"}},
                  {"id": "GO-140", "check": {"script": "gsc_checker.py", "requires": "gsc"}},
+                 {"id": "SE-114", "check": {"script": "domain_safety_check.py",
+                                             "requires": "safe_browsing"}},
                  {"id": "CN-001", "check": {"script": "parse_html.py", "requires": "fetch"}}]
         skips = private_host_skips(items, "127.0.0.1:8000")
-        self.assertEqual(sorted(skips), ["GO-140", "SP-108"])
+        self.assertEqual(sorted(skips), ["GO-140", "SE-114", "SP-108"])
         for status, reason in skips.values():
             # NO_DATA, never N/A: the item applies to this site, it just cannot be
             # answered here. N/A would lift coverage on the one kind of audit that
@@ -832,10 +879,11 @@ class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
     the measurement from the entry page. A passing number beside a failing verdict
     is worse than the raw assertion it replaced."""
 
-    def _row(self, status, got, ident="MS-020"):
+    def _row(self, status, got, ident="MS-020", url="https://example.com/"):
         return {"id": ident, "title": "t", "category": "meta_structured",
                 "category_label": "M", "severity": "high", "status": status,
                 "effort": "low", "evidence": f"len(title) = {got}",
+                "url": url,
                 "check": {"requires": "fetch"},
                 "measure": {"op": "len_lte", "kind": "count", "got": got, "want": 60}}
 
@@ -851,6 +899,24 @@ class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
         primary = [self._row(PASS, 52)]
         out = aggregate_pages(primary, [[self._row(PASS, 52)]])[0]
         self.assertEqual(out["measure"]["got"], 52)
+
+    def test_aggregate_evidence_names_the_page_that_supplied_the_value(self):
+        primary = [self._row(PASS, 52)]
+        pages = [[self._row(FAIL, 63, url="https://example.com/a")],
+                 [self._row(FAIL, 64, url="https://example.com/b")],
+                 [self._row(FAIL, 62, url="https://example.com/c")]]
+        evidence = aggregate_pages(primary, pages)[0]["evidence"]
+        self.assertTrue(evidence.startswith("3/3 pages:"))
+        self.assertIn("https://example.com/a", evidence)
+        self.assertIn("values differ", evidence)
+
+    def test_aggregate_evidence_does_not_claim_difference_when_values_agree(self):
+        primary = [self._row(PASS, 52)]
+        pages = [[self._row(PASS, 52, url="https://example.com/a")],
+                 [self._row(PASS, 52, url="https://example.com/b")]]
+        evidence = aggregate_pages(primary, pages)[0]["evidence"]
+        self.assertIn("https://example.com/a", evidence)
+        self.assertNotIn("values differ", evidence)
 
 
 class BrowserArtifacts(unittest.TestCase):
@@ -1632,6 +1698,45 @@ class SearchConsoleBoundary(unittest.TestCase):
                  "category_label": "C", "title": "t", "severity": "low",
                  "plerdy_ref": 0, "fix": ""}]
         self.assertEqual(grade(item, {}, {}, {}, True)[0]["status"], NO_DATA)
+
+
+class SafeBrowsingBoundary(unittest.TestCase):
+    ITEM = [{"id": "SE-114", "source": "script",
+             "check": {"requires": "safe_browsing",
+                       "script": "domain_safety_check.py"}}]
+
+    def test_missing_key_in_a_network_mode_needs_input(self):
+        _, skipped = build_plan(self.ITEM, {}, {"offline", "fetch", "crawl", "api"},
+                                "live", has_safe_browsing=False)
+        self.assertEqual(skipped["SE-114"][0], NEEDS_INPUT)
+        self.assertIn("GOOGLE_SAFE_BROWSING_KEY", skipped["SE-114"][1])
+
+    def test_archive_mode_makes_the_api_check_not_applicable(self):
+        _, skipped = build_plan(self.ITEM, {}, {"offline"}, "archive",
+                                has_safe_browsing=False)
+        self.assertEqual(skipped["SE-114"][0], NA)
+        self.assertIn("archive", skipped["SE-114"][1])
+
+    def test_either_supported_key_allows_the_check_to_run(self):
+        plan, skipped = build_plan(self.ITEM, {}, {"offline", "fetch", "crawl", "api"},
+                                   "live", has_safe_browsing=True)
+        self.assertEqual(skipped, {})
+        self.assertEqual(len(plan), 1)
+
+
+class NetworkOptIns(unittest.TestCase):
+    def test_return_tags_are_verified_in_both_network_modes(self):
+        for mode in ("live", "page"):
+            self.assertEqual(runner.opt_in_flags(mode, False)["hreflang_checker.py"],
+                             ["--verify-returns"])
+
+    def test_return_tags_are_never_verified_in_archive_mode(self):
+        self.assertNotIn("hreflang_checker.py", runner.opt_in_flags("archive", False))
+
+    def test_verify_bots_remains_an_independent_operator_opt_in(self):
+        self.assertNotIn("server_log_audit.py", runner.opt_in_flags("live", False))
+        self.assertEqual(runner.opt_in_flags("live", True)["server_log_audit.py"],
+                         ["--verify-bots"])
 
 
 class SecretsStayOutOfTheOutput(unittest.TestCase):

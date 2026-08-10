@@ -65,11 +65,18 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
         if re.search(r"\b(editorial|review policy|fact[- ]check|corrections?|ethics)\b", link.get("text", ""), re.I)
         or re.search(r"(editorial|review-policy|fact-check|corrections|ethics)", link.get("href", ""), re.I)
     ]
+    contact_routes = [
+        {"href": tag.get("href", "").strip(),
+         "text": tag.get_text(" ", strip=True)[:160],
+         "rel": tag.get("rel") or []}
+        for tag in soup.find_all("a", href=True)
+        if urlparse(tag.get("href", "").strip()).scheme.lower() in {"tel", "mailto"}
+    ]
     trust_links = [
         link for link in links
         if re.search(r"\b(about|contact|privacy|terms|team|authors?)\b", link.get("text", ""), re.I)
         or re.search(r"/(about|contact|privacy|terms|team|author)", link.get("href", ""), re.I)
-    ]
+    ] + contact_routes
     # Privacy specifically, kept apart from both of the above. `policy_links` means
     # editorial standards — fact-checking, corrections, ethics — while `trust_links`
     # is anything vaguely institutional, an "About" page included. CN-040 asks only

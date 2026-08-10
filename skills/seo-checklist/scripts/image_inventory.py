@@ -17,13 +17,19 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
     parsed = parse_html(html, url)
     rows = []
     issues = []
+    skipped_no_src = 0
     for idx, img in enumerate(parsed["images"]):
-        src = img.get("src") or ""
+        src = (img.get("src") or "").strip()
+        if not src:
+            skipped_no_src += 1
+            continue
         ext = os.path.splitext(urlparse(src).path)[1].lower().lstrip(".")
+        alt = img.get("alt")
         row = {
             "src": src,
-            "alt": img.get("alt"),
-            "has_alt": img.get("alt") is not None and img.get("alt") != "",
+            "alt": alt,
+            "has_alt": alt is not None,
+            "empty_alt": alt == "",
             "width": img.get("width"),
             "height": img.get("height"),
             "is_responsive_fill": bool(img.get("is_responsive_fill")),
@@ -50,7 +56,13 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
     # the message says it the other way round — so it matched nothing and the
     # item passed on every page. A number cannot be reworded.
     lazy_lcp = sum(1 for r in rows if r["likely_lcp_candidate"] and r["loading"] == "lazy")
-    return {"url": url or source, "count": len(rows), "missing_alt": sum(1 for r in rows if not r["has_alt"]), "summary": {"images": len(rows), "lazy_lcp_candidates": lazy_lcp}, "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
+    missing_alt = sum(1 for r in rows if not r["has_alt"])
+    empty_alt = sum(1 for r in rows if r["empty_alt"])
+    return {"url": url or source, "count": len(rows), "missing_alt": missing_alt,
+            "empty_alt": empty_alt, "skipped_no_src": skipped_no_src,
+            "summary": {"images": len(rows), "lazy_lcp_candidates": lazy_lcp,
+                        "empty_alt": empty_alt, "skipped_no_src": skipped_no_src},
+            "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
 
 
 def main() -> None:
@@ -61,7 +73,14 @@ def main() -> None:
     parser.add_argument("--json", "-j", action="store_true")
     args = parser.parse_args()
     result = inventory(args.source, args.fetch_images, args.timeout)
-    print(json.dumps(result, indent=2) if args.json else "\n".join(f"{'missing-alt' if not r['has_alt'] else 'ok'}\t{r['src']}" for r in result["images"]))
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        lines = [f"{'missing-alt' if not r['has_alt'] else 'empty-alt' if r['empty_alt'] else 'ok'}\t{r['src']}"
+                 for r in result["images"]]
+        lines.append(f"empty-alt-count\t{result['empty_alt']}")
+        lines.append(f"skipped-no-src\t{result['skipped_no_src']}")
+        print("\n".join(lines))
 
 
 if __name__ == "__main__":

@@ -353,6 +353,26 @@ def locale_lives_in(lang: str, url: str) -> str:
     return ""
 
 
+def _locale_lives_in_path_or_query(lang: str, url: str) -> str:
+    """Read a locale without treating its host as the separator.
+
+    A host shared by several locales cannot be what distinguishes those locales.
+    Its matching ccTLD or locale-looking subdomain is incidental, so only the path
+    and query remain meaningful for alternates on that host.
+    """
+    tokens = locale_tokens(lang)
+    parsed = urlparse(url)
+    segments = [s for s in parsed.path.split("/") if s]
+    if segments and segments[0].lower() in tokens:
+        return "subdirectory"
+    if parsed.query:
+        values = {v.lower() for pair in parsed.query.split("&")
+                  for v in pair.split("=")[1:]}
+        if values & tokens:
+            return "parameter"
+    return ""
+
+
 def _url_structure_reading(tags: list[dict]) -> tuple[str, list[str]]:
     """Return the structure and URLs that make a confident reading impossible."""
     graded: list[tuple[str, str]] = []
@@ -363,7 +383,17 @@ def _url_structure_reading(tags: list[dict]) -> tuple[str, list[str]]:
         if not lang or not url or lang.lower() == "x-default":
             continue
         graded.append((lang, url))
+
+    locales_by_host: dict[str, set[str]] = {}
+    for lang, url in graded:
+        host = (urlparse(url).hostname or "").lower()
+        locales_by_host.setdefault(host, set()).add(lang.lower())
+
+    for lang, url in graded:
         where = locale_lives_in(lang, url)
+        host = (urlparse(url).hostname or "").lower()
+        if len(locales_by_host.get(host, set())) > 1 and where in ("ccTLD", "subdomain"):
+            where = _locale_lives_in_path_or_query(lang, url)
         if where:
             readable.append((url, where))
         else:
@@ -667,6 +697,21 @@ def run_hreflang_check(url: str, verify_returns: bool = False) -> dict:
 
     # Check 2 — Return tags (bidirectional)
     results["return_tag_checks"] = check_return_tags(tags, final_url, verify_remote=verify_returns)
+    return_outcomes = [check.get("passed") for check in results["return_tag_checks"]]
+    return_summary = {
+        "verified": verify_returns,
+        "alternates_checked": len(return_outcomes),
+    }
+    if verify_returns and all(outcome is not None for outcome in return_outcomes):
+        return_summary["verified_and_valid"] = all(return_outcomes)
+        return_summary["detail"] = (
+            f"Verified {len(return_outcomes)} alternate return tag(s); "
+            + ("all valid." if all(return_outcomes) else "at least one is missing."))
+    elif not verify_returns:
+        return_summary["detail"] = "Return tags were not verified."
+    else:
+        return_summary["detail"] = "At least one alternate could not be verified."
+    results["checks"]["return_tags"] = return_summary
 
     # Tally summary
     sev_map = {"Critical": "critical", "High": "high", "Medium": "medium", "Low": "low"}

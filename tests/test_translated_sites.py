@@ -444,6 +444,34 @@ class ALocaleLivesInOnePartOfTheURL(unittest.TestCase):
                 {"lang": "fr", "url": "https://example.com/fr/"}]
         self.assertEqual(self.mod.url_structure_of(tags), "subdirectory")
 
+    def test_a_matching_cctld_with_locale_folders_is_a_subdirectory_scheme(self):
+        tags = [{"lang": "lt", "url": "https://example.lt/"},
+                {"lang": "en", "url": "https://example.lt/en/"},
+                {"lang": "ru", "url": "https://example.lt/ru/"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "subdirectory")
+        self.assertEqual(self.verdict(tags), "PASS")
+
+    def test_separate_matching_cctlds_remain_a_cctld_scheme(self):
+        tags = [{"lang": "de", "url": "https://example.de/"},
+                {"lang": "fr", "url": "https://example.fr/"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "ccTLD")
+        self.assertEqual(self.verdict(tags), "PASS")
+
+    def test_a_cctld_mixed_with_another_hosts_subdirectory_stays_mixed(self):
+        tags = [{"lang": "de", "url": "https://example.de/"},
+                {"lang": "fr", "url": "https://example.com/fr/"}]
+        result = self.mod.check_url_structure(tags)
+        self.assertEqual(result["structure"], "mixed")
+        self.assertIs(result["passed"], False)
+        for tag in tags:
+            self.assertIn(tag["url"], result["finding"])
+
+    def test_two_locales_on_one_matching_cctld_use_their_paths(self):
+        tags = [{"lang": "de", "url": "https://example.de/"},
+                {"lang": "en", "url": "https://example.de/en/"}]
+        self.assertEqual(self.mod.url_structure_of(tags), "subdirectory")
+        self.assertEqual(self.verdict(tags), "PASS")
+
     def test_a_region_spelled_differently_from_its_domain_is_not_guessed_at(self):
         """`en-GB` on `.uk`, `ja` on `.jp`: the code and the domain do not match as
         strings, and no table here maps one to the other. Alone, that set reads as

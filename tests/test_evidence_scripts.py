@@ -518,7 +518,7 @@ RUNS = [
     ("fresh_bad", "freshness_checker.py", ["{bad}"]),
     ("ga4", "ga4_tag_checker.py", ["{good}"]),
     ("ga4_bad", "ga4_tag_checker.py", ["{bad}"]),
-    ("hreflang", "hreflang_checker.py", ["{good}intl.html"]),
+    ("hreflang", "hreflang_checker.py", ["{good}intl.html", "--verify-returns"]),
     ("hreflang_bad", "hreflang_checker.py", ["{good}intl-broken.html"]),
     ("hreflang_none", "hreflang_checker.py", ["{good}"]),
     ("images", "image_inventory.py", ["{good}"]),
@@ -1300,6 +1300,24 @@ class EeatSignals(unittest.TestCase):
         real byline history, an organisation with verifiable sameAs targets."""
         self.assertGreater(out("eeat")["score"], out("eeat_bad")["score"] + 30)
 
+    def test_phone_and_email_links_are_language_neutral_contact_routes(self):
+        import tempfile
+        import eeat_signal_checker
+        html = """<!doctype html><html lang="lt"><body>
+        <a href="tel:+37060000000">+370 600 00000</a>
+        <a href="mailto:labas@example.lt">Rašykite mums</a>
+        </body></html>"""
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            result = eeat_signal_checker.check_eeat(path)
+        finally:
+            os.unlink(path)
+        self.assertEqual(len(result["signals"]["trust_links"]), 2)
+        self.assertEqual(verdict("CN-044", result), PASS)
+
 
 class Freshness(unittest.TestCase):
     """CN-038 `score`, CN-056 `dates`."""
@@ -1397,14 +1415,33 @@ class ImageInventory(unittest.TestCase):
         for item_id in ("CI-016", "MD-186"):
             self.assertEqual(verdict(item_id, good), PASS, item_id)
 
-    def test_a_missing_and_an_empty_alt_are_both_counted(self):
-        """`alt=""` is correct for a decorative image and wrong for a content one, and
-        this script counts both — which is why the item is `high` rather than
-        `critical`: the reader has to look."""
+    def test_a_missing_and_an_empty_alt_are_counted_separately(self):
         bad = out("images_bad")
-        self.assertEqual(bad["missing_alt"], 2)
+        self.assertEqual(bad["missing_alt"], 1)
+        self.assertEqual(bad["empty_alt"], 1)
         for item_id in ("CI-016", "MD-186"):
             self.assertEqual(verdict(item_id, bad), FAIL, item_id)
+
+    def test_an_img_without_src_is_skipped_and_reported(self):
+        import tempfile
+        import image_inventory
+        html = """<!doctype html><html><body>
+        <img src="informative.jpg">
+        <img src="decoration.svg" alt="">
+        <img id="lightbox" alt="">
+        </body></html>"""
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            result = image_inventory.inventory(path)
+        finally:
+            os.unlink(path)
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(result["missing_alt"], 1)
+        self.assertEqual(result["empty_alt"], 1)
+        self.assertEqual(result["skipped_no_src"], 1)
 
     def test_a_lazy_loaded_hero_image_is_the_one_thing_cn_054_looks_for(self):
         self.assertEqual(verdict("CN-054", out("images")), PASS)
@@ -1424,8 +1461,8 @@ class VideoSchema(unittest.TestCase):
         self.assertIn("warning", [i["severity"] for i in video["issues"]])
         self.assertEqual(verdict("MD-190", video), WARN)
 
-    def test_a_page_with_no_video_raises_nothing(self):
-        self.assertEqual(verdict("MD-190", out("video_bad")), PASS)
+    def test_a_page_with_no_video_reports_zero_for_the_applicability_rule(self):
+        self.assertEqual(out("video_bad")["videos"], 0)
 
 
 # ---------------------------------------------------------------------------
@@ -1742,6 +1779,12 @@ class Hreflang(unittest.TestCase):
         for item_id in ("IN-121", "IN-128", "IN-122"):
             self.assertEqual(verdict(item_id, good), PASS, item_id)
 
+    def test_in_122_evidence_is_a_verified_and_valid_return_set(self):
+        good = out("hreflang")
+        self.assertIs(good["checks"]["return_tags"]["verified_and_valid"], True)
+        self.assertEqual(ITEMS["IN-122"]["check"]["assert"]["path"],
+                         "checks.return_tags.verified_and_valid")
+
     def test_the_fixture_carries_no_locale_in_its_urls_so_in_127_declines(self):
         """The fixture's alternates are `/intl.html` and `/de.html` — filenames on one
         host, with the locale in neither the host, the first path segment nor a
@@ -1960,7 +2003,7 @@ class NothingIsDecidedAboutASiteThatCannotBeRead(unittest.TestCase):
             args = check.get("args") or []
             if not check.get("script") or not args or args[0] != "{url}":
                 continue
-            if check.get("requires") == "api":
+            if check.get("requires") in ("api", "safe_browsing"):
                 continue
             out.add(check["script"])
         return out

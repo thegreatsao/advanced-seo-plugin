@@ -74,6 +74,8 @@ CATEGORIES = [
 # `path` uses dots; `[]` is not needed — lists are handled by len_*/none_*.
 # Optional "warn" block uses the same vocabulary; it is evaluated only when
 # the main assert fails, turning FAIL into WARN.
+# Optional "applies_when" uses that vocabulary against the same script output. A
+# false condition is N/A rather than a PASS awarded for an empty result set.
 # --------------------------------------------------------------------------
 
 S = "script"
@@ -180,6 +182,24 @@ REQUIRES = {
     "gsc_cannibalization.py": "gsc",
 }
 DEFAULT_REQUIRES = "fetch"
+
+# A script-wide requirement is usually the honest one, but domain_safety_check.py
+# mixes ordinary network checks with one keyed third-party service. Only the four
+# items whose assertions read Safe Browsing need that credential; uptime and server
+# neighbours must keep running without it.
+ITEM_REQUIRES = {
+    "SE-114": "safe_browsing",
+    "SE-116": "safe_browsing",
+    "TE-171": "safe_browsing",
+    "TE-179": "safe_browsing",
+}
+
+# Empty evidence is not positive evidence. These two items share one video check and
+# apply only when the script actually found a video on the page.
+APPLIES_WHEN = {
+    "MB-102": {"path": "videos", "gt": 0},
+    "MD-190": {"path": "videos", "gt": 0},
+}
 
 # How much work a fix costs, so that priority can weigh severity against effort
 # instead of ranking by severity alone. These are per-category heuristics, not
@@ -728,7 +748,7 @@ item(121, "medium", S, "hreflang_checker.py", PAGE,
      {"path": "checks.x_default.passed", "truthy": True},
      "Configure geo-targeting signals, including x-default")
 item(122, "high", S, "hreflang_checker.py", PAGE,
-     {"path": "summary.critical", "eq": 0},
+     {"path": "checks.return_tags.verified_and_valid", "truthy": True},
      "Valid hreflang with return tags")
 item(123, "medium", S, "parse_html.py", HTMLARG,
      {"path": "lang", "truthy": True},
@@ -1260,9 +1280,12 @@ def build(titles: dict[int, str] | None = None,
                 entry["check"] = {
                     "script": script,
                     "args": args,
-                    "requires": REQUIRES.get(script, DEFAULT_REQUIRES),
+                    "requires": ITEM_REQUIRES.get(
+                        item_id, REQUIRES.get(script, DEFAULT_REQUIRES)),
                     "assert": rule,
                 }
+                if item_id in APPLIES_WHEN:
+                    entry["check"]["applies_when"] = APPLIES_WHEN[item_id]
                 if warn:
                     entry["check"]["warn"] = warn
             if source == L:
@@ -1293,9 +1316,12 @@ def build(titles: dict[int, str] | None = None,
             entry["check"] = {
                 "script": script,
                 "args": args,
-                "requires": REQUIRES.get(script, DEFAULT_REQUIRES),
+                "requires": ITEM_REQUIRES.get(
+                    eid, REQUIRES.get(script, DEFAULT_REQUIRES)),
                 "assert": rule,
             }
+            if eid in APPLIES_WHEN:
+                entry["check"]["applies_when"] = APPLIES_WHEN[eid]
             if warn:
                 entry["check"]["warn"] = warn
         if source == L:

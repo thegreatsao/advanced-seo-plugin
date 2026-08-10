@@ -358,6 +358,32 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **The 0.35.0 ccTLD repair remains too narrow for inner default-locale pages.** The
+  reproduced homepage set now reads correctly: `lt` at `example.lt/` beside `/en/`
+  and `/ru/` is a subdirectory scheme. The live proof contradicted the predicted
+  site-wide PASS, though: seven sampled inner-page sets still call an unmarked LT URL
+  such as `/bbq` incompatible with `/en/bbq` and `/ru/bbq`. The preserved 0.33.0
+  compatibility rule accepts only a bare default root, not the default locale's
+  unprefixed route tree.
+
+  Fixing this properly means identifying one unprefixed default-locale tree without
+  turning a genuinely unrelated unmarked path into evidence for a subdirectory
+  scheme. That is a second mixed-set decision, beyond 0.35.0's explicit rule to
+  discard only spurious host-based readings and leave the existing logic unchanged.
+
+- **Contact routes are now language-neutral; the institutional-link vocabulary is
+  still English-only.** CN-044 accepts `tel:` and `mailto:` links in any language, so
+  a clearly exposed phone number or email address is no longer missed because its
+  label says *Kontaktai* or *Контакты*. The remaining `about`, `privacy` and `terms`
+  vocabulary in `eeat_signal_checker.py` is English-only. On a non-English site that
+  makes CN-040's and CN-068's link signals weaker than their verdicts suggest, even
+  when equivalent institutional pages exist.
+
+  A proper repair needs locale-aware concepts rather than another hand-written list:
+  language detection, maintained per-locale terms and URL patterns, and multilingual
+  fixtures that prove both recognition and false-positive resistance. Fitting three
+  Lithuanian or Russian words to one audited site would only move the blind spot.
+
 - **Narrowed in 0.34.0; inspecting a set of important URLs remains open.** CI-002
   got the right evidence in 0.26.0 — Google's URL Inspection answer — but for eight
   releases kept *Ensure Important Content Is Indexed*, a title that claimed more
@@ -1198,3 +1224,39 @@ Recorded here because they get mistaken for defects:
   nothing when the whole value is missing. The guard now requires the entry point in
   every test file as well as checking its position; both files run their full suites
   directly.
+
+## Fixed in 0.35.0
+
+- **A host shared by several locales was allowed to classify itself as their
+  separator.** A Lithuanian root on `.lt` read as `ccTLD` beside `/en/` and `/ru/`,
+  producing a false `mixed` failure. Host-based readings are now discarded whenever
+  that host carries more than one locale; the path and query decide those alternates,
+  while genuinely separate ccTLDs and cross-host mixtures keep their old verdicts.
+- **The registry broke its founding principle: “nothing to check” was scored as
+  “fine.”** MB-102 and MD-190 passed pages with no video because an empty issue list
+  satisfied both assertions. The new, optional `applies_when` rule makes exactly
+  those two items N/A when `videos = 0`, with the reason in evidence; their
+  `SAME_CHECK` relationship still makes video SEO carry score weight only once.
+- **A missing Safe Browsing key looked like failed measurement.** SE-114, SE-116,
+  TE-171 and TE-179 now distinguish a networkless mode (N/A) from a network-capable
+  run missing either supported environment variable (NEEDS_INPUT). TE-167 uptime and
+  TE-178 neighbours remain runnable without the key; TE-179's title mismatch remains
+  deliberately out of scope.
+- **Sample evidence described a set by one member.** `aggregate_pages` already took
+  the verdict and measurement from the same worst page, but then prefixed that one
+  value with `N/M pages`, implying all matching pages agreed. This is the second
+  repair to the same line. Evidence now names the page that supplied the value and
+  says when the matching values differ. The general pattern is the defect: one member
+  cannot describe a set unless agreement was actually checked.
+- **IN-122 promised hreflang return tags without requesting their verification.**
+  Network modes now append `--verify-returns` through the per-run flag path; archive
+  mode still makes no network calls. The assertion reads a dedicated
+  `verified_and_valid` result, so the evidence states that verification happened
+  instead of inferring it from a zero critical-issue summary.
+- **The image inventory treated accessible and nonexistent images as defects.** An
+  absent `alt` attribute is counted separately from deliberate `alt=""`; `<img>`
+  elements without `src` are excluded, and both empty-alt and skipped counts are
+  reported rather than hidden.
+- **Contact detection equated English words with contactability.** `tel:` and
+  `mailto:` are now language-neutral trust links, while the broader multilingual
+  limitation remains recorded in §6 instead of being fitted to one live site.

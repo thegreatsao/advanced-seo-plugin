@@ -849,7 +849,8 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                has_gsc: bool = False,
                rejected: dict[str, str] | None = None,
                opt_in: dict[str, list[str]] | None = None,
-               profile_args: dict[str, list[str]] | None = None
+               profile_args: dict[str, list[str]] | None = None,
+               has_safe_browsing: bool = False,
                ) -> tuple[dict[tuple, list[str]], dict[str, tuple[str, str]]]:
     """Map each unique (script, args) to the item ids that depend on it.
 
@@ -887,6 +888,16 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
                                                   "set GSC_CREDENTIALS_PATH")
             if it["id"] in skipped:
                 continue
+        elif need == "safe_browsing":
+            if "api" not in caps:
+                skipped[it["id"]] = (
+                    NA, f"Safe Browsing needs network access; {mode} mode makes none")
+            elif not has_safe_browsing:
+                skipped[it["id"]] = (
+                    NEEDS_INPUT, "no Safe Browsing key — set GOOGLE_SAFE_BROWSING_KEY "
+                                 "or SAFE_BROWSING_API_KEY")
+            if it["id"] in skipped:
+                continue
         elif need not in caps:
             skipped[it["id"]] = (NA, f"needs '{need}'; not available in {mode} mode")
             continue
@@ -908,11 +919,11 @@ def build_plan(items: list[dict], ctx: dict, caps: set[str], mode: str,
         if no_input:
             skipped[it["id"]] = (NEEDS_INPUT, no_input)
             continue
-        # Flags the operator turned on for this run, appended to the one script each
-        # belongs to. Deliberately not registry args: the registry says what an item
-        # needs in order to be decided, and these say what this run is permitted to
-        # do — the same distinction as `--allow-private`, which is why neither lives
-        # in checklist.json.
+        # Per-run flags, appended to the one script each belongs to. Deliberately not
+        # registry args: the registry says what an item needs in order to be decided,
+        # while these describe what this run permits or guarantees. Return-tag
+        # verification is guaranteed in network modes; bot verification remains an
+        # operator opt-in.
         args += (opt_in or {}).get(chk["script"], [])
         # A third kind of argument, and the three are worth keeping apart. Registry args
         # say what an item needs in order to be decided. `opt_in` says what this run is
@@ -1029,6 +1040,30 @@ def unread_reason(data: dict) -> str:
     return ""
 
 
+def result_url(key: tuple, data: dict) -> str:
+    """Recover the page a script result describes for sampled evidence."""
+    for field in ("url", "final_url", "source"):
+        value = data.get(field)
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+    args = list(key[1]) if len(key) > 1 else []
+    if "--url" in args:
+        pos = args.index("--url") + 1
+        if pos < len(args):
+            return args[pos]
+    return next((arg for arg in args
+                 if isinstance(arg, str) and arg.startswith(("http://", "https://"))), "")
+
+
+def inapplicable_evidence(rule: dict, data: dict, fallback: str) -> str:
+    """State why an applicability condition did not hold without implying failure."""
+    path = rule.get("path", "")
+    value = resolve(data, path)
+    if path == "videos" and value == 0:
+        return "no video on the page (`videos = 0`)"
+    return f"does not apply: {fallback}"
+
+
 def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
           has_gsc: bool) -> list[dict]:
     key_for = {}
@@ -1096,6 +1131,9 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
             else:
                 data = results.get(key, {})
                 row["script"] = key[0]
+                subject = result_url(key, data)
+                if subject:
+                    row["url"] = subject
                 if "__error__" in data:
                     kind = data.get("__error_kind__", "crash")
                     row.update(status=NO_DATA, error_kind=kind,
@@ -1117,23 +1155,33 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                                evidence=f"the site could not be read: "
                                         f"{unread_reason(data)[:160]}")
                 else:
-                    row["measure"] = measurement(it["check"]["assert"], data)
-                    ok, ev = evaluate(it["check"]["assert"], data)
-                    if ok is None:
-                        row.update(status=NO_DATA, evidence=ev)
-                    elif ok:
-                        row.update(status=PASS, evidence=ev)
+                    applies = it["check"].get("applies_when")
+                    applies_ok, applies_ev = (evaluate(applies, data)
+                                              if applies else (True, ""))
+                    if applies_ok is None:
+                        row.update(status=NO_DATA, evidence=applies_ev)
+                    elif not applies_ok:
+                        row.update(status=NA,
+                                   evidence=inapplicable_evidence(applies, data,
+                                                                 applies_ev))
                     else:
-                        warn_rule = it["check"].get("warn")
-                        w_ok = False
-                        w_ev = ""
-                        if warn_rule:
-                            w_ok, w_ev = evaluate(warn_rule, data)
-                        if w_ok:
-                            row.update(status=WARN,
-                                       evidence=f"{ev}; within warn range ({w_ev})")
+                        row["measure"] = measurement(it["check"]["assert"], data)
+                        ok, ev = evaluate(it["check"]["assert"], data)
+                        if ok is None:
+                            row.update(status=NO_DATA, evidence=ev)
+                        elif ok:
+                            row.update(status=PASS, evidence=ev)
                         else:
-                            row.update(status=FAIL, evidence=ev)
+                            warn_rule = it["check"].get("warn")
+                            w_ok = False
+                            w_ev = ""
+                            if warn_rule:
+                                w_ok, w_ev = evaluate(warn_rule, data)
+                            if w_ok:
+                                row.update(status=WARN,
+                                           evidence=f"{ev}; within warn range ({w_ev})")
+                            else:
+                                row.update(status=FAIL, evidence=ev)
         # Where the verdict came from, recorded on every item that has one.
         #
         # Set here rather than at each branch above so a path added later cannot
@@ -1354,7 +1402,7 @@ def unreachable_skips(items: list[dict], reason: str,
 # an index, IndexNow submits it, and a Search Console property cannot exist for an
 # address on somebody's LAN. None of that is a defect in the site or in the tool,
 # and none of it becomes possible by trying harder.
-NEEDS_THE_OUTSIDE_WORLD = {"api", "gsc"}
+NEEDS_THE_OUTSIDE_WORLD = {"api", "gsc", "safe_browsing"}
 
 
 def private_host_skips(items: list[dict], host: str,
@@ -2044,14 +2092,29 @@ def aggregate_pages(primary: list[dict], per_page: list[list[dict]]) -> list[dic
         # the worst sampled page, so a report could say "52 characters, 60 is the
         # limit" directly under a FAIL — a passing number beside a failing verdict,
         # which is worse than printing the raw assertion.
+        detail = worst["evidence"]
+        if worst.get("url"):
+            detail = f"{worst['url']}: {detail}"
+        if len({r["evidence"] for r in bad}) > 1:
+            detail += "; values differ"
         row = dict(row, status=worst["status"],
-                   evidence=(f"{len(bad)}/{len(decided)} pages: {worst['evidence']}"),
+                   evidence=(f"{len(bad)}/{len(decided)} pages: {detail}"),
                    measure=worst.get("measure", row.get("measure")),
                    pages_checked=len(runs),
                    pages_decided=len(decided),
                    pages_matching=len(bad))
         out.append(row)
     return out
+
+
+def opt_in_flags(mode: str, verify_bots: bool) -> dict[str, list[str]]:
+    """Flags attached to script runs by mode or explicit operator permission."""
+    flags: dict[str, list[str]] = {}
+    if mode != "archive":
+        flags["hreflang_checker.py"] = ["--verify-returns"]
+    if verify_bots:
+        flags["server_log_audit.py"] = ["--verify-bots"]
+    return flags
 
 
 PSL_PATH = os.path.join(SKILL_DIR, "resources", "config", "public_suffix_list.dat")
@@ -2754,10 +2817,13 @@ def main() -> int:
                       + (f"; truncated at --crawl-max-pages {a.crawl_max_pages}"
                          if s.get("truncated") else ""), file=sys.stderr)
 
-    opt_in = {"server_log_audit.py": ["--verify-bots"]} if a.verify_bots else {}
+    opt_in = opt_in_flags(mode, a.verify_bots)
+    has_safe_browsing = bool(os.environ.get("GOOGLE_SAFE_BROWSING_KEY") or
+                             os.environ.get("SAFE_BROWSING_API_KEY"))
     prof_args = {k: list(v) for k, v in (profile.get("script_args") or {}).items()}
     plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path),
-                               rejected, opt_in, prof_args)
+                               rejected, opt_in, prof_args,
+                               has_safe_browsing=has_safe_browsing)
     if prof_args and not a.quiet:
         for script, extra in sorted(prof_args.items()):
             print(f"  profile {a.profile}: {script} {' '.join(extra)}", file=sys.stderr)
@@ -2813,7 +2879,8 @@ def main() -> int:
             pctx = dict(ctx, url=page_url, html=page_html)
             pplan, pskip = build_plan(page_items, pctx, caps, mode, preskip,
                                       bool(gsc_path), opt_in=opt_in,
-                                      profile_args=prof_args)
+                                      profile_args=prof_args,
+                                      has_safe_browsing=has_safe_browsing)
             presults = execute(pplan, a.workers, a.timeout, True)
             per_page.append(grade(page_items, pplan, presults, pskip, bool(gsc_path)))
             if os.path.exists(page_html):

@@ -42,7 +42,7 @@ ITEMS = DATA["items"]
 VALID_SOURCES = {"script", "llm", "manual", "gsc"}
 VALID_SEVERITY = {"critical", "high", "medium", "low"}
 VALID_EFFORT = {"low", "medium", "high"}
-VALID_REQUIRES = {"offline", "fetch", "crawl", "api", "gsc"}
+VALID_REQUIRES = {"offline", "fetch", "crawl", "api", "gsc", "safe_browsing"}
 with open(os.path.join(SCRIPTS, "checklist_runner.py"), encoding="utf-8") as f:
     RUNNER_SRC = f.read()
 
@@ -84,13 +84,31 @@ class RegistryShape(unittest.TestCase):
         a rule that silently reports NO_DATA forever."""
         for i in ITEMS:
             chk = i.get("check") or {}
-            for rule in (chk.get("assert"), chk.get("warn")):
+            for rule in (chk.get("assert"), chk.get("warn"), chk.get("applies_when")):
                 if not rule:
                     continue
                 for key in rule:
                     self.assertIn(f'"{key}"', RUNNER_SRC,
                                   f"{i['id']} uses operator {key!r}, which "
                                   f"checklist_runner.py does not implement")
+
+    def test_video_applicability_is_narrowly_declared(self):
+        declared = {item["id"]: item["check"]["applies_when"]
+                    for item in ITEMS if (item.get("check") or {}).get("applies_when")}
+        self.assertEqual(declared, {
+            "MB-102": {"path": "videos", "gt": 0},
+            "MD-190": {"path": "videos", "gt": 0},
+        })
+
+    def test_only_safe_browsing_verdicts_require_its_key(self):
+        requires = {item["id"]: item["check"]["requires"] for item in ITEMS
+                    if (item.get("check") or {}).get("script") ==
+                    "domain_safety_check.py"}
+        self.assertEqual({item_id for item_id, need in requires.items()
+                          if need == "safe_browsing"},
+                         {"SE-114", "SE-116", "TE-171", "TE-179"})
+        self.assertEqual(requires["TE-167"], "api")
+        self.assertEqual(requires["TE-178"], "api")
 
     def test_a_rule_does_more_than_name_a_path(self):
         """A rule of only {"path": ...} can never decide anything."""

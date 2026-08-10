@@ -10,6 +10,53 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.35.0 — seven defects exposed by one live multilingual audit
+
+All seven defects were found by auditing one live trilingual local-business site on a matching-language ccTLD, not by a fixture.
+None is theoretically impossible to encode in a purpose-built regression fixture;
+the existing static, English-first fixtures could not expose a matching-language
+ccTLD, differing values across a multilingual sample, a JavaScript-populated
+src-less lightbox placeholder, or non-English navigation whose contact route was a
+phone link. The regressions added here make those live shapes permanent test cases.
+
+Verdicts change in both directions. IN-127 changes FAIL -> PASS for the reproduced
+root set — a default locale at the root of its matching ccTLD with other locales in
+same-host subdirectories — and real cross-host mixtures remain FAIL. The live rerun
+contradicted the predicted aggregate PASS: seven inner-page sets still fail because
+their unmarked default-locale URLs, such as `/bbq`, are not bare roots. The specified
+repair deliberately leaves that older compatibility rule unchanged; KNOWN-ISSUES §6
+records the remaining false failure. CI-016 and its MD-186 twin change FAIL -> PASS
+for a src-less lightbox placeholder and correctly preserve `alt=""` as an explicit
+decorative alternative. CN-044 changes FAIL -> PASS when a page exposes a `tel:` or
+`mailto:` contact route regardless of link language.
+
+MB-102 and its scoring primary MD-190 change PASS -> N/A when
+`video_schema_checker.py` reports its real `videos = 0` field. This restores the
+registry's founding rule that an empty result set is not a clean measurement. Both
+twins report N/A together and leave the score together; their `SAME_CHECK` declaration
+still carries video SEO's weight once. SE-114, SE-116, TE-171 and TE-179 change
+NO_DATA -> NEEDS_INPUT when network is available but neither
+`GOOGLE_SAFE_BROWSING_KEY` nor `SAFE_BROWSING_API_KEY` is set. In archive mode they
+are N/A; TE-167 and TE-178 still run without a key.
+
+IN-122 remains PASS on the audited site but now runs `--verify-returns` automatically
+in live and page modes, never archive mode, so its evidence proves the return-tag work
+happened. Sampled evidence keeps its verdicts and counts while naming the page whose
+value it prints and appending “values differ” when the matching rows disagree; this
+fixes both MS-020's three title lengths and PASS rows such as IN-123's three languages.
+The institutional word list remains English-only beyond language-neutral phone and
+email routes, and KNOWN-ISSUES §6 states what a proper multilingual repair requires.
+The like-for-like machine-only live comparison moved score 84 -> 86 and coverage
+63% -> 62%; coverage did not rise when the video twin pair left both numerator and
+denominator, and its primary MD-190 removed one medium-severity weight, not two items'
+weight. The literal saved artifacts are 84/77% before and 86/62% after because the
+before artifact contains 38 model answers and Task 8 deliberately queued none.
+
+Registry `27003b24ce60` -> `07e64f9c9fc6`: four Safe Browsing requirements, two
+video applicability rules and IN-122's verified-return assertion change; titles,
+fixes, severities and thresholds do not. 719 -> 740 tests, with each defect's
+regression observed failing before its fix.
+
 ## 0.34.0 — CI-002 promises exactly what its evidence answers
 
 This defect was found and written by an earlier pass whose release was never landed,

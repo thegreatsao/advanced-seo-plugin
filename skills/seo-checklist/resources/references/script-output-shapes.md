@@ -619,6 +619,12 @@ because until then no rule read it. Absent, both land on `NO_DATA`.
 `checks.url_structure.finding` / `.fix` / `.severity` — str, on the failing two
 `checks.canonical_alignment.passed` — bool
 `checks.canonical_alignment.detail` — str
+`checks.return_tags.verified` — bool
+`checks.return_tags.alternates_checked` — int
+`checks.return_tags.verified_and_valid` — bool — **absent** when verification was not
+  requested or any alternate could not be fetched, so IN-122 reports `NO_DATA`
+  instead of inferring validity from an incomplete check
+`checks.return_tags.detail` — str
 `language_code_issues[]` — array
 `return_tag_checks[]` — array
   - item keys: passed, severity, confidence, finding, fix, alternates

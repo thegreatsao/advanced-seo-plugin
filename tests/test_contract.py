@@ -150,7 +150,7 @@ def requires_of(item_id: str) -> str:
 
 # Whole capabilities no loopback fixture can exercise. A third party cannot reach
 # 127.0.0.1, so these are NO_DATA on both sites — verified, not assumed.
-UNREACHABLE_REQUIRES = {"api", "gsc"}
+UNREACHABLE_REQUIRES = {"api", "gsc", "safe_browsing"}
 
 # Items whose evidence is identical on both fixtures on purpose, with why. Anything
 # not listed here has to differ, or the check cannot tell a good site from a bad one.

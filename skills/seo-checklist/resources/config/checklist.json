@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "27003b24ce60",
+  "registry_version": "07e64f9c9fc6",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -2040,6 +2040,10 @@
             "medium"
           ]
         },
+        "applies_when": {
+          "path": "videos",
+          "gt": 0
+        },
         "warn": {
           "path": "issues",
           "none_severity": [
@@ -2350,7 +2354,7 @@
         "args": [
           "{url}"
         ],
-        "requires": "api",
+        "requires": "safe_browsing",
         "assert": {
           "path": "safe_browsing.threats",
           "len_eq": 0
@@ -2394,7 +2398,7 @@
         "args": [
           "{url}"
         ],
-        "requires": "api",
+        "requires": "safe_browsing",
         "assert": {
           "path": "safe_browsing.clean",
           "truthy": true
@@ -2542,8 +2546,8 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "summary.critical",
-          "eq": 0
+          "path": "checks.return_tags.verified_and_valid",
+          "truthy": true
         }
       },
       "effort": "high",
@@ -3543,7 +3547,7 @@
         "args": [
           "{url}"
         ],
-        "requires": "api",
+        "requires": "safe_browsing",
         "assert": {
           "path": "safe_browsing.clean",
           "truthy": true
@@ -3709,7 +3713,7 @@
         "args": [
           "{url}"
         ],
-        "requires": "api",
+        "requires": "safe_browsing",
         "assert": {
           "path": "safe_browsing.threats",
           "len_lte": 0
@@ -3941,6 +3945,10 @@
             "high",
             "medium"
           ]
+        },
+        "applies_when": {
+          "path": "videos",
+          "gt": 0
         },
         "warn": {
           "path": "issues",
