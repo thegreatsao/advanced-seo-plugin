@@ -358,6 +358,37 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **Nine Search Console thresholds are examined and deliberately not calibrated.**
+  The pilot evidence is one small property, roughly ten thousand impressions over
+  sixteen months: 501 query-by-page rows, of which 26 clear 50 impressions, 15 clear
+  100 and 10 clear 200. Its CTR-by-position curve is non-monotonic (17.3% at position
+  1, 1.8% at position 2 and 9.1% at position 3), direct evidence that a few large rows
+  dominate the sample rather than evidence for what CTR is normal. Only five queries
+  reach the 50-199-impression bucket relevant to the average-position floor. No query,
+  URL, page path, property or client identity is retained; none is needed to understand
+  the limitation.
+
+  We refuse to relabel the nine values `measured`, and retain each inherited value,
+  for four distinct reasons:
+
+  - **Market claims need many properties.** `STRIKING_DISTANCE_MIN_POSITION` (4),
+    `STRIKING_DISTANCE_MAX_POSITION` (20), `TOP_POSITION_MAX` (3), `LOW_CTR_PCT`
+    (5), `VERY_LOW_CTR_PCT` (2) and `RANKS_FIRST_POSITION` (1.5) claim something
+    about normal ranking or CTR. One property in one language cannot establish that.
+  - **The available sample is too thin for mean-position stability.**
+    `STRIKING_DISTANCE_MIN_IMPRESSIONS` (50) gates an average position, not a CTR,
+    so binomial precision does not apply. It needs a distribution of how far query
+    mean positions wander; five relevant queries cannot supply one.
+  - **Backlink concentration is not search analytics.** `TOP1_SHARE_PCT` (50) reads
+    the Links export. No volume of Search Console performance data can settle it.
+  - **Severity is a product decision.** `HIGH_SEVERITY_IMPRESSIONS` (100) splits high
+    from medium after cannibalisation has already been found; it does not measure
+    whether the finding exists.
+
+  What would settle the market claims is many properties across languages and markets,
+  with property-level estimates kept independent. More months from this one property
+  would deepen the same sampling bias, not create the missing market evidence.
+
 - **Line-wrapped minified CSS reads as unminified.** The pinned corpus labels
   `bulma-1.0.2/css/versions/bulma-prefixed.min.css` as minified, but its line wrapping
   leaves it at only 37.13 bytes per line and 392 indented lines in the first 400. No

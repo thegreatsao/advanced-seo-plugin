@@ -31,8 +31,7 @@ import re
 import zipfile
 
 # Google localises the export, so match on shape rather than on English headers.
-# basis: inherited — half the backlinks from one domain, present at import. Round, and
-#  the finding it raises is about concentration risk rather than about a number of links.
+# basis: inherited — half the backlinks from one domain, present at import. Blocker: backlink concentration is not a search-analytics number, so no volume of Search Console performance data can calibrate it.
 TOP1_SHARE_PCT = 50
 
 SITE_SHEETS = ("linking sites", "linking-sites", "ссылающиеся сайты", "sites")

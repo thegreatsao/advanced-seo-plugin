@@ -29,27 +29,25 @@ except ImportError:
     HAS_GSC_DEPS = False
 
 
-# The opportunity rules, all present at import and none of them decided here. They read
-# as SEO-blog folklore stated in numbers, which is worth saying plainly: "striking
-# distance" is a phrase, not a measurement, and none of these bands was checked against
-# what a ranking change on this site actually costs or returns.
-# basis: inherited — positions 4-20 with at least 50 impressions, present at import.
+# The opportunity rules were all present at import. The two sample floors governing a
+# CTR comparison are now justified by binomial precision; the other numbers retain the
+# inherited values and name the evidence that would be needed to settle them.
+# basis: inherited — positions 4-20, present at import. Blocker: one property in one language cannot establish a cross-market ranking-opportunity band; this needs many properties across markets.
 STRIKING_DISTANCE_MIN_POSITION = 4
-# basis: inherited — position 20, the far end of the band above: roughly the bottom of
-#  Google's second page of results.
+# basis: inherited — position 20, the far end of the band above. Blocker: one property in one language cannot establish a cross-market ranking-opportunity band; this needs many properties across markets.
 STRIKING_DISTANCE_MAX_POSITION = 20
-# basis: inherited — fifty impressions, the sample floor of the rule above: below it
-#  an average position is the average of one or two searches.
+# basis: inherited — fifty impressions gates an average position, so binomial CTR precision does not apply. Blocker: only five pilot queries reached the relevant 50-199 bucket; this needs measured query-level mean-position variation.
 STRIKING_DISTANCE_MIN_IMPRESSIONS = 50
-# basis: inherited — top three positions, under 5% CTR, at least 100 impressions,
-#  present at import. Reads as a featured snippet taking the clicks.
+# basis: inherited — top three positions, present at import. Blocker: one property in one language cannot establish normal CTR by position across markets; this needs many properties across markets.
 TOP_POSITION_MAX = 3
-LOW_CTR_PCT = 5           # basis: inherited — the CTR half of the rule above
-LOW_CTR_MIN_IMPRESSIONS = 100   # basis: inherited — the sample floor of the rule above
-# basis: inherited — 200 impressions with under 2% CTR, present at import: seen often,
-#  clicked rarely, wherever it ranks.
+# basis: inherited — five percent CTR, present at import. Blocker: one property's non-monotonic CTR-by-position curve cannot establish normal CTR across markets; this needs many properties across markets.
+LOW_CTR_PCT = 5
+# basis: measured — corpus=binomial CTR proportion at the declared 5 percent threshold; date=2026-08-10; method=normal-approximation interval with z=1.96, applying the rule that the 95% confidence interval half-width on measured CTR must not exceed the threshold being tested. Minimum 73 impressions, so floor 100 has 27 impressions of headroom.
+LOW_CTR_MIN_IMPRESSIONS = 100
+# basis: measured — corpus=binomial CTR proportion at the declared 2 percent threshold; date=2026-08-10; method=normal-approximation interval with z=1.96, applying the rule that the 95% confidence interval half-width on measured CTR must not exceed the threshold being tested. Minimum 189 impressions, so floor 200 has 11 impressions of headroom.
 HIGH_IMPRESSIONS = 200
-VERY_LOW_CTR_PCT = 2      # basis: inherited — the CTR half of the rule above
+# basis: inherited — two percent CTR, present at import. Blocker: one property's non-monotonic CTR-by-position curve cannot establish normal CTR across markets; this needs many properties across markets.
+VERY_LOW_CTR_PCT = 2
 
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 

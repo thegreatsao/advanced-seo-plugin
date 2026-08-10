@@ -1,0 +1,120 @@
+{
+  "half_width_table": [
+    {
+      "ci_half_width_percentage_points": {
+        "2": 8.67729,
+        "5": 13.508368
+      },
+      "constant_roles": [
+        "gsc_cannibalization.py:MIN_IMPRESSIONS (uncalibrated)"
+      ],
+      "impressions": 10
+    },
+    {
+      "ci_half_width_percentage_points": {
+        "2": 3.880602,
+        "5": 6.041126
+      },
+      "constant_roles": [
+        "gsc_checker.py:STRIKING_DISTANCE_MIN_IMPRESSIONS (uncalibrated)"
+      ],
+      "impressions": 50
+    },
+    {
+      "ci_half_width_percentage_points": {
+        "2": 2.744,
+        "5": 4.271721
+      },
+      "constant_roles": [
+        "gsc_checker.py:LOW_CTR_MIN_IMPRESSIONS (calibrated)"
+      ],
+      "impressions": 100
+    },
+    {
+      "ci_half_width_percentage_points": {
+        "2": 1.940301,
+        "5": 3.020563
+      },
+      "constant_roles": [
+        "gsc_checker.py:HIGH_IMPRESSIONS (calibrated)"
+      ],
+      "impressions": 200
+    },
+    {
+      "ci_half_width_percentage_points": {
+        "2": 1.227154,
+        "5": 1.910372
+      },
+      "constant_roles": [],
+      "impressions": 500
+    },
+    {
+      "ci_half_width_percentage_points": {
+        "2": 0.867729,
+        "5": 1.350837
+      },
+      "constant_roles": [],
+      "impressions": 1000
+    }
+  ],
+  "pairs": [
+    {
+      "delivered_ci_half_width_fraction": 0.042717,
+      "delivered_ci_half_width_percentage_points": 4.271721,
+      "floor_constant": "LOW_CTR_MIN_IMPRESSIONS",
+      "floor_impressions": 100,
+      "headroom_impressions": 27,
+      "name": "top-position-low-ctr",
+      "required_minimum_impressions": 73,
+      "satisfies_precision_rule": true,
+      "script": "gsc_checker.py",
+      "threshold_constant": "LOW_CTR_PCT",
+      "threshold_fraction": 0.05,
+      "threshold_pct": 5
+    },
+    {
+      "delivered_ci_half_width_fraction": 0.019403,
+      "delivered_ci_half_width_percentage_points": 1.940301,
+      "floor_constant": "HIGH_IMPRESSIONS",
+      "floor_impressions": 200,
+      "headroom_impressions": 11,
+      "name": "high-impressions-very-low-ctr",
+      "required_minimum_impressions": 189,
+      "satisfies_precision_rule": true,
+      "script": "gsc_checker.py",
+      "threshold_constant": "VERY_LOW_CTR_PCT",
+      "threshold_fraction": 0.02,
+      "threshold_pct": 2
+    }
+  ],
+  "precision_rule": {
+    "confidence_level_pct": 95,
+    "half_width_formula": "z * sqrt(p * (1 - p) / n)",
+    "minimum_formula": "ceil((z / p)^2 * p * (1 - p))",
+    "model": "normal-approximation binomial proportion interval",
+    "name": "ci_half_width_not_greater_than_tested_ctr_threshold",
+    "requirement": "The 95% confidence interval half-width on measured CTR must not exceed the threshold being tested.",
+    "z_score": 1.96
+  },
+  "privacy": "Arithmetic only: no property, query, URL, page path, client name, credential or private corpus is an input.",
+  "uncalibrated_floors": [
+    {
+      "constant": "STRIKING_DISTANCE_MIN_IMPRESSIONS",
+      "floor_impressions": 50,
+      "illustrative_ci_half_width_percentage_points": 6.041126,
+      "reason": "gates average position rather than CTR; binomial precision does not calibrate it",
+      "reference_threshold_pct": 5,
+      "script": "gsc_checker.py",
+      "status": "not_calibrated_by_this_method"
+    },
+    {
+      "constant": "MIN_IMPRESSIONS",
+      "floor_impressions": 10,
+      "illustrative_ci_half_width_percentage_points": 13.508368,
+      "reason": "gates per-page evidence for a multi-page pattern rather than a CTR comparison; the 5 percent column is illustrative only",
+      "reference_threshold_pct": 5,
+      "script": "gsc_cannibalization.py",
+      "status": "not_calibrated_by_this_method"
+    }
+  ]
+}

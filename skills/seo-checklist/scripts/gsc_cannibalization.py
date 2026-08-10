@@ -32,12 +32,9 @@ except ImportError:
     print("Error: gsc_checker.py must be importable from the same directory")
     sys.exit(1)
 
-# basis: inherited — average position 1.5, present at import. An average, so a page
-#  alternating between 1 and 2 counts as owning the query; below it the page is not
-#  reliably first for anything.
+# basis: inherited — average position 1.5, present at import. Blocker: one property in one language cannot establish branded-query ownership across markets; this needs many properties across markets.
 RANKS_FIRST_POSITION = 1.5
-# basis: inherited — 100 impressions, present at import. Splits a cannibalised query
-#  into `high` and `medium`: below it the split is real but too small to prioritise.
+# basis: inherited — 100 impressions, present at import. Blocker: this only splits an already-fired finding into high versus medium severity, so it is a prioritisation convention rather than a search-analytics measurement.
 HIGH_SEVERITY_IMPRESSIONS = 100
 
 ROW_LIMIT = 5000

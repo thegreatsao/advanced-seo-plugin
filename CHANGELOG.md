@@ -10,6 +10,35 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.30.1 — nine GSC thresholds get a written refusal
+
+Nine inherited Search Console thresholds now name the evidence that is missing rather
+than implying that an unexamined number merely awaits more of the same data. The pilot
+is one small property, roughly ten thousand impressions over sixteen months. Its
+CTR-by-position curve is non-monotonic, only five queries reach the bucket needed to
+study the striking-distance average-position floor, and Search Console performance
+data cannot calibrate either backlink concentration or a high-versus-medium severity
+choice. The refusal is grouped by what could settle each family: many properties across
+markets for six ranking and CTR claims, query-level mean-position variation for the
+striking-distance sample floor, backlink evidence for concentration, and an explicit
+product convention for severity. More months from one property cannot substitute for
+the missing cross-market sample. No query, URL, page path, property or client identity
+is committed.
+
+Two other inherited floors are statistical questions and keep their values with a
+measured basis. For a binomial CTR proportion, this release requires the 95% confidence
+interval half-width at the tested CTR threshold to be no larger than that threshold.
+At 5%, the minimum is 73 impressions and `LOW_CTR_MIN_IMPRESSIONS = 100` has 27
+impressions of headroom, delivering +/-4.271721 percentage points. At 2%, the minimum
+is 189 and `HIGH_IMPRESSIONS = 200` has 11 impressions of headroom, delivering
++/-1.940301 points. The offline calibration tool and committed report rederive those
+figures and show the same half-width arithmetic at 10, 50, 100, 200, 500 and 1,000
+impressions, including the uncalibrated 50- and 10-impression floors for context.
+
+No threshold value and no verdict changes. Threshold inventory: 11 measured, 59
+inherited, 117 verdict thresholds total. Registry `666f511a91ad` unchanged.
+697 -> 699 tests.
+
 ## 0.30.0 — SERP character limits admit that truncation is pixels
 
 `META_MAX_CHARS` moves from 165 to the measured Arial desktop capacity of 144.

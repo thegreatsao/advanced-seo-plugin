@@ -11,6 +11,7 @@ import datetime
 import importlib.util
 import io
 import json
+import math
 import os
 import re
 import statistics
@@ -476,6 +477,49 @@ def over(result):
                            "one composition cannot show text sensitivity")
         for font in report["fonts"]:
             self.assertRegex(font["sha256"], r"^[0-9a-f]{64}$", font)
+
+    def test_the_gsc_floors_match_their_committed_measurement(self):
+        report_path = os.path.join(
+            TOOLS, "calibration", "gsc-sample-floors.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+        sys.path.insert(0, SCRIPTS)
+        import gsc_checker
+
+        self.assertEqual(
+            {pair["floor_constant"] for pair in report["pairs"]},
+            {"LOW_CTR_MIN_IMPRESSIONS", "HIGH_IMPRESSIONS"},
+            "the report no longer covers both calibrated GSC CTR floors")
+        for pair in report["pairs"]:
+            name = pair["floor_constant"]
+            self.assertEqual(getattr(gsc_checker, name),
+                             pair["floor_impressions"],
+                             f"{name} drifted away from its measurement")
+
+    def test_a_gsc_floor_delivers_the_precision_it_claims(self):
+        report_path = os.path.join(
+            TOOLS, "calibration", "gsc-sample-floors.json")
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+
+        rule = report["precision_rule"]
+        self.assertEqual(
+            rule["name"],
+            "ci_half_width_not_greater_than_tested_ctr_threshold")
+        for pair in report["pairs"]:
+            p = pair["threshold_fraction"]
+            n = pair["floor_impressions"]
+            half_width = rule["z_score"] * math.sqrt(p * (1 - p) / n)
+            self.assertAlmostEqual(
+                half_width, pair["delivered_ci_half_width_fraction"], places=6,
+                msg=f"{pair['floor_constant']} reports the wrong half-width")
+            self.assertLessEqual(
+                half_width, p,
+                f"{pair['floor_constant']} does not satisfy {rule['name']}")
+            independently_required = math.ceil(
+                (rule["z_score"] / p) ** 2 * p * (1 - p))
+            self.assertEqual(independently_required,
+                             pair["required_minimum_impressions"])
 
     def test_the_title_advice_matches_the_title_check(self):
         sys.path.insert(0, SCRIPTS)
