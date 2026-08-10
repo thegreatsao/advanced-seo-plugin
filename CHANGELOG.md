@@ -10,6 +10,40 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.34.0 — CI-002 promises exactly what its evidence answers
+
+This defect was found and written by an earlier pass whose release was never landed,
+rescued from its reading copy, and held back once because another session held
+`audit_item_semantics.py`. It is re-derived here against the current tree; the old
+patch was read for intent and never applied.
+
+**CI-002 no longer turns one inspected URL into a claim about a site's important
+content.** Since 0.26.0 it has asserted Google's URL Inspection `indexed` answer, but
+`requires: gsc` keeps the item out of the per-page sampled pass: one audited URL is
+inspected once. The inherited title *Ensure Important Content Is Indexed* survived
+that repair for eight releases and promised a scope the evidence cannot answer. A
+declared, reasoned override now titles it *Confirm Google Has Indexed the Audited
+URL*, while `plerdy-titles.json` stays faithful to the source checklist.
+
+The rescued draft proposed *Ensure the Audited URL Is Indexed*. This release departs
+from it deliberately: CI-001 is already *Ensure URL Is Indexed* and asks whether the
+page can be indexed from this plugin's crawl, while CI-002 asks whether Google has
+indexed it. Putting those two titles one word apart would obscure two different
+instruments and allow their verdicts to look contradictory. The override loader also
+refuses unknown ids, plugin-owned items, blank titles or reasons, and titles that
+merely repeat their source; metadata keys never reach the generator. The shipped-title
+regression was observed failing before the registry was regenerated.
+
+The Russian catalogue now names Google's evidence and remains distinct from CI-001.
+The semantics audit records CI-002's narrowed scope, corrects IN-127's stale account
+of mixed URL structures, and prints its inert historical rulings as information rather
+than a gate. Important-URL inspection remains open: it needs a policy for the 2,000
+daily inspections per property, selection rules and aggregation.
+
+Registry `03fb71754eb2` -> `27003b24ce60`: CI-002's title is the only item field that
+changes; 215 items remain, with no assertion, severity, score weight or verdict
+change. 716 -> 719 tests.
+
 ## 0.33.1 — the gate reads an item's subject, never its side of it
 
 Written in a parallel session and tagged `v0.32.1` from a commit that never reached

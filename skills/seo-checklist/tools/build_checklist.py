@@ -26,6 +26,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(HERE)
 DEFAULT_OUT = os.path.join(SKILL_DIR, "resources", "config", "checklist.json")
+TITLE_OVERRIDES = os.path.join(
+    SKILL_DIR, "resources", "config", "title-overrides.json")
 
 # --------------------------------------------------------------------------
 # Categories — mirror the 15 Plerdy sections, id-prefixed for stable item ids.
@@ -1132,6 +1134,44 @@ def load_titles() -> dict[int, str]:
     return {int(k): v for k, v in raw.items() if k.lstrip("-").isdigit()}
 
 
+def load_title_overrides() -> dict[str, dict]:
+    """Read deliberate departures from borrowed Plerdy titles.
+
+    Underscore-prefixed keys are metadata, just as they are in the source title
+    file. Validation happens after the complete item list exists, so a typo cannot
+    silently create an override that reaches no item.
+    """
+    if not os.path.exists(TITLE_OVERRIDES):
+        return {}
+    with open(TITLE_OVERRIDES, encoding="utf-8") as f:
+        raw = json.load(f)
+    return {key: value for key, value in raw.items() if not key.startswith("_")}
+
+
+def title_override_problems(items: list[dict], titles: dict[int, str],
+                            overrides: dict[str, dict]) -> list[str]:
+    """Name every override that cannot be a meaningful source-title departure."""
+    known = {item["id"]: item for item in items}
+    problems = []
+    for item_id, override in overrides.items():
+        item = known.get(item_id)
+        if item is None:
+            problems.append(f"{item_id}: no registry item has this id")
+            continue
+        if item["plerdy_ref"] is None:
+            problems.append(f"{item_id}: item has no Plerdy source title to override")
+            continue
+        title = override.get("title") if isinstance(override, dict) else None
+        why = override.get("why") if isinstance(override, dict) else None
+        if not str(title or "").strip():
+            problems.append(f"{item_id}: override title is blank")
+        if not str(why or "").strip():
+            problems.append(f"{item_id}: override reason is blank")
+        if title == titles.get(item["plerdy_ref"]):
+            problems.append(f"{item_id}: override title matches its Plerdy source title")
+    return problems
+
+
 # Which evidence answers an LLM item, which is not the same question as which
 # checklist category it sits in. Grouping by lens lets one agent read one slice
 # of the page once; grouping by category would make four agents re-read the same
@@ -1193,19 +1233,26 @@ SCORES_WITH = {twin: primary
                for twin in ([twins] if isinstance(twins, str) else twins)}
 
 
-def build() -> list[dict]:
-    titles = load_titles()
+def build(titles: dict[int, str] | None = None,
+          overrides: dict[str, dict] | None = None) -> list[dict]:
+    titles = load_titles() if titles is None else titles
+    overrides = load_title_overrides() if overrides is None else overrides
     out: list[dict] = []
     for key, prefix, label, (lo, hi) in CATEGORIES:
         for ref in range(lo, hi + 1):
             sev, source, script, args, rule, fix, warn = MAP.get(
                 ref, ("medium", M, None, None, None, "", None))
+            item_id = f"{prefix}-{ref:03d}"
+            override = overrides.get(item_id)
+            title = titles.get(ref, f"Item {ref}")
+            if isinstance(override, dict):
+                title = override.get("title", title)
             entry = {
-                "id": f"{prefix}-{ref:03d}",
+                "id": item_id,
                 "plerdy_ref": ref,
                 "category": key,
                 "category_label": label,
-                "title": titles.get(ref, f"Item {ref}"),
+                "title": title,
                 "severity": sev,
                 "source": source,
             }
@@ -1268,7 +1315,14 @@ def main() -> int:
                     help="Exit 1 if the on-disk registry is stale")
     a = ap.parse_args()
 
-    items = build()
+    titles = load_titles()
+    overrides = load_title_overrides()
+    items = build(titles, overrides)
+    override_problems = title_override_problems(items, titles, overrides)
+    if override_problems:
+        for problem in override_problems:
+            print(f"Invalid title override: {problem}", file=sys.stderr)
+        return 1
     unlensed = [i["id"] for i in items if i["source"] == L and not i.get("lens")]
     if unlensed:
         print(f"LLM items with no lens: {', '.join(unlensed)} — add them to LENS, "

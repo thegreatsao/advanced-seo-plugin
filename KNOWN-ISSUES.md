@@ -358,6 +358,23 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **Narrowed in 0.34.0; inspecting a set of important URLs remains open.** CI-002
+  got the right evidence in 0.26.0 — Google's URL Inspection answer — but for eight
+  releases kept *Ensure Important Content Is Indexed*, a title that claimed more
+  than one inspected URL could answer. It is now *Confirm Google Has Indexed the
+  Audited URL* through a declared override, while `plerdy-titles.json` remains a
+  faithful record of the inherited wording.
+
+  The site-wide feature is still missing. Inspecting a set of important URLs needs
+  a quota policy for 2,000 inspections per property per day, selection rules and
+  aggregation; until those exist, no site-wide indexation claim is made. No gate
+  caught the over-claim. CI-002 shares vocabulary with its assertion through its fix
+  text — "indexed", "indexing" and "Search Console" — so the semantics tool never
+  listed it, and a title that over-claims *scope* is invisible to a check that
+  compares *subject*. This is the neighbour of the polarity limit recorded directly
+  below: the words can identify the right subject while the sentence still promises
+  the wrong thing.
+
 - **A title can name the right subject and still state the wrong side of it, and no
   gate here reads polarity.** `audit_item_semantics.py` answers whether an item
   asserts *about* what its title names. It has never answered whether a PASS means

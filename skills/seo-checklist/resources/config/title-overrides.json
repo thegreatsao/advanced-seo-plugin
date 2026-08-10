@@ -1,0 +1,7 @@
+{
+  "_comment": "A deliberate departure from an inherited title. plerdy-titles.json is a record of someone else's checklist and stays faithful to it; when this plugin's evidence cannot answer the borrowed sentence, the local title is declared here with the reason it differs. Keys are registry item ids; keys beginning with _ are metadata and never reach the generator. An override that matches the source title is not a no-op, it is a dead entry - delete it.",
+  "CI-002": {
+    "title": "Confirm Google Has Indexed the Audited URL",
+    "why": "URL Inspection answers for one URL, and requires: gsc keeps the item out of the per-page sampled pass, so it answers for the audited URL only. The Plerdy wording 'Ensure Important Content Is Indexed' claims the site's important content. Checking a set of important URLs needs a quota-aware GSC sampling feature that does not exist, so the plugin must not keep a title that implies it. The wording also has to stay distinct from CI-001 'Ensure URL Is Indexed', which asks whether this page can be indexed rather than whether Google has."
+  }
+}

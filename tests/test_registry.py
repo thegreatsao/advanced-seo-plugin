@@ -32,6 +32,8 @@ import harness  # noqa: E402
 REGISTRY = os.path.join(SKILL, "resources", "config", "checklist.json")
 SHAPES = os.path.join(SKILL, "resources", "references", "script-output-shapes.md")
 PROFILES = os.path.join(SKILL, "resources", "config", "profiles.json")
+TITLE_OVERRIDES = os.path.join(
+    SKILL, "resources", "config", "title-overrides.json")
 
 with open(REGISTRY, encoding="utf-8") as f:
     DATA = json.load(f)
@@ -864,6 +866,13 @@ class ChecklistProvenance(unittest.TestCase):
         self.assertTrue(all(isinstance(k, int) for k in titles))
         self.assertEqual(titles[1], "Ensure URL Is Indexed")
 
+    def test_override_metadata_keys_do_not_reach_the_generator(self):
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        import build_checklist
+        overrides = build_checklist.load_title_overrides()
+        self.assertEqual(set(overrides), {"CI-002"})
+        self.assertNotIn("_comment", overrides)
+
     def test_every_numbered_title_is_referenced_by_exactly_one_item(self):
         """plerdy_ref is the trace back to the source line, so the mapping has to be
         a bijection over 1..200 — and the 15 items this plugin added must not claim
@@ -874,6 +883,66 @@ class ChecklistProvenance(unittest.TestCase):
         self.assertEqual(sorted(refs), numbered)
         added = [i["id"] for i in ITEMS if i["plerdy_ref"] is None]
         self.assertEqual(len(added), 15, f"unexpected unreferenced items: {added}")
+
+
+class DeliberateTitleOverrides(unittest.TestCase):
+    """A local title may narrow a borrowed one, but never silently."""
+
+    def setUp(self):
+        with open(TITLE_OVERRIDES, encoding="utf-8") as f:
+            self.raw = json.load(f)
+        with open(os.path.join(SKILL, "resources", "config", "plerdy-titles.json"),
+                  encoding="utf-8") as f:
+            self.source_titles = json.load(f)
+        self.overrides = {key: value for key, value in self.raw.items()
+                          if not key.startswith("_")}
+
+    def test_every_override_is_explained_shipped_and_differs_from_its_source(self):
+        known = {item["id"]: item for item in ITEMS}
+        problems = []
+        for item_id, override in self.overrides.items():
+            if item_id not in known:
+                problems.append(f"{item_id}: no such registry item")
+                continue
+            title = str(override.get("title") or "").strip()
+            why = str(override.get("why") or "").strip()
+            if not title:
+                problems.append(f"{item_id}: empty title")
+            if not why:
+                problems.append(f"{item_id}: no reason")
+            if known[item_id]["title"] != override.get("title"):
+                problems.append(f"{item_id}: shipped registry ignored the override")
+            ref = known[item_id]["plerdy_ref"]
+            original = self.source_titles.get(str(ref))
+            if not original:
+                problems.append(f"{item_id}: source title is missing")
+            if original == override.get("title"):
+                problems.append(f"{item_id}: override repeats the source title")
+        self.assertEqual(problems, [])
+
+    def test_the_builder_refuses_all_invalid_override_shapes(self):
+        sys.path.insert(0, os.path.join(SKILL, "tools"))
+        import build_checklist
+        titles = build_checklist.load_titles()
+        items = build_checklist.build(titles, {})
+        cases = {
+            "unknown id": ({"NO-999": {"title": "Different", "why": "Reason"}},
+                           "NO-999: no registry item"),
+            "unborrowed item": ({"GEO-001": {"title": "Different", "why": "Reason"}},
+                                "GEO-001: item has no Plerdy source title"),
+            "blank title": ({"CI-002": {"title": " ", "why": "Reason"}},
+                            "CI-002: override title is blank"),
+            "blank reason": ({"CI-002": {"title": "Different", "why": " "}},
+                             "CI-002: override reason is blank"),
+            "source title": ({"CI-002": {"title": titles[2], "why": "Reason"}},
+                             "CI-002: override title matches its Plerdy source title"),
+        }
+        for label, (overrides, expected) in cases.items():
+            with self.subTest(label):
+                problems = build_checklist.title_override_problems(
+                    items, titles, overrides)
+                self.assertTrue(any(expected in problem for problem in problems),
+                                problems)
 
 
 class RegistryDocs(unittest.TestCase):

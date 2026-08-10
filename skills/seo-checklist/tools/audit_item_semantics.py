@@ -22,6 +22,10 @@ disallows exactly the four paths CI-019 tests, with a comment saying so.
 Exit 1 on any duplicate, or on an unreviewed vocabulary miss. Reviewing an item is
 writing down which of the three is wrong, or that none of them is.
 
+The summary also lists REVIEWED rulings whose items no longer fire the vocabulary
+heuristic. That list is informational, never a gate: a ruling normally becomes inert
+because its item was repaired, and keeping the history lets later editors see why.
+
 Neither question is about POLARITY, and this tool does not answer it. A title phrased
 as the failure state rather than the desired one — GEO-008 in 0.32.0, caught by hand —
 shares its assertion's vocabulary perfectly and inverts what a PASS means. The
@@ -76,14 +80,17 @@ REVIEWED: dict[str, str] = {
     # really is an intrusive interstitial, and no token-overlap test will ever know
     # that. Those are marked OK. Four are not.
 
-    "CI-002": "FIXED (0.26). Was a defect: asserted summary.urls >= 1, so a sitemap "
+    "CI-002": "FIXED (0.26 evidence, 0.34 title). Was a defect: asserted "
+              "summary.urls >= 1, so a sitemap "
               "listing one URL passed a site of five hundred pages, and being in a "
               "sitemap is not being indexed — the floor it checked (a sitemap exists "
               "and is not empty) is GO-136's. It now asserts `indexed` from URL "
-              "Inspection, Google's own answer. Narrower than the title in one respect, "
-              "stated rather than hidden: it answers for the audited page, because "
-              "whole-site coverage is the Index Coverage report and the API has never "
-              "exposed it. Not a duplicate of GO-135 (`issues`, which also covers "
+              "Inspection, Google's own answer, and its title is now a declared override "
+              "that promises only the audited URL. `requires: gsc` keeps the item out "
+              "of the sampled-page pass, so one inspection is the whole answer. "
+              "Important-URL inspection remains open work — quota policy, selection "
+              "and aggregation — rather than a hidden limitation. Not a duplicate of "
+              "GO-135 (`issues`, which also covers "
               "robots blocks, fetch failures and canonical conflicts) nor of CI-010 "
               "(`canonical_match`) — a page can be indexed with issues, or unindexed "
               "with a matching canonical, and both are pinned in the 0.26 tests.",
@@ -105,14 +112,16 @@ REVIEWED: dict[str, str] = {
               "so the item silently switched data source and awarded a critical PASS on "
               "a lab number for every site CrUX has no sample for. Now `field_cwv."
               "verdict`, a twin of SP-108.",
-    "IN-127": "FIXED (0.26). Was a defect: asserted checks.protocol_consistency.passed "
+    "IN-127": "FIXED (0.26; mixed-set false PASS fixed in 0.33). Was a defect: "
+              "asserted checks.protocol_consistency.passed "
               "— whether the hreflang set mixes http and https — which is worth "
               "checking and is not URL structure, so a site with every locale on "
               "`?lang=` passed. It now asserts checks.url_structure.passed, which reads "
               "each alternate against its own hreflang code and answers ccTLD, "
-              "subdomain, subdirectory, parameter, mixed, single or unmarked. The last "
-              "three carry no `passed` key, so a set whose URLs do not encode their "
-              "locale is NO_DATA rather than credited with a structure. Protocol "
+              "subdomain, subdirectory, parameter, mixed, single or unmarked. Parameter "
+              "and mixed carry `passed: False`; mixed names the conflicting URLs. Only "
+              "single and wholly unmarked sets carry no `passed` key, so they are "
+              "NO_DATA rather than credited with a structure. Protocol "
               "consistency is still computed and still counted in the severity tally; "
               "no item asserts it now.",
 
@@ -259,6 +268,7 @@ def main() -> int:
     # 2. Vocabulary — a heuristic, and the output is a reading list.
     print("\n== items whose assertion shares no vocabulary with their own title ==")
     unreviewed = []
+    firing = set()
     for item in items:
         check = item.get("check") or {}
         paths = assertion_paths(check.get("assert"))
@@ -268,6 +278,7 @@ def main() -> int:
         does = tokens(check["script"]) | {t for p in paths for t in tokens(p)}
         if claims & does:
             continue
+        firing.add(item["id"])
         ruling = REVIEWED.get(item["id"])
         mark = "reviewed" if ruling else "UNREVIEWED"
         print(f"  [{mark}] {item['id']} ({item['severity']}) {item['title']}")
@@ -279,6 +290,10 @@ def main() -> int:
 
     for item_id in unreviewed:
         failures.append(f"{item_id} asserts nothing its title mentions and nobody has ruled on it")
+
+    inert_rulings = sorted(set(REVIEWED) - firing)
+    print(f"\nInformational: {len(inert_rulings)} REVIEWED ruling(s) no longer fire: "
+          f"{', '.join(inert_rulings) if inert_rulings else 'none'}")
 
     total = len(items)
     print(f"\n{total} items · {len(duplicates)} duplicate group(s) · "

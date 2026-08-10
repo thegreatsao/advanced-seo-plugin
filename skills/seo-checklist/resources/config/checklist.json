@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "03fb71754eb2",
+  "registry_version": "27003b24ce60",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -117,7 +117,7 @@
       "plerdy_ref": 2,
       "category": "crawling_indexing",
       "category_label": "Crawling & Indexing",
-      "title": "Ensure Important Content Is Indexed",
+      "title": "Confirm Google Has Indexed the Audited URL",
       "severity": "high",
       "source": "script",
       "check": {
