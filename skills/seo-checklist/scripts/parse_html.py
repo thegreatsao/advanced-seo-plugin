@@ -125,12 +125,19 @@ def _structure_issues(soup) -> list[dict[str, Any]]:
                 "error", f"Heading hierarchy skips from H{previous} to H{current}",
                 evidence=text[:120]))
 
+    # `main` is the one landmark whose absence is always a markup defect: every
+    # page has main content, so not marking it is a page that failed to say where
+    # its content is.
     if not soup.find("main"):
         issues.append(issue("error", "No main landmark element found"))
-    if not soup.find("nav"):
-        issues.append(issue("warning", "No nav landmark element found"))
-    if not soup.find("footer"):
-        issues.append(issue("warning", "No footer landmark element found"))
+    # `nav` and `footer` are deliberately not checked for absence. A page with no
+    # navigation correctly has no `nav`, and a page with no footer content
+    # correctly has no `footer` — penalising that measures page design, not
+    # semantic markup, and "Use Hierarchical Headings and Semantic HTML" asks for
+    # the second. The honest version of the check would be structural rather than
+    # existential: a list of links in a header that is *not* inside a `nav`. That
+    # needs a reliable "this looks like navigation" test, which nothing here has,
+    # so the check says less rather than guessing.
     return issues
 
 

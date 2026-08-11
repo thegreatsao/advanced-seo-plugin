@@ -219,7 +219,7 @@ class ParseHtml(unittest.TestCase):
         self.assertIn("H1 to H3", out["issues"][0]["message"])
         self.assertEqual(verdict("CN-048", out), FAIL)
 
-    def test_cn_048_fails_without_main_and_warns_on_weaker_landmarks(self):
+    def test_cn_048_fails_a_page_that_never_marks_its_main_content(self):
         no_main = self.parse(
             "<html><body><nav>Site</nav><h1>Menu</h1><footer>Contact</footer>"
             "</body></html>")
@@ -227,16 +227,22 @@ class ParseHtml(unittest.TestCase):
                          ["error"])
         self.assertEqual(verdict("CN-048", no_main), FAIL)
 
-        for missing, html in (
-            ("nav", "<main><h1>Menu</h1></main><footer>Contact</footer>"),
-            ("footer", "<nav>Site</nav><main><h1>Menu</h1></main>"),
+    def test_cn_048_does_not_penalise_a_page_for_having_no_nav_or_footer(self):
+        """Absence of `nav` or `footer` is page design, not markup semantics.
+
+        Both were warnings when this item was rewritten, and that put the
+        exemplary fixture into WARN over a blog post with no footer — an
+        entirely ordinary page. `main` stays an error because every page has
+        main content, so failing to mark it is a real defect."""
+        for shape, html in (
+            ("no nav", "<main><h1>Menu</h1></main><footer>Contact</footer>"),
+            ("no footer", "<nav>Site</nav><main><h1>Menu</h1></main>"),
+            ("neither", "<main><h1>Menu</h1></main>"),
         ):
-            with self.subTest(missing=missing):
+            with self.subTest(shape=shape):
                 out = self.parse(f"<html><body>{html}</body></html>")
-                self.assertEqual([finding["severity"] for finding in out["issues"]],
-                                 ["warning"])
-                self.assertIn(missing, out["issues"][0]["message"])
-                self.assertEqual(verdict("CN-048", out), WARN)
+                self.assertEqual(out["issues"], [])
+                self.assertEqual(verdict("CN-048", out), PASS)
 
 
 class IndexabilityMatrix(unittest.TestCase):

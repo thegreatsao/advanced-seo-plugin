@@ -125,8 +125,8 @@
         "why": "the hand-written mobile render declares zero indistinct links"
       },
       "CN-048": {
-        "expect": "WARN",
-        "why": "'Use Hierarchical Headings and Semantic HTML' is satisfied on heading order and main landmarks, but several pages omit the weaker footer landmark"
+        "expect": "PASS",
+        "why": "'Use Hierarchical Headings and Semantic HTML' is satisfied: no page skips a heading level and every page marks its main content with <main>. A page with no footer is not less semantic, so its absence is not a finding"
       },
       "CN-051": {
         "expect": "PASS",
