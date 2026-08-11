@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "843026f5d5dd",
+  "registry_version": "95b74152fe4f",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -3731,15 +3731,18 @@
         "args": [
           "{url}"
         ],
-        "requires": "safe_browsing",
+        "requires": "api",
         "assert": {
-          "path": "safe_browsing.threats",
-          "len_eq": 0
+          "path": "whois.age_days",
+          "gte": 90
+        },
+        "warn": {
+          "path": "whois.age_days",
+          "lt": 90
         }
       },
       "effort": "low",
-      "fix": "Check the domain against Safe Browsing and review its registration history; set GOOGLE_SAFE_BROWSING_KEY so this can be answered",
-      "scores_with": "SE-114"
+      "fix": "A young domain is a fact to plan around, not a defect: expect slower trust accumulation and no quick ranking wins. Check a domain's registration history before buying it."
     },
     {
       "id": "TE-180",

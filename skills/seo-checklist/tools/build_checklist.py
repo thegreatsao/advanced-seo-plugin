@@ -184,7 +184,7 @@ REQUIRES = {
 DEFAULT_REQUIRES = "fetch"
 
 # A script-wide requirement is usually the honest one, but domain_safety_check.py
-# mixes ordinary network checks with one keyed third-party service. Only the four
+# mixes ordinary network checks with one keyed third-party service. Only the three
 # items whose assertions read Safe Browsing need that credential; uptime and server
 # neighbours must keep running without it.
 ITEM_REQUIRES = {
@@ -195,7 +195,6 @@ ITEM_REQUIRES = {
     "SE-114": "safe_browsing",
     "SE-116": "safe_browsing",
     "TE-171": "safe_browsing",
-    "TE-179": "safe_browsing",
 }
 
 # Empty evidence is not positive evidence. These two items share one video check and
@@ -731,6 +730,10 @@ item(113, "critical", S, "pagespeed.py", ["{url}", "--strategy", "mobile"],
      "LCP < 2.5s, INP < 200ms, CLS < 0.1")
 
 # --- 8. Security ------------------------------------------------------------
+# `threats`, not `matches`: `matches` is the key in Google's raw response and the
+# script never re-emits it under that name. `audit_assertions.py` caught the difference,
+# which is what it is for — and it is already in that tool's PATH_EXEMPT, since a field
+# that needs a key is absent from a keyless probe without being wrong.
 item(114, "critical", S, "domain_safety_check.py", PAGE,
      {"path": "safe_browsing.threats", "len_eq": 0},
      "Scan the site for malicious code via Safe Browsing")
@@ -994,28 +997,29 @@ item(177, "medium", S, "javascript_render_audit.py", PAGE,
 item(178, "low", S, "domain_safety_check.py", PAGE,
      {"path": "neighbors.suspicious", "len_eq": 0},
      "Audit neighboring sites on the same server IP")
+# 0.44 deliberately reverses 0.21's TE-179 ruling. That ruling correctly objected that
+# age is neither a full registration history nor reputation, and that a FAIL whose only
+# remedy is waiting pollutes a prioritised fix list. The decision changes because
+# reputation remains asserted three times by SE-114, SE-116 and TE-171 while no other
+# item measures even one domain-history fact; this scalar now costs only a WARN — half
+# of one low-severity point — rather than a FAIL.
+#
+# `lt 90` is the exact complement of `gte 90`, so FAIL is unreachable on purpose; no
+# gate checks numeric reachability, which makes that choice important to record here.
+# An absent age remains NO_DATA because the runner consults `warn` only after a false
+# assertion. Removing TE-179's per-item credential restores the script's `api` requires,
+# keeping whois unavailable on loopback and the item outside the fixture-decidable set.
+#
+# GO-134's `opportunity_section` remains the right precedent for a list of findings with
+# no item to attach to. Domain age is a single scalar with an item already named for it;
+# routing it to prose would leave that row asking for an unrelated Safe Browsing key while
+# a later section reported the age. The item should say what its own evidence measured.
 item(179, "low", S, "domain_safety_check.py", PAGE,
-     # This asserted `whois.age_days >= 90`, and a café whose domain was 58 days old
-     # failed it. Age is not history and it is not reputation: a new domain is not a
-     # defect, no work closes the item, and it resolves itself in a month while
-     # occupying a line in the fix list. A task nobody can do teaches the reader to
-     # skim the list.
-     #
-     # It was the case for inventing a status meaning "worth knowing but not
-     # actionable" — and the case dissolved on inspection. The item's own script
-     # already reports reputation; age was a proxy reached for because the real signal
-     # needs a key. Asserting the real signal makes the vocabulary sufficient again:
-     # a clean domain passes at any age, a listed one fails at any age, and with no
-     # `GOOGLE_SAFE_BROWSING_KEY` the field is absent, which is NO_DATA — "we could not
-     # look", which the registry has always been able to say.
-     # `threats`, not `matches`: `matches` is the key in Google's raw response and the
-     # script never re-emits it under that name. `audit_assertions.py` caught the
-     # difference, which is what it is for — and it is already in that tool's
-     # PATH_EXEMPT, since a field that needs a key is absent from a keyless probe
-     # without being wrong.
-     {"path": "safe_browsing.threats", "len_eq": 0},
-     "Check the domain against Safe Browsing and review its registration history; "
-     "set GOOGLE_SAFE_BROWSING_KEY so this can be answered")
+     {"path": "whois.age_days", "gte": 90},
+     "A young domain is a fact to plan around, not a defect: expect slower trust "
+     "accumulation and no quick ranking wins. Check a domain's registration history "
+     "before buying it.",
+     warn={"path": "whois.age_days", "lt": 90})
 item(180, "medium", S, "a11y_seo_checker.py", PAGE,
      {"path": "score", "gte": 80},
      "Meet WCAG accessibility basics")
@@ -1251,11 +1255,12 @@ SAME_CHECK = {
     "MD-189": "MB-097",   # modern formats — MD-189 medium, MB-097 medium, lower id
     "MD-190": "MB-102",   # video SEO (medium) over "Optimize Video for Mobile" (low)
     "TE-166": "MB-104",   # "Add a Favicon" / "Ensure Favicon Displays in Mobile SERPs"
-    # One Safe Browsing response, expressed four ways in the source checklists.
-    # All four read the same threats list. The critical pair ties on severity, so
-    # the lower id SE-114 carries the weight; the two remaining items are twins of
-    # that same primary, never a chain through SE-116.
-    "SE-114": ["SE-116", "TE-171", "TE-179"],
+    # One Safe Browsing response, expressed three ways in the source checklists.
+    # All three read the same threats list. The critical pair ties on severity, so
+    # the lower id SE-114 carries the weight; SE-116 and TE-171 are twins of that
+    # same primary, never a chain. TE-179 left this group in 0.44 to measure the
+    # otherwise-uncovered domain-history half of its title through whois age.
+    "SE-114": ["SE-116", "TE-171"],
     # Three entries for one measurement, and the registry asked the question three times
     # because the source checklists did. SP-108 *Pass Core Web Vitals (Field Data)* is the
     # one that says what it measures; SP-112 asks it again per device and SP-113 asks it

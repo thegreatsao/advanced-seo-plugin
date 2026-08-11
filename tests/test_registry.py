@@ -106,9 +106,10 @@ class RegistryShape(unittest.TestCase):
                     "domain_safety_check.py"}
         self.assertEqual({item_id for item_id, need in requires.items()
                           if need == "safe_browsing"},
-                         {"SE-114", "SE-116", "TE-171", "TE-179"})
+                         {"SE-114", "SE-116", "TE-171"})
         self.assertEqual(requires["TE-167"], "api")
         self.assertEqual(requires["TE-178"], "api")
+        self.assertEqual(requires["TE-179"], "api")
 
     def test_a_rule_does_more_than_name_a_path(self):
         """A rule of only {"path": ...} can never decide anything."""
@@ -1496,7 +1497,7 @@ class OneCheckCarriesWeightOnce(unittest.TestCase):
     def test_safe_browsing_is_one_flat_group(self):
         by_id = {item["id"]: item for item in ITEMS}
         self.assertIsNone(by_id["SE-114"].get("scores_with"))
-        for item_id in ("SE-116", "TE-171", "TE-179"):
+        for item_id in ("SE-116", "TE-171"):
             self.assertEqual(by_id[item_id].get("scores_with"), "SE-114")
             self.assertEqual(self.shape(by_id[item_id]), self.shape(by_id["SE-114"]))
 

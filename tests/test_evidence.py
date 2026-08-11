@@ -956,6 +956,52 @@ class DomainSafety(unittest.TestCase):
         self.assertEqual(verdict("SE-116", out), NO_DATA)
 
 
+class DomainHistory(unittest.TestCase):
+    """TE-179 reads its live whois-age rule, including the deliberate warn band."""
+
+    def setUp(self):
+        self.check = registry_rule("TE-179")
+
+    def test_an_established_domain_passes(self):
+        out = {"whois": {"checked": True, "age_days": 4000}}
+        self.assertEqual(verdict("TE-179", out), PASS)
+        self.assertIs(evaluate(self.check["assert"], out)[0], True)
+
+    def test_a_young_domain_warns_and_names_both_bands(self):
+        out = {"whois": {"checked": True, "age_days": 64}}
+        assert_ok, assert_evidence = evaluate(self.check["assert"], out)
+        warn_ok, warn_evidence = evaluate(self.check["warn"], out)
+        self.assertEqual(verdict("TE-179", out), WARN)
+        self.assertIs(assert_ok, False)
+        self.assertIs(warn_ok, True)
+        self.assertEqual(assert_evidence, "whois.age_days = 64 (want gte 90)")
+        self.assertEqual(warn_evidence, "whois.age_days = 64 (want lt 90)")
+
+    def test_ninety_days_is_inclusive_and_passes(self):
+        out = {"whois": {"checked": True, "age_days": 90}}
+        self.assertEqual(verdict("TE-179", out), PASS)
+        self.assertIs(evaluate(self.check["assert"], out)[0], True)
+
+    def test_an_unavailable_whois_binary_is_no_data(self):
+        out = {"whois": {"checked": False,
+                         "error": "whois binary not available"}}
+        self.assertEqual(verdict("TE-179", out), NO_DATA)
+        self.assertIsNone(evaluate(self.check["assert"], out)[0])
+        self.assertIsNone(evaluate(self.check["warn"], out)[0])
+
+    def test_fail_is_unreachable_because_the_warn_band_is_the_complement(self):
+        self.assertEqual(self.check["assert"],
+                         {"path": "whois.age_days", "gte": 90})
+        self.assertEqual(self.check["warn"],
+                         {"path": "whois.age_days", "lt": 90})
+        for age in (-1, 0, 64, 89.5, 90, 90.5, 4000):
+            out = {"whois": {"checked": True, "age_days": age}}
+            assert_ok = evaluate(self.check["assert"], out)[0]
+            warn_ok = evaluate(self.check["warn"], out)[0]
+            self.assertEqual({assert_ok, warn_ok}, {False, True}, age)
+            self.assertNotEqual(verdict("TE-179", out), FAIL, age)
+
+
 class ImageWeightAudit(unittest.TestCase):
     """MB-096 (`responsive_count`) and MB-097 (`modern_format_count`).
 

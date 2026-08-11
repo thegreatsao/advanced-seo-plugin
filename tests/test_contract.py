@@ -186,7 +186,7 @@ SAME_ON_BOTH = {
     "TE-175": "both fixtures are served by the same header-free http.server",
     "TE-170": "both fixtures are served by the same http.server: no cache headers, no gzip",
     "TE-167": "both fixtures are up; downtime is not something a fixture can show",
-    "TE-179": "the same server answers both, so response time does not differ",
+    "TE-179": "no loopback fixture host has a whois record, so neither side can be dated",
     "SP-109": "neither fixture loads a third-party script",
     "SP-110": "both fixtures block rendering on a stylesheet in the head",
     "TECH-002": "neither fixture loads a web font",
