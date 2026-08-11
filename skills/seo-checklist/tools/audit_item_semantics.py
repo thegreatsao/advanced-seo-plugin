@@ -63,9 +63,11 @@ REVIEWED: dict[str, str] = {
               "exposed. Two repairs: existence, and decide which check this is.",
     "CN-053": "DEFECT (0.20). Title and fix are about iframes; the assertion counts "
               "words (raw.word_count >= 300). Nothing in the item observes an iframe.",
-    "TE-179": "DEFECT (0.20). 'Domain history and reputation' is asserted as "
-              "whois.age_days >= 90. A new domain is not a reputation problem and no "
-              "work closes the item; it closes itself.",
+    "TE-179": "FIXED (0.44). The 0.21 objection was right that age is not reputation "
+              "and that waiting is not a fix. The repaired group makes that distinction: "
+              "SE-114, SE-116 and TE-171 assert reputation, while TE-179 measures the "
+              "otherwise-uncovered history half as whois.age_days >= 90. A younger "
+              "domain warns but can never fail, and an absent age remains NO_DATA.",
     "GO-134": "FIXED (0.23). A defect from 0.20: 'Resolve Search Console issues' read "
               "`opportunities` through a severity gate, so position 4.0 with 115 "
               "impressions printed as a high failure. An opportunity is not a defect at "

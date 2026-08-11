@@ -10,6 +10,31 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.44.0 — TE-179 measures domain history without calling youth a defect
+
+TE-179 now asserts `whois.age_days >= 90`: an established domain passes, a younger
+one warns, and a missing whois age remains `NO_DATA`. The `lt 90` warning band is the
+assertion's exact complement, so FAIL is deliberately unreachable. The item no longer
+needs a Safe Browsing credential; its script-level `api` requirement keeps it outside
+the loopback-fixture oracle.
+
+This explicitly reverses the TE-179 decision recorded in 0.21.0 without pretending
+that decision was wrong on its facts. Age is still not reputation, and an unfixable
+FAIL still does not belong in a prioritised fix list. The proposition is different:
+SE-114, SE-116 and TE-171 assert reputation through Safe Browsing three times, while
+none of the 215 items otherwise asserts domain history, and a WARN costs half of one
+`low` point rather than the whole point a FAIL would cost. The audited site's weighed
+score moves from 467.5/516 to 468.0/517, so its headline score stays 91.
+
+This does not add an informational status or disturb GO-134's opportunities section.
+Those opportunities are a list of findings with no item to attach to; domain age is a
+single scalar with a row already named for it, and that row is the clearest place to
+render the evidence.
+
+Registry `95b74152fe4f` replaces `843026f5d5dd`. The fixture oracle remains 98 matched,
+0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
+The 824-test baseline becomes 829.
+
 ## 0.43.0 — registry assertions measure the facts their titles name
 
 KW-071 now reads the emitted `contested_queries` count instead of the deleted

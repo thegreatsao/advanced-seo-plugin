@@ -336,6 +336,18 @@ rather than a repair, which is why it is last.
 > action closes and no better assertion captures — this decision should be reopened on
 > that item's evidence, not on the two above.
 
+> **0.44.0 takes neither horn for TE-179.** Ninety days still means ninety days, and
+> the item has not become informational — that status still does not exist. What
+> changed is the price: a domain younger than the threshold is a WARN worth half of one
+> `low` point rather than a FAIL worth all of it, while an absent whois age remains
+> `NO_DATA` and FAIL is unreachable by construction.
+>
+> The fact not on the table in 0.21.0 is coverage. SE-114, SE-116 and TE-171 assert the
+> reputation half three times over, while no other item among the 215 asserts domain
+> history. TE-179 now supplies that missing half without claiming age *is* reputation.
+> The repair remains answered: no new status was added, and this is a later pricing and
+> coverage decision about the same row, not a reopening of the roadmap entry.
+
 **No registry additions.** 214 stays 214, and may become fewer if the duplicate pairs
 merge. Everything here repairs, removes or reclassifies what is already there.
 

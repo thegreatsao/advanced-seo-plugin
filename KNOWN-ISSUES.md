@@ -902,6 +902,19 @@ name. A column called `url` would be read as "fix this page".
   go, only that where it goes is not a verdict. Reopen this on the evidence of an item
   that genuinely has nowhere to go — not on these two.
 
+  **0.44.0 reopened and re-answered the TE-179 half only.** The 0.21.0 objections remain
+  true: age is not reputation, and a young domain must not FAIL work that nobody can
+  perform. What was not on the table then is that SE-114, SE-116 and TE-171 already
+  assert reputation three times while no item asserts domain history. TE-179 therefore
+  returns to `whois.age_days >= 90` with its exact complement as a warning band: a young
+  domain WARNs at half of one `low` point, an older domain passes, an absent age is
+  `NO_DATA`, and FAIL is unreachable.
+
+  This is not a repeal of the general ruling and does not create a status meaning "worth
+  knowing but not actionable". GO-134's list of unattached findings still belongs in
+  prose outside the score, partition and fix list. Domain age is a scalar with an item
+  already named for it, so its evidence belongs on that row.
+
 - **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
   array without a `field` matches the whole serialised issue, URLs included, so
   GO-138's `404` matched the *port* of a test origin that bound 40455. The
