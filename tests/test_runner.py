@@ -918,6 +918,54 @@ class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
         self.assertIn("https://example.com/a", evidence)
         self.assertNotIn("values differ", evidence)
 
+    def test_issue_measurement_uses_the_same_severity_alias_as_the_verdict(self):
+        rule = {"path": "issues", "none_severity":
+                ["critical", "high", "medium"]}
+        data = {"issues": [{"severity": "warning", "message": "No local schema"}]}
+        self.assertFalse(evaluate(rule, data)[0])
+        measure = runner.measurement(rule, data)
+        self.assertEqual(measure["got"], 1)
+        self.assertEqual(measure["sample"], "No local schema")
+
+    def test_three_of_eight_issue_pages_keep_a_nonpassing_measure_and_sample(self):
+        clean = self._row(PASS, 0, ident="LO-200")
+        clean["measure"] = {"path": "issues", "op": "none_severity",
+                            "kind": "issues", "got": 0, "want": 0,
+                            "levels": ["critical", "high", "medium"]}
+        issue = self._row(WARN, 1, ident="LO-200", url="https://example.com/gallery")
+        issue["evidence"] = "1 issue(s) at medium: No LocalBusiness JSON-LD found"
+        issue["measure"] = {"path": "issues", "op": "none_severity",
+                            "kind": "issues", "got": 1, "want": 0,
+                            "levels": ["critical", "high", "medium"],
+                            "sample": "No LocalBusiness JSON-LD found"}
+        pages = [[dict(clean)] for _ in range(5)] + [[dict(issue)] for _ in range(3)]
+        out = aggregate_pages([clean], pages)[0]
+        self.assertEqual(out["status"], WARN)
+        self.assertEqual(out["measure"]["got"], 1)
+        self.assertIn("sample", out["measure"])
+        self.assertEqual(out["pages_matching"], 3)
+        self.assertFalse(runner.measure_contradicts_verdict(out))
+
+    def test_each_measure_kind_stays_attached_to_the_worst_page(self):
+        for kind, passing, failing in (
+                ("count", 0, 2), ("number", 0, 2),
+                ("matches", 0, 1), ("issues", 0, 1)):
+            with self.subTest(kind=kind):
+                primary = self._row(PASS, passing)
+                primary["measure"] = {"kind": kind, "op": "lte",
+                                      "got": passing, "want": 0}
+                bad = self._row(FAIL, failing)
+                bad["measure"] = {"kind": kind, "op": "lte",
+                                  "got": failing, "want": 0}
+                out = aggregate_pages(primary=[primary],
+                                      per_page=[[primary], [bad]])[0]
+                self.assertEqual(out["measure"]["got"], failing)
+                self.assertFalse(runner.measure_contradicts_verdict(out))
+
+    def test_a_nonpass_with_a_passing_measure_is_a_contradiction(self):
+        row = self._row(WARN, 0)
+        self.assertTrue(runner.measure_contradicts_verdict(row))
+
 
 class BrowserArtifacts(unittest.TestCase):
     """A trace is the only evidence in an audit that this process cannot re-take.
@@ -2070,6 +2118,110 @@ class LocalBusinessSubtypes(unittest.TestCase):
         accepting anything with "Business" in the name would not be."""
         self.assertEqual(self._nodes("SomeFutureBusinessType"), [])
 
+    def test_a_tourist_attraction_is_a_place_not_a_local_business(self):
+        self.assertEqual(self._nodes("TouristAttraction"), [])
+
+
+class EntityAddressesAndNap(unittest.TestCase):
+    def soup(self, body="", nodes=()):
+        from bs4 import BeautifulSoup
+        blocks = "".join(
+            f'<script type="application/ld+json">{json.dumps(node)}</script>'
+            for node in nodes)
+        return BeautifulSoup(f"<html><body>{body}{blocks}</body></html>",
+                             "html.parser")
+
+    def entities(self, body="", nodes=()):
+        from entity_checker import extract_entities_from_schema
+        return extract_entities_from_schema(self.soup(body, nodes))
+
+    def nap(self, body="", nodes=()):
+        from entity_checker import check_nap_consistency
+        soup = self.soup(body, nodes)
+        return check_nap_consistency(soup, self.entities(body, nodes))
+
+    def test_restaurant_in_a_graph_and_type_lists_are_entities(self):
+        nodes = ({"@graph": [
+            {"@type": "Restaurant", "name": "R"},
+            {"@type": ["Restaurant", "LocalBusiness"], "name": "L"},
+            {"@type": "Organization", "name": "O"},
+            {"@type": "WebSite", "name": "W"},
+        ]},)
+        found = self.entities(nodes=nodes)
+        self.assertEqual([row["type"] for row in found],
+                         ["Restaurant", "Restaurant", "Organization"])
+
+    def test_a_structured_address_visible_on_the_page_has_no_address_issue(self):
+        node = {"@type": "Restaurant", "name": "Acme Valley",
+                "telephone": "+370 600 00000",
+                "address": {"@type": "PostalAddress",
+                            "streetAddress": "Kaimynų gatvė 2, Rudiliai"}}
+        issues = self.nap("Kaimynų gatvė 2, Rudiliai +370 600 00000", (node,))
+        self.assertFalse([i for i in issues if "address" in i["finding"].lower()])
+
+    def test_a_schema_address_missing_from_visible_text_is_a_mismatch(self):
+        node = {"@type": "Restaurant", "name": "R",
+                "address": {"@type": "PostalAddress",
+                            "streetAddress": "Kaimynų gatvė 2"}}
+        findings = [i["finding"] for i in self.nap("Welcome", (node,))]
+        self.assertTrue(any("not visible" in finding.lower() for finding in findings))
+        self.assertFalse(any("no street address detected" in finding.lower()
+                             for finding in findings))
+
+    def test_no_structured_address_is_reported_as_undetermined(self):
+        node = {"@type": "LocalBusiness", "name": "R"}
+        findings = [i["finding"] for i in self.nap("Welcome", (node,))]
+        self.assertTrue(any("could not be determined" in finding.lower()
+                            for finding in findings))
+
+    def test_the_existing_english_shape_keeps_its_clean_address_verdict(self):
+        node = {"@type": "LocalBusiness", "name": "Cafe",
+                "address": {"@type": "PostalAddress",
+                            "streetAddress": "123 Main Street"}}
+        issues = self.nap("Visit Cafe at 123 Main Street", (node,))
+        self.assertFalse([i for i in issues if "address" in i["finding"].lower()])
+
+    def test_nap_reports_the_gvm_locality_disagreement_with_both_types(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Acme Valley",
+             "telephone": "+37060000000",
+             "address": {"@type": "PostalAddress",
+                         "streetAddress": "Kaimynų gatvė 2, Rudiliai",
+                         "addressLocality": "Molėtų r. sav.", "postalCode": "33171"}},
+            {"@type": "Organization", "name": "Acme Valley",
+             "telephone": "+37060000000",
+             "address": {"@type": "PostalAddress",
+                         "streetAddress": "Kaimynų g. 2, Rudiliai",
+                         "addressLocality": "Molėtų r.", "postalCode": "33171"}},
+        )
+        issues = self.nap("Kaimynų gatvė 2, Rudiliai Kaimynų g. 2, Rudiliai", nodes)
+        warning = next(i for i in issues if i["severity"] == "Warning"
+                       and "addressLocality" in i["finding"])
+        self.assertIn("Restaurant", warning["finding"])
+        self.assertIn("Organization", warning["finding"])
+        self.assertIn("Molėtų r. sav.", warning["finding"])
+        self.assertIn("Molėtų r.", warning["finding"])
+        self.assertFalse(any("streetAddress" in i["finding"] for i in issues))
+
+    def test_equal_and_single_entity_nap_have_no_disagreement(self):
+        node = {"@type": "Restaurant", "name": "R", "telephone": "12345678",
+                "address": {"@type": "PostalAddress",
+                            "streetAddress": "Kaimynų gatvė 2"}}
+        single = self.nap("Kaimynų gatvė 2 12345678", (node,))
+        double = self.nap("Kaimynų gatvė 2 12345678", (node, dict(node)))
+        self.assertFalse([i for i in single + double
+                          if i["severity"] == "Warning" and "differs" in i["finding"]])
+
+    def test_tourist_attraction_address_participates_in_nap_only(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "R",
+             "address": {"@type": "PostalAddress", "streetAddress": "One"}},
+            {"@type": "TouristAttraction", "name": "R",
+             "address": {"@type": "PostalAddress", "streetAddress": "Two"}},
+        )
+        issues = self.nap("One Two", nodes)
+        self.assertTrue(any("TouristAttraction" in i["finding"] for i in issues))
+
 
 class RenderedPageMeasurements(unittest.TestCase):
     """Five items came back from the LLM queue to being measured. The thing that
@@ -2365,6 +2517,69 @@ class ScriptFailureKind(unittest.TestCase):
     def test_a_missing_script_says_so(self):
         out = run_script("definitely_not_a_script.py", [])
         self.assertEqual(out["error_kind"], "missing")
+
+
+class EvidenceArtifact(unittest.TestCase):
+    """The compact run summary must be joinable to a complete evidence file."""
+
+    def test_the_parser_accepts_an_evidence_path(self):
+        args = runner.build_parser().parse_args(
+            ["https://example.com", "--evidence-json", "evidence.json"])
+        self.assertEqual(args.evidence_json, "evidence.json")
+
+    def test_successful_outputs_are_kept_under_the_same_keys_as_runs(self):
+        results = {
+            ("ok.py", ("ok.py", "https://example.com")):
+                {"summary": {"errors": 2}, "issues": ["a", "b"],
+                 "__elapsed__": 0.25},
+            ("broken.py", ("broken.py", "https://example.com")):
+                {"__elapsed__": 0.5, "__error__": "traceback",
+                 "__error_kind__": "crash"},
+        }
+        runs = runner.summarize_runs(results)
+        evidence = runner.evidence_runs(results)
+        self.assertEqual(set(evidence), set(runs))
+        self.assertEqual(evidence["ok.py https://example.com"]["issues"], ["a", "b"])
+        self.assertEqual(evidence["broken.py https://example.com"],
+                         runs["broken.py https://example.com"])
+
+    def test_an_evidence_file_is_redacted_and_written(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory, True)
+        path = os.path.join(directory, "evidence.json")
+        secret = "/tmp/credentials.json"
+        runner.write_evidence(path, {"x": {"credential": secret}}, (secret,))
+        with open(path, encoding="utf-8") as stream:
+            self.assertEqual(json.load(stream), {"x": {"credential": "<redacted>"}})
+
+
+class UnicodeMinHash(unittest.TestCase):
+    def setUp(self):
+        import site_crawl
+        self.crawl = site_crawl
+
+    def similarity(self, left, right):
+        return self.crawl.jaccard_from_minhash(
+            self.crawl.minhash_signature(self.crawl.shingle(left)),
+            self.crawl.minhash_signature(self.crawl.shingle(right)))
+
+    def test_different_russian_texts_are_not_near_duplicates(self):
+        left = "собирайте спелую чернику летом всей семьёй сегодня"
+        right = "покормите дружелюбных животных в контактном зоопарке сегодня"
+        self.assertLess(self.similarity(left, right), 0.85)
+
+    def test_the_same_russian_text_is_identical(self):
+        text = "собирайте спелую чернику летом всей семьёй сегодня"
+        self.assertEqual(self.similarity(text, text), 1.0)
+
+    def test_lithuanian_diacritics_stay_in_consecutive_shingles(self):
+        text = "mėlynės auga mūsų gražioje sodyboje prie ežero"
+        shingles = self.crawl.shingle(text)
+        self.assertIn("mėlynės auga mūsų gražioje sodyboje", shingles)
+
+    def test_wordless_texts_are_not_comparable(self):
+        self.assertEqual(self.crawl.shingle("!!!"), set())
+        self.assertEqual(self.similarity("!!!", "..."), 0.0)
 
 
 class OneFetchPerUrl(unittest.TestCase):

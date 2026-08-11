@@ -10,6 +10,58 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.37.0 — the second live audit keeps the evidence it exposed
+
+Runs can now write every evidence script's parsed output with `--evidence-json`;
+`checklist-results.json` names that file without embedding it, and a run that omits
+the flag says that its scalar measures are not the full evidence. Before this release,
+an owner receiving CI-017's two errors or MS-023's query count could not recover which
+errors or queries produced the verdict from the audit artifacts.
+
+MinHash shingles now use Python's Unicode word definition and empty text is explicitly
+not comparable. Russian pages about different subjects no longer become 100% duplicates
+because only their Latin-script footer survived, and Lithuanian diacritics no longer
+splice non-consecutive words together. The 0.85 threshold itself is unchanged.
+
+Entity and local-SEO checks now share one LocalBusiness subtype hierarchy and accept
+list-valued `@type`. A `Restaurant` is local; a `TouristAttraction` is a Place that may
+participate in NAP comparison but does not answer LocalBusiness questions. Structured
+`PostalAddress` comes before visible-text comparison, so non-English addresses are no
+longer declared absent by an English street-name regex. Multiple local schema nodes now
+surface normalized name, telephone and address disagreements, including the live-site
+`addressLocality` split that the old "NAP consistency" function never compared.
+
+Search Console brand spreads move out of the cannibalization failure count when the
+homepage owns the inferred brand, and hreflang alternates count as one logical page.
+Raw rank `spread` remains on each query but no longer carries a failing direction;
+close non-brand competition is reported separately as `contested_queries`. KW-071 is
+therefore `NO_DATA` until its keyword-overuse registry wording is reconciled with SERP
+evidence, recorded in KNOWN-ISSUES rather than hidden behind a backwards threshold.
+
+Sampled issue measures now apply the same severity aliases as their verdicts. The old
+report could put “No critical/high/medium issues reported” beside a WARN whose evidence
+named exactly such an issue; it now carries the issue count and sample from that same
+worst page. A runtime guard refuses every sampled WARN/FAIL whose rendered measure says
+the assertion passed, across `issues`, `count`, `number` and `matches` measures.
+
+The exact Task 9 rerun changes MS-023 FAIL -> WARN: 11 reported splits become
+three after seven owned brand spreads move aside and locale alternates collapse.
+KW-071 changes FAIL -> NO_DATA because its unchanged registry path no longer exists.
+Eleven PASS model answers and one WARN model answer from the saved 11 August artifact
+return to LLM_PENDING because the required runner command queues no model review; those
+twelve movements are missing inputs, not evidence repairs. No other status changes.
+
+The raw comparison moves 87/100 at 67% (550/826 weight) to 88/100 at 62%
+(510/826). Coverage does not rise. The only old near-duplicate pair,
+`/ru/blueberries` against `/ru/petting-zoo`, moves from 1.0 to 0.1 and is the only
+pair crossing 0.85; the threshold stays 0.85. `checklist-results.json` is 157,758
+bytes and the complete `checklist-evidence.json` is 305,195 bytes. The evidence file
+is larger by design and is not trimmed: the old, smaller result could not identify
+the errors, queries, duplicate pair or NAP findings behind its scalar counts.
+
+Registry `07e64f9c9fc6` is unchanged: no checklist item, title, threshold or assertion
+was edited. Every regression was observed failing against 8d47729 before its repair.
+
 ## 0.36.0 — the default locale's whole unprefixed route tree
 
 IN-127 changes FAIL -> PASS for every site whose default locale is unprefixed while

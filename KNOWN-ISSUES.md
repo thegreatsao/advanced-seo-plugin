@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.28.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.37.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -357,6 +357,19 @@ verdict without carrying its address, and a site-level check has no single page 
 name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
+
+- **KW-071 asks about keyword overuse, while its evidence measures SERP competition.**
+  `gsc_cannibalization.py` now reports close non-branded competition honestly as
+  `summary.contested_queries` and retains each query's raw position `spread`. A wide
+  spread is not treated as ambiguity: position 1.5 beside 11.2 shows a winner, while
+  1.2 beside 1.4 is the unsettled shape.
+
+  The registry still points KW-071 at the removed directional `worst_spread`, so the
+  item reports `NO_DATA` in 0.37.0 instead of manufacturing a keyword-overuse verdict
+  from rank distance. Repointing or retitling it changes the audit contract and
+  `registry_version`; this release deliberately does neither. The open decision is
+  whether KW-071 should become the close-competition assertion or move to evidence
+  that actually measures duplicated or overused copy.
 
 - **Closed in 0.36.0: the default locale's whole unprefixed route tree is compatible
   with a subdirectory scheme.** The 0.35.0 repair accepted only the root: `example.lt/`

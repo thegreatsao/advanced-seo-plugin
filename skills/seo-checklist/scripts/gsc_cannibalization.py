@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import sys
+import unicodedata
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -28,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from gsc_checker import build_service
+    from hreflang_checker import locale_page_key, run_hreflang_check
 except ImportError:
     print("Error: gsc_checker.py must be importable from the same directory")
     sys.exit(1)
@@ -44,6 +46,10 @@ MIN_IMPRESSIONS = 10       # below this, page-splitting is noise, not a pattern
 # basis: inherited — present at import, and definitional rather than calibratable: one
 #  page cannot compete with itself
 MIN_PAGES = 2
+# basis: convention — two results within three average-position places are close
+# enough that the number alone cannot identify a settled winner. This reuses the
+# former registry band without claiming that a wider raw spread is worse.
+CONTESTED_POSITION_BAND = 3.0
 
 
 def fetch_query_page_rows(service, site_url: str, days: int):
@@ -68,31 +74,82 @@ def fetch_query_page_rows(service, site_url: str, days: int):
     return rows, start.isoformat(), end.isoformat()
 
 
-def find_cannibalization(rows: list) -> list:
+def _group_locale_pages(hits: list, alternate_urls: list[str]) -> list:
+    grouped = {}
+    for hit in hits:
+        key = locale_page_key(hit["page"], alternate_urls)
+        grouped.setdefault(key, []).append(hit)
+    pages = []
+    for members in grouped.values():
+        representative = max(members, key=lambda row: row["impressions"])
+        impressions = sum(row["impressions"] for row in members)
+        weighted = sum(row["position"] * row["impressions"] for row in members
+                       if row["position"])
+        positioned = sum(row["impressions"] for row in members if row["position"])
+        pages.append({
+            "page": representative["page"],
+            "clicks": sum(row["clicks"] for row in members),
+            "impressions": impressions,
+            "position": round(weighted / positioned, 1) if positioned else 0,
+            "alternates": sorted({row["page"] for row in members}),
+        })
+    return sorted(pages, key=lambda page: -page["impressions"])
+
+
+def find_query_spreads(rows: list, alternate_urls: list[str] | None = None) -> list:
     by_query: dict = {}
     for r in rows:
         by_query.setdefault(r["query"], []).append(r)
 
     out = []
     for query, hits in by_query.items():
-        pages = [h for h in hits if h["impressions"] >= MIN_IMPRESSIONS]
-        if len(pages) < MIN_PAGES:
+        eligible = [hit for hit in hits if hit["impressions"] >= MIN_IMPRESSIONS]
+        if len(eligible) < MIN_PAGES:
             continue
-        pages.sort(key=lambda p: -p["impressions"])
+        pages = _group_locale_pages(eligible, alternate_urls or [])
         positions = [p["position"] for p in pages if p["position"]]
         out.append({
             "query": query,
-            "pages": [{"page": p["page"], "clicks": p["clicks"],
-                       "impressions": p["impressions"], "position": p["position"]}
-                      for p in pages[:5]],
+            "pages": pages[:5],
             "page_count": len(pages),
             "clicks": sum(p["clicks"] for p in pages),
             "impressions": sum(p["impressions"] for p in pages),
-            # A wide spread means Google is undecided across very different ranks.
+            # Raw distance between the best and worst logical page positions. A
+            # wide value means one page outranks another; it does not by itself
+            # mean Google is undecided or that keyword copy is duplicated.
             "spread": round(max(positions) - min(positions), 1) if len(positions) > 1 else 0,
+            "positions_compared": len(positions),
         })
     out.sort(key=lambda c: (-c["impressions"], -c["spread"]))
     return out
+
+
+def find_cannibalization(rows: list, alternate_urls: list[str] | None = None) -> list:
+    """Return query spreads that still contain at least two logical pages."""
+    return [row for row in find_query_spreads(rows, alternate_urls)
+            if row["page_count"] >= MIN_PAGES]
+
+
+def _brand_form(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return "".join(char for char in decomposed
+                   if char.isalnum() and not unicodedata.combining(char))
+
+
+def is_branded_query(query: str, brand_query: str) -> bool:
+    """Match case, diacritic and spacing variants, including longer brand queries."""
+    query_form, brand_form = _brand_form(query), _brand_form(brand_query)
+    if not query_form or not brand_form:
+        return False
+    if brand_form in query_form:
+        return True
+    brand_words = [_brand_form(word) for word in str(brand_query).split()]
+    brand_words = [word for word in brand_words if word]
+    if len(brand_words) >= 2 and "".join(brand_words[:2]) in query_form:
+        return True
+    # The inferred brand often includes a location suffix. Preserve a substantial
+    # shorter form such as "acme valley" / "acmevalley" as the same brand.
+    return query_form in brand_form and len(query_form) >= max(5, len(brand_form) // 2)
 
 
 def find_branded(rows: list, site_url: str) -> dict:
@@ -117,12 +174,26 @@ def find_branded(rows: list, site_url: str) -> dict:
     }
 
 
-def analyze(site_url: str, credentials: str, days: int) -> dict:
+def hreflang_alternates(site_url: str) -> list[str]:
+    """Read locale alternates with the same parser as the hreflang audit."""
+    homepage = (site_url.replace("sc-domain:", "https://", 1)
+                if site_url.startswith("sc-domain:") else site_url)
+    try:
+        report = run_hreflang_check(homepage)
+    except Exception:
+        return []
+    return [tag["url"] for tag in report.get("tags", []) if tag.get("url")]
+
+
+def analyze(site_url: str, credentials: str, days: int,
+            alternate_urls: list[str] | None = None) -> dict:
     result = {
         "property": site_url,
         "period": {"start": None, "end": None},
         "queries_analyzed": 0,
         "cannibalized": [],
+        "branded_spread": [],
+        "contested": [],
         "branded": {},
         # Empty, not `{"cannibalized_queries": None, …}`. `eq` and `truthy` read a
         # None as a *failing value* rather than as silence, so pre-seeding the keys
@@ -147,11 +218,29 @@ def analyze(site_url: str, credentials: str, days: int) -> dict:
 
     result["period"] = {"start": start, "end": end}
     result["queries_analyzed"] = len({r["query"] for r in rows})
-    result["cannibalized"] = find_cannibalization(rows)[:25]
     result["branded"] = find_branded(rows, site_url)
+    spreads = find_query_spreads(rows, alternate_urls)
+    brand = result["branded"]
+    owns_brand = bool(brand.get("checked") and brand.get("owns_homepage"))
+    if owns_brand:
+        result["branded_spread"] = [
+            spread for spread in spreads
+            if is_branded_query(spread["query"], brand.get("query", ""))
+        ][:25]
+    result["cannibalized"] = [
+        spread for spread in spreads
+        if spread["page_count"] >= MIN_PAGES
+        and not (owns_brand
+                 and is_branded_query(spread["query"], brand.get("query", "")))
+    ][:25]
+    result["contested"] = [
+        spread for spread in result["cannibalized"]
+        if spread["positions_compared"] >= MIN_PAGES
+        and spread["spread"] <= CONTESTED_POSITION_BAND
+    ]
     result["summary"] = {
         "cannibalized_queries": len(result["cannibalized"]),
-        "worst_spread": max((c["spread"] for c in result["cannibalized"]), default=0),
+        "contested_queries": len(result["contested"]),
     }
 
     for c in result["cannibalized"][:10]:
@@ -190,7 +279,8 @@ def main():
              or os.environ.get("GV_SA_KEY")
              or os.path.expanduser("~/.config/gcloud/gsc-service-account.json"))
 
-    result = analyze(args.site_url, creds, args.days)
+    result = analyze(args.site_url, creds, args.days,
+                     alternate_urls=hreflang_alternates(args.site_url))
 
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))

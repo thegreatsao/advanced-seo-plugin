@@ -16,7 +16,9 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 import urllib.parse
+from itertools import combinations
 from urllib.parse import urlparse
 
 try:
@@ -26,9 +28,13 @@ except ImportError:
     sys.exit(1)
 
 try:
+    from lib.schema_types import (LOCAL_BUSINESS_TYPES, is_local_business_type,
+                                  schema_types)
     from lib.safe_http import safe_get, safe_head
     from seo_common import fetch_html
 except ImportError:
+    from scripts.lib.schema_types import (LOCAL_BUSINESS_TYPES,
+                                          is_local_business_type, schema_types)
     from scripts.lib.safe_http import safe_get, safe_head
     from scripts.seo_common import fetch_html
 
@@ -45,6 +51,14 @@ SAMEAS_PLATFORMS = {
     "facebook.com": {"name": "Facebook", "priority": "Low", "kg_signal": "Weak"},
     "instagram.com": {"name": "Instagram", "priority": "Low", "kg_signal": "Weak"},
 }
+
+ORGANIZATION_TYPES = frozenset({
+    "Organization", "Corporation", "MedicalOrganization",
+    "EducationalOrganization", "GovernmentOrganization",
+})
+PLACE_TYPES = frozenset({"Place", "TouristAttraction"})
+ENTITY_TYPES = (LOCAL_BUSINESS_TYPES | ORGANIZATION_TYPES | PLACE_TYPES
+                | {"Person", "Brand"})
 
 
 # ---------------------------------------------------------------------------
@@ -73,19 +87,21 @@ def extract_entities_from_schema(soup: BeautifulSoup) -> list:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            schema_type = item.get("@type", "")
-            # Look for entity types
-            if schema_type in ("Organization", "Person", "Corporation",
-                               "LocalBusiness", "Brand", "MedicalOrganization",
-                               "EducationalOrganization", "GovernmentOrganization"):
+            types = schema_types(item.get("@type"))
+            matched = next((schema_type for schema_type in types
+                            if schema_type in ENTITY_TYPES), "")
+            if matched:
                 entities.append({
-                    "type": schema_type,
+                    "type": matched,
+                    "types": types,
                     "name": item.get("name", ""),
                     "url": item.get("url", ""),
                     "sameAs": item.get("sameAs", []),
                     "logo": item.get("logo", ""),
                     "description": item.get("description", ""),
                     "identifier": item.get("identifier", ""),
+                    "telephone": item.get("telephone", ""),
+                    "address": item.get("address"),
                 })
 
     return entities
@@ -269,47 +285,117 @@ def check_google_knowledge_graph(entity_name: str, api_key: str = "") -> dict:
 # NAP consistency check
 # ---------------------------------------------------------------------------
 
+def _visible_form(value: str) -> str:
+    """Normalize Unicode, case and whitespace for a visible-text comparison."""
+    return re.sub(r"\s+", " ",
+                  unicodedata.normalize("NFKC", str(value)).casefold()).strip()
+
+
+def _nap_form(value) -> str:
+    """Normalize NAP values, including Lithuanian g. as gatvė."""
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    text = re.sub(r"\bg\s*\.", " gatvė ", text)
+    return re.sub(r"[^\w]+", " ", text, flags=re.UNICODE).strip()
+
+
+def _postal_address(entity: dict) -> dict:
+    address = entity.get("address")
+    if not isinstance(address, dict):
+        return {}
+    types = schema_types(address.get("@type"))
+    street = str(address.get("streetAddress") or "").strip()
+    return address if "PostalAddress" in types and street else {}
+
+
+def _nap_entities(entities: list) -> list:
+    """Organizations, local businesses and Places can state local NAP facts."""
+    out = []
+    for entity in entities:
+        types = schema_types(entity.get("types") or entity.get("type"))
+        if (is_local_business_type(types)
+                or ORGANIZATION_TYPES.intersection(types)
+                or PLACE_TYPES.intersection(types)):
+            out.append(entity)
+    return out
+
+
+def _nap_disagreements(entities: list) -> list:
+    issues = []
+    address_fields = ("streetAddress", "addressLocality", "addressRegion",
+                      "postalCode", "addressCountry")
+    for left, right in combinations(entities, 2):
+        comparisons = [("name", left.get("name"), right.get("name")),
+                       ("telephone", left.get("telephone"), right.get("telephone"))]
+        left_address, right_address = left.get("address"), right.get("address")
+        if isinstance(left_address, dict) and isinstance(right_address, dict):
+            comparisons.extend((field, left_address.get(field), right_address.get(field))
+                               for field in address_fields)
+        for field, left_value, right_value in comparisons:
+            if not str(left_value or "").strip() or not str(right_value or "").strip():
+                continue
+            if _nap_form(left_value) == _nap_form(right_value):
+                continue
+            issues.append({
+                "severity": "Warning",
+                "finding": (f"NAP {field} differs between {left['type']} "
+                            f"('{left_value}') and {right['type']} ('{right_value}')."),
+                "fix": "Use one normalized business value across every local schema node.",
+            })
+    return issues
+
+
 def check_nap_consistency(soup: BeautifulSoup, entities: list) -> list:
     """Check Name/Address/Phone consistency signals on the page."""
     issues = []
-
-    # Look for structured LocalBusiness / Organization
-    local_entities = [e for e in entities if e["type"] in ("LocalBusiness", "Organization")]
-
+    local_entities = _nap_entities(entities)
     if not local_entities:
         return []
 
     for entity in local_entities:
-        name = entity.get("name", "")
-        if not name:
+        if not entity.get("name"):
             issues.append({
                 "severity": "Warning",
                 "finding": f"{entity['type']} schema is missing 'name' property.",
                 "fix": "Add the exact business name to the schema.",
             })
 
-    # Check for visible phone/address on page
+    issues.extend(_nap_disagreements(local_entities))
+
     page_text = soup.get_text(separator=" ")
     has_phone = bool(re.search(r"[\+]?[\d\-\(\)\s]{7,15}", page_text))
-    has_address = bool(re.search(r"\d{1,5}\s+\w+\s+(street|st|avenue|ave|road|rd|blvd|drive|dr|lane|ln)", page_text, re.I))
-
-    if not has_phone and local_entities:
+    if not has_phone:
         issues.append({
             "severity": "Info",
             "finding": "No phone number detected on page for LocalBusiness entity.",
             "fix": "Display phone number visibly and include 'telephone' in LocalBusiness schema.",
         })
-    # The address half of "check for visible phone/address" was computed and then
-    # thrown away, so half this function did nothing. Found by putting a linter in
-    # CI, which is the argument for having one: a NAP block missing its A is the
-    # same defect as one missing its P, and only the P was ever reported.
-    if not has_address and local_entities:
+
+    addresses = [(entity, _postal_address(entity)) for entity in local_entities]
+    addresses = [(entity, address) for entity, address in addresses if address]
+    if not addresses:
         issues.append({
             "severity": "Info",
-            "finding": "No street address detected on page for LocalBusiness entity.",
-            "fix": "Display the street address visibly and include 'address' "
-                   "(PostalAddress) in LocalBusiness schema.",
+            "finding": ("Street address could not be determined: no local entity "
+                        "provides a PostalAddress with streetAddress."),
+            "fix": ("Add a PostalAddress with streetAddress to the local entity; "
+                    "that structured value will settle whether an address exists."),
         })
+    else:
+        visible = _visible_form(page_text)
+        seen = set()
+        for entity, address in addresses:
+            street = str(address["streetAddress"]).strip()
+            key = (entity["type"], _visible_form(street))
+            if key in seen:
+                continue
+            seen.add(key)
+            if _visible_form(street) not in visible:
+                issues.append({
+                    "severity": "Info",
+                    "finding": (f"Schema streetAddress '{street}' on {entity['type']} "
+                                "is not visible in the page text."),
+                    "fix": "Display the schema streetAddress visibly on the page.",
+                })
 
     return issues
 

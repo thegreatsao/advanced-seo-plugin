@@ -17,11 +17,36 @@ from checklist_report import (  # noqa: E402
     FAIL, FIX_STATUSES, LLM_PENDING, MANUAL, NA, NEEDS_INPUT, NO_DATA, PASS,
     STATUS_ICON, STATUS_ORDER, WARN, Lang, apply_llm_review,
     fix_rows, history_section, merge_llm_answers, merge_manual_answers,
-    priority_of, provenance_line, render_html,
+    phrase_measure, priority_of, provenance_line, render_html,
     render_llm_queue, render_markdown, write_fixes,
 )
 
 I18N = os.path.join(SKILL, "resources", "i18n")
+
+
+class IssueMeasurePhrasing(unittest.TestCase):
+    def row(self, got, sample=""):
+        measure = {"kind": "issues", "op": "none_severity", "got": got,
+                   "want": 0, "levels": ["critical", "high", "medium"]}
+        if sample:
+            measure["sample"] = sample
+        return item("LO-200", WARN if got else PASS, measure=measure)
+
+    def test_an_issue_names_the_problem_instead_of_its_absence(self):
+        text = phrase_measure(self.row(1, "No LocalBusiness JSON-LD found"))
+        self.assertIn("1 critical/high/medium issue", text)
+        self.assertIn("No LocalBusiness JSON-LD found", text)
+        self.assertNotIn("No critical/high/medium issues", text)
+
+    def test_a_clean_site_still_reports_no_issues(self):
+        self.assertEqual(phrase_measure(self.row(0)),
+                         "No critical/high/medium issues reported.")
+
+    def test_russian_selects_the_issue_and_no_issue_strings_correctly(self):
+        issue_text = phrase_measure(self.row(1, "Нет LocalBusiness"), Lang("ru"))
+        clean_text = phrase_measure(self.row(0), Lang("ru"))
+        self.assertIn("Проблем уровня critical/high/medium: 1", issue_text)
+        self.assertIn("Проблем уровня critical/high/medium не найдено", clean_text)
 
 
 def item(item_id, status, **extra):

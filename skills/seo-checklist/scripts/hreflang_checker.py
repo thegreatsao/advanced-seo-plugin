@@ -152,6 +152,38 @@ def extract_hreflang_from_http_headers(url: str) -> list[dict]:
     return tags
 
 
+def locale_page_key(url: str, alternate_urls: list[str]) -> tuple:
+    """Group a URL with locale alternates learned from hreflang declarations.
+
+    Exact alternates form one group even across domains. For other routes on the
+    same host, remove only a first path segment observed on a root-level alternate;
+    this derives `/en/`-style locale prefixes from markup rather than maintaining a
+    language-code path heuristic here.
+    """
+    def normalized(value: str) -> tuple:
+        parsed = urlparse(value)
+        path = parsed.path.rstrip("/") or "/"
+        return (parsed.scheme.lower(), parsed.netloc.lower(), path,
+                parsed.params, parsed.query)
+
+    target = normalized(url)
+    alternates = {normalized(value) for value in alternate_urls if value}
+    if target in alternates:
+        return ("hreflang", tuple(sorted(alternates)))
+
+    prefixes_by_host: dict[str, set[str]] = {}
+    for _scheme, host, path, _params, _query in alternates:
+        parts = [part for part in path.split("/") if part]
+        if len(parts) == 1:
+            prefixes_by_host.setdefault(host, set()).add(parts[0])
+
+    scheme, host, path, params, query = target
+    parts = [part for part in path.split("/") if part]
+    if parts and parts[0] in prefixes_by_host.get(host, set()):
+        parts = parts[1:]
+    return (scheme, host, "/" + "/".join(parts) if parts else "/", params, query)
+
+
 def check_sitemap_hreflang(base_url: str) -> dict:
     """Check /sitemap.xml for xhtml:link hreflang attributes."""
     parsed = urlparse(base_url)

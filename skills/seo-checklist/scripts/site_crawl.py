@@ -121,19 +121,21 @@ def exact_hash(text: str) -> str:
 
 
 def shingle(text: str, k: int = SHINGLE_WORDS) -> set:
-    words = re.findall(r"\b[a-z]+\b", (text or "").lower())
+    words = re.findall(r"\b\w+\b", (text or "").lower())
     if len(words) < k:
-        return {" ".join(words)}
+        return set()
     return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
 
 
 def minhash_signature(shingles: set, num_hashes: int = MINHASH_FUNCTIONS) -> list:
     """MinHash signature: the comparable form of a page's text.
 
-    Kept verbatim from `duplicate_content.py` rather than improved, because the
-    similarity threshold that reads it (0.85) was calibrated against these values
-    and a faster hash would move every near-duplicate verdict by an unknown amount.
+    The 0.85 similarity threshold was originally calibrated against ASCII-only
+    shingles of English fixtures. Keep the hash construction stable while using
+    the Unicode word population measured in 0.37.0.
     """
+    if not shingles:
+        return []
     sig = []
     for i in range(num_hashes):
         min_hash = float("inf")
@@ -147,6 +149,9 @@ def minhash_signature(shingles: set, num_hashes: int = MINHASH_FUNCTIONS) -> lis
 
 def jaccard_from_minhash(sig1: list, sig2: list) -> float:
     """Estimate Jaccard similarity from two MinHash signatures.
+
+    Return 0.0 when either signature is empty: the pair is not comparable, and
+    must not be reported as identical.
 
     `strict=True` because the estimate is only valid over signatures of the same
     length: `zip` stops at the shorter one while the denominator stays `len(sig1)`,

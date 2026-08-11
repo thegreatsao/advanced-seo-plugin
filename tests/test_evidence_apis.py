@@ -319,9 +319,10 @@ class Cannibalization(unittest.TestCase):
                  "ctr": 0.05, "position": position}
                 for keys, clicks, impressions, position in triples]
 
-    def analyze(self, rows):
+    def analyze(self, rows, alternate_urls=None):
         self.mod.build_service = lambda *a, **k: _Query(rows=rows)
-        return self.mod.analyze("https://example.com/", "/dev/null", 90)
+        return self.mod.analyze("https://example.com/", "/dev/null", 90,
+                                alternate_urls=alternate_urls)
 
     def items_for(self):
         return [i for i in ITEMS.values()
@@ -335,7 +336,7 @@ class Cannibalization(unittest.TestCase):
         ]))
         self.assertEqual(out["cannibalized"], [])
         self.assertEqual(verdicts(self.items_for(), out),
-                         {"GO-139": PASS, "KW-070": PASS, "KW-071": PASS,
+                         {"GO-139": PASS, "KW-070": PASS, "KW-071": NO_DATA,
                           "MS-023": PASS})
 
     def test_two_urls_ranking_for_one_query_are_found(self):
@@ -351,12 +352,58 @@ class Cannibalization(unittest.TestCase):
         self.assertGreaterEqual(found["page_count"], 2)
         self.assertGreaterEqual(len(found["pages"]), 2)
         # Pinned per item rather than "something failed": which one fails is the
-        # content of the check. KW-071 reads the spread and fails it; MS-023 counts
-        # cannibalised queries and warns at one; the two branded items are about
-        # whether the site owns its own name, which this fixture does not disturb.
+        # content of the check. KW-071's registry claim is deliberately unanswered:
+        # raw spread has no failing direction, and repointing the registry is a
+        # separate contract change. MS-023 still counts genuine split queries.
         self.assertEqual(verdicts(self.items_for(), out),
-                         {"GO-139": PASS, "KW-070": PASS, "KW-071": FAIL,
+                         {"GO-139": PASS, "KW-070": PASS, "KW-071": NO_DATA,
                           "MS-023": WARN})
+
+    def test_an_owned_brand_and_its_variants_move_to_branded_spread(self):
+        out = self.analyze(self.rows([
+            (("acme valley riverside", "https://example.com/"), 400, 2000, 1.2),
+            (("acme valley riverside", "https://example.com/menu"), 30, 500, 1.4),
+            (("acme valley riversidė", "https://example.com/"), 90, 600, 1.1),
+            (("acme valley riversidė", "https://example.com/gallery"), 10, 100, 2.0),
+            (("acmevalley reviews", "https://example.com/"), 50, 400, 1.3),
+            (("acmevalley reviews", "https://example.com/reviews"), 8, 80, 4.0),
+        ]))
+        self.assertEqual(out["cannibalized"], [])
+        self.assertEqual({row["query"] for row in out["branded_spread"]},
+                         {"acme valley riverside", "acme valley riversidė",
+                          "acmevalley reviews"})
+        self.assertEqual(out["summary"]["contested_queries"], 0)
+
+    def test_a_brand_the_homepage_does_not_own_still_cannibalizes(self):
+        out = self.analyze(self.rows([
+            (("acme valley", "https://example.com/other"), 400, 2000, 1.2),
+            (("acme valley", "https://example.com/"), 30, 500, 2.0),
+        ]))
+        self.assertFalse(out["branded"]["owns_homepage"])
+        self.assertEqual([row["query"] for row in out["cannibalized"]],
+                         ["acme valley"])
+
+    def test_hreflang_alternates_count_as_one_logical_page(self):
+        out = self.analyze(self.rows([
+            (("acme valley", "https://example.com/"), 400, 2000, 1.2),
+            (("acme valley", "https://example.com/en/"), 30, 500, 1.4),
+            (("acme valley", "https://example.com/ru/"), 20, 300, 1.5),
+        ]), alternate_urls=["https://example.com/", "https://example.com/en/",
+                            "https://example.com/ru/"])
+        self.assertEqual(out["cannibalized"], [])
+        self.assertEqual(out["branded_spread"][0]["page_count"], 1)
+
+    def test_close_nonbrand_competition_is_contested_but_a_wide_spread_is_not(self):
+        out = self.analyze(self.rows([
+            (("fixture bakery", "https://example.com/"), 500, 3000, 1.0),
+            (("close query", "https://example.com/a"), 40, 500, 1.2),
+            (("close query", "https://example.com/b"), 30, 400, 1.4),
+            (("wide query", "https://example.com/a"), 20, 300, 1.5),
+            (("wide query", "https://example.com/c"), 10, 200, 11.2),
+        ]))
+        self.assertEqual(out["summary"]["contested_queries"], 1)
+        self.assertEqual([row["query"] for row in out["contested"]], ["close query"])
+        self.assertNotIn("worst_spread", out["summary"])
 
     def test_no_credentials_is_undecided_and_says_so(self):
         """Not an empty history. A property nobody could open and a property with no

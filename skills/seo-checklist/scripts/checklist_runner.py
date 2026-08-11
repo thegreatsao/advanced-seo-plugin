@@ -782,10 +782,12 @@ def measurement(rule: dict, data: dict) -> dict:
         if hits:
             out["sample"] = hits[0][:160]
     elif op == "none_severity":
-        levels = {str(lvl).lower() for lvl in rule["none_severity"]}
+        levels = {SEVERITY_ALIAS.get(str(lvl).lower(), str(lvl).lower())
+                  for lvl in rule["none_severity"]}
         hits = [it for it in (value if isinstance(value, list) else [])
                 if isinstance(it, dict)
-                and str(it.get("severity", "")).lower() in levels]
+                and SEVERITY_ALIAS.get(str(it.get("severity", "")).lower(),
+                                       str(it.get("severity", "")).lower()) in levels]
         out["got"] = len(hits)
         out["want"] = 0
         out["kind"] = "issues"
@@ -813,6 +815,43 @@ def measurement(rule: dict, data: dict) -> dict:
         out["got"] = str(value)[:160]
         out["kind"] = "value"
     return out
+
+
+def measure_reports_pass(measure: dict) -> bool | None:
+    """Read whether a rendered measure is a passing assertion, when decidable."""
+    if not measure or measure.get("missing") or "got" not in measure:
+        return None
+    got, want, op = measure.get("got"), measure.get("want"), measure.get("op")
+    try:
+        if op in ("eq", "len_eq"):
+            return got == want
+        if op in ("ne",):
+            return got != want
+        if op in ("lte", "len_lte", "count_matching_lte"):
+            return got <= want
+        if op in ("lt",):
+            return got < want
+        if op in ("gte", "len_gte"):
+            return got >= want
+        if op in ("gt",):
+            return got > want
+        if op in ("between", "len_between"):
+            return want[0] <= got <= want[1]
+        if op in ("none_matching", "none_severity"):
+            return got == 0
+        if op in ("truthy", "falsy"):
+            return got == want
+        if op == "value_map":
+            return got in (want or [])
+    except (IndexError, TypeError):
+        return None
+    return None
+
+
+def measure_contradicts_verdict(item: dict) -> bool:
+    """A sampled WARN/FAIL cannot carry a measure that says its assertion passed."""
+    return (item.get("status") in (WARN, FAIL)
+            and measure_reports_pass(item.get("measure") or {}) is True)
 
 
 # How a reader supplies an input this run did not have.
@@ -2103,6 +2142,9 @@ def aggregate_pages(primary: list[dict], per_page: list[list[dict]]) -> list[dic
                    pages_checked=len(runs),
                    pages_decided=len(decided),
                    pages_matching=len(bad))
+        if measure_contradicts_verdict(row):
+            raise AssertionError(
+                f"{row['id']} sampled {row['status']} carries a passing measure")
         out.append(row)
     return out
 
@@ -2292,6 +2334,43 @@ def find_gsc_credentials(explicit: str) -> str:
     return ""
 
 
+def run_label(key: tuple) -> str:
+    """Return the stable label used to join compact and full run artifacts."""
+    return f"{key[0]} {' '.join(str(x) for x in key[1][1:])}".strip()
+
+
+def summarize_runs(results: dict) -> dict:
+    """Keep only timing and failure state in the email-sized results artifact."""
+    return {
+        run_label(key): {
+            "elapsed": value.get("__elapsed__"),
+            "error": value.get("__error__"),
+            "error_kind": value.get("__error_kind__"),
+        }
+        for key, value in results.items()
+    }
+
+
+def evidence_runs(results: dict) -> dict:
+    """Keep each successful parsed output; retain the run summary for failures."""
+    summaries = summarize_runs(results)
+    out = {}
+    for key, value in results.items():
+        label = run_label(key)
+        if value.get("__error__"):
+            out[label] = summaries[label]
+        else:
+            out[label] = {k: v for k, v in value.items()
+                          if not str(k).startswith("__")}
+    return out
+
+
+def write_evidence(path: str, evidence: dict, secrets: tuple[str, ...] = ()) -> None:
+    """Write a complete, redacted evidence artifact without changing its shape."""
+    with open(os.path.expanduser(path), "w", encoding="utf-8") as stream:
+        json.dump(redact(evidence, secrets), stream, ensure_ascii=False, indent=2)
+
+
 def archive_entry(archive_dir: str, entry: str) -> str:
     """Pick the HTML file to analyse inside a local site copy."""
     root = os.path.expanduser(archive_dir)
@@ -2359,6 +2438,11 @@ def build_parser() -> argparse.ArgumentParser:
                          "read (default: alongside --json, as *-crawl.json). It is "
                          "the audit's record of which URLs exist and which are "
                          "broken, so it is kept rather than discarded.")
+    ap.add_argument("--evidence-json", default="", metavar="PATH",
+                    help="where to write every evidence script's parsed JSON "
+                         "output. Keys match the compact runs summary so the two "
+                         "artifacts can be joined without embedding bulky evidence "
+                         "in the emailed checklist results.")
     ap.add_argument("--crawl-depth", type=int, default=3, metavar="N",
                     help="link depth for the shared crawl (default: 3)")
     ap.add_argument("--crawl-max-pages", type=int, default=100, metavar="N",
@@ -2502,6 +2586,11 @@ def print_report(payload, a, hist, crawl_path, diff_note) -> None:
         if len(c["broken"]) > BROKEN_URLS_SHOWN:
             print(f"  … {len(c['broken']) - BROKEN_URLS_SHOWN} more in {c['inventory']}")
     print(f"\nResults: {os.path.abspath(a.json_out)}")
+    if payload.get("evidence_path"):
+        print(f"Evidence: {os.path.abspath(os.path.expanduser(a.evidence_json))}")
+    elif any(row.get("measure") for row in payload.get("items", [])):
+        print("Full script evidence was reduced to checklist measures; rerun with "
+              "--evidence-json PATH to keep the parsed outputs.")
     if crawl_path and os.path.exists(crawl_path):
         print(f"Crawl:   {os.path.abspath(crawl_path)}")
     if hist:
@@ -2972,11 +3061,9 @@ def main() -> int:
         "profile_args": prof_args or None,
         "sample": a.sample,
         "sampled_urls": sampled_urls,
+        "evidence_path": a.evidence_json or None,
         "scores": score(graded),
-        "runs": {f"{k[0]} {' '.join(str(x) for x in k[1][1:])}".strip():
-                 {"elapsed": v.get("__elapsed__"), "error": v.get("__error__"),
-                  "error_kind": v.get("__error_kind__")}
-                 for k, v in results.items()},
+        "runs": summarize_runs(results),
         # Timeouts and crashes both land in NO_DATA; counted apart so a run that
         # was merely too slow does not read as a plugin full of broken scripts.
         "script_failures": {
@@ -3000,6 +3087,10 @@ def main() -> int:
     }
 
     payload = redact(payload, tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k)))
+
+    if a.evidence_json:
+        write_evidence(a.evidence_json, evidence_runs(results),
+                       tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k)))
 
     hist = ""
     if not a.no_history:
