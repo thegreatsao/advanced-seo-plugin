@@ -34,3 +34,24 @@ fixture harness, `/assets/logo@2x.webp` returns HTTP 200 and 34 bytes; the PNG f
 is 64×64 and 136 bytes. The entry page reports `responsive_count=1` and
 `modern_format_count=1`. The two sampled pages with no images each report zero for
 both counts, and those inapplicable zeroes decide the site-wide failure.
+
+## Stage 3 — TLS stand
+
+Measured on 11 August 2026 from the first run after commit `47eab13`, which declared
+the expectations before the checker ran.
+
+| Item | Fixture | Expected | Actual | Bucket | Reasoning |
+|---|---|---:|---:|:---:|---|
+| SE-115 | broken_tls | FAIL | NO_DATA | A | “Enable HSTS (HTTP Strict Transport Security)” is failed by an HTTPS response that omits HSTS, but `security_headers.py` omits `header_values.strict-transport-security` too; the registry therefore sees a missing evidence path instead of a false value. |
+
+### Stage 3 counts
+
+- A — checker defect: 1
+- B — declaration correction: 0
+- C — fixture indeterminate: 0
+- D — deferred registry decision: 0
+
+The two redirect items declared `INDETERMINATE` before the run are fixture scope,
+not first-run disagreements, and therefore are not triage findings. The shared TLS
+entry would need a dedicated looping URL for CI-014 and a dedicated multi-hop URL for
+AR-150; making the shared entry loop would gate the security-header audit itself.
