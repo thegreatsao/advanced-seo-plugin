@@ -166,8 +166,9 @@
         "why": "the 390-pixel-wide hand-written render declares zero tap targets below 48 pixels"
       },
       "MB-104": {
-        "expect": "FAIL",
-        "why": "about.html and both blog posts omit a favicon declaration, so those pages do not ensure a favicon in mobile search results"
+        "expect": "INDETERMINATE",
+        "triage": "DEFERRED-REGISTRY",
+        "why": "REGISTRY-DECISIONS.md item 9: this duplicates TE-166's per-page link-element assertion, which cannot establish whether a favicon displays site-wide in mobile SERPs"
       },
       "IN-123": {
         "expect": "PASS",
@@ -178,8 +179,9 @@
         "why": "the fixture contains no paginated series; it would need linked first, middle, and last pages with pagination markup to exercise this title"
       },
       "TE-166": {
-        "expect": "FAIL",
-        "why": "about.html and both blog posts omit a link rel=icon declaration"
+        "expect": "INDETERMINATE",
+        "triage": "DEFERRED-REGISTRY",
+        "why": "REGISTRY-DECISIONS.md item 9: this duplicates MB-104 and treats a per-page link element as the only way to add a favicon, excluding the site-wide /favicon.ico convention"
       },
       "SP-214": {
         "expect": "PASS",
@@ -357,8 +359,9 @@
         "why": "the 390-pixel-wide hand-written render declares nine tap targets below 48 pixels"
       },
       "MB-104": {
-        "expect": "FAIL",
-        "why": "no page declares a favicon for mobile search results"
+        "expect": "INDETERMINATE",
+        "triage": "DEFERRED-REGISTRY",
+        "why": "REGISTRY-DECISIONS.md item 9: this duplicates TE-166's per-page link-element assertion, which cannot establish whether a favicon displays site-wide in mobile SERPs"
       },
       "IN-123": {
         "expect": "FAIL",
@@ -369,8 +372,9 @@
         "why": "the fixture contains no paginated series; it would need linked first, middle, and last pages with pagination defects to exercise this title"
       },
       "TE-166": {
-        "expect": "FAIL",
-        "why": "no page contains a link rel=icon declaration"
+        "expect": "INDETERMINATE",
+        "triage": "DEFERRED-REGISTRY",
+        "why": "REGISTRY-DECISIONS.md item 9: this duplicates MB-104 and treats a per-page link element as the only way to add a favicon, excluding the site-wide /favicon.ico convention"
       },
       "SP-214": {
         "expect": "FAIL",

@@ -2,7 +2,7 @@
 
 The manifest is the oracle. Its verdicts were written from checklist titles and
 fixture construction before this module was run; this file only loads and reports
-them. A mismatch is stage 1's result, not permission to edit either side.
+them. A mismatch is a triage input, not permission to edit either side silently.
 """
 from __future__ import annotations
 
@@ -45,7 +45,8 @@ def audit(label: str, url: str) -> dict[str, str]:
     out = os.path.join(SITE.dir, f"oracle-{label}.json")
     artifacts = []
     for flag, filename in (("--rendered-json", "rendered.json"),
-                           ("--cwv-json", "cwv.json")):
+                           ("--cwv-json", "cwv.json"),
+                           ("--links-csv", "top-linking-sites.csv")):
         path = SITE.artifact(label, filename)
         if path:
             artifacts += [flag, path]
@@ -158,7 +159,7 @@ class ManifestContract(unittest.TestCase):
 class FixtureOracle(unittest.TestCase):
 
     def test_every_settled_declaration_matches_the_real_runner(self):
-        """Every settled declaration agrees after the stage-one triage."""
+        """Every settled declaration agrees after the completed triage."""
         _tally, differences = comparison()
         detail = "\n".join(
             f"{row['fixture']} {row['item']}: expected {row['expected']}, "

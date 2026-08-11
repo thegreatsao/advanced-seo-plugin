@@ -1,22 +1,23 @@
 # Supplied-by-the-operator inputs, for the fixture pair
 
-Nine registry items are decided from a file rather than from a request:
+Twelve registry items are decided from a file rather than from a request:
 `cwv_metrics.py` reads Core Web Vitals from a browser performance trace,
 `rendered_audit.py` reads font size, link distinctness, overlays and tap targets
-from a rendered page, and `server_log_audit.py` reads a server access log. The
-first two exist because those numbers are *computed* values — a subprocess cannot
-obtain them, and a model reading HTML has not measured them. The third exists
-because its fact is in the **past**: no request made now can discover what
-Googlebot did last month.
+from a rendered page, `server_log_audit.py` reads a server access log, and
+`gsc_links_csv.py` reads a Search Console Links export. The first two exist because
+those numbers are *computed* values — a subprocess cannot obtain them, and a model
+reading HTML has not measured them. The other two exist because their facts are in
+the **past**: no request made now can discover what Googlebot crawled or which sites
+linked last month.
 
-Which means the contract audit could not exercise those nine at all. Without a
-file they report NO_DATA, correctly, on both sites — so for nine items,
-including two `high` ones, the good/broken comparison was measuring nothing. One
+Which means the contract audit could not exercise those items at all without the
+corresponding artifacts. Without a file they report NO_DATA, correctly, on both
+sites — so the good/broken comparison was measuring nothing. One
 of the two `high` items is "Avoid Intrusive Interstitials", which is the check
 most likely to matter to a real reader and was the least exercised.
 
-**These numbers are written by hand, and every file says so in its own `source`
-field.** No browser runs in CI. That is a real limitation and it is not hidden:
+**The browser numbers are written by hand, and every JSON file says so in its own
+`source` field.** No browser runs in CI. That is a real limitation and it is not hidden:
 `source` is printed by the script, carried into the results, and shown in the
 report, so a file that came from a text editor rather than a trace announces it
 everywhere it goes.
@@ -33,6 +34,14 @@ Both files record a 390px viewport, because `rendered_audit.py` refuses to
 answer tap-target and mobile-interstitial questions from a desktop render — a
 desktop fixture would leave MB-094 and MB-103 NO_DATA and two of the eight
 unexercised.
+
+## top-linking-sites.csv
+
+Plausible single-sheet Search Console Links exports, with a non-numeric header and
+one linking domain per row. The good fixture distributes 12 backlinks over five
+domains, with a 33.3% top-domain share. The broken fixture puts eight of ten links
+on one domain and has only two linking domains. These files exercise total links,
+root-domain count, and concentration; they make no claim about link quality.
 
 ## access.log
 
