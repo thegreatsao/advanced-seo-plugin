@@ -61,6 +61,58 @@ def _schema_items(schema_data: Any) -> list[dict[str, Any]]:
     return items
 
 
+def _is_breadcrumb_type(value: Any) -> bool:
+    """Whether a JSON-LD, Microdata or RDFa type names BreadcrumbList."""
+    values = value if isinstance(value, (list, tuple)) else [value]
+    for raw in values:
+        for token in str(raw or "").split():
+            if re.search(r"(?:^|[:/#])BreadcrumbList$", token, re.I):
+                return True
+    return False
+
+
+def _breadcrumb_markup(soup) -> bool:
+    """Find a valid-enough Microdata or RDFa BreadcrumbList carrier."""
+    for element in soup.find_all(True):
+        if (element.has_attr("itemscope")
+                and _is_breadcrumb_type(element.get("itemtype"))):
+            return True
+        if _is_breadcrumb_type(element.get("typeof")):
+            return True
+    return False
+
+
+def _nav_accessible_name(nav, soup) -> str:
+    names = [nav.get("aria-label") or "", nav.get("title") or ""]
+    for ident in str(nav.get("aria-labelledby") or "").split():
+        label = soup.find(id=ident)
+        if label:
+            names.append(label.get_text(" ", strip=True))
+    return " ".join(names)
+
+
+def _has_breadcrumb_ui(soup, structured_trail: bool) -> bool:
+    """Find explicit, machine-detectable markers for a visible breadcrumb trail.
+
+    Accepted markers are a nav landmark whose accessible name says breadcrumb,
+    any element whose class or id says breadcrumb, and Microdata/RDFa carrying a
+    BreadcrumbList type. A hand-rolled row of plain links with none of those
+    markers is intentionally undetectable here: static HTML cannot distinguish it
+    reliably from ordinary navigation.
+    """
+    if structured_trail:
+        return True
+    if any(re.search(r"breadcrumb", _nav_accessible_name(nav, soup), re.I)
+           for nav in soup.find_all("nav")):
+        return True
+    for element in soup.find_all(True):
+        marker = " ".join([str(element.get("id") or ""),
+                           " ".join(element.get("class") or [])])
+        if re.search(r"breadcrumb", marker, re.I):
+            return True
+    return False
+
+
 def _rel_contains(value: Any, token: str) -> bool:
     if not value:
         return False
@@ -100,6 +152,7 @@ def parse_html(
     soup = BeautifulSoup(html, html_parser())
     headers = headers or {}
     header_lookup = {str(k).lower(): v for k, v in headers.items()}
+    structured_breadcrumb = _breadcrumb_markup(soup)
 
     result = {
         "title": None,
@@ -141,6 +194,10 @@ def parse_html(
             "prerender": [],
         },
         "schema": [],
+        "breadcrumbs": {
+            "schema": structured_breadcrumb,
+            "ui": _has_breadcrumb_ui(soup, structured_breadcrumb),
+        },
         "open_graph": {},
         "twitter_card": {},
         "word_count": 0,
@@ -346,6 +403,12 @@ def parse_html(
                 "from_graph": item is not schema_data,
                 "raw": item,
             })
+
+    result["breadcrumbs"]["schema"] = (
+        result["breadcrumbs"]["schema"]
+        or any(_is_breadcrumb_type(item.get("@types"))
+               for item in result["schema"] if isinstance(item, dict))
+    )
 
     # Word count (visible text only)
     for element in soup(["script", "style", "nav", "footer", "header"]):

@@ -925,9 +925,8 @@ item(155, "low", S, "url_quality.py", PAGE,
      "Consistent, descriptive URL slugs")
 item(156, "medium", M, fix="Helpful 404 page with navigation and search")
 item(157, "low", L, fix="Use tag pages deliberately rather than generating duplicates")
-item(158, "medium", S, "schema_required_props.py", PAGE,
-     {"path": "issues", "field": "message",
-      "none_matching": "(?i)BreadcrumbList"},
+item(158, "medium", S, "parse_html.py", HTMLARG,
+     {"path": "breadcrumbs", "eq": {"schema": True, "ui": True}},
      "Breadcrumbs in the UI and as BreadcrumbList markup")
 item(159, "low", L, fix="Simplify primary navigation")
 item(160, "low", L, fix="Optimize footer navigation")

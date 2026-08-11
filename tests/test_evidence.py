@@ -154,6 +154,53 @@ class ParseHtml(unittest.TestCase):
         self.assertEqual(stuffed["meta_keywords"], "seo, seo services, cheap seo")
         self.assertEqual(verdict("MS-031", stuffed), FAIL)
 
+    def test_ar_158_requires_parseable_schema_and_a_visible_ui_marker(self):
+        schema = ('<script type="application/ld+json">'
+                  '{"@context":"https://schema.org",'
+                  '"@type":"BreadcrumbList","itemListElement":[]}'
+                  '</script>')
+        schema_only = self.parse(PAGE.replace("</head>", schema + "</head>"))
+        self.assertEqual(schema_only["breadcrumbs"], {"schema": True, "ui": False})
+        self.assertEqual(verdict("AR-158", schema_only), FAIL)
+
+        complete = self.parse(PAGE.replace(
+            "</head>", schema + "</head>").replace(
+                "<body>", '<body><nav aria-label="Breadcrumb">Home</nav>'))
+        self.assertEqual(complete["breadcrumbs"], {"schema": True, "ui": True})
+        self.assertEqual(verdict("AR-158", complete), PASS)
+
+    def test_ar_158_accepts_each_explicit_ui_marker(self):
+        markers = (
+            '<nav aria-label="Breadcrumb trail"><a href="/">Home</a></nav>',
+            ('<span id="crumb-label">Breadcrumb trail</span>'
+             '<nav aria-labelledby="crumb-label"><a href="/">Home</a></nav>'),
+            '<ol class="site-breadcrumbs"><li>Home</li></ol>',
+            '<div id="breadcrumb-trail"><a href="/">Home</a></div>',
+        )
+        for marker in markers:
+            with self.subTest(marker=marker):
+                out = self.parse(PAGE.replace("<body>", "<body>" + marker))
+                self.assertTrue(out["breadcrumbs"]["ui"])
+                self.assertFalse(out["breadcrumbs"]["schema"])
+
+    def test_ar_158_accepts_microdata_and_rdfa_as_ui_and_schema(self):
+        markers = (
+            ('<ol itemscope itemtype="https://schema.org/BreadcrumbList">'
+             '<li>Home</li></ol>'),
+            '<ol typeof="schema:BreadcrumbList"><li>Home</li></ol>',
+        )
+        for marker in markers:
+            with self.subTest(marker=marker):
+                out = self.parse(PAGE.replace("<body>", "<body>" + marker))
+                self.assertEqual(out["breadcrumbs"], {"schema": True, "ui": True})
+
+    def test_ar_158_does_not_infer_plain_links_or_invalid_json_ld(self):
+        plain = '<p><a href="/">Home</a> / <a href="/shop">Shop</a></p>'
+        invalid = '<script type="application/ld+json">{"@type":"BreadcrumbList"</script>'
+        out = self.parse(PAGE.replace("<body>", "<body>" + plain).replace(
+            "</head>", invalid + "</head>"))
+        self.assertEqual(out["breadcrumbs"], {"schema": False, "ui": False})
+
 
 class IndexabilityMatrix(unittest.TestCase):
     """Four critical items read this script: CI-001 (indexable), CI-003 (200),
