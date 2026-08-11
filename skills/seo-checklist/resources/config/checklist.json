@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "07e64f9c9fc6",
+  "registry_version": "d70a3d112521",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -380,16 +380,14 @@
         "script": "robots_path_tester.py",
         "args": [
           "{url}",
-          "/assets/app.css",
-          "/static/app.js",
-          "/images/hero.jpg",
+          "--discover-assets",
           "--agent",
           "Googlebot"
         ],
         "requires": "fetch",
         "assert": {
-          "path": "allowed_urls",
-          "len_gte": 3
+          "path": "blocked_urls",
+          "len_eq": 0
         }
       },
       "effort": "low",
@@ -616,8 +614,8 @@
         ],
         "requires": "crawl",
         "assert": {
-          "path": "exact_duplicates",
-          "len_eq": 0
+          "path": "summary.duplicate_title_groups",
+          "eq": 0
         }
       },
       "effort": "low",
@@ -1504,8 +1502,8 @@
         ],
         "requires": "gsc",
         "assert": {
-          "path": "summary.worst_spread",
-          "lte": 3
+          "path": "summary.contested_queries",
+          "eq": 0
         }
       },
       "effort": "medium",
@@ -2400,12 +2398,13 @@
         ],
         "requires": "safe_browsing",
         "assert": {
-          "path": "safe_browsing.clean",
-          "truthy": true
+          "path": "safe_browsing.threats",
+          "len_eq": 0
         }
       },
       "effort": "low",
-      "fix": "Confirm there is no hacked content or malware"
+      "fix": "Confirm there is no hacked content or malware",
+      "scores_with": "SE-114"
     },
     {
       "id": "SE-117",
@@ -3549,13 +3548,13 @@
         ],
         "requires": "safe_browsing",
         "assert": {
-          "path": "safe_browsing.clean",
-          "truthy": true
+          "path": "safe_browsing.threats",
+          "len_eq": 0
         }
       },
       "effort": "low",
       "fix": "Check the domain against blocklists and Safe Browsing",
-      "scores_with": "SE-116"
+      "scores_with": "SE-114"
     },
     {
       "id": "TE-172",
@@ -3716,11 +3715,12 @@
         "requires": "safe_browsing",
         "assert": {
           "path": "safe_browsing.threats",
-          "len_lte": 0
+          "len_eq": 0
         }
       },
       "effort": "low",
-      "fix": "Check the domain against Safe Browsing and review its registration history; set GOOGLE_SAFE_BROWSING_KEY so this can be answered"
+      "fix": "Check the domain against Safe Browsing and review its registration history; set GOOGLE_SAFE_BROWSING_KEY so this can be answered",
+      "scores_with": "SE-114"
     },
     {
       "id": "TE-180",

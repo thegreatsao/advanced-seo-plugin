@@ -10,6 +10,26 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.43.0 — registry assertions measure the facts their titles name
+
+KW-071 now reads the emitted `contested_queries` count instead of the deleted
+`worst_spread` field. MS-022 gets a case-insensitive, whitespace-normalized duplicate
+title count that skips missing titles, leaving duplicate body content to CN-041.
+
+The four Safe Browsing items now read one threats-list assertion and score it once,
+with SE-114 as the primary. CI-013 discovers the audited page's same-origin CSS,
+JavaScript and image references instead of testing three invented paths; a page with
+no such asset remains undecided. Same-origin is an exact scheme, hostname and
+effective-port match after URL resolution.
+
+`image_inventory.py` no longer emits the unread
+`lazy_lcp_performance_candidates` count. MD-185 retains the condition as the warning
+`Likely LCP image is lazy-loaded` from `image_weight_audit.py`.
+
+Registry `d70a3d112521` replaces `07e64f9c9fc6`. The fixture declarations remain
+fully agreed after MS-022 is re-declared from its title-specific rule. The 808-test
+baseline becomes 814.
+
 ## 0.42.0 — absent HSTS is a failure, not missing evidence
 
 `security_headers.py` now emits an empty value for every tracked response header

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "07e64f9c9fc6",
+  "registry_version": "d70a3d112521",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -67,7 +67,7 @@
       },
       "MS-022": {
         "expect": "PASS",
-        "why": "every reachable page has a distinct title"
+        "why": "the title says 'Duplicate Page Titles', and every reachable page has a distinct normalized non-empty title"
       },
       "MS-029": {
         "expect": "PASS",
@@ -261,7 +261,7 @@
       },
       "MS-022": {
         "expect": "FAIL",
-        "why": "the two reachable duplicate pages use the same title and declare no consolidating canonical"
+        "why": "the title says 'Duplicate Page Titles', and the two reachable duplicate pages share the same normalized title"
       },
       "MS-029": {
         "expect": "FAIL",
