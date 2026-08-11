@@ -166,9 +166,8 @@
         "why": "the 390-pixel-wide hand-written render declares zero tap targets below 48 pixels"
       },
       "MB-104": {
-        "expect": "INDETERMINATE",
-        "triage": "DEFERRED-REGISTRY",
-        "why": "REGISTRY-DECISIONS.md item 9: this duplicates TE-166's per-page link-element assertion, which cannot establish whether a favicon displays site-wide in mobile SERPs"
+        "expect": "PASS",
+        "why": "'Ensure Favicon Displays in Mobile SERPs' needs an icon declared on the page; every page in this fixture carries <link rel=\"icon\"> to /assets/logo.png. Whether the item should also verify the icon resolves at 48 px is REGISTRY-DECISIONS.md item 9 and does not stop the fixture from settling the rule as written"
       },
       "IN-123": {
         "expect": "PASS",
@@ -179,9 +178,8 @@
         "why": "the fixture contains no paginated series; it would need linked first, middle, and last pages with pagination markup to exercise this title"
       },
       "TE-166": {
-        "expect": "INDETERMINATE",
-        "triage": "DEFERRED-REGISTRY",
-        "why": "REGISTRY-DECISIONS.md item 9: this duplicates MB-104 and treats a per-page link element as the only way to add a favicon, excluding the site-wide /favicon.ico convention"
+        "expect": "PASS",
+        "why": "'Add a Favicon' is satisfied: every page in this fixture declares <link rel=\"icon\">. Whether a site-wide /favicon.ico should satisfy it without the element is REGISTRY-DECISIONS.md item 9"
       },
       "SP-214": {
         "expect": "PASS",
@@ -359,9 +357,8 @@
         "why": "the 390-pixel-wide hand-written render declares nine tap targets below 48 pixels"
       },
       "MB-104": {
-        "expect": "INDETERMINATE",
-        "triage": "DEFERRED-REGISTRY",
-        "why": "REGISTRY-DECISIONS.md item 9: this duplicates TE-166's per-page link-element assertion, which cannot establish whether a favicon displays site-wide in mobile SERPs"
+        "expect": "FAIL",
+        "why": "no page in this fixture declares an icon at all, so nothing can display in a mobile result"
       },
       "IN-123": {
         "expect": "FAIL",
@@ -372,9 +369,8 @@
         "why": "the fixture contains no paginated series; it would need linked first, middle, and last pages with pagination defects to exercise this title"
       },
       "TE-166": {
-        "expect": "INDETERMINATE",
-        "triage": "DEFERRED-REGISTRY",
-        "why": "REGISTRY-DECISIONS.md item 9: this duplicates MB-104 and treats a per-page link element as the only way to add a favicon, excluding the site-wide /favicon.ico convention"
+        "expect": "FAIL",
+        "why": "no page in this fixture declares <link rel=\"icon\">, and the fixture serves no /favicon.ico either"
       },
       "SP-214": {
         "expect": "FAIL",
