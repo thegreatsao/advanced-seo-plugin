@@ -9,8 +9,9 @@
         "why": "robots.txt exists, has a user-agent policy, and declares the sitemap"
       },
       "AR-158": {
-        "expect": "FAIL",
-        "why": "the page has BreadcrumbList schema but no visible breadcrumb UI, while the title requires both"
+        "expect": "INDETERMINATE",
+        "triage": "DEFERRED-REGISTRY",
+        "why": "REGISTRY-DECISIONS.md item 1: the rule checks BreadcrumbList schema but the title also promises visible breadcrumb UI"
       },
       "AR-162": {
         "expect": "PASS",
@@ -25,8 +26,8 @@
         "why": "every crawlable sitemap page is discoverable through internal navigation or contextual links"
       },
       "CI-019": {
-        "expect": "N/A",
-        "why": "the system and search paths do not exist, so there is no such page to noindex"
+        "expect": "PASS",
+        "why": "the title says 'Noindex System & Search Pages'; no such page exists, and robots.txt also excludes every named path"
       },
       "CN-041": {
         "expect": "PASS",
@@ -45,8 +46,8 @@
         "why": "the fixture supplies a sitemap but no search-engine index inventory to reconcile against it"
       },
       "GO-138": {
-        "expect": "FAIL",
-        "why": "the sitemap includes a URL that robots.txt forbids, so it is not a valid indexable sitemap URL"
+        "expect": "PASS",
+        "why": "the title says 'Invalid URLs'; the listed private URL exists and returns 200, while a robots Disallow conflict does not make the URL invalid"
       },
       "LO-200": {
         "expect": "INDETERMINATE",
@@ -81,8 +82,8 @@
         "why": "the JSON-LD blocks are parseable and contain the required structures for their declared types"
       },
       "TE-174": {
-        "expect": "FAIL",
-        "why": "site.css retains comments, whitespace, indentation, and long-form declarations instead of being minified"
+        "expect": "PASS",
+        "why": "the title says 'Minify & Optimize CSS'; at 340 bytes the stylesheet is below the checker's 2 KB actionability floor and has no meaningful optimization target"
       },
       "TECH-001": {
         "expect": "PASS",
@@ -103,8 +104,8 @@
         "why": "orphan.html exists in the sitemap but no page links to it"
       },
       "BL-081": {
-        "expect": "FAIL",
-        "why": "one page repeats the same exact-match anchor five times to the same target"
+        "expect": "WARN",
+        "why": "the title says 'Natural and Varied'; five repeated exact-match links create one overused target, which is the rule's warning band"
       },
       "CI-008": {
         "expect": "FAIL",
@@ -135,8 +136,8 @@
         "why": "the sitemap contains an off-host URL, missing URLs, and an invalid lastmod date"
       },
       "LO-200": {
-        "expect": "FAIL",
-        "why": "the local bakery page provides no business name-address-phone block or LocalBusiness data"
+        "expect": "INDETERMINATE",
+        "why": "the fixture needs a parseable LocalBusiness node missing name, address, or telephone to exercise the rule's error band and reach FAIL"
       },
       "MB-096": {
         "expect": "FAIL",
@@ -147,8 +148,8 @@
         "why": "a 54 KB PNG of simple line art may already be efficiently compressed, and no quality target or alternative encoding is supplied"
       },
       "MD-185": {
-        "expect": "FAIL",
-        "why": "the page repeats an oversized PNG, omits dimensions and useful alt text on copies, defers the hero, and references a missing image"
+        "expect": "WARN",
+        "why": "the title says 'Optimize Images'; the constructed lazy LCP candidate is a medium optimization issue, which belongs in the rule's warning band"
       },
       "MS-022": {
         "expect": "FAIL",
@@ -159,8 +160,9 @@
         "why": "the two reachable duplicate pages use the same meta description"
       },
       "TE-168": {
-        "expect": "FAIL",
-        "why": "the page links to missing internal and non-resolving external URLs"
+        "expect": "INDETERMINATE",
+        "triage": "DEFERRED-REGISTRY",
+        "why": "REGISTRY-DECISIONS.md item 2: the rule places one broken target in WARN and does not inspect the Redirected half of the title"
       },
       "TE-172": {
         "expect": "FAIL",
@@ -171,8 +173,8 @@
         "why": "the linked 21 KB stylesheet deliberately retains comments, whitespace, indentation, and repeated long-form rules"
       },
       "TECH-001": {
-        "expect": "FAIL",
-        "why": "the page embeds a HowTo declaration even though the title forbids HowTo misuse, and the declaration is malformed"
+        "expect": "INDETERMINATE",
+        "why": "the fixture needs a parseable HowTo or FAQPage block; its only HowTo appears inside unparseable JSON-LD and cannot be classified"
       }
     }
   }
