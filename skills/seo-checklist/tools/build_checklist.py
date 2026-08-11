@@ -188,6 +188,10 @@ DEFAULT_REQUIRES = "fetch"
 # items whose assertions read Safe Browsing need that credential; uptime and server
 # neighbours must keep running without it.
 ITEM_REQUIRES = {
+    # The same script still answers LO-200 per page. LO-198 passes the shared crawl
+    # explicitly and is deliberately site-level, so its requirement cannot be the
+    # script-wide default.
+    "LO-198": "crawl",
     "SE-114": "safe_browsing",
     "SE-116": "safe_browsing",
     "TE-171": "safe_browsing",
@@ -1059,7 +1063,7 @@ item(196, "medium", L, fix="Determine whether the site needs local traffic")
 # and phone consistency — never the title tag. Whether a title is localised for
 # its city and service is a market judgement.
 item(197, "medium", L, fix="Localized title tags")
-item(198, "high", S, "local_seo_checker.py", PAGE,
+item(198, "high", S, "local_seo_checker.py", CRAWLARG,
      {"path": "local_business_nodes", "gte": 1},
      "Implement LocalBusiness structured data")
 item(199, "high", M, fix="Create and optimize the Google Business Profile — follow resources/playbooks/local-seo.md")

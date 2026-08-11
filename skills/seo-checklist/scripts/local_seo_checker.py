@@ -7,6 +7,7 @@ import argparse
 import re
 from typing import Any
 
+import site_crawl
 from lib.schema_types import is_local_business_type
 from schema_required_props import extract_schema_documents, find_schema_nodes, load_source_html
 from seo_common import parse_html, print_json_or_text, issue
@@ -21,6 +22,35 @@ def find_local_business_nodes(documents: list) -> list:
     """Every JSON-LD node whose @type is a LocalBusiness or one of its subtypes."""
     return [row for row in find_schema_nodes(documents)
             if is_local_business_type(row.get("types"))]
+
+
+def check_local_business_inventory(source: str, inventory_path: str) -> dict[str, Any]:
+    """Decide LocalBusiness presence across every HTML page in one crawl."""
+    inventory = site_crawl.inventory_for(source, inventory_path)
+    pages = site_crawl.html_pages(inventory)
+    matches = []
+    for key, page in pages.items():
+        for node in page.get("schema_nodes") or []:
+            if is_local_business_type(node.get("types")):
+                matches.append({"url": page.get("final_url") or page.get("url") or key,
+                                "types": node.get("types") or []})
+    issues = []
+    if not matches:
+        issues.append(issue("warning", "No LocalBusiness JSON-LD found on any "
+                            "crawled page (nor any of its subtypes)", source))
+    return {
+        "source": source,
+        "final_url": source,
+        "status": None,
+        "fetch_error": inventory.get("fetch_error"),
+        "scope": "site",
+        "pages_checked": len(pages),
+        "local_business_nodes": len(matches),
+        "local_business_pages": sorted({row["url"] for row in matches}),
+        "phones_detected": [],
+        "map_embeds": 0,
+        "issues": issues,
+    }
 
 
 def check_local_seo(source: str, timeout: int = 15) -> dict[str, Any]:
@@ -71,10 +101,16 @@ def check_local_seo(source: str, timeout: int = 15) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Check local SEO signals")
     parser.add_argument("source", help="URL or HTML file")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory: check LocalBusiness presence across "
+                             "the site instead of repeating it per page")
     parser.add_argument("--timeout", type=int, default=15)
     parser.add_argument("--json", "-j", action="store_true", help="Output JSON")
     args = parser.parse_args()
-    result = check_local_seo(args.source, timeout=args.timeout)
+    if args.inventory:
+        result = check_local_business_inventory(args.source, args.inventory)
+    else:
+        result = check_local_seo(args.source, timeout=args.timeout)
     lines = [
         f"Local SEO check for {args.source}",
         f"LocalBusiness nodes: {result['local_business_nodes']}  Phones: {len(result['phones_detected'])}  Issues: {len(result['issues'])}",

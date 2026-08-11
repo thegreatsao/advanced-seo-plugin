@@ -29,6 +29,7 @@ the rest of the suite put together.
 import json
 import os
 import sys
+import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
@@ -1651,6 +1652,46 @@ class BrokenLinks(unittest.TestCase):
         self.assertEqual([row["url"] for row in result["redirected"]],
                          ["https://example.test/go"])
         self.assertTrue(all(row["is_internal"] for row in result["redirected"]))
+
+
+class LocalBusinessInventory(unittest.TestCase):
+    def test_lo_198_finds_a_contact_page_node_when_the_entry_has_none(self):
+        import local_seo_checker
+        import site_crawl
+        home = '<html><body><a href="/contact">Contact</a></body></html>'
+        contact = ('<html><head><script type="application/ld+json">'
+                   '{"@context":"https://schema.org","@type":"Restaurant",'
+                   '"name":"Fixture"}</script></head><body>Contact</body></html>')
+        routes = {
+            "/": home,
+            "/contact": contact,
+            "/robots.txt": (200, "User-agent: *\nAllow: /\n"),
+        }
+        with harness.allow_loopback(), served(routes) as site:
+            inventory = site_crawl.crawl(site.url, use_sitemap=False, workers=1)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as handle:
+                json.dump(inventory, handle)
+                handle.flush()
+                result = local_seo_checker.check_local_business_inventory(
+                    site.url, handle.name)
+
+        self.assertEqual(inventory["pages"][site.url]["schema_nodes"], [])
+        contact_row = inventory["pages"][site.base + "/contact"]
+        self.assertEqual(contact_row["schema_nodes"], [{"types": ["Restaurant"]}])
+        self.assertEqual(result["scope"], "site")
+        self.assertEqual(result["pages_checked"], 2)
+        self.assertEqual(result["local_business_nodes"], 1)
+        self.assertEqual(result["local_business_pages"], [site.base + "/contact"])
+        self.assertEqual(verdict("LO-198", result), PASS)
+        self.assertEqual(verdict("LO-198", dict(result, local_business_nodes=0)),
+                         FAIL)
+
+        check = ITEMS["LO-198"]["check"]
+        self.assertEqual(check["requires"], "crawl")
+        self.assertEqual(check["args"], ["{url}", "--inventory", "{inventory_json}"])
+        from checklist_runner import is_page_level
+        self.assertFalse(is_page_level({"check": check}))
+        self.assertEqual(ITEMS["LO-200"]["check"]["requires"], "fetch")
 
 
 class ExternalLinks(unittest.TestCase):

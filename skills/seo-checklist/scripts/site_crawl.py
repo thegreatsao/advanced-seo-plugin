@@ -46,6 +46,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from seo_common import (
+    as_list,
     discover_sitemap_urls,
     fetch_url,
     normalize_url,
@@ -53,6 +54,7 @@ from seo_common import (
     parse_sitemap_xml,
     print_json_or_text,
     same_host,
+    walk_json,
 )
 
 # Bumped when a reader could be wrong about what a field means. `load()` refuses an
@@ -60,8 +62,9 @@ from seo_common import (
 # 2 adds `lang`. Bumped rather than tolerated as absent: a version-1 inventory cannot
 # answer the language question at all, and a reader that treats "no lang recorded" as
 # "one language" would put a trilingual site's whole navigation back into the editorial
-# link set — silently, which is the failure this counter exists to stop.
-INVENTORY_VERSION = 2
+# link set — silently, which is the failure this counter exists to stop. 3 adds compact
+# `schema_nodes`; an older inventory cannot answer a site-wide schema-presence rule.
+INVENTORY_VERSION = 3
 
 DEFAULT_MAX_PAGES = 100
 DEFAULT_DEPTH = 3
@@ -306,6 +309,9 @@ def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
         "external_out": 0,
         "links": [],
         "html": False,
+        # One compact row per parseable JSON-LD node. Site-wide schema checks need
+        # the types, not a second fetch of every page or the full raw payload.
+        "schema_nodes": [],
         # The declared `<html lang>`. Free — the parse below already produced it — and
         # it is what lets a reader tell one language section of a site from another
         # without inferring anything from URL shape. anchor_text_audit.py needs it:
@@ -331,6 +337,14 @@ def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
     row["canonical"] = parsed.get("canonical")
     row["lang"] = parsed.get("lang")
     row["noindex"] = has_noindex(parsed.get("meta_robots"), fetched.get("headers"))
+    for document in parsed.get("schema") or []:
+        for node in walk_json(document):
+            if not isinstance(node, dict):
+                continue
+            types = [value for value in as_list(node.get("@type"))
+                     if isinstance(value, str)]
+            if types:
+                row["schema_nodes"].append({"types": types})
 
     # Every `<a>`, with nothing deduplicated. The first version of this collapsed
     # repeats of the same (target, anchor) within a page — which is exactly the shape
