@@ -1987,6 +1987,37 @@ class CrawlKeysAreNotFetchTargets(unittest.TestCase):
             self.assertEqual(site.paths().count("/about/"), 1)
             self.assertNotIn("/about", site.paths())
 
+    def test_crawler_never_fetches_its_dedup_key_for_a_discovered_directory_slash(self):
+        """Fail if the crawler regresses to fetching its normalized page key."""
+        import tempfile
+        import requests
+
+        with tempfile.TemporaryDirectory(prefix="crawl-slash-source-") as source:
+            good = os.path.join(source, "good")
+            directory = os.path.join(good, "en")
+            os.makedirs(directory)
+            with open(os.path.join(good, "index.html"), "w", encoding="utf-8") as fh:
+                fh.write('<html><body><a href="/en/">English</a></body></html>')
+            with open(os.path.join(directory, "index.html"), "w",
+                      encoding="utf-8") as fh:
+                fh.write("<html><body>English</body></html>")
+
+            with harness.FixtureSite(source=source) as fixture:
+                key = fixture.origin("good") + "/en"
+                canonical = requests.get(key, allow_redirects=False, timeout=5)
+                self.assertEqual(canonical.status_code, 301)
+                self.assertEqual(canonical.headers["Location"], "/en/")
+
+                result = self.crawl.crawl(fixture.good, use_sitemap=False, workers=1)
+
+            # 0.40.0 separated deduplication from fetching: page keys may normalize
+            # the slash, but the discovered href is the address that must be fetched.
+            self.assertFalse(key.endswith("/"))
+            self.assertIn(key, result["pages"])
+            self.assertTrue(result["pages"][key]["final_url"].endswith("/"))
+            self.assertEqual(result["redirected"], [])
+            self.assertEqual(result["summary"]["pages_redirected"], 0)
+
 
 class NothingIsUndecidedAboutASiteThatAnswered(unittest.TestCase):
     """The other direction, and it cost an item on every audit for a whole release.

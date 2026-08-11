@@ -92,6 +92,7 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
     """SimpleHTTPRequestHandler with a fixed document root and no access log."""
 
     root = ""
+    response_headers: dict[str, str] = {}
 
     def translate_path(self, path):
         rel = path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
@@ -100,6 +101,11 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, *args):  # noqa: D102 - silence the access log
         pass
+
+    def end_headers(self):
+        for key, value in self.response_headers.items():
+            self.send_header(key, value)
+        super().end_headers()
 
 
 class _Site:
@@ -111,17 +117,24 @@ class _Site:
     once both ports are known.
     """
 
-    def __init__(self, source: str, into: str):
+    def __init__(self, source: str, into: str, *, tls: bool = False,
+                 response_headers: dict[str, str] | None = None):
         self.dir = shutil.copytree(source, into)
         socketserver.ThreadingTCPServer.allow_reuse_address = True
         # Threading: several evidence scripts fetch concurrently, and a
         # single-threaded server deadlocks the moment one of them holds a connection
         # open while asking for the next page.
-        handler = type("Handler", (_Quiet,), {"root": self.dir})
+        handler = type("Handler", (_Quiet,), {
+            "root": self.dir,
+            "response_headers": dict(response_headers or {}),
+        })
         self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
         self.server.daemon_threads = True
+        if tls:
+            self.server.socket = tls_context().wrap_socket(self.server.socket,
+                                                           server_side=True)
         self.port = self.server.server_address[1]
-        self.base = f"http://127.0.0.1:{self.port}"
+        self.base = f"{'https' if tls else 'http'}://127.0.0.1:{self.port}"
         self._rewrite()
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -141,11 +154,21 @@ class _Site:
 
 
 class FixtureSite:
-    """The two fixture sites, each on its own origin.
+    """The fixture trees over paired HTTP and HTTPS origins.
 
-    `good` and `broken` are absolute URLs ending in `/`. Use as a context manager or
+    `good`, `broken`, `good_tls`, and `broken_tls` are absolute URLs ending in `/`.
+    The HTTPS pair deliberately differs only in response-header policy: `good_tls`
+    emits the hardened set and `broken_tls` emits none. Use as a context manager or
     call `start()`/`stop()`.
     """
+
+    GOOD_TLS_HEADERS = {
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Content-Security-Policy": "default-src 'self'",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    }
 
     def __init__(self, source: str = FIXTURES):
         self.source = source
@@ -155,18 +178,28 @@ class FixtureSite:
 
     def start(self) -> "FixtureSite":
         self.dir = tempfile.mkdtemp(prefix="seo-fixture-")
-        for name in ("good", "broken"):
-            src = os.path.join(self.source, name)
+        origins = (
+            ("good", "good", False, {}),
+            ("broken", "broken", False, {}),
+            ("good_tls", "good", True, self.GOOD_TLS_HEADERS),
+            ("broken_tls", "broken", True, {}),
+        )
+        for name, source_name, tls, headers in origins:
+            src = os.path.join(self.source, source_name)
             if os.path.isdir(src):
-                self._sites[name] = _Site(src, os.path.join(self.dir, name))
-                self._copy_artifacts(name)
-        # Each site's external links point at the other, once both ports are known.
-        # A site served alone keeps pointing at the unbound placeholder, which fails
-        # loudly rather than silently reaching the internet.
-        if len(self._sites) == 2:
-            good, broken = self._sites["good"], self._sites["broken"]
-            good.link_external(broken.base)
-            broken.link_external(good.base)
+                self._sites[name] = _Site(src, os.path.join(self.dir, name), tls=tls,
+                                          response_headers=headers)
+                if not tls:
+                    self._copy_artifacts(name)
+        # Each site's external links point at its same-protocol neighbour, once both
+        # ports are known. A site served alone keeps the unbound placeholder, which
+        # fails loudly rather than silently reaching the internet.
+        for left_name, right_name in (("good", "broken"),
+                                      ("good_tls", "broken_tls")):
+            if left_name in self._sites and right_name in self._sites:
+                left, right = self._sites[left_name], self._sites[right_name]
+                left.link_external(right.base)
+                right.link_external(left.base)
         return self
 
     def _copy_artifacts(self, name: str) -> None:
@@ -193,6 +226,10 @@ class FixtureSite:
     def origin(self, name: str) -> str:
         return self._sites[name].base
 
+    def environment(self, name: str) -> dict:
+        """Offline child environment, trusting the fixture CA only for TLS origins."""
+        return tls_env() if name.endswith("_tls") else offline_env()
+
     @property
     def good(self) -> str:
         return self._sites["good"].base + "/"
@@ -200,6 +237,14 @@ class FixtureSite:
     @property
     def broken(self) -> str:
         return self._sites["broken"].base + "/"
+
+    @property
+    def good_tls(self) -> str:
+        return self._sites["good_tls"].base + "/"
+
+    @property
+    def broken_tls(self) -> str:
+        return self._sites["broken_tls"].base + "/"
 
     def stop(self) -> None:
         for site in self._sites.values():
