@@ -954,7 +954,7 @@ item(167, "medium", S, "domain_safety_check.py", PAGE,
      {"path": "uptime.reachable", "truthy": True},
      "Set up uptime monitoring")
 item(168, "high", S, "broken_links.py", CRAWLARG,
-     {"path": "summary.broken", "eq": 0},
+     {"path": "summary.broken_or_redirected", "eq": 0},
      "Fix broken and redirected links",
      {"path": "summary.broken", "lte": 3})
 item(169, "high", S, "javascript_render_audit.py", PAGE,

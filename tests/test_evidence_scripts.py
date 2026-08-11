@@ -1586,7 +1586,7 @@ class Entities(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class BrokenLinks(unittest.TestCase):
-    """TE-168 `summary.broken`."""
+    """TE-168 `summary.broken_or_redirected`, warning on `summary.broken`."""
 
     def test_a_site_whose_links_all_resolve_passes(self):
         self.assertEqual(verdict("TE-168", out("broken")), PASS)
@@ -1601,6 +1601,56 @@ class BrokenLinks(unittest.TestCase):
         requests. `truncated` exists so a capped run cannot be read as a complete
         one."""
         self.assertIn("truncated", out("broken"))
+
+    def test_redirects_warn_and_the_existing_broken_tolerance_survives(self):
+        self.assertEqual(verdict("TE-168", {"summary": {
+            "broken": 0, "redirected": 0, "broken_or_redirected": 0}}), PASS)
+        self.assertEqual(verdict("TE-168", {"summary": {
+            "broken": 0, "redirected": 12, "broken_or_redirected": 12}}), WARN)
+        for broken in (1, 3):
+            with self.subTest(broken=broken):
+                self.assertEqual(verdict("TE-168", {"summary": {
+                    "broken": broken, "redirected": 0,
+                    "broken_or_redirected": broken}}), WARN)
+        self.assertEqual(verdict("TE-168", {"summary": {
+            "broken": 4, "redirected": 0, "broken_or_redirected": 4}}), FAIL)
+
+    def test_inventory_counts_only_internal_redirect_targets(self):
+        import broken_links
+        inventory = {
+            "site": "https://example.test/",
+            "fetch_error": None,
+            "summary": {"unique_internal_targets": 1, "truncated": False},
+            "pages": {
+                "https://example.test/": {
+                    "links": [
+                        {"target": "https://example.test/go", "internal": True,
+                         "anchor": "Go", "nofollow": False},
+                        {"target": "https://outside.test/go", "internal": False,
+                         "anchor": "Away", "nofollow": False},
+                    ],
+                },
+                "https://example.test/go": {
+                    "url": "https://example.test/go",
+                    "final_url": "https://example.test/there",
+                    "status": 200,
+                    "error": None,
+                    "robots_blocked": False,
+                    "redirect_chain": ["https://example.test/there"],
+                    "links": [],
+                },
+            },
+            # The crawl can report external activity elsewhere; this reader derives
+            # its population from internal inbound targets and must ignore it.
+            "redirected": [{"url": "https://outside.test/go",
+                            "to": "https://outside.test/there", "hops": 1}],
+        }
+        result = broken_links.links_from_inventory(inventory)
+        self.assertEqual(result["summary"]["redirected"], 1)
+        self.assertEqual(result["summary"]["broken_or_redirected"], 1)
+        self.assertEqual([row["url"] for row in result["redirected"]],
+                         ["https://example.test/go"])
+        self.assertTrue(all(row["is_internal"] for row in result["redirected"]))
 
 
 class ExternalLinks(unittest.TestCase):

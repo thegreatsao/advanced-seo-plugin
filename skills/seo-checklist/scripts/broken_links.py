@@ -213,6 +213,7 @@ def check_broken_links(url: str, internal_only: bool = False,
         "healthy": result["healthy"],
         "broken": len(result["broken"]),
         "redirected": len(result["redirected"]),
+        "broken_or_redirected": len(result["broken"]) + len(result["redirected"]),
         "timeout": len(result["timeout"]),
     }
 
@@ -303,6 +304,7 @@ def links_from_inventory(inventory: dict) -> dict:
         "healthy": result["healthy"],
         "broken": len(result["broken"]),
         "redirected": len(result["redirected"]),
+        "broken_or_redirected": len(result["broken"]) + len(result["redirected"]),
         "timeout": 0,
         "unchecked": len(result["unchecked"]),
     }
