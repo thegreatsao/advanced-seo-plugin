@@ -88,6 +88,110 @@
       "TECH-001": {
         "expect": "PASS",
         "why": "the schema uses current Organization, WebSite, BreadcrumbList, Bakery, and Article types with no HowTo or FAQ misuse"
+      },
+      "CI-004": {
+        "expect": "PASS",
+        "why": "none of the crawlable pages carries a meta robots noindex directive"
+      },
+      "MS-020": {
+        "expect": "PASS",
+        "why": "every supplied page title is concise enough to avoid SERP truncation"
+      },
+      "MS-021": {
+        "expect": "PASS",
+        "why": "the exemplary fixture ought to keep every sampled page title at 30 characters or more; about.html needs its deliberately short title repaired after this declaration"
+      },
+      "MS-026": {
+        "expect": "PASS",
+        "why": "every crawlable page has a non-empty title element"
+      },
+      "MS-028": {
+        "expect": "PASS",
+        "why": "the crawlable high-value pages all supply a meta description"
+      },
+      "MS-030": {
+        "expect": "PASS",
+        "why": "the sampled high-value pages carry clear meta descriptions in the fixture's intended 120–160-character range"
+      },
+      "MS-031": {
+        "expect": "PASS",
+        "why": "no page uses the obsolete meta keywords element"
+      },
+      "CN-034": {
+        "expect": "PASS",
+        "why": "the hand-written mobile render declares zero text nodes below 12 pixels"
+      },
+      "CN-035": {
+        "expect": "PASS",
+        "why": "the hand-written mobile render declares zero indistinct links"
+      },
+      "CN-048": {
+        "expect": "PASS",
+        "why": "the crawlable pages use one h1 followed by multiple h2 sections inside semantic main or article markup"
+      },
+      "CN-051": {
+        "expect": "PASS",
+        "why": "the hand-written mobile render declares no overlay covering content"
+      },
+      "CN-065": {
+        "expect": "PASS",
+        "why": "every crawlable page has exactly one clear h1"
+      },
+      "CN-066": {
+        "expect": "PASS",
+        "why": "every crawlable sampled page uses at least two h2 subheadings to structure its content"
+      },
+      "BL-084": {
+        "expect": "PASS",
+        "why": "the exemplary Links export to be staged after declaration will distribute backlinks across at least five domains with no domain supplying more than half"
+      },
+      "BL-086": {
+        "expect": "PASS",
+        "why": "the exemplary Links export to be staged after declaration will contain multiple backlinks"
+      },
+      "BL-087": {
+        "expect": "PASS",
+        "why": "the exemplary Links export to be staged after declaration will contain at least five linking root domains"
+      },
+      "MB-093": {
+        "expect": "PASS",
+        "why": "every crawlable page declares a responsive viewport for a mobile-first layout"
+      },
+      "MB-094": {
+        "expect": "PASS",
+        "why": "the 390-pixel-wide hand-written render declares no mobile overlay covering content"
+      },
+      "MB-103": {
+        "expect": "PASS",
+        "why": "the 390-pixel-wide hand-written render declares zero tap targets below 48 pixels"
+      },
+      "MB-104": {
+        "expect": "FAIL",
+        "why": "about.html and both blog posts omit a favicon declaration, so those pages do not ensure a favicon in mobile search results"
+      },
+      "IN-123": {
+        "expect": "PASS",
+        "why": "every page makes its language obvious with html lang=en"
+      },
+      "AR-146": {
+        "expect": "INDETERMINATE",
+        "why": "the fixture contains no paginated series; it would need linked first, middle, and last pages with pagination markup to exercise this title"
+      },
+      "TE-166": {
+        "expect": "FAIL",
+        "why": "about.html and both blog posts omit a link rel=icon declaration"
+      },
+      "SP-214": {
+        "expect": "PASS",
+        "why": "the hand-written local trace records an 820 ms largest contentful paint"
+      },
+      "SP-215": {
+        "expect": "PASS",
+        "why": "the hand-written local trace records a cumulative layout shift of 0.01"
+      },
+      "SP-216": {
+        "expect": "PASS",
+        "why": "the hand-written local trace records 40 ms of total blocking time"
       }
     },
     "broken": {
@@ -175,6 +279,110 @@
       "TECH-001": {
         "expect": "INDETERMINATE",
         "why": "the fixture needs a parseable HowTo or FAQPage block; its only HowTo appears inside unparseable JSON-LD and cannot be classified"
+      },
+      "CI-004": {
+        "expect": "FAIL",
+        "why": "the entry page explicitly blocks indexing with meta robots noindex"
+      },
+      "MS-020": {
+        "expect": "PASS",
+        "why": "every title that exists is at most 42 characters and cannot be truncated for excessive length; the missing entry-page title belongs to 'Ensure Every Page Has a Title'"
+      },
+      "MS-021": {
+        "expect": "FAIL",
+        "why": "the reachable thin page title '404 Not Found' is only 13 characters"
+      },
+      "MS-026": {
+        "expect": "FAIL",
+        "why": "the entry page has no title element"
+      },
+      "MS-028": {
+        "expect": "FAIL",
+        "why": "the entry page and reachable thin page have no meta description"
+      },
+      "MS-030": {
+        "expect": "FAIL",
+        "why": "the search page description is only 'Search results.' and other reachable pages have no description"
+      },
+      "MS-031": {
+        "expect": "FAIL",
+        "why": "the entry page contains a meta keywords element stuffed with bakery phrases"
+      },
+      "CN-034": {
+        "expect": "FAIL",
+        "why": "the hand-written mobile render declares 14 text nodes below 12 pixels"
+      },
+      "CN-035": {
+        "expect": "FAIL",
+        "why": "the hand-written mobile render declares six hyperlinks that are not clear and distinct"
+      },
+      "CN-048": {
+        "expect": "FAIL",
+        "why": "the entry page has two h1 elements, no h2 hierarchy, and no semantic main or article container"
+      },
+      "CN-051": {
+        "expect": "FAIL",
+        "why": "the hand-written mobile render declares one overlay covering content"
+      },
+      "CN-065": {
+        "expect": "FAIL",
+        "why": "the entry page has two h1 elements instead of one clear h1"
+      },
+      "CN-066": {
+        "expect": "FAIL",
+        "why": "the broken pages contain no h2 subheadings"
+      },
+      "BL-084": {
+        "expect": "FAIL",
+        "why": "the broken Links export to be staged after declaration will put more than 65 percent of its backlinks on one referring domain"
+      },
+      "BL-086": {
+        "expect": "PASS",
+        "why": "the broken Links export to be staged after declaration will still contain backlinks; concentration does not make the total zero"
+      },
+      "BL-087": {
+        "expect": "FAIL",
+        "why": "the broken Links export to be staged after declaration will contain fewer than five linking root domains"
+      },
+      "MB-093": {
+        "expect": "FAIL",
+        "why": "the entry page and reachable blog pages omit the responsive viewport declaration"
+      },
+      "MB-094": {
+        "expect": "FAIL",
+        "why": "the 390-pixel-wide hand-written render declares an overlay covering mobile content"
+      },
+      "MB-103": {
+        "expect": "FAIL",
+        "why": "the 390-pixel-wide hand-written render declares nine tap targets below 48 pixels"
+      },
+      "MB-104": {
+        "expect": "FAIL",
+        "why": "no page declares a favicon for mobile search results"
+      },
+      "IN-123": {
+        "expect": "FAIL",
+        "why": "the entry page and reachable thin page omit the html lang attribute"
+      },
+      "AR-146": {
+        "expect": "INDETERMINATE",
+        "why": "the fixture contains no paginated series; it would need linked first, middle, and last pages with pagination defects to exercise this title"
+      },
+      "TE-166": {
+        "expect": "FAIL",
+        "why": "no page contains a link rel=icon declaration"
+      },
+      "SP-214": {
+        "expect": "FAIL",
+        "why": "the hand-written local trace records a 5200 ms largest contentful paint"
+      },
+      "SP-215": {
+        "expect": "FAIL",
+        "why": "the hand-written local trace records a cumulative layout shift of 0.34"
+      },
+      "SP-216": {
+        "expect": "FAIL",
+        "why": "the hand-written local trace records 980 ms of total blocking time"
       }
     }
   }

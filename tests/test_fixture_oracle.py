@@ -21,10 +21,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from harness import FixtureSite, spawn  # noqa: E402
 
 DECLARED_IDS = {
-    "AR-151", "AR-158", "AR-162", "BL-081", "CI-008", "CI-019",
-    "CN-041", "CN-054", "GO-132", "GO-137", "GO-138", "LO-200",
-    "MB-096", "MB-097", "MD-185", "MS-022", "MS-029", "TE-168",
-    "TE-172", "TE-174", "TECH-001",
+    "AR-146", "AR-151", "AR-158", "AR-162", "BL-081", "BL-084",
+    "BL-086", "BL-087", "CI-004", "CI-008", "CI-019", "CN-034",
+    "CN-035", "CN-041", "CN-048", "CN-051", "CN-054", "CN-065",
+    "CN-066", "GO-132", "GO-137", "GO-138", "IN-123", "LO-200",
+    "MB-093", "MB-094", "MB-096", "MB-097", "MB-103", "MB-104",
+    "MD-185", "MS-020", "MS-021", "MS-022", "MS-026", "MS-028",
+    "MS-029", "MS-030", "MS-031", "SP-214", "SP-215", "SP-216",
+    "TE-166", "TE-168", "TE-172", "TE-174", "TECH-001",
 }
 ALLOWED = {"PASS", "WARN", "FAIL", "N/A", "INDETERMINATE"}
 SITE = None
@@ -99,15 +103,19 @@ def setUpModule():
 def tearDownModule():
     try:
         tally, differences = comparison()
-        print("\nFixture oracle stage 1")
+        print("\nFixture oracle through stage 2a")
         for label in ("good", "broken"):
             counts = tally[label]
-            print(f"  {label}: 21 declarations — {counts['matched']} matched, "
+            declarations = len(manifest()["fixtures"][label])
+            print(f"  {label}: {declarations} declarations — "
+                  f"{counts['matched']} matched, "
                   f"{counts['disagreed']} disagreed, "
                   f"{counts['indeterminate']} indeterminate")
         totals = {key: sum(row[key] for row in tally.values())
                   for key in ("matched", "disagreed", "indeterminate")}
-        print(f"  total: 42 declarations — {totals['matched']} matched, "
+        declarations = sum(len(row) for row in manifest()["fixtures"].values())
+        print(f"  total: {declarations} declarations — "
+              f"{totals['matched']} matched, "
               f"{totals['disagreed']} disagreed, "
               f"{totals['indeterminate']} indeterminate")
         print("  differences:")
@@ -133,7 +141,7 @@ class ManifestContract(unittest.TestCase):
             declared["declared_from"],
             "item title plus fixture construction; never from a run")
 
-    def test_both_fixtures_declare_all_21_items(self):
+    def test_both_fixtures_declare_all_items(self):
         fixtures = manifest()["fixtures"]
         self.assertEqual(set(fixtures), {"good", "broken"})
         for label, declarations in fixtures.items():
