@@ -83,7 +83,7 @@
       },
       "TE-174": {
         "expect": "PASS",
-        "why": "the title says 'Minify & Optimize CSS'; at 340 bytes the stylesheet is below the checker's 2 KB actionability floor and has no meaningful optimization target"
+        "why": "'Minify & Optimize CSS' asks for a stylesheet with waste worth removing; at 340 bytes there is none that a byte of request overhead would not eclipse, and the checker's 2 KB floor encodes the same reading rather than justifying it"
       },
       "TECH-001": {
         "expect": "PASS",
