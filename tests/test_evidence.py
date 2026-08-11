@@ -201,6 +201,43 @@ class ParseHtml(unittest.TestCase):
             "</head>", invalid + "</head>"))
         self.assertEqual(out["breadcrumbs"], {"schema": False, "ui": False})
 
+    def test_cn_048_passes_a_hierarchical_h1_only_semantic_page(self):
+        html = ("<html><body><nav>Site</nav><main><h1>Gallery</h1>"
+                "<p>Photographs need no artificial subheadings.</p></main>"
+                "<footer>Contact</footer></body></html>")
+        out = self.parse(html)
+        self.assertEqual(out["h2"], [])
+        self.assertEqual(out["issues"], [])
+        self.assertEqual(verdict("CN-048", out), PASS)
+        self.assertEqual(verdict("CN-066", out), FAIL)
+
+    def test_cn_048_fails_a_skipped_heading_level(self):
+        html = ("<html><body><nav>Site</nav><main><h1>Menu</h1>"
+                "<h3>Dessert</h3></main><footer>Contact</footer></body></html>")
+        out = self.parse(html)
+        self.assertIn("error", [finding["severity"] for finding in out["issues"]])
+        self.assertIn("H1 to H3", out["issues"][0]["message"])
+        self.assertEqual(verdict("CN-048", out), FAIL)
+
+    def test_cn_048_fails_without_main_and_warns_on_weaker_landmarks(self):
+        no_main = self.parse(
+            "<html><body><nav>Site</nav><h1>Menu</h1><footer>Contact</footer>"
+            "</body></html>")
+        self.assertEqual([finding["severity"] for finding in no_main["issues"]],
+                         ["error"])
+        self.assertEqual(verdict("CN-048", no_main), FAIL)
+
+        for missing, html in (
+            ("nav", "<main><h1>Menu</h1></main><footer>Contact</footer>"),
+            ("footer", "<nav>Site</nav><main><h1>Menu</h1></main>"),
+        ):
+            with self.subTest(missing=missing):
+                out = self.parse(f"<html><body>{html}</body></html>")
+                self.assertEqual([finding["severity"] for finding in out["issues"]],
+                                 ["warning"])
+                self.assertIn(missing, out["issues"][0]["message"])
+                self.assertEqual(verdict("CN-048", out), WARN)
+
 
 class IndexabilityMatrix(unittest.TestCase):
     """Four critical items read this script: CI-001 (indexable), CI-003 (200),

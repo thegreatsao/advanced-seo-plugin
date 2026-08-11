@@ -502,8 +502,8 @@ item(45, "medium", M, fix="Run a content gap analysis against competitors")
 item(46, "medium", L, fix="Review copy quality and content classification")
 item(47, "medium", L, fix="Check grammar and spelling")
 item(48, "high", S, "parse_html.py", HTMLARG,
-     {"path": "h2", "len_gte": 1},
-     "Use hierarchical headings and semantic HTML")
+     ISSUES_ANY(),
+     "Use hierarchical headings and semantic HTML", warn=NOTHING_SERIOUS())
 item(49, "medium", L, fix="Target topics and queries, not isolated keywords")
 item(50, "high", L, fix="Follow Google Search Essentials - quality and spam policies")
 # mobile_render_checker.py reports viewport, fixed widths and sticky positioning.

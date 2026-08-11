@@ -27,7 +27,7 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get
 
-from seo_common import html_parser
+from seo_common import html_parser, issue
 
 
 def _fetch_url(url: str, timeout: int = 20) -> dict[str, Any]:
@@ -111,6 +111,27 @@ def _has_breadcrumb_ui(soup, structured_trail: bool) -> bool:
         if re.search(r"breadcrumb", marker, re.I):
             return True
     return False
+
+
+def _structure_issues(soup) -> list[dict[str, Any]]:
+    """Report heading-level skips and missing semantic landmark elements."""
+    issues = []
+    headings = [(int(element.name[1]), element.get_text(" ", strip=True))
+                for element in soup.find_all(re.compile(r"^h[1-6]$", re.I))
+                if element.get_text(" ", strip=True)]
+    for (previous, _), (current, text) in zip(headings, headings[1:], strict=False):
+        if current > previous + 1:
+            issues.append(issue(
+                "error", f"Heading hierarchy skips from H{previous} to H{current}",
+                evidence=text[:120]))
+
+    if not soup.find("main"):
+        issues.append(issue("error", "No main landmark element found"))
+    if not soup.find("nav"):
+        issues.append(issue("warning", "No nav landmark element found"))
+    if not soup.find("footer"):
+        issues.append(issue("warning", "No footer landmark element found"))
+    return issues
 
 
 def _rel_contains(value: Any, token: str) -> bool:
@@ -198,6 +219,7 @@ def parse_html(
             "schema": structured_breadcrumb,
             "ui": _has_breadcrumb_ui(soup, structured_breadcrumb),
         },
+        "issues": _structure_issues(soup),
         "open_graph": {},
         "twitter_card": {},
         "word_count": 0,
