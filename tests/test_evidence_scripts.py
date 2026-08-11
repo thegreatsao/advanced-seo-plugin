@@ -1466,10 +1466,30 @@ class ImageInventory(unittest.TestCase):
         self.assertEqual(result["empty_alt"], 1)
         self.assertEqual(result["skipped_no_src"], 1)
 
-    def test_a_lazy_loaded_hero_image_is_the_one_thing_cn_054_looks_for(self):
+    def test_a_native_lazy_hero_remains_discoverable(self):
         self.assertEqual(verdict("CN-054", out("images")), PASS)
-        self.assertEqual(out("images_lazy")["summary"]["lazy_lcp_candidates"], 1)
-        self.assertEqual(verdict("CN-054", out("images_lazy")), FAIL)
+        lazy = out("images_lazy")
+        self.assertEqual(lazy["summary"]["lazy_lcp_performance_candidates"], 1)
+        self.assertEqual(lazy["summary"]["lazy_lcp_candidates"], 0)
+        self.assertEqual(verdict("CN-054", lazy), PASS)
+
+    def test_a_js_deferred_image_without_native_source_is_not_discoverable(self):
+        import tempfile
+        import image_inventory
+        html = """<!doctype html><html><body>
+        <img data-src="hero.jpg" width="800" height="400" class="lazy">
+        </body></html>"""
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            result = image_inventory.inventory(path)
+        finally:
+            os.unlink(path)
+        self.assertEqual(result["summary"]["lazy_lcp_candidates"], 1)
+        self.assertIs(result["images"][0]["discoverable"], False)
+        self.assertEqual(verdict("CN-054", result), FAIL)
 
     def test_the_image_count_is_the_count(self):
         self.assertEqual(verdict("MD-184", out("images")), PASS)

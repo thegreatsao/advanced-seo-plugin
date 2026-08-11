@@ -248,6 +248,8 @@ SAME_ON_BOTH = {
               "ships an image big enough to trip it without bloating the repository",
     "MB-098": "the dimension warning needs a real intrinsic size to compare against; "
               "both fixture images are 64px placeholders",
+    "CN-054": "both fixtures expose native image sources, so both are crawlable; "
+              "the data-src-only failure direction is covered in test_evidence_scripts",
 
     # --- Needs an artifact this audit does not produce -----------------------
     # The `--cwv-json` and `--rendered-json` exemptions used to live here and are

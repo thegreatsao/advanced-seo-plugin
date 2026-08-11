@@ -890,6 +890,18 @@ class ImageWeightAudit(unittest.TestCase):
         self.assertEqual(verdict("MB-097", out), FAIL)
         self.assertEqual(verdict("MB-096", out), FAIL)
 
+    def test_an_image_free_page_does_not_fail_responsive_images(self):
+        out = self.audit("<p>This page has no images.</p>")
+        self.assertEqual(out["image_count"], 0)
+        self.assertNotIn("responsive_count", out)
+        self.assertEqual(verdict("MB-096", out), NO_DATA)
+
+    def test_an_image_free_page_does_not_fail_modern_formats(self):
+        out = self.audit("<p>This page has no images.</p>")
+        self.assertEqual(out["image_count"], 0)
+        self.assertNotIn("modern_format_count", out)
+        self.assertEqual(verdict("MB-097", out), NO_DATA)
+
     def test_no_modern_source_means_the_raster_advice_still_stands(self):
         out = self.audit("""<picture>
           <source media="(max-width: 600px)" srcset="/i/small.png">

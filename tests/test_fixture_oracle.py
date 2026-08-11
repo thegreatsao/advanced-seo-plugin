@@ -143,9 +143,8 @@ class ManifestContract(unittest.TestCase):
 
 class FixtureOracle(unittest.TestCase):
 
-    @unittest.expectedFailure
     def test_every_settled_declaration_matches_the_real_runner(self):
-        """Expected failure: differences are this stage's deliverable."""
+        """Every settled declaration agrees after the stage-one triage."""
         _tally, differences = comparison()
         detail = "\n".join(
             f"{row['fixture']} {row['item']}: expected {row['expected']}, "

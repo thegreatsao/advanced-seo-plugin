@@ -470,9 +470,12 @@ def parse_html(html: str, base_url: str = "") -> dict:
 
     images = []
     for img in soup.find_all("img"):
-        src = img.get("src") or img.get("data-src") or ""
+        native_src = img.get("src") or ""
+        deferred_src = img.get("data-src") or ""
+        src = native_src or deferred_src
         if src and base_url:
             src = normalize_url(src, base_url)
+        sources = picture_sources(img, base_url)
         is_responsive_fill = is_responsive_fill_image(img)
         images.append({
             "src": src,
@@ -485,13 +488,19 @@ def parse_html(html: str, base_url: str = "") -> dict:
             "sizes": img.get("sizes"),
             "fetchpriority": img.get("fetchpriority"),
             "decoding": img.get("decoding"),
+            # Native `src`/`srcset` and picture sources are discoverable without
+            # running page JavaScript. A `data-src`/`data-srcset`-only image is a
+            # deferred instruction to JS, not an image source a crawler can follow.
+            "native_source": bool(native_src or img.get("srcset")
+                                  or any(source.get("srcset") for source in sources)),
+            "deferred_source": bool(deferred_src or img.get("data-srcset")),
             # What the browser may pick *instead* of `src`. Reading only the `img`
             # made a site doing this right look like a site doing nothing: the
             # recommended way to serve webp is a `<picture>` whose `<source>`
             # offers the modern format and whose `<img>` keeps a png fallback for
             # old browsers — so the fallback was the only thing the audit ever
             # saw, and MB-096/MB-097 failed the pattern they exist to encourage.
-            "picture_sources": picture_sources(img, base_url),
+            "picture_sources": sources,
         })
 
     schema = []

@@ -38,6 +38,9 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
             "sizes": bool(img.get("sizes")),
             "format": ext,
             "likely_lcp_candidate": likely_lcp_candidate(img, idx),
+            "native_source": bool(img.get("native_source")),
+            "deferred_source": bool(img.get("deferred_source")),
+            "discoverable": bool(img.get("native_source")),
         }
         if not row["has_alt"]:
             issues.append({"severity": "warning", "message": "Image missing alt text", "url": src})
@@ -51,16 +54,21 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
             row["content_length"] = head.get("headers", {}).get("content-length")
             row["content_type"] = head.get("headers", {}).get("content-type")
         rows.append(row)
-    # Counted rather than described. The checklist used to look for this by
-    # matching the issue text, and the pattern wanted "lazy" before "LCP" while
-    # the message says it the other way round — so it matched nothing and the
-    # item passed on every page. A number cannot be reworded.
+    # Keep the performance observation, but do not use it to answer a crawlability
+    # question. Native `loading=lazy` with an ordinary `src` remains discoverable;
+    # only a JS-deferred source with no native alternative answers CN-054 adversely.
     lazy_lcp = sum(1 for r in rows if r["likely_lcp_candidate"] and r["loading"] == "lazy")
+    undiscoverable_lazy = sum(1 for r in rows
+                              if r["deferred_source"] and not r["discoverable"])
     missing_alt = sum(1 for r in rows if not r["has_alt"])
     empty_alt = sum(1 for r in rows if r["empty_alt"])
     return {"url": url or source, "count": len(rows), "missing_alt": missing_alt,
             "empty_alt": empty_alt, "skipped_no_src": skipped_no_src,
-            "summary": {"images": len(rows), "lazy_lcp_candidates": lazy_lcp,
+            "summary": {"images": len(rows),
+                        # Retained at the registry's existing path: this is the
+                        # CN-054 verdict input, now aligned with discoverability.
+                        "lazy_lcp_candidates": undiscoverable_lazy,
+                        "lazy_lcp_performance_candidates": lazy_lcp,
                         "empty_alt": empty_alt, "skipped_no_src": skipped_no_src},
             "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
 

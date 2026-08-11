@@ -720,8 +720,11 @@ one — the script refuses the file instead.
 `count` — int
 `missing_alt` — int
 `summary.images` — int
-`summary.lazy_lcp_candidates` — int — added for CN-054, which used to look for
-  this by matching the issue text. Counted, so it cannot be reworded.
+`summary.lazy_lcp_candidates` — int — CN-054's compatibility path: JS-deferred images
+  with `data-src`/`data-srcset` but no native `src`, `srcset`, or `<picture>` source.
+  Native `loading=lazy` remains discoverable and does not increment this count.
+`summary.lazy_lcp_performance_candidates` — int — likely LCP images carrying native
+  `loading=lazy`; a performance observation, not CN-054's crawlability verdict.
 `issues[]` — array
   - item keys: severity, message, url
 `images[]` — array
@@ -743,12 +746,14 @@ one — the script refuses the file instead.
   be worse still — an equality assertion reads it as a failure.
 `broken_images[]` — array of str — absent under the same condition
 `known_image_bytes` — NoneType
-`modern_format_count` — int — images the browser can obtain in avif or webp, counting
+`modern_format_count` — int — absent when the page has no images; otherwise, images
+  the browser can obtain in avif or webp, counting
   a `<picture><source type="image/webp">` as well as an `img` whose own src is one.
   MB-097 reads this. Until 0.7.0 only the `img` was read, so the recommended pattern
   — modern format in a `<source>`, png fallback in the `<img>` — counted as no modern
   format at all and failed the item it exists to satisfy.
-`responsive_count` — int — images with a `srcset`, on the `img` or on a `<source>`
+`responsive_count` — int — absent when the page has no images; otherwise, images
+  with a `srcset`, on the `img` or on a `<source>`
   beside it. MB-096 reads this, and it was wrong in the same direction.
 `modern_format_on_img_count` — int — the narrow count: `img` src only
 `srcset_on_img_count` — int — the narrow count: `img` attribute only

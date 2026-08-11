@@ -137,8 +137,6 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         "image_count": len(images),
         "images_status_checked": len(checked),
         "known_image_bytes": known_bytes if fetch_images or any(row["content_length"] for row in images) else None,
-        "modern_format_count": sum(1 for row in images if row["modern_format"]),
-        "responsive_count": sum(1 for row in images if row["responsive"]),
         # The same two counts restricted to the `<img>` tag, which is what these
         # used to mean. Kept because they are the honest way to say "the fallback
         # is a png and that is fine": dropping them would leave no way to tell a
@@ -151,6 +149,13 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         "images": images,
         "fetch_error": fetched.get("error"),
     }
+    # An image-free page is not a page serving unresponsive, legacy-format images.
+    # Omit these verdict inputs so a sampled page with nothing to optimize is
+    # undecided and pages that actually contain images decide the site-level item.
+    if images:
+        out["modern_format_count"] = sum(1 for row in images
+                                          if row["modern_format"])
+        out["responsive_count"] = sum(1 for row in images if row["responsive"])
     # Present only when statuses exist. Emitting 0 — or None, which an equality
     # assertion reads as a failure rather than as silence — would turn "we did not
     # look" into a verdict either way. An absent key is NO_DATA by design.
@@ -177,7 +182,9 @@ def main() -> None:
     if args.json:
         print(json.dumps(result, indent=2))
     else:
-        print(f"Images: {result['image_count']}; responsive: {result['responsive_count']}; issues: {len(result['issues'])}")
+        print(f"Images: {result['image_count']}; responsive: "
+              f"{result.get('responsive_count', 'n/a')}; "
+              f"issues: {len(result['issues'])}")
 
 
 if __name__ == "__main__":

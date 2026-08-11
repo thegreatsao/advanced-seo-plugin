@@ -10,6 +10,24 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.41.0 — image verdicts distinguish absence, deferral and discoverability
+
+MB-096 and MB-097 no longer fail an image-free sampled page. The image audit omits
+`responsive_count` and `modern_format_count` when there is no image to assess, so
+that page is undecided and pages that serve images determine whether the site uses
+responsive and modern formats. Pages with old or non-responsive raster images still
+emit zero and fail as before.
+
+CN-054 now answers its title. Native `loading=lazy` with an ordinary `src`, `srcset`,
+or `<picture>` source remains crawl-discoverable and passes; a JS-deferred
+`data-src`/`data-srcset` image with no native source fails. Likely lazy-loaded LCP
+images remain reported separately as a performance observation.
+
+The fixture oracle triage settles five declarations, marks two fixtures
+indeterminate, and defers AR-158 and TE-168 to registry decisions 1 and 2. All
+remaining settled declarations now agree with the runner. Registry
+`07e64f9c9fc6` is unchanged. The 803-test baseline becomes 806.
+
 ## 0.40.1 — sampled-page evidence names the full sample
 
 Per-page aggregate evidence now keeps the sample size as its denominator when
