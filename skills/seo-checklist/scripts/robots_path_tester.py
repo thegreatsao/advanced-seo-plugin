@@ -4,6 +4,9 @@
 `--probe` additionally fetches each path robots permits, because "robots.txt does not
 disallow it" and "it is an indexable page" are different claims and CI-019 needs the
 second one. See `probe_url` for why that distinction was worth a request.
+
+`--discover-assets` reads same-origin stylesheet, script and image references from
+the audited page so CI-013 tests real rendering resources rather than invented paths.
 """
 
 from __future__ import annotations
@@ -11,6 +14,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from urllib.parse import urljoin, urlsplit
+
+from bs4 import BeautifulSoup
 
 from seo_common import fetch_robots, normalize_url, robots_allowed
 
@@ -35,6 +41,66 @@ _NOINDEX = re.compile(r"\bnone\b|\bnoindex\b", re.I)
 # in 0.5.0, and as the soft-404 guard's warning that `404` appears in the title of
 # every article ever written about broken links.
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parsed = urlsplit(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    if port is None:
+        port = 443 if parsed.scheme.lower() == "https" else 80 if parsed.scheme.lower() == "http" else None
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), port
+
+
+def discover_asset_paths(site: str, timeout: int = 15) -> tuple[list[str], str | None]:
+    """Return same-origin stylesheet, script and image paths referenced by the page.
+
+    Same origin means the resolved asset has the page response's scheme, hostname
+    and effective port. A CDN or even the same hostname on another scheme/port has
+    its own robots.txt and is outside this site's policy.
+    """
+    try:
+        response = safe_get(site, timeout=timeout, headers=default_headers(),
+                            allow_redirects=True)
+    except Exception as exc:
+        return [], f"{type(exc).__name__}: {exc}"
+    if response is None:
+        return [], "no response"
+    status = getattr(response, "status_code", None)
+    if status is None or status >= 400:
+        return [], f"status {status}"
+
+    page_url = getattr(response, "url", None) or normalize_url(site)
+    page_origin = _origin(page_url)
+    soup = BeautifulSoup(getattr(response, "text", "") or "", "html.parser")
+    references = []
+    for tag in soup.find_all("link", href=True):
+        if "stylesheet" in [str(value).lower() for value in (tag.get("rel") or [])]:
+            references.append(tag["href"])
+    references.extend(tag["src"] for tag in soup.find_all("script", src=True))
+    for tag in soup.find_all("img"):
+        if tag.get("src"):
+            references.append(tag["src"])
+        if tag.get("srcset"):
+            references.extend(part.strip().split()[0]
+                              for part in tag["srcset"].split(",") if part.strip())
+    for tag in soup.find_all("source"):
+        if tag.find_parent("picture") and tag.get("srcset"):
+            references.extend(part.strip().split()[0]
+                              for part in tag["srcset"].split(",") if part.strip())
+
+    paths = set()
+    for reference in references:
+        resolved = urlsplit(urljoin(page_url, reference))
+        if resolved.scheme not in ("http", "https") or _origin(resolved.geturl()) != page_origin:
+            continue
+        path = resolved.path or "/"
+        if resolved.query:
+            path += "?" + resolved.query
+        paths.add(path)
+    return sorted(paths), None
 
 
 def probe_url(url: str, timeout: int = 15) -> dict:
@@ -119,8 +185,10 @@ def test_paths(site: str, paths: list[str], agents: list[str], timeout: int = 15
            "robots_status": robots["fetch"].get("status"), "rows": rows}
     # No robots.txt answer means no verdict: a 500 or a timeout says nothing about
     # what is allowed, and an empty list would read as "nothing is exposed".
-    if not unreachable_robots:
+    if paths and not unreachable_robots:
         out["allowed_urls"] = reachable
+        out["blocked_urls"] = sorted(
+            row["url"] for row in rows if not row["allowed_for"])
     if probe and not unreachable_robots:
         # What CI-019 actually asks: pages that exist, that a crawler may fetch, and
         # that carry no directive keeping them out of the index. A path missing from
@@ -147,7 +215,10 @@ def test_paths(site: str, paths: list[str], agents: list[str], timeout: int = 15
 def main() -> None:
     parser = argparse.ArgumentParser(description="Test paths against robots.txt")
     parser.add_argument("site")
-    parser.add_argument("paths", nargs="+")
+    parser.add_argument("paths", nargs="*")
+    parser.add_argument("--discover-assets", action="store_true",
+                        help="Discover same-origin stylesheet, script and image paths "
+                             "from the audited page")
     parser.add_argument("--agent", action="append", help="Crawler user-agent; repeatable")
     parser.add_argument("--timeout", type=int, default=15)
     parser.add_argument("--probe", action="store_true",
@@ -155,8 +226,23 @@ def main() -> None:
                              "whether it carries noindex")
     parser.add_argument("--json", "-j", action="store_true")
     args = parser.parse_args()
-    result = test_paths(args.site, args.paths, args.agent or DEFAULT_AGENTS,
-                        args.timeout, probe=args.probe)
+    paths = args.paths
+    discovery_error = None
+    if args.discover_assets:
+        paths, discovery_error = discover_asset_paths(args.site, args.timeout)
+    if discovery_error:
+        result = {"site": normalize_url(args.site), "rows": [],
+                  "asset_discovery_error": discovery_error,
+                  "error": f"asset discovery failed: {discovery_error}"}
+    elif not paths:
+        result = {"site": normalize_url(args.site), "rows": []}
+        if args.discover_assets:
+            result["discovered_assets"] = []
+    else:
+        result = test_paths(args.site, paths, args.agent or DEFAULT_AGENTS,
+                            args.timeout, probe=args.probe)
+        if args.discover_assets:
+            result["discovered_assets"] = paths
     if args.json:
         print(json.dumps(result, indent=2))
     else:

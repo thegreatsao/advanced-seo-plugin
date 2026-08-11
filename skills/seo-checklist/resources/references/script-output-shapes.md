@@ -68,7 +68,7 @@ for that page. Use `--no-http-cache` for an isolated timing.
 
 | Script | Missing | Handling |
 |---|---|---|
-| `robots_path_tester.py` | positional `paths` | registry passes `/search /cart /checkout /login` |
+| `robots_path_tester.py` | positional `paths` | CI-019 passes `/search /cart /checkout /login`; CI-013 uses `--discover-assets` |
 | `indexnow_checker.py` | `--key` | optional; `NO_DATA` unless key configured |
 
 ---
@@ -1158,11 +1158,13 @@ sitemap URL reachable and this check vacuous.
 
 ### robots_path_tester.py
 
-Takes positional paths after the URL. The registry uses it twice, and since 0.20 the
-two uses need different evidence. CI-013 passes representative asset paths with
-`--agent Googlebot` to ask whether rendering resources are reachable: robots.txt rules
-are matched, nothing is fetched, and the paths need not exist. CI-019 passes
-`/search /cart /checkout /login` **and `--probe`**, because "robots.txt does not
+Takes positional paths after the URL or discovers the audited page's own same-origin
+stylesheets, scripts and images with `--discover-assets`. The registry uses it twice,
+and the two uses need different evidence. CI-013 discovers assets and passes
+`--agent Googlebot`; same-origin means an exact scheme, hostname and effective-port
+match after resolving the reference against the final page URL, so a third-party CDN
+is governed by its own robots.txt. CI-019 passes `/search /cart /checkout /login`
+**and `--probe`**, because "robots.txt does not
 disallow it" and "it is an indexable page" are different claims and only the second one
 is an accusation.
 
@@ -1172,11 +1174,17 @@ is an accusation.
 `allowed_urls[]` — array of str — every tested URL at least one agent may fetch.
   **Absent** when `robots_status` is neither 200 nor 404: a 500 or a timeout says
   nothing about what is allowed, and an empty list would read as "nothing is
-  exposed". CI-013 asserts it holds every asset path. Added because the previous
+  exposed". It is also absent when there are no paths to test. Added because the previous
   assertion matched `allowed.*true` as text, and `allowed` and `true` never land in
   the same string of a nested dict — so it matched nothing and passed every site.
   CI-019 asserted it was empty until 0.20 and no longer does: this field is computed
   from robots.txt alone, so a site with no cart was accused of exposing `/cart`.
+`blocked_urls[]` — array of str — **what CI-013 asserts is empty.** Same-origin page
+  assets Googlebot cannot fetch. Absent when asset discovery finds no blockable
+  reference or robots.txt cannot be read, so either empty input or an unavailable
+  policy produces NO_DATA rather than a critical PASS.
+`discovered_assets[]` — array of str — normalized same-origin paths found by
+  `--discover-assets`, including query strings because robots rules can match them.
 
 Under `--probe` only, and absent without it:
 

@@ -326,13 +326,14 @@ item(12, "medium", S, "url_quality.py", PAGE,
 # robots_checker.py reports sitemaps and syntax; it never says anything about
 # CSS, JS or images, so this critical item passed on every site ever audited —
 # the pattern was matching the script's own module docstring, which mentions
-# both. robots_path_tester answers it properly: ask whether Googlebot may fetch
-# representative asset paths. The rules are matched, nothing is downloaded, so
-# the paths need not exist. ASSET_PROBES and the len_gte below must agree.
-ASSET_PROBES = ["/assets/app.css", "/static/app.js", "/images/hero.jpg"]
+# both. robots_path_tester now discovers the audited page's own rendering assets
+# and asks whether Googlebot may fetch them. A literal path proves only that
+# robots.txt does not happen to name that invented path. `blocked_urls` is omitted
+# when the page references no same-origin CSS, JS or image, so emptiness cannot earn
+# a critical PASS for a page that supplied nothing to test.
 item(13, "critical", S, "robots_path_tester.py",
-     ["{url}"] + ASSET_PROBES + ["--agent", "Googlebot"],
-     {"path": "allowed_urls", "len_gte": len(ASSET_PROBES)},
+     ["{url}", "--discover-assets", "--agent", "Googlebot"],
+     {"path": "blocked_urls", "len_eq": 0},
      "Do not block critical CSS/JS/images in robots.txt - Google must be able to render the page")
 item(14, "high", S, "redirect_checker.py", PAGE,
      {"path": "has_loop", "falsy": True},

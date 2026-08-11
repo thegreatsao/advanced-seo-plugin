@@ -384,19 +384,16 @@ class CanonicalChecker(unittest.TestCase):
 
 
 class RobotsPathTester(unittest.TestCase):
-    """CI-013 (critical): may Googlebot fetch representative CSS, JS and image
-    paths? The rule counts `allowed_urls`, so the count and ASSET_PROBES in the
-    generator have to agree."""
+    """CI-013 (critical): may Googlebot fetch the page's own CSS, JS and images?"""
 
     def setUp(self):
         import robots_path_tester as rpt
         self.rpt = rpt
-        self.saved = rpt.fetch_robots
+        self.saved = (rpt.fetch_robots, rpt.safe_get)
         self.args = registry_rule("CI-013")["args"]
-        self.paths = [a for a in self.args[1:] if a.startswith("/")]
 
     def tearDown(self):
-        self.rpt.fetch_robots = self.saved
+        self.rpt.fetch_robots, self.rpt.safe_get = self.saved
 
     def serve(self, body, status=200):
         from seo_common import parse_robots_txt
@@ -405,28 +402,53 @@ class RobotsPathTester(unittest.TestCase):
             "fetch": {"status": status},
             "parsed": parse_robots_txt(body) if status == 200 else None}
 
-    def run_test(self):
-        return self.rpt.test_paths("https://example.com/", self.paths, ["Googlebot"])
+    def run_test(self, paths):
+        return self.rpt.test_paths("https://example.com/", paths, ["Googlebot"])
+
+    def test_registry_discovers_assets_instead_of_inventing_paths(self):
+        self.assertIn("--discover-assets", self.args)
+        self.assertEqual([arg for arg in self.args[1:] if arg.startswith("/")], [])
+
+    def test_only_same_origin_page_assets_are_discovered(self):
+        class Response:
+            status_code = 200
+            url = "https://example.com/guide/"
+            text = """<link rel=\"stylesheet\" href=\"/assets/site.css\">
+                <script src=\"app.js\"></script>
+                <img src=\"/images/hero.jpg\"
+                     srcset=\"/images/hero-2x.jpg 2x, https://cdn.example/hero.jpg 3x\">
+                <script src=\"https://third.example/tracker.js\"></script>
+                <img src=\"http://example.com/not-same-origin.jpg\">"""
+
+        self.rpt.safe_get = lambda *a, **k: Response()
+        found, error = self.rpt.discover_asset_paths("https://example.com/guide/")
+        self.assertIsNone(error)
+        self.assertEqual(found, ["/assets/site.css", "/guide/app.js",
+                                 "/images/hero-2x.jpg", "/images/hero.jpg"])
 
     def test_assets_reachable_passes(self):
         self.serve("User-agent: *\nDisallow: /admin\n")
-        out = self.run_test()
-        self.assertEqual(len(out["allowed_urls"]), len(self.paths))
+        out = self.run_test(["/assets/site.css", "/app.js", "/hero.jpg"])
+        self.assertEqual(out["blocked_urls"], [])
         self.assertEqual(verdict("CI-013", out), PASS)
 
     def test_a_blocked_asset_directory_fails(self):
         self.serve("User-agent: *\nDisallow: /assets/\nDisallow: /static/\n")
-        out = self.run_test()
-        self.assertEqual(len(out["allowed_urls"]), 1)
+        out = self.run_test(["/assets/site.css", "/static/app.js", "/hero.jpg"])
+        self.assertEqual(len(out["blocked_urls"]), 2)
         self.assertEqual(verdict("CI-013", out), FAIL)
 
+    def test_a_page_with_no_blockable_asset_is_undecided(self):
+        self.serve("User-agent: *\nDisallow: /admin\n")
+        out = self.run_test([])
+        self.assertNotIn("blocked_urls", out)
+        self.assertEqual(verdict("CI-013", out), NO_DATA)
+
     def test_an_unreachable_robots_txt_is_undecided_not_clean(self):
-        """A 500 says nothing about what is allowed, and an empty `allowed_urls`
-        would read as "every asset is blocked" while a present-but-empty list would
-        read as clean. The key is omitted instead."""
+        """A 500 says nothing about whether the page's own assets are blocked."""
         self.serve("", status=500)
-        out = self.run_test()
-        self.assertNotIn("allowed_urls", out)
+        out = self.run_test(["/assets/site.css"])
+        self.assertNotIn("blocked_urls", out)
         self.assertEqual(verdict("CI-013", out), NO_DATA)
 
 
