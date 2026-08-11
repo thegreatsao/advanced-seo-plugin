@@ -730,8 +730,6 @@ one — the script refuses the file instead.
 `summary.lazy_lcp_candidates` — int — CN-054's compatibility path: JS-deferred images
   with `data-src`/`data-srcset` but no native `src`, `srcset`, or `<picture>` source.
   Native `loading=lazy` remains discoverable and does not increment this count.
-`summary.lazy_lcp_performance_candidates` — int — likely LCP images carrying native
-  `loading=lazy`; a performance observation, not CN-054's crawlability verdict.
 `issues[]` — array
   - item keys: severity, message, url
 `images[]` — array

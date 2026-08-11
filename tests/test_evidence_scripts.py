@@ -1490,10 +1490,10 @@ class ImageInventory(unittest.TestCase):
         self.assertEqual(result["empty_alt"], 1)
         self.assertEqual(result["skipped_no_src"], 1)
 
-    def test_a_native_lazy_hero_remains_discoverable(self):
+    def test_a_native_lazy_hero_remains_discoverable_without_an_unread_counter(self):
         self.assertEqual(verdict("CN-054", out("images")), PASS)
         lazy = out("images_lazy")
-        self.assertEqual(lazy["summary"]["lazy_lcp_performance_candidates"], 1)
+        self.assertNotIn("lazy_lcp_performance_candidates", lazy["summary"])
         self.assertEqual(lazy["summary"]["lazy_lcp_candidates"], 0)
         self.assertEqual(verdict("CN-054", lazy), PASS)
 

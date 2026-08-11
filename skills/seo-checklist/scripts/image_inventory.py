@@ -54,10 +54,10 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
             row["content_length"] = head.get("headers", {}).get("content-length")
             row["content_type"] = head.get("headers", {}).get("content-type")
         rows.append(row)
-    # Keep the performance observation, but do not use it to answer a crawlability
-    # question. Native `loading=lazy` with an ordinary `src` remains discoverable;
-    # only a JS-deferred source with no native alternative answers CN-054 adversely.
-    lazy_lcp = sum(1 for r in rows if r["likely_lcp_candidate"] and r["loading"] == "lazy")
+    # Native `loading=lazy` with an ordinary `src` remains discoverable; only a
+    # JS-deferred source with no native alternative answers CN-054 adversely. LCP
+    # performance is graded separately by image_weight_audit.py for MD-185, so this
+    # inventory does not retain a second, unread count for it.
     undiscoverable_lazy = sum(1 for r in rows
                               if r["deferred_source"] and not r["discoverable"])
     missing_alt = sum(1 for r in rows if not r["has_alt"])
@@ -68,7 +68,6 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
                         # Retained at the registry's existing path: this is the
                         # CN-054 verdict input, now aligned with discoverability.
                         "lazy_lcp_candidates": undiscoverable_lazy,
-                        "lazy_lcp_performance_candidates": lazy_lcp,
                         "empty_alt": empty_alt, "skipped_no_src": skipped_no_src},
             "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
 
