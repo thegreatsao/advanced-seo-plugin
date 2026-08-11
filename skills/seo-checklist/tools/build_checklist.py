@@ -405,7 +405,7 @@ item(21, "medium", S, "parse_html.py", HTMLARG,
      {"path": "title", "len_gte": 30},
      "Titles under 30 characters are usually too vague to match intent")
 item(22, "high", S, "duplicate_content.py", CRAWLARG,
-     {"path": "exact_duplicates", "len_eq": 0},
+     {"path": "summary.duplicate_title_groups", "eq": 0},
      "Crawl for duplicate titles, then differentiate or canonicalize them")
 item(23, "high", S, "gsc_cannibalization.py", GSCARG,
      {"path": "summary.cannibalized_queries", "eq": 0},

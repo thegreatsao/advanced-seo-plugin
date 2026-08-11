@@ -1168,7 +1168,7 @@ class LlmsTxt(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class DuplicateAndThinContent(unittest.TestCase):
-    """MS-022 `exact_duplicates`, CN-041 `summary.exact_duplicate_groups`,
+    """MS-022 `summary.duplicate_title_groups`, CN-041 `summary.exact_duplicate_groups`,
     CN-039 `summary.thin_pages`, MS-029 `summary.duplicate_description_groups`.
 
     MS-029 *Eliminate Duplicate Meta Descriptions* asserted the content-duplication
@@ -1198,8 +1198,32 @@ class DuplicateAndThinContent(unittest.TestCase):
     def test_two_paths_serving_one_document_are_found(self):
         bad = out("dupes_bad")
         self.assertEqual(bad["summary"]["exact_duplicate_groups"], 1)
+        self.assertEqual(bad["summary"]["duplicate_title_groups"], 1)
         for item_id in ("MS-022", "CN-041"):
             self.assertEqual(verdict(item_id, bad), FAIL, item_id)
+
+    def test_missing_titles_are_not_duplicates_but_case_and_spacing_are(self):
+        import duplicate_content
+        pages = {
+            "/absent-a": {"title": ""},
+            "/absent-b": {"title": "   "},
+            "/shared-a": {"title": "Summer Menu"},
+            "/shared-b": {"title": " summer   menu "},
+            "/unique": {"title": "Contact"},
+        }
+        groups = duplicate_content.duplicate_titles(pages)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["urls"], ["/shared-a", "/shared-b"])
+
+    def test_ms_022_fails_on_shared_titles_and_not_on_shared_content(self):
+        shared_title = {"summary": {"duplicate_title_groups": 1,
+                                    "exact_duplicate_groups": 0}}
+        shared_body = {"summary": {"duplicate_title_groups": 0,
+                                   "exact_duplicate_groups": 1}}
+        self.assertEqual(verdict("MS-022", shared_title), FAIL)
+        self.assertEqual(verdict("CN-041", shared_title), PASS)
+        self.assertEqual(verdict("MS-022", shared_body), PASS)
+        self.assertEqual(verdict("CN-041", shared_body), FAIL)
 
     def test_ms_029_fails_on_shared_descriptions_and_not_on_shared_content(self):
         """The wiring, on a payload built for it rather than on a fixture.
