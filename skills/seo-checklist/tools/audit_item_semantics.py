@@ -138,7 +138,8 @@ REVIEWED: dict[str, str] = {
     "CN-051": "OK. overlays_covering_content == 0 is an intrusive interstitial, "
               "measured on the rendered page, which is the only place it exists.",
     "KW-071": "OK. Cannibalisation is keyword duplication seen from the SERP side, "
-              "and worst_spread is how far one query's URLs are scattered.",
+              "and contested_queries counts queries whose URLs compete in the same "
+              "close position band.",
     "MB-093": "OK, weakly, and it is `critical`. A viewport meta tag is necessary for "
               "a responsive layout and nowhere near sufficient — a fixed-width page "
               "with the tag passes. The full check needs rendering at two widths.",
@@ -146,8 +147,8 @@ REVIEWED: dict[str, str] = {
     "MB-105": "OK. `diffs` is the parity between raw and rendered, which is the item.",
     "SP-107": "OK. FCP is when above-the-fold content appears; the title says so in "
               "English and the assertion says so in an acronym.",
-    "SE-116": "OK. safe_browsing.clean is hacked content and malware, as graded by "
-              "the service that grades it.",
+    "SE-116": "OK. An empty safe_browsing.threats list is no hacked content or "
+              "malware, as graded by the service that grades it.",
     "IN-128": "OK. hreflang self-reference is the mechanism by which the correct "
               "localised page is served; without it the set does not resolve.",
     "GO-131": "OK. A measurement id present is GA4 installed.",

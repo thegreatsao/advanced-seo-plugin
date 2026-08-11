@@ -726,7 +726,7 @@ item(115, "medium", S, "security_headers.py", PAGE,
      {"path": "header_values.strict-transport-security", "truthy": True},
      "Enable HSTS")
 item(116, "critical", S, "domain_safety_check.py", PAGE,
-     {"path": "safe_browsing.clean", "truthy": True},
+     {"path": "safe_browsing.threats", "len_eq": 0},
      "Confirm there is no hacked content or malware")
 item(117, "critical", S, "security_headers.py", PAGE,
      {"path": "https", "truthy": True},
@@ -957,7 +957,7 @@ item(170, "medium", S, "cache_compression_checker.py", PAGE,
      ISSUES_ANY(),
      "Configure server rewrites and cache/compression headers", warn=NOTHING_SERIOUS())
 item(171, "critical", S, "domain_safety_check.py", PAGE,
-     {"path": "safe_browsing.clean", "truthy": True},
+     {"path": "safe_browsing.threats", "len_eq": 0},
      "Check the domain against blocklists and Safe Browsing")
 item(172, "high", S, "rich_results_guard.py", PAGE,
      {"path": "summary.errors", "eq": 0},
@@ -1002,7 +1002,7 @@ item(179, "low", S, "domain_safety_check.py", PAGE,
      # difference, which is what it is for — and it is already in that tool's
      # PATH_EXEMPT, since a field that needs a key is absent from a keyless probe
      # without being wrong.
-     {"path": "safe_browsing.threats", "len_lte": 0},
+     {"path": "safe_browsing.threats", "len_eq": 0},
      "Check the domain against Safe Browsing and review its registration history; "
      "set GOOGLE_SAFE_BROWSING_KEY so this can be answered")
 item(180, "medium", S, "a11y_seo_checker.py", PAGE,
@@ -1240,7 +1240,11 @@ SAME_CHECK = {
     "MD-189": "MB-097",   # modern formats — MD-189 medium, MB-097 medium, lower id
     "MD-190": "MB-102",   # video SEO (medium) over "Optimize Video for Mobile" (low)
     "TE-166": "MB-104",   # "Add a Favicon" / "Ensure Favicon Displays in Mobile SERPs"
-    "SE-116": "TE-171",   # hacked content & malware / blocklist & Safe-Browsing checks
+    # One Safe Browsing response, expressed four ways in the source checklists.
+    # All four read the same threats list. The critical pair ties on severity, so
+    # the lower id SE-114 carries the weight; the two remaining items are twins of
+    # that same primary, never a chain through SE-116.
+    "SE-114": ["SE-116", "TE-171", "TE-179"],
     # Three entries for one measurement, and the registry asked the question three times
     # because the source checklists did. SP-108 *Pass Core Web Vitals (Field Data)* is the
     # one that says what it measures; SP-112 asks it again per device and SP-113 asks it

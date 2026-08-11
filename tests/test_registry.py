@@ -1493,6 +1493,13 @@ class OneCheckCarriesWeightOnce(unittest.TestCase):
             self.assertIn(item["scores_with"], ids,
                           f"{item['id']} defers to an id that is not in the registry")
 
+    def test_safe_browsing_is_one_flat_group(self):
+        by_id = {item["id"]: item for item in ITEMS}
+        self.assertIsNone(by_id["SE-114"].get("scores_with"))
+        for item_id in ("SE-116", "TE-171", "TE-179"):
+            self.assertEqual(by_id[item_id].get("scores_with"), "SE-114")
+            self.assertEqual(self.shape(by_id[item_id]), self.shape(by_id["SE-114"]))
+
     def test_a_twin_shares_its_primary_s_check_exactly(self):
         """The claim `scores_with` makes is *this is the same check*. If the shapes
         differ, two different questions are being asked and one of them stopped
