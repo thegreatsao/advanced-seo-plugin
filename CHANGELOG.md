@@ -44,11 +44,18 @@ redirecting targets. Redirects alone warn, one to three broken targets retain th
 existing warning tolerance, and only a fourth broken target fails. Strictness moves
 only for the previously unread “Redirected” half; the broken-link bands do not move.
 
-CN-048 now emits structural `issues`: skipped heading levels and a missing `main`
-landmark are errors, while missing `nav` or `footer` landmarks are warnings. Its old
-H2 minimum is removed and CN-066 keeps the separate two-H2 rule. Strictness moves in
-both directions to match “Hierarchical Headings and Semantic HTML”: real structural
-defects now count, while a correctly structured H1-only gallery no longer fails.
+CN-048 now emits structural `issues`: a skipped heading level and a missing `main`
+landmark are errors. Its old H2 minimum is removed and CN-066 keeps the separate
+two-H2 rule. Strictness moves in both directions to match “Hierarchical Headings and
+Semantic HTML”: real structural defects now count, while a correctly structured
+H1-only gallery no longer fails.
+
+Absence of `nav` or `footer` is deliberately **not** a finding. Both were warnings in
+the first cut of this rule, and that put the exemplary fixture into WARN over blog
+pages with no footer — entirely ordinary pages. A page with no navigation correctly
+has no `nav`, and penalising the absence measures page design rather than markup
+semantics. `main` stays an error because every page has main content, so failing to
+mark it is a real defect.
 
 LO-198 is site-level. `site_crawl.py` inventory version 3 records the types of each
 parseable JSON-LD node, and `local_seo_checker.py --inventory` asks whether at least
