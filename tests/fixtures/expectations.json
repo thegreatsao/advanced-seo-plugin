@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "registry_version": "07e64f9c9fc6",
+  "declared_from": "item title plus fixture construction; never from a run",
+  "fixtures": {
+    "good": {
+      "AR-151": {
+        "expect": "PASS",
+        "why": "robots.txt exists, has a user-agent policy, and declares the sitemap"
+      },
+      "AR-158": {
+        "expect": "FAIL",
+        "why": "the page has BreadcrumbList schema but no visible breadcrumb UI, while the title requires both"
+      },
+      "AR-162": {
+        "expect": "PASS",
+        "why": "the crawlable pages are connected by descriptive internal links and no crawlable sitemap page is orphaned"
+      },
+      "BL-081": {
+        "expect": "PASS",
+        "why": "internal anchors are descriptive and varied; repeated Home links are ordinary navigation"
+      },
+      "CI-008": {
+        "expect": "PASS",
+        "why": "every crawlable sitemap page is discoverable through internal navigation or contextual links"
+      },
+      "CI-019": {
+        "expect": "N/A",
+        "why": "the system and search paths do not exist, so there is no such page to noindex"
+      },
+      "CN-041": {
+        "expect": "PASS",
+        "why": "the reachable pages have distinct body content and do not duplicate one another"
+      },
+      "CN-054": {
+        "expect": "PASS",
+        "why": "the lazy image is present in ordinary picture, source, and img markup, so its URL and content remain discoverable"
+      },
+      "GO-132": {
+        "expect": "PASS",
+        "why": "the sole GA4 measurement ID is configured once"
+      },
+      "GO-137": {
+        "expect": "INDETERMINATE",
+        "why": "the fixture supplies a sitemap but no search-engine index inventory to reconcile against it"
+      },
+      "GO-138": {
+        "expect": "FAIL",
+        "why": "the sitemap includes a URL that robots.txt forbids, so it is not a valid indexable sitemap URL"
+      },
+      "LO-200": {
+        "expect": "INDETERMINATE",
+        "why": "on-page NAP and LocalBusiness data exist, but the fixture provides no GBP or review evidence"
+      },
+      "MB-096": {
+        "expect": "PASS",
+        "why": "the picture source declares srcset candidates and sizes for responsive selection"
+      },
+      "MB-097": {
+        "expect": "PASS",
+        "why": "the picture offers a WebP source and its tiny PNG fallback is compressed"
+      },
+      "MD-185": {
+        "expect": "PASS",
+        "why": "the image has a modern source, responsive candidates, dimensions, alt text, lazy loading, and async decoding"
+      },
+      "MS-022": {
+        "expect": "PASS",
+        "why": "every reachable page has a distinct title"
+      },
+      "MS-029": {
+        "expect": "PASS",
+        "why": "every supplied meta description is distinct"
+      },
+      "TE-168": {
+        "expect": "PASS",
+        "why": "the fixture deliberately removed its planted dead link and its internal links resolve"
+      },
+      "TE-172": {
+        "expect": "PASS",
+        "why": "the JSON-LD blocks are parseable and contain the required structures for their declared types"
+      },
+      "TE-174": {
+        "expect": "FAIL",
+        "why": "site.css retains comments, whitespace, indentation, and long-form declarations instead of being minified"
+      },
+      "TECH-001": {
+        "expect": "PASS",
+        "why": "the schema uses current Organization, WebSite, BreadcrumbList, Bakery, and Article types with no HowTo or FAQ misuse"
+      }
+    },
+    "broken": {
+      "AR-151": {
+        "expect": "FAIL",
+        "why": "there is no robots.txt in the tree, so the requested file is a 404"
+      },
+      "AR-158": {
+        "expect": "FAIL",
+        "why": "there is no visible breadcrumb UI and the BreadcrumbList schema omits itemListElement"
+      },
+      "AR-162": {
+        "expect": "FAIL",
+        "why": "orphan.html exists in the sitemap but no page links to it"
+      },
+      "BL-081": {
+        "expect": "FAIL",
+        "why": "one page repeats the same exact-match anchor five times to the same target"
+      },
+      "CI-008": {
+        "expect": "FAIL",
+        "why": "orphan.html is declared in the sitemap but is undiscoverable from internal links or navigation"
+      },
+      "CI-019": {
+        "expect": "FAIL",
+        "why": "the reachable search-results page has no meta noindex, X-Robots-Tag noindex, or robots exclusion"
+      },
+      "CN-041": {
+        "expect": "FAIL",
+        "why": "duplicate-a.html and duplicate-b.html expose identical reachable body content without a consolidating canonical"
+      },
+      "CN-054": {
+        "expect": "PASS",
+        "why": "the lazy-loaded hero uses native loading and an ordinary src attribute, so it remains discoverable"
+      },
+      "GO-132": {
+        "expect": "FAIL",
+        "why": "the same GA4 measurement ID is configured twice on one page"
+      },
+      "GO-137": {
+        "expect": "INDETERMINATE",
+        "why": "the fixture supplies a sitemap but no search-engine index inventory to reconcile against it"
+      },
+      "GO-138": {
+        "expect": "FAIL",
+        "why": "the sitemap contains an off-host URL, missing URLs, and an invalid lastmod date"
+      },
+      "LO-200": {
+        "expect": "FAIL",
+        "why": "the local bakery page provides no business name-address-phone block or LocalBusiness data"
+      },
+      "MB-096": {
+        "expect": "FAIL",
+        "why": "the large images have neither srcset nor sizes and provide no responsive variants"
+      },
+      "MB-097": {
+        "expect": "INDETERMINATE",
+        "why": "a 54 KB PNG of simple line art may already be efficiently compressed, and no quality target or alternative encoding is supplied"
+      },
+      "MD-185": {
+        "expect": "FAIL",
+        "why": "the page repeats an oversized PNG, omits dimensions and useful alt text on copies, defers the hero, and references a missing image"
+      },
+      "MS-022": {
+        "expect": "FAIL",
+        "why": "the two reachable duplicate pages use the same title and declare no consolidating canonical"
+      },
+      "MS-029": {
+        "expect": "FAIL",
+        "why": "the two reachable duplicate pages use the same meta description"
+      },
+      "TE-168": {
+        "expect": "FAIL",
+        "why": "the page links to missing internal and non-resolving external URLs"
+      },
+      "TE-172": {
+        "expect": "FAIL",
+        "why": "the page has malformed JSON-LD, an incomplete Product, and a BreadcrumbList without itemListElement"
+      },
+      "TE-174": {
+        "expect": "FAIL",
+        "why": "the linked 21 KB stylesheet deliberately retains comments, whitespace, indentation, and repeated long-form rules"
+      },
+      "TECH-001": {
+        "expect": "FAIL",
+        "why": "the page embeds a HowTo declaration even though the title forbids HowTo misuse, and the declaration is malformed"
+      }
+    }
+  }
+}
