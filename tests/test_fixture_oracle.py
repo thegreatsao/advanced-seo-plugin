@@ -39,11 +39,17 @@ def manifest() -> dict:
 def audit(label: str, url: str) -> dict[str, str]:
     """Run the unmodified checker against one served fixture."""
     out = os.path.join(SITE.dir, f"oracle-{label}.json")
+    artifacts = []
+    for flag, filename in (("--rendered-json", "rendered.json"),
+                           ("--cwv-json", "cwv.json")):
+        path = SITE.artifact(label, filename)
+        if path:
+            artifacts += [flag, path]
     proc = spawn(
         [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
          "--allow-private", "--sample", "3", "--max-rps", "0",
          "--no-history", "--no-prompt", "--quiet", "--timeout", "120",
-         "--json", out],
+         "--json", out, *artifacts],
         timeout=900)
     if proc.returncode != 0:
         raise AssertionError(
