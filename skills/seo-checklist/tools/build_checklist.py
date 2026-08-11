@@ -577,9 +577,16 @@ item(70, "high", S, "gsc_cannibalization.py", GSCARG,
 # cannibalization and the narrower close-position contest. MS-023 already owns
 # the broad `cannibalized_queries` count; this item measures the distinct close
 # contest that is evidence of duplication or overuse.
+#
+# The warn band is not decoration. The rule this replaced was `worst_spread lte 3`,
+# so the item already tolerated a little before it failed; repointing it at a count
+# with `eq 0` alone quietly made a `high` item fail on a single contested query.
+# MS-023 grades the broader `cannibalized_queries` on the same script with `lte 3`,
+# and a narrower signal cannot honestly be stricter than the broader one.
 item(71, "high", S, "gsc_cannibalization.py", GSCARG,
      {"path": "summary.contested_queries", "eq": 0},
-     "Find keyword overuse and duplication across URLs")
+     "Find keyword overuse and duplication across URLs",
+     {"path": "summary.contested_queries", "lte": 3})
 # article_seo.py has no keyword finding at all — its seo_issues describe presence
 # and length, and the word "keyword" appears only inside remediation text. Both
 # patterns were matching that: KW-072 and KW-073 reported a keyword problem

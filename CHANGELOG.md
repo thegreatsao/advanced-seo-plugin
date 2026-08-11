@@ -13,8 +13,15 @@ breaking change for whoever read the old number, and saying so is the point.
 ## 0.43.0 — registry assertions measure the facts their titles name
 
 KW-071 now reads the emitted `contested_queries` count instead of the deleted
-`worst_spread` field. MS-022 gets a case-insensitive, whitespace-normalized duplicate
-title count that skips missing titles, leaving duplicate body content to CN-041.
+`worst_spread` field, and grades it with a `lte 3` warn band. The band matters: the
+rule it replaced was `worst_spread lte 3`, so the item already tolerated a little
+before failing, and a bare `eq 0` would have made a `high` item fail on one contested
+query without that being anyone's decision. MS-023 grades the broader
+`cannibalized_queries` on the same script with `lte 3`, and a narrower signal should
+not be stricter than the broader one.
+
+MS-022 gets a case-insensitive, whitespace-normalized duplicate title count that skips
+missing titles, leaving duplicate body content to CN-041.
 
 The four Safe Browsing items now read one threats-list assertion and score it once,
 with SE-114 as the primary. CI-013 discovers the audited page's same-origin CSS,
@@ -26,7 +33,7 @@ effective-port match after URL resolution.
 `lazy_lcp_performance_candidates` count. MD-185 retains the condition as the warning
 `Likely LCP image is lazy-loaded` from `image_weight_audit.py`.
 
-Registry `d70a3d112521` replaces `07e64f9c9fc6`. The fixture declarations remain
+Registry `ce8266615771` replaces `07e64f9c9fc6`. The fixture declarations remain
 fully agreed after MS-022 is re-declared from its title-specific rule. The 808-test
 baseline becomes 814.
 
