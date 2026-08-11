@@ -94,6 +94,7 @@ def extract_entities_from_schema(soup: BeautifulSoup) -> list:
                 entities.append({
                     "type": matched,
                     "types": types,
+                    "id": item.get("@id", ""),
                     "name": item.get("name", ""),
                     "url": item.get("url", ""),
                     "sameAs": item.get("sameAs", []),
@@ -319,13 +320,50 @@ def _nap_entities(entities: list) -> list:
     return out
 
 
+def _identity_refs(entity: dict) -> set[str]:
+    """Return schema identifiers that explicitly link descriptions of one thing."""
+    refs = set()
+    entity_id = entity.get("id") or entity.get("@id")
+    if isinstance(entity_id, str) and entity_id.strip():
+        refs.add(entity_id.strip())
+    same_as = entity.get("sameAs") or []
+    if isinstance(same_as, (str, dict)):
+        same_as = [same_as]
+    for value in same_as:
+        if isinstance(value, str) and value.strip():
+            refs.add(value.strip())
+        elif isinstance(value, dict):
+            linked_id = value.get("@id")
+            if isinstance(linked_id, str) and linked_id.strip():
+                refs.add(linked_id.strip())
+    return refs
+
+
+def _same_named_entity(left: dict, right: dict) -> bool:
+    """Names must agree only for a shared type or an explicit identity link."""
+    left_types = set(schema_types(left.get("types") or left.get("type")))
+    right_types = set(schema_types(right.get("types") or right.get("type")))
+    if left_types.intersection(right_types):
+        return True
+    left_id = str(left.get("id") or left.get("@id") or "").strip()
+    right_id = str(right.get("id") or right.get("@id") or "").strip()
+    # Distinct node identifiers are the stronger signal: co-located entities can
+    # legitimately share an official social profile, and one node may even cite
+    # another in sameAs without becoming the same schema node. Use sameAs as an
+    # identity fallback only when neither node has its own identifier.
+    if left_id or right_id:
+        return bool(left_id and left_id == right_id)
+    return bool(_identity_refs(left).intersection(_identity_refs(right)))
+
+
 def _nap_disagreements(entities: list) -> list:
     issues = []
     address_fields = ("streetAddress", "addressLocality", "addressRegion",
                       "postalCode", "addressCountry")
     for left, right in combinations(entities, 2):
-        comparisons = [("name", left.get("name"), right.get("name")),
-                       ("telephone", left.get("telephone"), right.get("telephone"))]
+        comparisons = [("telephone", left.get("telephone"), right.get("telephone"))]
+        if _same_named_entity(left, right):
+            comparisons.insert(0, ("name", left.get("name"), right.get("name")))
         left_address, right_address = left.get("address"), right.get("address")
         if isinstance(left_address, dict) and isinstance(right_address, dict):
             comparisons.extend((field, left_address.get(field), right_address.get(field))

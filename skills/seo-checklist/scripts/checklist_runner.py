@@ -2365,6 +2365,19 @@ def evidence_runs(results: dict) -> dict:
     return out
 
 
+def evidence_artifact(results: dict, pages: dict | None = None) -> dict:
+    """Build the evidence artifact without flattening page runs into site runs.
+
+    ``pages=None`` means no sampling occurred and deliberately omits the ``pages``
+    key, preserving the pre-sampling artifact shape. An empty mapping means a
+    sampled run had no page output and is retained so absence is still explicit.
+    """
+    out = evidence_runs(results)
+    if pages is not None:
+        out["pages"] = pages
+    return out
+
+
 def write_evidence(path: str, evidence: dict, secrets: tuple[str, ...] = ()) -> None:
     """Write a complete, redacted evidence artifact without changing its shape."""
     with open(os.path.expanduser(path), "w", encoding="utf-8") as stream:
@@ -2943,6 +2956,7 @@ def main() -> int:
                       "links); auditing the single page", file=sys.stderr)
                 sampled_urls = []
 
+    page_evidence: dict[str, dict] | None = None
     if sampled_urls:
         # Artifact-backed items are page-level and still must not be sampled. The
         # file describes one URL; re-running the same reader against four other
@@ -2952,6 +2966,7 @@ def main() -> int:
         # is actually about.
         page_items = [i for i in items if is_page_level(i) and not reads_artifact(i)]
         per_page = []
+        page_evidence = {}
         if not a.quiet:
             print(f"  sampling {len(sampled_urls)} pages for "
                   f"{len(page_items)} page-level checks", file=sys.stderr)
@@ -2964,6 +2979,7 @@ def main() -> int:
                 # every page-level check, and the worst verdict wins.
                 print(f"  [{n}/{len(sampled_urls)}] skipped {page_url} — {page.error}",
                       file=sys.stderr)
+                page_evidence[page_url] = {"skipped": True, "reason": page.error}
                 continue
             pctx = dict(ctx, url=page_url, html=page_html)
             pplan, pskip = build_plan(page_items, pctx, caps, mode, preskip,
@@ -2972,6 +2988,7 @@ def main() -> int:
                                       has_safe_browsing=has_safe_browsing)
             presults = execute(pplan, a.workers, a.timeout, True)
             per_page.append(grade(page_items, pplan, presults, pskip, bool(gsc_path)))
+            page_evidence[page_url] = evidence_runs(presults)
             if os.path.exists(page_html):
                 os.unlink(page_html)
             if not a.quiet:
@@ -3089,7 +3106,7 @@ def main() -> int:
     payload = redact(payload, tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k)))
 
     if a.evidence_json:
-        write_evidence(a.evidence_json, evidence_runs(results),
+        write_evidence(a.evidence_json, evidence_artifact(results, page_evidence),
                        tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k)))
 
     hist = ""

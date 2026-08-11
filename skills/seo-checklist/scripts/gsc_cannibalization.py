@@ -50,6 +50,14 @@ MIN_PAGES = 2
 # enough that the number alone cannot identify a settled winner. This reuses the
 # former registry band without claiming that a wider raw spread is worse.
 CONTESTED_POSITION_BAND = 3.0
+# basis: convention — shorter normalized terms collide with too many ordinary words.
+MIN_NEAR_BRAND_LENGTH = 5
+# basis: convention — one typo is the precision cap below ten normalized characters.
+SHORT_NEAR_BRAND_LENGTH = 10
+# basis: convention — one edit catches a dropped or doubled letter in a short term.
+SHORT_NEAR_BRAND_EDITS = 1
+# basis: convention — two edits allow the same typo rate across longer brand forms.
+LONG_NEAR_BRAND_EDITS = 2
 
 
 def fetch_query_page_rows(service, site_url: str, days: int):
@@ -136,8 +144,52 @@ def _brand_form(value: str) -> str:
                    if char.isalnum() and not unicodedata.combining(char))
 
 
+def _within_edit_distance(left: str, right: str, limit: int) -> bool:
+    """Return whether two normalized terms differ by no more than ``limit``."""
+    if abs(len(left) - len(right)) > limit:
+        return False
+    previous = list(range(len(right) + 1))
+    for left_index, left_char in enumerate(left, 1):
+        current = [left_index]
+        for right_index, right_char in enumerate(right, 1):
+            current.append(min(
+                current[-1] + 1,
+                previous[right_index] + 1,
+                previous[right_index - 1] + (left_char != right_char),
+            ))
+        if min(current) > limit:
+            return False
+        previous = current
+    return previous[-1] <= limit
+
+
+def _near_brand(query: str, brand_query: str) -> bool:
+    brand_words = [_brand_form(word) for word in str(brand_query).split()]
+    brand_words = [word for word in brand_words if word]
+    brand_terms = {_brand_form(brand_query)}
+    if len(brand_words) >= 2:
+        brand_terms.add("".join(brand_words[:2]))
+    query_terms = {_brand_form(query)}
+    query_terms.update(_brand_form(word) for word in str(query).split())
+
+    for brand_term in brand_terms:
+        for query_term in query_terms:
+            # Precision guard: terms below five are
+            # too easily ordinary words; under ten gets one edit, longer terms two.
+            # This catches common dropped/doubled letters without making a quiet
+            # cannibalization count out of unrelated short queries.
+            if min(len(brand_term), len(query_term)) < MIN_NEAR_BRAND_LENGTH:
+                continue
+            limit = (SHORT_NEAR_BRAND_EDITS
+                     if len(brand_term) < SHORT_NEAR_BRAND_LENGTH
+                     else LONG_NEAR_BRAND_EDITS)
+            if _within_edit_distance(query_term, brand_term, limit):
+                return True
+    return False
+
+
 def is_branded_query(query: str, brand_query: str) -> bool:
-    """Match case, diacritic and spacing variants, including longer brand queries."""
+    """Match normalized brand forms and deliberately bounded misspellings."""
     query_form, brand_form = _brand_form(query), _brand_form(brand_query)
     if not query_form or not brand_form:
         return False
@@ -149,7 +201,9 @@ def is_branded_query(query: str, brand_query: str) -> bool:
         return True
     # The inferred brand often includes a location suffix. Preserve a substantial
     # shorter form such as "acme valley" / "acmevalley" as the same brand.
-    return query_form in brand_form and len(query_form) >= max(5, len(brand_form) // 2)
+    if query_form in brand_form and len(query_form) >= max(5, len(brand_form) // 2):
+        return True
+    return _near_brand(query, brand_query)
 
 
 def find_branded(rows: list, site_url: str) -> dict:

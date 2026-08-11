@@ -374,6 +374,66 @@ class Cannibalization(unittest.TestCase):
                           "acmevalley reviews"})
         self.assertEqual(out["summary"]["contested_queries"], 0)
 
+    def test_a_one_edit_brand_misspelling_moves_to_branded_spread(self):
+        out = self.analyze(self.rows([
+            (("fixture orchard riverside", "https://example.com/"), 400, 2000, 1.2),
+            (("fixture orchard riverside", "https://example.com/menu"), 30, 500, 1.4),
+            (("fixture orchrd", "https://example.com/"), 50, 400, 1.3),
+            (("fixture orchrd", "https://example.com/reviews"), 8, 80, 2.0),
+        ]))
+        self.assertEqual(out["cannibalized"], [])
+        self.assertEqual({row["query"] for row in out["branded_spread"]},
+                         {"fixture orchard riverside", "fixture orchrd"})
+
+    def test_a_five_character_nonbrand_two_edits_away_stays_cannibalized(self):
+        out = self.analyze(self.rows([
+            (("orchard", "https://example.com/"), 400, 2000, 1.2),
+            (("orchid", "https://example.com/a"), 50, 400, 1.3),
+            (("orchid", "https://example.com/b"), 30, 300, 1.6),
+        ]))
+        self.assertEqual([row["query"] for row in out["cannibalized"]], ["orchid"])
+
+    def test_a_four_character_real_word_is_never_near_matched(self):
+        """`acne` is one edit from the inferred `acme` brand and a real word.
+        No longer candidate can provide this guard for a distance-one matcher by
+        definition, so the explicit short-term floor is the discriminating case."""
+        out = self.analyze(self.rows([
+            (("acme", "https://example.com/"), 400, 2000, 1.2),
+            (("acne", "https://example.com/a"), 50, 400, 1.3),
+            (("acne", "https://example.com/b"), 30, 300, 1.6),
+        ]))
+        self.assertEqual([row["query"] for row in out["cannibalized"]], ["acne"])
+
+    def test_eleven_query_shape_keeps_only_two_real_contests(self):
+        triples = [
+            (("fixture orchard riverside", "https://example.com/"), 500, 3000, 1.0),
+            (("fixture orchard riverside", "https://example.com/info"), 40, 400, 1.3),
+        ]
+        brand_queries = [
+            "fixture orchard", "fixtureorchard", "fixture orchard reviews",
+            "fixture orchard menu", "fixture orchrd", "fixture orchard photos",
+        ]
+        for index, query in enumerate(brand_queries):
+            triples.extend([
+                ((query, "https://example.com/"), 30, 200, 1.2),
+                ((query, f"https://example.com/brand-{index}"), 10, 80, 1.8),
+            ])
+        for index, query in enumerate(("family lunch", "lakeside activities")):
+            triples.extend([
+                ((query, f"https://example.com/topic-{index}"), 20, 150, 3.0),
+                ((query, f"https://example.com/guide-{index}"), 15, 120, 4.0),
+            ])
+        triples.extend([
+            (("opening hours", "https://example.com/hours"), 8, 60, 2.0),
+            (("directions", "https://example.com/contact"), 7, 50, 2.5),
+        ])
+        out = self.analyze(self.rows(triples))
+        self.assertEqual(out["queries_analyzed"], 11)
+        self.assertEqual(out["summary"], {"cannibalized_queries": 2,
+                                          "contested_queries": 2})
+        self.assertIn("fixture orchrd",
+                      {row["query"] for row in out["branded_spread"]})
+
     def test_a_brand_the_homepage_does_not_own_still_cannibalizes(self):
         out = self.analyze(self.rows([
             (("acme valley", "https://example.com/other"), 400, 2000, 1.2),

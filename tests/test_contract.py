@@ -613,6 +613,17 @@ class ArtifactsMustDescribeTheAuditedPage(unittest.TestCase):
                              f"{item_id} claims a page count, but one trace of one "
                              f"page is all that was measured")
 
+    def test_sampled_evidence_names_every_sampled_url(self):
+        """The delivered evidence must contain each page that contributed to the
+        aggregate, while the entry-page script mapping stays at the top level."""
+        evidence_path = os.path.join(SITE.dir, "sampled-pages-evidence.json")
+        sampled = partial_audit("sampled-with-evidence", SITE.good, "--sample", "3",
+                                "--evidence-json", evidence_path)
+        with open(evidence_path, encoding="utf-8") as stream:
+            evidence = json.load(stream)
+        self.assertEqual(set(evidence["pages"]), set(sampled["sampled_urls"]))
+        self.assertEqual(set(evidence) - {"pages"}, set(sampled["runs"]))
+
 
 class NothingIsDecidedWithoutEvidence(unittest.TestCase):
     """Every decided item must carry the evidence it was decided on, and every

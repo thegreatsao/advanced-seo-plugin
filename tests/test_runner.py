@@ -2181,7 +2181,7 @@ class EntityAddressesAndNap(unittest.TestCase):
         issues = self.nap("Visit Cafe at 123 Main Street", (node,))
         self.assertFalse([i for i in issues if "address" in i["finding"].lower()])
 
-    def test_nap_reports_the_gvm_locality_disagreement_with_both_types(self):
+    def test_nap_reports_the_live_shape_locality_disagreement_with_both_types(self):
         nodes = (
             {"@type": "Restaurant", "name": "Acme Valley",
              "telephone": "+37060000000",
@@ -2202,6 +2202,72 @@ class EntityAddressesAndNap(unittest.TestCase):
         self.assertIn("Molėtų r. sav.", warning["finding"])
         self.assertIn("Molėtų r.", warning["finding"])
         self.assertFalse(any("streetAddress" in i["finding"] for i in issues))
+
+    def test_distinct_local_nodes_may_have_different_names(self):
+        """Types and distinct identifiers separate three co-located entities;
+        their two locality disagreements remain evidence, their names do not."""
+        nodes = (
+            {"@id": "https://example.com/#restaurant", "@type": "Restaurant",
+             "name": "Fixture Orchard", "telephone": "+37060000000",
+             "sameAs": ["https://social.example/fixture-orchard"],
+             "address": {"@type": "PostalAddress", "streetAddress": "One",
+                         "addressLocality": "North District"}},
+            {"@id": "https://example.com/#attraction",
+             "@type": "TouristAttraction", "name": "Lakeside Family Park",
+             "telephone": "+37060000000",
+             "sameAs": ["https://example.com/#restaurant",
+                        "https://social.example/fixture-orchard"],
+             "address": {"@type": "PostalAddress", "streetAddress": "One",
+                         "addressLocality": "North District"}},
+            {"@id": "https://example.com/#organization",
+             "@type": "Organization", "name": "Fixture Orchard Company",
+             "telephone": "+37060000000",
+             "sameAs": ["https://social.example/fixture-orchard"],
+             "address": {"@type": "PostalAddress", "streetAddress": "One",
+                         "addressLocality": "Northern District"}},
+        )
+        findings = [issue["finding"] for issue in
+                    self.nap("One North District Northern District +37060000000",
+                             nodes)
+                    if "differs" in issue["finding"]]
+        self.assertEqual(sum("addressLocality" in finding for finding in findings), 2)
+        self.assertFalse(any("NAP name" in finding for finding in findings), findings)
+
+    def test_same_type_nodes_with_different_names_still_warn(self):
+        nodes = (
+            {"@id": "https://example.com/#restaurant-one", "@type": "Restaurant",
+             "name": "Fixture Orchard", "telephone": "12345678",
+             "address": {"@type": "PostalAddress", "streetAddress": "One"}},
+            {"@id": "https://example.com/#restaurant-two", "@type": "Restaurant",
+             "name": "Fixture Orchard Dining", "telephone": "12345678",
+             "address": {"@type": "PostalAddress", "streetAddress": "One"}},
+        )
+        issues = self.nap("One 12345678", nodes)
+        name_issue = next(issue for issue in issues
+                          if "NAP name differs" in issue["finding"])
+        self.assertEqual(name_issue["severity"], "Warning")
+
+    def test_cross_type_nodes_with_one_identity_still_compare_names(self):
+        shared_address = {"@type": "PostalAddress", "streetAddress": "One"}
+        identities = (
+            ({"@id": "https://example.com/#place"},
+             {"@id": "https://example.com/#place"}),
+            ({"sameAs": ["https://profiles.example/place"]},
+             {"sameAs": ["https://profiles.example/place"]}),
+        )
+        for left_identity, right_identity in identities:
+            with self.subTest(identity=left_identity):
+                nodes = (
+                    {"@type": "Restaurant", "name": "Fixture Orchard",
+                     "telephone": "12345678", "address": shared_address,
+                     **left_identity},
+                    {"@type": "Organization", "name": "Fixture Orchard Company",
+                     "telephone": "12345678", "address": shared_address,
+                     **right_identity},
+                )
+                issues = self.nap("One 12345678", nodes)
+                self.assertTrue(any("NAP name differs" in issue["finding"]
+                                    for issue in issues), issues)
 
     def test_equal_and_single_entity_nap_have_no_disagreement(self):
         node = {"@type": "Restaurant", "name": "R", "telephone": "12345678",
@@ -2551,6 +2617,43 @@ class EvidenceArtifact(unittest.TestCase):
         runner.write_evidence(path, {"x": {"credential": secret}}, (secret,))
         with open(path, encoding="utf-8") as stream:
             self.assertEqual(json.load(stream), {"x": {"credential": "<redacted>"}})
+
+    def test_sampled_pages_are_nested_without_changing_site_level_runs(self):
+        site_results = {
+            ("site.py", ("site.py", "https://example.com")):
+                {"summary": {"errors": 0}, "__elapsed__": 0.1},
+        }
+        site_evidence = runner.evidence_runs(site_results)
+        pages = {
+            "https://example.com/": {"page.py https://example.com/": {"count": 0}},
+            "https://example.com/about": {
+                "page.py https://example.com/about": {"count": 1}},
+        }
+        artifact = runner.evidence_artifact(site_results, pages)
+        self.assertEqual({key: value for key, value in artifact.items()
+                          if key != "pages"}, site_evidence)
+        self.assertEqual(set(artifact["pages"]), set(pages))
+
+    def test_a_skipped_sampled_page_keeps_its_reason(self):
+        skipped = {"https://example.com/missing": {
+            "skipped": True, "reason": "HTTP 404"}}
+        artifact = runner.evidence_artifact({}, skipped)
+        self.assertEqual(artifact["pages"], skipped)
+
+    def test_a_non_sampled_run_omits_the_pages_key(self):
+        artifact = runner.evidence_artifact({})
+        self.assertNotIn("pages", artifact)
+
+    def test_redaction_reaches_sampled_page_evidence(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory, True)
+        path = os.path.join(directory, "evidence.json")
+        secret = "/tmp/page-credentials.json"
+        artifact = runner.evidence_artifact({}, {
+            "https://example.com/": {"page.py": {"credential": secret}}})
+        runner.write_evidence(path, artifact, (secret,))
+        with open(path, encoding="utf-8") as stream:
+            self.assertNotIn(secret, json.dumps(json.load(stream)))
 
 
 class UnicodeMinHash(unittest.TestCase):

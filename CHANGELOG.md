@@ -10,6 +10,44 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.38.0 — sampled evidence follows every graded page
+
+`--evidence-json` now keeps each sampled page's complete script output under a
+top-level `pages` mapping while leaving the entry-page script mapping unchanged.
+A skipped sampled page remains present with its skip reason, and a non-sampled run
+omits `pages`. Before this release, an aggregate such as “3/8 pages” preserved only
+the entry page's evidence: a reader could neither identify the three pages nor
+verify what the other five scripts reported. Redaction now covers both levels.
+
+NAP comparison now separates shared premises from shared identity. Address and
+telephone still compare across every local node, while names compare only across a
+shared type or identity; distinct node identifiers take precedence over shared
+profile links. Two cross-type name warnings disappear from the live shape and its
+two real `addressLocality` warnings remain. The old four-warning list trained a
+reader to skim the noise and made the address mismatch easier to miss.
+
+Owned-brand query classification now accepts bounded spelling mistakes after the
+same case, diacritic and spacing normalization as exact matches. Terms below five
+characters never near-match; terms below ten permit one edit and longer terms two,
+against both the whole query and its words. In the eleven-query live shape, the
+one-edit brand misspelling moves from `cannibalized` to `branded_spread`:
+`cannibalized_queries` falls from 3 to 2 and `contested_queries` from 2 to 1 because
+the misspelling was itself one of the close contests. MS-023 remains WARN because
+both 3 and 2 are inside its unchanged warn band; no evidence-driven status moves.
+
+The comparable unmerged rerun remains 88/100 at 62% coverage (510/826 weight).
+The saved prior result has twelve merged model answers, so a literal diff
+returns AR-159, CN-049, CN-064, IN-130, KW-072, KW-075, LO-196, LO-197, MS-025,
+MS-027 and TE-165 from PASS to LLM_PENDING and MS-024 from WARN to LLM_PENDING;
+those are missing model inputs, not evidence changes. The complete evidence artifact
+grows from 305,515 to 1,667,888 bytes for eight pages, while the new result is
+157,758 bytes. The 1.7 MB evidence file remains practical as one JSON artifact and
+is deliberately neither truncated nor summarized.
+
+Registry `07e64f9c9fc6` is unchanged: no checklist item, title, threshold or assertion
+was edited. All three regression families were observed failing against b648b33
+before their repairs; 769 baseline tests become 781.
+
 ## 0.37.0 — the second live audit keeps the evidence it exposed
 
 Runs can now write every evidence script's parsed output with `--evidence-json`;
