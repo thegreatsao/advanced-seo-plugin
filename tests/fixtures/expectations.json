@@ -192,6 +192,10 @@
       "SP-216": {
         "expect": "PASS",
         "why": "the hand-written local trace records 40 ms of total blocking time"
+      },
+      "SE-117": {
+        "expect": "FAIL",
+        "why": "the site is served over plain HTTP, so it does not force HTTPS across the site"
       }
     },
     "broken": {
@@ -383,6 +387,62 @@
       "SP-216": {
         "expect": "FAIL",
         "why": "the hand-written local trace records 980 ms of total blocking time"
+      },
+      "SE-117": {
+        "expect": "FAIL",
+        "why": "the site is served over plain HTTP, so it does not force HTTPS across the site"
+      }
+    },
+    "good_tls": {
+      "SE-117": {
+        "expect": "PASS",
+        "why": "the site and its rewritten same-origin URLs are served over HTTPS"
+      },
+      "SE-115": {
+        "expect": "PASS",
+        "why": "the HTTPS origin emits Strict-Transport-Security with a one-year max-age and includeSubDomains"
+      },
+      "SE-120": {
+        "expect": "PASS",
+        "why": "the HTTPS origin emits CSP, Permissions-Policy, Referrer-Policy, and X-Content-Type-Options hardening headers"
+      },
+      "TE-175": {
+        "expect": "PASS",
+        "why": "the HTTPS pages use the deliberately hardened response-header policy with only X-Frame-Options omitted"
+      },
+      "CI-014": {
+        "expect": "PASS",
+        "why": "the audited HTTPS entry responds directly with no redirect chain or loop"
+      },
+      "AR-150": {
+        "expect": "PASS",
+        "why": "the audited HTTPS entry responds directly and therefore has no redirect hops"
+      }
+    },
+    "broken_tls": {
+      "SE-117": {
+        "expect": "PASS",
+        "why": "the site and its rewritten same-origin URLs are still served over HTTPS despite the sparse header policy"
+      },
+      "SE-115": {
+        "expect": "FAIL",
+        "why": "the HTTPS origin omits Strict-Transport-Security entirely"
+      },
+      "SE-120": {
+        "expect": "FAIL",
+        "why": "the HTTPS origin omits CSP, Permissions-Policy, Referrer-Policy, and every other deliberate hardening header"
+      },
+      "TE-175": {
+        "expect": "FAIL",
+        "why": "the HTTPS pages use a deliberately sparse response-header policy and omit every tracked security header"
+      },
+      "CI-014": {
+        "expect": "INDETERMINATE",
+        "why": "the shared TLS entry has no loop; the fixture needs a dedicated audited entry URL that loops without gating the security-header audit"
+      },
+      "AR-150": {
+        "expect": "INDETERMINATE",
+        "why": "the shared TLS entry has no chain; the fixture needs a dedicated audited entry URL with more than one redirect hop"
       }
     }
   }

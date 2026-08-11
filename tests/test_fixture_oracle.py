@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from harness import FixtureSite, spawn  # noqa: E402
 
-DECLARED_IDS = {
+HTTP_DECLARED_IDS = {
     "AR-146", "AR-151", "AR-158", "AR-162", "BL-081", "BL-084",
     "BL-086", "BL-087", "CI-004", "CI-008", "CI-019", "CN-034",
     "CN-035", "CN-041", "CN-048", "CN-051", "CN-054", "CN-065",
@@ -28,7 +28,14 @@ DECLARED_IDS = {
     "MB-093", "MB-094", "MB-096", "MB-097", "MB-103", "MB-104",
     "MD-185", "MS-020", "MS-021", "MS-022", "MS-026", "MS-028",
     "MS-029", "MS-030", "MS-031", "SP-214", "SP-215", "SP-216",
-    "TE-166", "TE-168", "TE-172", "TE-174", "TECH-001",
+    "SE-117", "TE-166", "TE-168", "TE-172", "TE-174", "TECH-001",
+}
+TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
+DECLARED_IDS = {
+    "good": HTTP_DECLARED_IDS,
+    "broken": HTTP_DECLARED_IDS,
+    "good_tls": TLS_DECLARED_IDS,
+    "broken_tls": TLS_DECLARED_IDS,
 }
 ALLOWED = {"PASS", "WARN", "FAIL", "N/A", "INDETERMINATE"}
 SITE = None
@@ -54,7 +61,7 @@ def audit(label: str, url: str) -> dict[str, str]:
         [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
          "--allow-private", "--sample", "3", "--max-rps", "0",
          "--no-history", "--no-prompt", "--quiet", "--timeout", "120",
-         "--json", out, *artifacts],
+         "--json", out, *artifacts], env=SITE.environment(label),
         timeout=900)
     if proc.returncode != 0:
         raise AssertionError(
@@ -94,18 +101,43 @@ def comparison() -> tuple[dict[str, dict[str, int]], list[dict[str, str]]]:
     return tally, differences
 
 
+def coverage() -> tuple[int, int, int]:
+    """Unique items, items settled for both site qualities, and opposed items."""
+    fixtures = manifest()["fixtures"]
+    item_ids = set().union(*(set(row) for row in fixtures.values()))
+    settled_both = 0
+    opposed = 0
+    for item_id in item_ids:
+        by_side = {"good": set(), "broken": set()}
+        all_settled = set()
+        for label, declarations in fixtures.items():
+            declared = declarations.get(item_id)
+            if not declared or declared["expect"] == "INDETERMINATE":
+                continue
+            status = declared["expect"]
+            all_settled.add(status)
+            by_side["good" if label.startswith("good") else "broken"].add(status)
+        if all(by_side.values()):
+            settled_both += 1
+        if len(all_settled) > 1:
+            opposed += 1
+    return len(item_ids), settled_both, opposed
+
+
 def setUpModule():
     global SITE
     SITE = FixtureSite().start()
-    for label, url in (("good", SITE.good), ("broken", SITE.broken)):
+    for label, url in (("good", SITE.good), ("broken", SITE.broken),
+                       ("good_tls", SITE.good_tls),
+                       ("broken_tls", SITE.broken_tls)):
         RESULTS[label] = audit(label, url)
 
 
 def tearDownModule():
     try:
         tally, differences = comparison()
-        print("\nFixture oracle through stage 2a")
-        for label in ("good", "broken"):
+        print("\nFixture oracle through stage 3")
+        for label in manifest()["fixtures"]:
             counts = tally[label]
             declarations = len(manifest()["fixtures"][label])
             print(f"  {label}: {declarations} declarations — "
@@ -119,6 +151,9 @@ def tearDownModule():
               f"{totals['matched']} matched, "
               f"{totals['disagreed']} disagreed, "
               f"{totals['indeterminate']} indeterminate")
+        items, settled_both, opposed = coverage()
+        print(f"  coverage: {items} items declared, {settled_both} settled on both "
+              f"sides, {opposed} opposed across fixture origins")
         print("  differences:")
         if not differences:
             print("    none")
@@ -144,9 +179,9 @@ class ManifestContract(unittest.TestCase):
 
     def test_both_fixtures_declare_all_items(self):
         fixtures = manifest()["fixtures"]
-        self.assertEqual(set(fixtures), {"good", "broken"})
+        self.assertEqual(set(fixtures), set(DECLARED_IDS))
         for label, declarations in fixtures.items():
-            self.assertEqual(set(declarations), DECLARED_IDS, label)
+            self.assertEqual(set(declarations), DECLARED_IDS[label], label)
 
     def test_every_declaration_has_a_supported_verdict_and_reason(self):
         for label, declarations in manifest()["fixtures"].items():
