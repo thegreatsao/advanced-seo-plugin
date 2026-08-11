@@ -336,7 +336,7 @@ class Cannibalization(unittest.TestCase):
         ]))
         self.assertEqual(out["cannibalized"], [])
         self.assertEqual(verdicts(self.items_for(), out),
-                         {"GO-139": PASS, "KW-070": PASS, "KW-071": NO_DATA,
+                         {"GO-139": PASS, "KW-070": PASS, "KW-071": PASS,
                           "MS-023": PASS})
 
     def test_two_urls_ranking_for_one_query_are_found(self):
@@ -352,11 +352,11 @@ class Cannibalization(unittest.TestCase):
         self.assertGreaterEqual(found["page_count"], 2)
         self.assertGreaterEqual(len(found["pages"]), 2)
         # Pinned per item rather than "something failed": which one fails is the
-        # content of the check. KW-071's registry claim is deliberately unanswered:
-        # raw spread has no failing direction, and repointing the registry is a
-        # separate contract change. MS-023 still counts genuine split queries.
+        # content of the check. KW-071 now counts only close-position contests, so
+        # the widely separated third URL keeps this broad cannibalization out of its
+        # narrower duplication/overuse verdict. MS-023 still counts the split query.
         self.assertEqual(verdicts(self.items_for(), out),
-                         {"GO-139": PASS, "KW-070": PASS, "KW-071": NO_DATA,
+                         {"GO-139": PASS, "KW-070": PASS, "KW-071": PASS,
                           "MS-023": WARN})
 
     def test_an_owned_brand_and_its_variants_move_to_branded_spread(self):

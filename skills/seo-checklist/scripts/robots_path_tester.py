@@ -226,6 +226,8 @@ def main() -> None:
                              "whether it carries noindex")
     parser.add_argument("--json", "-j", action="store_true")
     args = parser.parse_args()
+    if not args.paths and not args.discover_assets:
+        parser.error("provide one or more paths or use --discover-assets")
     paths = args.paths
     discovery_error = None
     if args.discover_assets:
