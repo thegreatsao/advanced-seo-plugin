@@ -179,7 +179,7 @@ Reads `--inventory` (see `site_crawl.py`); crawls one for itself without it.
 `readability.sentence_count` — int
 `readability.avg_sentence_length` — float
 `readability.avg_syllables_per_word` — float
-`target_keyword` — str
+`target_keyword` — str, absent when no primary keyword can be determined
 `extracted_keywords[]` — array
 `related_keywords[]` — array
 `seo_issues[]` — array
@@ -1296,7 +1296,8 @@ output contracts derive from it, so a change here moves ten items at once.
 `summary.sitemaps_checked` / `.sitemap_urls` / `.sitemap_urls_off_host` — int
 `summary.reachable_pages` — int (linked-to, not fetched)
 `summary.truncated` — bool
-`pages.<key>` — object, one per fetched URL
+`pages.<key>` — object, one per deduplicated page; the key is the page key and
+  `url` is the first discovered spelling that was fetched
   - `url`, `final_url`, `status`, `content_type`, `redirect_chain[]`, `redirected`,
     `bytes`, `error`, `robots_blocked`, `html`, `depth`, `discovered_by`
     (`entry`/`sitemap`/`link`), `in_sitemap`

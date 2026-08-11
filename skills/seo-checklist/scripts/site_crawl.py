@@ -196,7 +196,7 @@ def has_noindex(meta_robots: str | None, headers: dict | None = None) -> bool:
 
 def load_sitemap_urls(site_url: str, sitemap_urls: list[str] | None = None,
                       timeout: int = 15, max_sitemaps: int = 25,
-                      fetch=fetch_url) -> dict:
+                      fetch=fetch_url, include_fetch_targets: bool = False) -> dict:
     """Every URL the site's sitemaps list, as page keys.
 
     `fetch` is injectable only so the crawl can count its own requests; there is no
@@ -232,14 +232,26 @@ def load_sitemap_urls(site_url: str, sitemap_urls: list[str] | None = None,
     # unreachable by internal link by definition, so GO-137 would fail every site
     # whose sitemap has one, for the wrong reason.
     deduped, off_host, seen = [], [], set()
+    fetch_targets: dict[str, str] = {}
     for url in urls:
-        key = page_key(url)
+        discovered = normalize_url(url, site_url)
+        key = page_key(discovered)
         if key in seen:
             continue
         seen.add(key)
-        (deduped if same_host(site_url, key) else off_host).append(key)
-    return {"sitemaps_checked": sorted(seen_sitemaps), "urls": deduped,
-            "off_host": off_host, "errors": errors}
+        if same_host(site_url, key):
+            deduped.append(key)
+            fetch_targets[key] = discovered
+        else:
+            off_host.append(key)
+    result = {"sitemaps_checked": sorted(seen_sitemaps), "urls": deduped,
+              "off_host": off_host, "errors": errors}
+    if include_fetch_targets:
+        # Crawl-only transport detail, removed before the inventory is written.
+        # The first sitemap spelling wins when `/about` and `/about/` share a
+        # page key: one fetch is enough, and first-seen keeps the crawl stable.
+        result["_fetch_targets"] = fetch_targets
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -269,12 +281,12 @@ class _Ordered:
             yield future.result()
 
 
-def _read_page(fetched: dict, key: str, site_url: str,
+def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
                signatures: bool = True) -> dict:
     """Everything worth writing down about one fetched page, from one parse."""
     row = {
-        "url": key,
-        "final_url": fetched.get("url") or key,
+        "url": discovered_url,
+        "final_url": fetched.get("url") or discovered_url,
         "status": fetched.get("status"),
         "content_type": (fetched.get("headers") or {}).get("content-type", ""),
         "redirect_chain": fetched.get("redirect_chain") or [],
@@ -335,6 +347,10 @@ def _read_page(fetched: dict, key: str, site_url: str,
         rel = [str(v).lower() for v in (link.get("rel") or [])]
         row["links"].append({
             "target": target,
+            # Private crawl state: retain what the page actually linked so the
+            # queue fetches it, while `target` remains the dedup/orphan key. Removed
+            # by `_finish`; the public link contract continues to expose page keys.
+            "_fetch_url": normalize_url(href, row["final_url"]),
             "anchor": (link.get("text") or "").strip(),
             "rel": rel,
             "nofollow": "nofollow" in rel,
@@ -380,26 +396,29 @@ def crawl(site_url: str, depth: int = DEFAULT_DEPTH,
             counter["requests"] += 1
         return fetch_url(url, **kw)
 
-    sitemap = ({"sitemaps_checked": [], "urls": [], "off_host": [], "errors": []}
+    sitemap = ({"sitemaps_checked": [], "urls": [], "off_host": [], "errors": [],
+                "_fetch_targets": {}}
                if not use_sitemap
                else load_sitemap_urls(site_url, sitemap_urls=sitemap_urls,
-                                      timeout=timeout, fetch=_fetch))
+                                      timeout=timeout, fetch=_fetch,
+                                      include_fetch_targets=True))
+    sitemap_fetch_targets = sitemap.pop("_fetch_targets", {})
     sitemap_set = set(sitemap["urls"])
 
     pages: dict[str, dict] = {}
     robots_blocked: dict[str, str] = {}
-    queue: deque = deque([(entry, 0, "entry")])
+    queue: deque = deque([(entry, site_url, 0, "entry")])
     queued = {entry}
-    for url in sitemap["urls"]:
-        if url not in queued:
-            queued.add(url)
-            queue.append((url, 0, "sitemap"))
+    for key in sitemap["urls"]:
+        if key not in queued:
+            queued.add(key)
+            queue.append((key, sitemap_fetch_targets.get(key, key), 0, "sitemap"))
 
     def fetch_one(job: tuple) -> tuple:
-        key, page_depth, source = job
+        key, discovered_url, page_depth, source = job
         # `respect_robots` off for the entry only. See the docstring: the asymmetry
         # is deliberate and load-bearing.
-        fetched = _fetch(key, timeout=timeout, max_bytes=2_000_000,
+        fetched = _fetch(discovered_url, timeout=timeout, max_bytes=2_000_000,
                          respect_robots=source != "entry")
         return job, fetched
 
@@ -414,11 +433,12 @@ def crawl(site_url: str, depth: int = DEFAULT_DEPTH,
             break
 
         with _Ordered(workers) as pool:
-            for (key, page_depth, source), fetched in pool.map(fetch_one, batch):
+            for (key, discovered_url, page_depth, source), fetched in pool.map(
+                    fetch_one, batch):
                 if fetched.get("robots_blocked"):
                     robots_blocked[key] = fetched.get("error") or "robots.txt"
                     continue
-                row = _read_page(fetched, key, site_url, signatures)
+                row = _read_page(fetched, key, discovered_url, site_url, signatures)
                 row["depth"] = page_depth
                 row["discovered_by"] = source
                 row["in_sitemap"] = key in sitemap_set
@@ -431,7 +451,8 @@ def crawl(site_url: str, depth: int = DEFAULT_DEPTH,
                     target = link["target"]
                     if target not in queued and len(queued) < max_pages * 4:
                         queued.add(target)
-                        queue.append((target, page_depth + 1, "link"))
+                        queue.append((target, link["_fetch_url"], page_depth + 1,
+                                      "link"))
 
     return _finish(site_url, entry, pages, robots_blocked, sitemap, sitemap_set,
                    counter["requests"], depth, max_pages, bool(queue), signatures)
@@ -447,6 +468,7 @@ def _finish(site_url: str, entry: str, pages: dict, robots_blocked: dict,
             (inbound if link["internal"] else external_targets)[link["target"]].append(
                 {"source": key, "anchor": link["anchor"],
                  "nofollow": link["nofollow"]})
+            link.pop("_fetch_url", None)
 
     internal_targets = set(inbound)
     unchecked = sorted(internal_targets - set(pages) - set(robots_blocked))
@@ -461,12 +483,12 @@ def _finish(site_url: str, entry: str, pages: dict, robots_blocked: dict,
             continue
         if row["error"] or (row["status"] or 0) >= 400:
             broken.append({
-                "url": key,
+                "url": row["url"],
                 "status": row["status"],
                 "error": row["error"],
                 "linked_from": sorted({s["source"] for s in inbound.get(key, [])}),
             })
-    redirected = [{"url": key, "to": pages[key]["final_url"],
+    redirected = [{"url": pages[key]["url"], "to": pages[key]["final_url"],
                    "hops": len(pages[key]["redirect_chain"]),
                    "linked_from": sorted({s["source"] for s in inbound.get(key, [])})}
                   for key in sorted(pages) if pages[key]["redirected"]]

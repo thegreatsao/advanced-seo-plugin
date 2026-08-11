@@ -10,6 +10,43 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.40.0 — crawl identity and keyword evidence describe what was observed
+
+The shared crawler now keeps `page_key` solely as its deduplication, inbound-link
+and orphan-bookkeeping key. It fetches the first URL spelling actually discovered
+in a sitemap or link and reports that spelling in the page row and redirect list.
+The root slash remains intact, and `/about` plus `/about/` still produce one page.
+This removes the two internal redirects the crawler fabricated by changing the
+site's `/en/` and `/ru/` links before requesting them.
+
+An undetermined primary keyword is now absent from `article_seo.py` output instead
+of present as an empty string, so KW-076 reads it as `NO_DATA` rather than `FAIL`.
+This is an output-contract correction independent of which words are filtered.
+
+Keyword extraction now selects curated English, Lithuanian or Russian stopwords
+from the page's declared `<html lang>`, retains Unicode letters, and treats a
+stopword as an n-gram boundary rather than splicing the words around it into a
+phrase that never appeared. A new language belongs in its own list rather than a
+global union.
+
+In the fresh eight-page live rerun, all three gallery pages omit
+`target_keyword`; `/bbq` and `/menu` both extract `molėtų rajone` ("in the Molėtai
+district"). That is a meaningful local phrase rather than function words, but it
+is not page-specific enough to be a strong inferred primary keyword. At aggregate
+level KW-076 moves FAIL to PASS because five sampled pages provide a keyword and
+the three absent values are undecided rather than failures.
+
+The crawl remains 24 HTML pages with no broken or blocked pages. Redirected pages
+fall from 2 to 0 and `redirected[]` becomes empty; every other summary field,
+including `summary.requests = 27`, is unchanged. That counter records top-level
+fetch calls rather than redirect hops, so the two eliminated HTTP hops do not make
+the stored count fall. AR-149 moves WARN to PASS; CI-008, AR-162 and TE-168 remain
+PASS. No other item moves. The score rises from 88 to 89 over the same 117 decided
+items and the same 62% weight coverage (510/826).
+
+Registry `07e64f9c9fc6` is unchanged: no checklist item, title, threshold or
+assertion was edited. The 791-test baseline becomes 797.
+
 ## 0.39.0 — NAP identity and query evidence follow the measured business
 
 NAP name comparison now keys business identity on equal normalized telephone,

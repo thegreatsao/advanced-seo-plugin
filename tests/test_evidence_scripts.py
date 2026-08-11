@@ -1378,8 +1378,31 @@ class ArticleKeyword(unittest.TestCase):
         """The contract pair exempts this item on the grounds that the script "finds
         one on any page with prose". Measured, that holds only for a page with enough
         of it: nineteen words extract nothing."""
-        self.assertEqual(out("article_bad")["target_keyword"], "")
-        self.assertEqual(verdict("KW-076", out("article_bad")), FAIL)
+        self.assertNotIn("target_keyword", out("article_bad"))
+        self.assertEqual(verdict("KW-076", out("article_bad")), NO_DATA)
+
+    def test_lithuanian_stopwords_leave_a_content_phrase(self):
+        import article_seo
+        text = "pas mus gardūs šašlykai. pas mus gardūs šašlykai."
+        self.assertEqual(article_seo.extract_keywords_frequency(text, lang="lt"),
+                         ["gardūs šašlykai"])
+
+    def test_russian_words_are_extracted_and_its_stopwords_removed(self):
+        import article_seo
+        text = "у нас вкусные шашлыки. у нас вкусные шашлыки."
+        self.assertEqual(article_seo.extract_keywords_frequency(text, lang="ru"),
+                         ["вкусные шашлыки"])
+
+    def test_a_language_list_is_not_applied_to_another_language(self):
+        import article_seo
+        text = "pas pas pas pas"
+        self.assertEqual(article_seo.extract_keywords_frequency(text, lang="lt"), [])
+        self.assertTrue(article_seo.extract_keywords_frequency(text, lang="en"))
+
+    def test_the_page_declares_which_language_list_to_use(self):
+        import article_seo
+        soup = article_seo.BeautifulSoup('<html lang="lt-LT"></html>', "html.parser")
+        self.assertEqual(article_seo.page_language(soup), "lt")
 
 
 class TopicalClusters(unittest.TestCase):
@@ -1893,6 +1916,56 @@ class OneCrawlForEveryoneWhoNeedsTheWholeSite(unittest.TestCase):
 
     def test_a_site_whose_sitemap_matches_its_links_has_no_orphans(self):
         self.assertEqual(verdict("GO-137", out("orphans")), PASS)
+
+
+class CrawlKeysAreNotFetchTargets(unittest.TestCase):
+    """A page key deduplicates spellings; it is not necessarily a served URL."""
+
+    def setUp(self):
+        import site_crawl
+        self.crawl = site_crawl
+        self.loopback = harness.allow_loopback()
+        self.loopback.__enter__()
+
+    def tearDown(self):
+        self.loopback.__exit__(None, None, None)
+
+    def test_a_sitemap_url_is_fetched_with_the_slash_it_declared(self):
+        sitemap = ('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                   '<url><loc>PLACEHOLDER/about/</loc></url></urlset>')
+        routes = {
+            "/": "<html><body>Home</body></html>",
+            "/about/": "<html><body>About</body></html>",
+            "/about": (301, {"Location": "PLACEHOLDER/about/"}, ""),
+            "/robots.txt": (200, "User-agent: *\nAllow: /\n"),
+            "/sitemap.xml": (200, {"Content-Type": "application/xml"}, sitemap),
+        }
+        with harness.served(routes).rewrite("PLACEHOLDER") as site:
+            result = self.crawl.crawl(
+                site.url, sitemap_urls=[site.base + "/sitemap.xml"], workers=1)
+            key = site.base + "/about"
+            self.assertEqual(set(result["pages"]), {site.url, key})
+            self.assertEqual(result["pages"][key]["url"], site.base + "/about/")
+            self.assertNotIn("/about", site.paths())
+            self.assertEqual(result["redirected"], [])
+
+    def test_two_link_spellings_still_count_as_one_page(self):
+        home = ('<html><body><a href="/about/">slash</a>'
+                '<a href="/about">no slash</a></body></html>')
+        routes = {
+            "/": home,
+            "/about/": "<html><body>About</body></html>",
+            "/about": (301, {"Location": "PLACEHOLDER/about/"}, ""),
+            "/robots.txt": (200, "User-agent: *\nAllow: /\n"),
+        }
+        with harness.served(routes).rewrite("PLACEHOLDER") as site:
+            result = self.crawl.crawl(site.url, use_sitemap=False, workers=1)
+            key = site.base + "/about"
+            self.assertEqual(self.crawl.page_key(site.url), site.url)
+            self.assertEqual(set(result["pages"]), {site.url, key})
+            self.assertEqual(result["pages"][key]["url"], site.base + "/about/")
+            self.assertEqual(site.paths().count("/about/"), 1)
+            self.assertNotIn("/about", site.paths())
 
 
 class NothingIsUndecidedAboutASiteThatAnswered(unittest.TestCase):

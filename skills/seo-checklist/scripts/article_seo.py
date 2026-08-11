@@ -92,17 +92,52 @@ MAX_EAGER_IMAGES = 3
 #  keyword list, not a verdict about the page.
 MIN_RELATED_KEYWORDS = 5
 
+# Curated per-language lists, selected from the page's declared `<html lang>`.
+# Add a new language here and to no shared/global union: applying every language's
+# function words to every page can remove a real content word in another language.
 STOP_WORDS = {
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "with", "by", "of", "from", "as", "is", "are", "was", "were", "be",
-    "been", "this", "that", "these", "those", "it", "he", "she", "they",
-    "we", "you", "i", "your", "my", "their", "our", "its", "which", "who",
-    "whom", "whose", "what", "where", "when", "why", "how", "all", "any",
-    "both", "each", "few", "more", "most", "other", "some", "such", "no",
-    "nor", "not", "only", "own", "same", "so", "than", "too", "very", "can",
-    "will", "just", "should", "have", "has", "had", "do", "does", "did",
-    "get", "got", "make", "use", "used", "also", "about", "into",
-    "then", "there", "would", "could", "here",
+    "en": {
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        "with", "by", "of", "from", "as", "is", "are", "was", "were", "be",
+        "been", "this", "that", "these", "those", "it", "he", "she", "they",
+        "we", "you", "i", "your", "my", "their", "our", "its", "which", "who",
+        "whom", "whose", "what", "where", "when", "why", "how", "all", "any",
+        "both", "each", "few", "more", "most", "other", "some", "such", "no",
+        "nor", "not", "only", "own", "same", "so", "than", "too", "very", "can",
+        "will", "just", "should", "have", "has", "had", "do", "does", "did",
+        "get", "got", "make", "use", "used", "also", "about", "into",
+        "then", "there", "would", "could", "here",
+    },
+    "lt": {
+        "aš", "apie", "ant", "ar", "arba", "be", "bei", "bet", "bus", "buvo",
+        "būti", "čia", "dar", "dėl", "gali", "galima", "ir", "iš", "jei", "jis",
+        "ji", "jo", "jos", "jų", "juos", "jas", "jam", "jai", "jiems", "joms",
+        "jūs", "jus", "jums", "kaip", "kad", "kas", "kada", "kiek", "kitą",
+        "kitų", "kur", "kuri", "kurie", "kurio", "labai", "man", "manęs", "mes",
+        "mus", "mums", "mūsų", "ne", "nei", "nes", "nuo", "o", "pas", "per",
+        "po", "prie", "prieš", "sau", "savęs", "savo", "su", "šį", "ši", "šis",
+        "šią", "šie", "šios", "šių", "tačiau", "tai", "taip", "tas", "tavo",
+        "tavęs", "ten", "tik", "tiktai", "tu", "turi", "tą", "tų", "tuo", "už",
+        "va", "viena", "vienas", "vis", "visa", "visi", "yra",
+    },
+    "ru": {
+        "а", "без", "более", "больше", "будет", "будто", "бы", "был", "была",
+        "были", "было", "быть", "в", "вам", "вас", "ведь", "весь", "во", "вот",
+        "впрочем", "все", "всегда", "всего", "всех", "всю", "вы", "где", "да",
+        "даже", "для", "до", "другой", "его", "ее", "ей", "ему", "если", "есть",
+        "еще", "её", "ж", "же", "за", "зачем", "здесь", "и", "из", "или", "им",
+        "иногда", "их", "к", "как", "какая", "какой", "когда", "конечно", "куда",
+        "ли", "лучше", "между", "меня", "мне", "много", "может", "мой", "моя",
+        "мы", "на", "над", "надо", "нас", "не", "него", "нее", "ней", "нельзя",
+        "нет", "ни", "нибудь", "никогда", "ним", "них", "ничего", "но", "ну", "о",
+        "об", "один", "он", "она", "они", "опять", "от", "перед", "по", "под",
+        "после", "потом", "потому", "почти", "при", "про", "раз", "разве", "с",
+        "сам", "свою", "себе", "себя", "сейчас", "сказать", "со", "совсем", "так",
+        "такой", "там", "тебя", "тем", "теперь", "то", "тогда", "того", "тоже",
+        "только", "том", "тот", "три", "тут", "ты", "у", "уж", "уже", "хорошо",
+        "хоть", "чего", "чем", "через", "что", "чтобы", "чуть", "этой", "этом",
+        "этот", "эти", "этого", "эту", "я",
+    },
 }
 
 # Deprecated / restricted schema types (as of Feb 2026)
@@ -428,23 +463,36 @@ def compute_readability(text: str) -> dict:
 # Keyword extraction (frequency-weighted n-grams — honest naming)
 # ---------------------------------------------------------------------------
 
-def extract_keywords_frequency(text: str, top_n: int = 12) -> list:
+def page_language(soup: BeautifulSoup) -> str:
+    """Return the primary declared language, without guessing from the URL/text."""
+    html = soup.find("html")
+    raw = str(html.get("lang") or "").strip().lower() if html else ""
+    return re.split(r"[-_]", raw, maxsplit=1)[0]
+
+
+def extract_keywords_frequency(text: str, top_n: int = 12, lang: str = "") -> list:
     """
     Extract high-frequency unigrams, bigrams, and trigrams as keyword candidates.
     Uses frequency counting (not TF-IDF — no corpus reference available).
     Favors multi-word phrases over single terms.
     """
-    words = re.findall(r"\b[a-z]{3,}\b", text.lower())
-    filtered = [w for w in words if w not in STOP_WORDS]
+    # Python's Unicode word class keeps Lithuanian diacritics and Cyrillic letters.
+    # A declared unsupported language gets no guessed list; missing `lang` retains
+    # the historical English fallback for callers that pass plain text directly.
+    words = re.findall(r"[^\W\d_]{3,}", text.lower(), re.UNICODE)
+    stop_words = STOP_WORDS.get(lang, set()) if lang else STOP_WORDS["en"]
+    filtered = [w for w in words if w not in stop_words]
 
     unigrams = Counter(filtered)
     bigrams = Counter(
-        f"{filtered[i]} {filtered[i+1]}"
-        for i in range(len(filtered) - 1)
+        f"{words[i]} {words[i+1]}"
+        for i in range(len(words) - 1)
+        if words[i] not in stop_words and words[i + 1] not in stop_words
     )
     trigrams = Counter(
-        f"{filtered[i]} {filtered[i+1]} {filtered[i+2]}"
-        for i in range(len(filtered) - 2)
+        f"{words[i]} {words[i+1]} {words[i+2]}"
+        for i in range(len(words) - 2)
+        if all(word not in stop_words for word in words[i:i + 3])
     )
 
     scored: list[tuple[str, float]] = []
@@ -611,7 +659,7 @@ def main():
     readability = compute_readability(full_text)
 
     # ── Keyword research ───────────────────────────────────────────────────
-    extracted_kws = extract_keywords_frequency(full_text)
+    extracted_kws = extract_keywords_frequency(full_text, lang=page_language(soup))
     target_kw = (args.keyword.lower() if args.keyword else "") or (extracted_kws[0] if extracted_kws else "")
 
     related_kws: list[str] = []
@@ -647,11 +695,14 @@ def main():
         "images": content["images"],
         "structured_data": structured_data,
         "readability": readability,
-        "target_keyword": target_kw,
         "extracted_keywords": extracted_kws,
         "related_keywords": related_kws[:15],
         "seo_issues": seo_issues,
     }
+    # Missing is the output contract for "could not determine one": the registry
+    # reads absence as NO_DATA. An empty string used to turn uncertainty into FAIL.
+    if target_kw:
+        result["target_keyword"] = target_kw
 
     if args.json:
         print(json.dumps(result, indent=2))
