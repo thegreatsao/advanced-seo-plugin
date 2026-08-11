@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "ce8266615771",
+  "registry_version": "843026f5d5dd",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -9,9 +9,8 @@
         "why": "robots.txt exists, has a user-agent policy, and declares the sitemap"
       },
       "AR-158": {
-        "expect": "INDETERMINATE",
-        "triage": "DEFERRED-REGISTRY",
-        "why": "REGISTRY-DECISIONS.md item 1: the rule checks BreadcrumbList schema but the title also promises visible breadcrumb UI"
+        "expect": "FAIL",
+        "why": "'Implement Breadcrumbs (UI + Schema)' requires both halves; the entry has BreadcrumbList JSON-LD, but no page exposes a breadcrumb-named UI trail"
       },
       "AR-162": {
         "expect": "PASS",
@@ -126,8 +125,8 @@
         "why": "the hand-written mobile render declares zero indistinct links"
       },
       "CN-048": {
-        "expect": "PASS",
-        "why": "the crawlable pages use one h1 followed by multiple h2 sections inside semantic main or article markup"
+        "expect": "WARN",
+        "why": "'Use Hierarchical Headings and Semantic HTML' is satisfied on heading order and main landmarks, but several pages omit the weaker footer landmark"
       },
       "CN-051": {
         "expect": "PASS",
@@ -205,7 +204,7 @@
       },
       "AR-158": {
         "expect": "FAIL",
-        "why": "there is no visible breadcrumb UI and the BreadcrumbList schema omits itemListElement"
+        "why": "'Implement Breadcrumbs (UI + Schema)' requires both halves; there is no visible breadcrumb UI, regardless of the parseable BreadcrumbList node"
       },
       "AR-162": {
         "expect": "FAIL",
@@ -268,9 +267,8 @@
         "why": "the two reachable duplicate pages use the same meta description"
       },
       "TE-168": {
-        "expect": "INDETERMINATE",
-        "triage": "DEFERRED-REGISTRY",
-        "why": "REGISTRY-DECISIONS.md item 2: the rule places one broken target in WARN and does not inspect the Redirected half of the title"
+        "expect": "WARN",
+        "why": "'Fix Broken & Redirected Links' finds one broken internal target and no redirecting target; one broken link remains inside the preserved up-to-three warning band"
       },
       "TE-172": {
         "expect": "FAIL",
@@ -322,7 +320,7 @@
       },
       "CN-048": {
         "expect": "FAIL",
-        "why": "the entry page has two h1 elements, no h2 hierarchy, and no semantic main or article container"
+        "why": "'Use Hierarchical Headings and Semantic HTML' fails because the entry page has no semantic main landmark; its separate two-H1 defect belongs to CN-065"
       },
       "CN-051": {
         "expect": "FAIL",

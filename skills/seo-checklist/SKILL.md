@@ -514,7 +514,7 @@ about it while each was right about what it read. Never shared: a failed request
 `http_cache` in the JSON says which kind of run produced the file.
 
 **One crawl, kept.** Before the plan is built, the runner runs `site_crawl.py` once
-and hands the inventory to the ten site-wide checks — status, canonical, noindex, word
+and hands the inventory to the site-wide checks — status, canonical, noindex, word
 count, content hash and every link for each URL it reached. Six scripts used to crawl
 independently; on a seven-page fixture that was 97 requests for one audited page and is
 now 16, with the response cache below taking most of the rest. The inventory is written

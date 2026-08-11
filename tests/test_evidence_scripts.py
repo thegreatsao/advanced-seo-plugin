@@ -1538,7 +1538,7 @@ class VideoSchema(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class SchemaRequiredProps(unittest.TestCase):
-    """MS-032 `summary.errors`, AR-158 and GO-143 `issues` by pattern."""
+    """MS-032 `summary.errors` and GO-143 `issues` by pattern."""
 
     def test_complete_schema_produces_no_errors(self):
         good = out("props")
@@ -1549,14 +1549,6 @@ class SchemaRequiredProps(unittest.TestCase):
         bad = out("props_bad")
         self.assertGreaterEqual(bad["summary"]["errors"], 2)
         self.assertEqual(verdict("MS-032", bad), FAIL)
-
-    def test_ar_158_matches_the_breadcrumb_finding_specifically(self):
-        """A pattern assertion, and the family that produced fifteen checks which
-        could never fire. This one can: the finding it looks for exists."""
-        self.assertEqual(verdict("AR-158", out("props")), PASS)
-        self.assertEqual(verdict("AR-158", out("props_bad")), FAIL)
-        self.assertRegex(json.dumps(out("props_bad")["issues"]), "(?i)BreadcrumbList")
-
 
 class RichResults(unittest.TestCase):
     """TE-172 `summary.errors`, TECH-001 `summary.warnings`."""

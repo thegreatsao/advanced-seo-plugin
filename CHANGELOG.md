@@ -33,9 +33,35 @@ effective-port match after URL resolution.
 `lazy_lcp_performance_candidates` count. MD-185 retains the condition as the warning
 `Likely LCP image is lazy-loaded` from `image_weight_audit.py`.
 
-Registry `ce8266615771` replaces `07e64f9c9fc6`. The fixture declarations remain
-fully agreed after MS-022 is re-declared from its title-specific rule. The 808-test
-baseline becomes 814.
+AR-158 now reads `breadcrumbs.schema` and `breadcrumbs.ui` from `parse_html.py` and
+requires both. Parseable JSON-LD, Microdata and RDFa can establish the schema half;
+the UI half accepts a breadcrumb-named nav landmark, class/id marker, or the
+Microdata/RDFa trail itself. This is intentionally stricter about the two presences
+the title names, while required-property validation remains MS-032's separate job.
+
+TE-168 now passes only when the site-wide internal inventory has neither broken nor
+redirecting targets. Redirects alone warn, one to three broken targets retain the
+existing warning tolerance, and only a fourth broken target fails. Strictness moves
+only for the previously unread “Redirected” half; the broken-link bands do not move.
+
+CN-048 now emits structural `issues`: skipped heading levels and a missing `main`
+landmark are errors, while missing `nav` or `footer` landmarks are warnings. Its old
+H2 minimum is removed and CN-066 keeps the separate two-H2 rule. Strictness moves in
+both directions to match “Hierarchical Headings and Semantic HTML”: real structural
+defects now count, while a correctly structured H1-only gallery no longer fails.
+
+LO-198 is site-level. `site_crawl.py` inventory version 3 records the types of each
+parseable JSON-LD node, and `local_seo_checker.py --inventory` asks whether at least
+one crawled HTML page carries a LocalBusiness or subtype. This is less strict than
+requiring repetition on every sampled page and broader than entry-only evidence;
+LO-200 remains a separate per-page NAP/GBP/reviews judgement.
+
+Registry `843026f5d5dd` replaces `07e64f9c9fc6` for the combined 0.43.0 release.
+AR-158 good moves INDETERMINATE to FAIL, TE-168 broken moves INDETERMINATE to WARN,
+and CN-048 good moves PASS to WARN. The 108 fixture declarations remain fully agreed:
+98 matched, 0 disagreed and 10 indeterminate across 53 items, with 42 opposed. Batch
+A's interim 814-test baseline becomes 823; the release-to-release baseline is 808 to
+823.
 
 ## 0.42.0 — absent HSTS is a failure, not missing evidence
 

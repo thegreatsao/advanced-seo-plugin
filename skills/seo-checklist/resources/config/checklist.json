@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "ce8266615771",
+  "registry_version": "843026f5d5dd",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -1129,8 +1129,19 @@
         ],
         "requires": "offline",
         "assert": {
-          "path": "h2",
-          "len_gte": 1
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high",
+            "medium"
+          ]
+        },
+        "warn": {
+          "path": "issues",
+          "none_severity": [
+            "critical",
+            "high"
+          ]
         }
       },
       "effort": "high",
@@ -3274,15 +3285,19 @@
       "severity": "medium",
       "source": "script",
       "check": {
-        "script": "schema_required_props.py",
+        "script": "parse_html.py",
         "args": [
+          "{html}",
+          "--url",
           "{url}"
         ],
-        "requires": "fetch",
+        "requires": "offline",
         "assert": {
-          "path": "issues",
-          "field": "message",
-          "none_matching": "(?i)BreadcrumbList"
+          "path": "breadcrumbs",
+          "eq": {
+            "schema": true,
+            "ui": true
+          }
         }
       },
       "effort": "high",
@@ -3471,7 +3486,7 @@
         ],
         "requires": "crawl",
         "assert": {
-          "path": "summary.broken",
+          "path": "summary.broken_or_redirected",
           "eq": 0
         },
         "warn": {
@@ -4056,9 +4071,11 @@
       "check": {
         "script": "local_seo_checker.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--inventory",
+          "{inventory_json}"
         ],
-        "requires": "fetch",
+        "requires": "crawl",
         "assert": {
           "path": "local_business_nodes",
           "gte": 1

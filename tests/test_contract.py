@@ -157,6 +157,8 @@ UNREACHABLE_REQUIRES = {"api", "gsc", "safe_browsing"}
 SAME_ON_BOTH = {
     # The two sites are the same shape by design: both are small, static, and
     # hand-written, so what they share is not something a fixture can vary.
+    "AR-158": "neither fixture exposes a breadcrumb-named UI trail; the good entry's "
+              "schema alone cannot satisfy a title that requires UI + Schema",
     "AR-146": "neither fixture paginates",
     "CN-055": "neither fixture paginates",
     "IN-121": "neither fixture is multilingual",
@@ -386,6 +388,8 @@ class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):
     # ago and the README still described them. This test found the documentation drift
     # by refusing to accept an exemption nothing needs.
     ACCUSED_ON_PURPOSE = {
+        "AR-158": "the good fixture has BreadcrumbList schema but deliberately no "
+                  "breadcrumb-named UI trail",
         "SE-115": "served over plain HTTP, where the fixture cannot enable HSTS",
         "SE-117": "served over plain HTTP by http.server: HSTS cannot be present",
         # SE-118 was here until 0.20, when it stopped reading `https` off

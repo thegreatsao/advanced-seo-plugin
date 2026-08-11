@@ -2,7 +2,7 @@
 # Script output shapes
 
 All 57 scripts the registry runs are documented here, plus `site_crawl.py`, which
-the runner runs itself before building the plan and whose inventory the ten site-wide
+the runner runs itself before building the plan and whose inventory the site-wide
 checks read. Four of them break the
 `issues[].severity` + `message` convention the rest share — `gsc_checker.py` and
 `indexnow_checker.py` capitalise severity, `indexnow_checker.py` uses `finding`
@@ -42,7 +42,7 @@ add up to the audit's wall time.
 
 | Script | Note |
 |---|---|
-| `site_crawl.py` | one crawl for all ten site-wide checks; the budget is `--crawl-max-pages` (100) |
+| `site_crawl.py` | one crawl for all site-wide checks; the budget is `--crawl-max-pages` (100) |
 | `duplicate_content.py` | fast with `--inventory`: it compares hashes the crawl computed |
 | `orphan_pages_from_sitemap.py` | fast with `--inventory`: sitemap membership against the crawl's link graph |
 | `pagespeed.py` | ~19s — external PageSpeed API |
@@ -206,6 +206,7 @@ one it fetches a single page and checks every link on it, internal and external.
 `summary.healthy` — int
 `summary.broken` — int
 `summary.redirected` — int
+`summary.broken_or_redirected` — int — read by TE-168 for its clean PASS band
 `summary.timeout` — int
 `summary.unchecked` — int
 `issues[]` — array
@@ -939,11 +940,18 @@ not distinct targets — link equity divides among links.
 
 ### local_seo_checker.py
 
+With `--inventory`, LO-198 uses site scope without refetching pages. The fields below
+remain present, and the site path additionally emits `scope`, `pages_checked`, and
+`local_business_pages[]`. Without the inventory, LO-200 keeps the single-page shape.
+
 `source` — str
 `final_url` — str
-`status` — int
+`status` — int or NoneType
 `fetch_error` — NoneType or str (the page could not be read; LO-198 and LO-200 are `high`)
 `local_business_nodes` — int
+`scope` — str: `site` (inventory only)
+`pages_checked` — int (inventory only)
+`local_business_pages[]` — array (inventory only)
 `phones_detected[]` — array
 `map_embeds` — int
 `issues[]` — array
@@ -1096,6 +1104,10 @@ sitemap URL reachable and this check vacuous.
 `resource_hints.prerender[]` — array
 `schema[]` — array
   - item keys: @type, @types, @id, @context, status, note, has_context, has_type, from_graph, raw
+`breadcrumbs` — object — read by AR-158
+  - `schema` / `ui` — bool — parseable markup and an explicit UI marker
+`issues[]` — array — heading-level skips and missing main/nav/footer landmarks
+  - item keys: severity, message, url, evidence
 `open_graph.og:locale` — str
 `open_graph.og:site_name` — str
 `open_graph.og:type` — str
@@ -1296,8 +1308,8 @@ than a measurement — see §2 of KNOWN-ISSUES.md.
 ### site_crawl.py
 
 Not a registry item's script — the runner runs it once before it builds the plan and
-hands the file to the ten site-wide checks. Written down here because those checks'
-output contracts derive from it, so a change here moves ten items at once.
+hands the file to the site-wide checks. Written down here because those checks'
+output contracts derive from it, so a change here moves them at once.
 
 `inventory_version` — int (a reader refuses a version it does not know)
 `site` / `entry` — str
@@ -1323,6 +1335,7 @@ output contracts derive from it, so a change here moves ten items at once.
     (meta **and** `X-Robots-Tag`)
   - `content_words`, `text_hash`, `signature[]` (MinHash, 100 values)
   - `internal_out`, `unique_internal_out`, `external_out`
+  - `schema_nodes[]` — one object per parseable JSON-LD node; item key: `types[]`
   - `links[]` — item keys: target, anchor, rel, nofollow, internal
 `reachable[]` — array of page keys
 `unchecked_internal_targets[]` — array

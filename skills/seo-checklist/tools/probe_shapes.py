@@ -14,11 +14,11 @@ asks for. It used to hold one, and it had gone stale in both directions at once.
 Environment: PROBE_ONLY narrows to named scripts, PROBE_GSC_PROPERTY adds the
 Search Console jobs, PROBE_CWV_JSON / PROBE_RENDERED_JSON / PROBE_LINKS_CSV supply
 the artifacts, PROBE_INVENTORY_JSON supplies a crawl inventory instead of taking one,
-and PROBE_CRAWL=0 skips the crawl (the ten site-wide items are then unprobeable and
+and PROBE_CRAWL=0 skips the crawl (the site-wide items are then unprobeable and
 said so on stderr). Anything not supplied is skipped and named rather than probed
 with a literal "{gsc_property}" on the command line.
 
-A full probe crawls the target once and hands the inventory to the ten site-wide
+A full probe crawls the target once and hands the inventory to the site-wide
 checks, the same way an audit does — so it costs roughly what one audit costs rather
 than what six independent crawls cost. Use PROBE_ONLY when only one output contract
 changed.
@@ -79,7 +79,7 @@ def _child_env() -> dict:
 def build_inventory(path="probe-inventory.json"):
     """Crawl once, the way the runner does before it builds its plan.
 
-    Without this the ten site-wide items are unprobeable — `{inventory_json}` has no
+    Without this the site-wide items are unprobeable — `{inventory_json}` has no
     value, so they are dropped and named on stderr, and a tool that exists to check
     asserted paths against real output would be silent about exactly the paths a
     release changed. That is how GEO-007 kept reading a field nothing emitted: the

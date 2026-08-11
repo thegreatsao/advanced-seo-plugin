@@ -2890,7 +2890,7 @@ def main() -> int:
                   file=sys.stderr)
         # Its own timeout: a 100-page crawl at the default 4 rps takes longer than a
         # single-page script has any business taking, and being killed for that would
-        # take all ten site-wide items down with it.
+        # take all site-wide items down with it.
         crawl = run_script("site_crawl.py",
                            [audit_url, "--out", crawl_path,
                             "--depth", str(a.crawl_depth),
@@ -2898,11 +2898,11 @@ def main() -> int:
                            timeout=max(a.timeout * 3, 300))
         why = crawl.get("error") or crawl.get("fetch_error")
         if why:
-            # NO_DATA with this reason for all ten items, rather than ten verdicts
+            # NO_DATA with this reason for every site-wide item, rather than verdicts
             # about a site nothing read.
             rejected["inventory_json"] = f"the shared crawl read nothing: {why}"
             print(f"  crawl failed: {why}\n"
-                  f"  the ten site-wide checks report NO_DATA", file=sys.stderr)
+                  f"  the site-wide checks report NO_DATA", file=sys.stderr)
         else:
             ctx["inventory_json"] = crawl_path
             # Read back for `--sample`: the crawl already knows which URLs exist and

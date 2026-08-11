@@ -517,8 +517,8 @@ def _finish(site_url: str, entry: str, pages: dict, robots_blocked: dict,
         "max_pages": max_pages,
         "signatures": signatures,
         # Nothing was read at all. Every script reading this inventory copies it
-        # through, so the runner turns one crawl failure into NO_DATA for all ten
-        # items rather than ten confident verdicts about nothing.
+        # through, so the runner turns one crawl failure into NO_DATA for all
+        # items rather than confident verdicts about nothing.
         "fetch_error": None if html_pages else "no page could be crawled",
         "summary": {
             "requests": requests,
