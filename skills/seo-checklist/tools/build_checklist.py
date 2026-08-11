@@ -572,8 +572,12 @@ item(69, "high", M, fix="Run keyword research and set position benchmarks")
 item(70, "high", S, "gsc_cannibalization.py", GSCARG,
      {"path": "branded.owns_homepage", "truthy": True},
      "Confirm the homepage ranks first for the branded query")
+# `worst_spread` disappeared when the script split multi-URL queries into broad
+# cannibalization and the narrower close-position contest. MS-023 already owns
+# the broad `cannibalized_queries` count; this item measures the distinct close
+# contest that is evidence of duplication or overuse.
 item(71, "high", S, "gsc_cannibalization.py", GSCARG,
-     {"path": "summary.worst_spread", "lte": 3},
+     {"path": "summary.contested_queries", "eq": 0},
      "Find keyword overuse and duplication across URLs")
 # article_seo.py has no keyword finding at all — its seo_issues describe presence
 # and length, and the word "keyword" appears only inside remediation text. Both
