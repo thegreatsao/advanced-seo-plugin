@@ -10,6 +10,16 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.40.1 — sampled-page evidence names the full sample
+
+Per-page aggregate evidence now keeps the sample size as its denominator when
+some pages are undecided, and names how many were undecided. A five-page verdict
+from an eight-page sample therefore reads `5/8 pages (3 undecided)` instead of
+`5/5 pages`; fully decided samples retain their existing wording.
+
+Verdicts and the structured `pages_checked`, `pages_decided`, and
+`pages_matching` counters are unchanged. Registry `07e64f9c9fc6` is unchanged.
+
 ## 0.40.0 — crawl identity and keyword evidence describe what was observed
 
 The shared crawler now keeps `page_key` solely as its deduplication, inbound-link

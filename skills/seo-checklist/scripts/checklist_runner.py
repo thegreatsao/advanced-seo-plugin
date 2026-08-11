@@ -2136,8 +2136,11 @@ def aggregate_pages(primary: list[dict], per_page: list[list[dict]]) -> list[dic
             detail = f"{worst['url']}: {detail}"
         if len({r["evidence"] for r in bad}) > 1:
             detail += "; values differ"
+        coverage = f"{len(bad)}/{len(runs)} pages"
+        if len(decided) != len(runs):
+            coverage += f" ({len(runs) - len(decided)} undecided)"
         row = dict(row, status=worst["status"],
-                   evidence=(f"{len(bad)}/{len(decided)} pages: {detail}"),
+                   evidence=f"{coverage}: {detail}",
                    measure=worst.get("measure", row.get("measure")),
                    pages_checked=len(runs),
                    pages_decided=len(decided),

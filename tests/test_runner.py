@@ -910,6 +910,29 @@ class AggregationKeepsVerdictAndMeasureTogether(unittest.TestCase):
         self.assertIn("https://example.com/a", evidence)
         self.assertIn("values differ", evidence)
 
+    def test_aggregate_evidence_keeps_the_old_shape_when_every_page_decides(self):
+        primary = [self._row(PASS, 52)]
+        pages = [[self._row(PASS, 52)] for _ in range(3)]
+        out = aggregate_pages(primary, pages)[0]
+        self.assertTrue(out["evidence"].startswith("3/3 pages:"))
+        self.assertEqual(out["status"], PASS)
+        self.assertEqual(out["pages_checked"], 3)
+        self.assertEqual(out["pages_decided"], 3)
+        self.assertEqual(out["pages_matching"], 3)
+
+    def test_aggregate_evidence_names_undecided_pages_in_the_full_sample(self):
+        primary = [self._row(PASS, 52)]
+        undecided = self._row(runner.NO_DATA, 0)
+        pages = ([[self._row(PASS, 52)] for _ in range(5)] +
+                 [[dict(undecided)] for _ in range(3)])
+        out = aggregate_pages(primary, pages)[0]
+        self.assertTrue(out["evidence"].startswith(
+            "5/8 pages (3 undecided):"))
+        self.assertEqual(out["status"], PASS)
+        self.assertEqual(out["pages_checked"], 8)
+        self.assertEqual(out["pages_decided"], 5)
+        self.assertEqual(out["pages_matching"], 5)
+
     def test_aggregate_evidence_does_not_claim_difference_when_values_agree(self):
         primary = [self._row(PASS, 52)]
         pages = [[self._row(PASS, 52, url="https://example.com/a")],
