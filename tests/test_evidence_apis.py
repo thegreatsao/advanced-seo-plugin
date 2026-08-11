@@ -429,10 +429,63 @@ class Cannibalization(unittest.TestCase):
         ])
         out = self.analyze(self.rows(triples))
         self.assertEqual(out["queries_analyzed"], 11)
+        self.assertEqual(len(out["queries"]), 11)
+        self.assertFalse(out["queries_truncated"])
         self.assertEqual(out["summary"], {"cannibalized_queries": 2,
                                           "contested_queries": 2})
         self.assertIn("fixture orchrd",
                       {row["query"] for row in out["branded_spread"]})
+        bucket_counts = {
+            bucket: sum(row["bucket"] == bucket for row in out["queries"])
+            for bucket in ("branded_spread", "cannibalized", "contested", "single_page")
+        }
+        self.assertEqual(bucket_counts, {"branded_spread": 7, "cannibalized": 0,
+                                         "contested": 2, "single_page": 2})
+        self.assertEqual(bucket_counts["cannibalized"] + bucket_counts["contested"],
+                         out["summary"]["cannibalized_queries"])
+        misspelling = next(row for row in out["queries"]
+                           if row["query"] == "fixture orchrd")
+        self.assertEqual(misspelling["brand_form"], "fixtureorchrd")
+        self.assertEqual(misspelling["matched_brand_term"], "fixtureorchard")
+        self.assertEqual(misspelling["edit_distance"], 1)
+        single = next(row for row in out["queries"]
+                      if row["query"] == "opening hours")
+        self.assertEqual(single, {
+            "query": "opening hours", "brand_form": "openinghours",
+            "page_count": 1, "impressions": 60, "spread": 0,
+            "positions_compared": 1,
+            "bucket": "single_page",
+        })
+
+    def test_query_evidence_caps_after_every_classified_query(self):
+        triples = [
+            (("fixture orchard", "https://example.com/"), 500, 3000, 1.0),
+            (("fixture orchard", "https://example.com/info"), 40, 400, 1.3),
+        ]
+        for index in range(30):
+            triples.extend([
+                ((f"fixture orchard variant {index}", "https://example.com/"),
+                 20, 200, 2.0),
+                ((f"fixture orchard variant {index}",
+                  f"https://example.com/variant-{index}"), 5, 100, 2.5),
+            ])
+        triples.extend(
+            ((f"unclassified query {index}", f"https://example.com/{index}"),
+             0, 20, 5.0)
+            for index in range(1001)
+        )
+        out = self.analyze(self.rows(triples))
+        self.assertEqual(out["queries_analyzed"], 1032)
+        self.assertEqual(len(out["queries"]), 1000)
+        self.assertTrue(out["queries_truncated"])
+        self.assertEqual(len(out["branded_spread"]), 25)
+        self.assertEqual(out["queries"][0]["query"], "fixture orchard")
+        self.assertEqual(out["queries"][0]["bucket"], "branded_spread")
+        self.assertEqual(sum(row["bucket"] == "branded_spread"
+                             for row in out["queries"]), 31)
+        self.assertFalse(any(row["bucket"] == "single_page"
+                             and row["page_count"] >= 2
+                             for row in out["queries"]))
 
     def test_a_brand_the_homepage_does_not_own_still_cannibalizes(self):
         out = self.analyze(self.rows([
@@ -474,6 +527,8 @@ class Cannibalization(unittest.TestCase):
         self.mod.build_service = refuse
         out = self.mod.analyze("https://example.com/", "/nonexistent.json", 90)
         self.assertTrue(out.get("error"))
+        self.assertEqual(out["queries"], [])
+        self.assertFalse(out["queries_truncated"])
         for item in self.items_for():
             self.assertEqual(verdict(item["id"], out), NO_DATA, item["id"])
 

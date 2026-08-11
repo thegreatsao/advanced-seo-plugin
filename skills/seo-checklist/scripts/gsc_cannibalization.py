@@ -58,6 +58,8 @@ SHORT_NEAR_BRAND_LENGTH = 10
 SHORT_NEAR_BRAND_EDITS = 1
 # basis: convention — two edits allow the same typo rate across longer brand forms.
 LONG_NEAR_BRAND_EDITS = 2
+# basis: convention — 1000 retains 243 queries whole without unbounded evidence.
+QUERY_EVIDENCE_LIMIT = 1000
 
 
 def fetch_query_page_rows(service, site_url: str, days: int):
@@ -114,22 +116,27 @@ def find_query_spreads(rows: list, alternate_urls: list[str] | None = None) -> l
         eligible = [hit for hit in hits if hit["impressions"] >= MIN_IMPRESSIONS]
         if len(eligible) < MIN_PAGES:
             continue
-        pages = _group_locale_pages(eligible, alternate_urls or [])
-        positions = [p["position"] for p in pages if p["position"]]
-        out.append({
-            "query": query,
-            "pages": pages[:5],
-            "page_count": len(pages),
-            "clicks": sum(p["clicks"] for p in pages),
-            "impressions": sum(p["impressions"] for p in pages),
-            # Raw distance between the best and worst logical page positions. A
-            # wide value means one page outranks another; it does not by itself
-            # mean Google is undecided or that keyword copy is duplicated.
-            "spread": round(max(positions) - min(positions), 1) if len(positions) > 1 else 0,
-            "positions_compared": len(positions),
-        })
+        out.append(_query_summary(query, eligible, alternate_urls))
     out.sort(key=lambda c: (-c["impressions"], -c["spread"]))
     return out
+
+
+def _query_summary(query: str, eligible: list,
+                   alternate_urls: list[str] | None = None) -> dict:
+    pages = _group_locale_pages(eligible, alternate_urls or [])
+    positions = [p["position"] for p in pages if p["position"]]
+    return {
+        "query": query,
+        "pages": pages[:5],
+        "page_count": len(pages),
+        "clicks": sum(p["clicks"] for p in pages),
+        "impressions": sum(p["impressions"] for p in pages),
+        # Raw distance between the best and worst logical page positions. A
+        # wide value means one page outranks another; it does not by itself
+        # mean Google is undecided or that keyword copy is duplicated.
+        "spread": round(max(positions) - min(positions), 1) if len(positions) > 1 else 0,
+        "positions_compared": len(positions),
+    }
 
 
 def find_cannibalization(rows: list, alternate_urls: list[str] | None = None) -> list:
@@ -144,10 +151,10 @@ def _brand_form(value: str) -> str:
                    if char.isalnum() and not unicodedata.combining(char))
 
 
-def _within_edit_distance(left: str, right: str, limit: int) -> bool:
-    """Return whether two normalized terms differ by no more than ``limit``."""
+def _bounded_edit_distance(left: str, right: str, limit: int) -> int | None:
+    """Return the edit distance when it is no greater than ``limit``."""
     if abs(len(left) - len(right)) > limit:
-        return False
+        return None
     previous = list(range(len(right) + 1))
     for left_index, left_char in enumerate(left, 1):
         current = [left_index]
@@ -158,19 +165,22 @@ def _within_edit_distance(left: str, right: str, limit: int) -> bool:
                 previous[right_index - 1] + (left_char != right_char),
             ))
         if min(current) > limit:
-            return False
+            return None
         previous = current
-    return previous[-1] <= limit
+    distance = previous[-1]
+    return distance if distance <= limit else None
 
 
-def _near_brand(query: str, brand_query: str) -> bool:
+def _near_brand_match(query: str, brand_query: str) -> tuple[str, int] | None:
     brand_words = [_brand_form(word) for word in str(brand_query).split()]
     brand_words = [word for word in brand_words if word]
-    brand_terms = {_brand_form(brand_query)}
+    brand_terms = [_brand_form(brand_query)]
     if len(brand_words) >= 2:
-        brand_terms.add("".join(brand_words[:2]))
-    query_terms = {_brand_form(query)}
-    query_terms.update(_brand_form(word) for word in str(query).split())
+        brand_terms.append("".join(brand_words[:2]))
+    brand_terms = list(dict.fromkeys(term for term in brand_terms if term))
+    query_terms = [_brand_form(query)]
+    query_terms.extend(_brand_form(word) for word in str(query).split())
+    query_terms = list(dict.fromkeys(term for term in query_terms if term))
 
     for brand_term in brand_terms:
         for query_term in query_terms:
@@ -183,27 +193,81 @@ def _near_brand(query: str, brand_query: str) -> bool:
             limit = (SHORT_NEAR_BRAND_EDITS
                      if len(brand_term) < SHORT_NEAR_BRAND_LENGTH
                      else LONG_NEAR_BRAND_EDITS)
-            if _within_edit_distance(query_term, brand_term, limit):
-                return True
-    return False
+            distance = _bounded_edit_distance(query_term, brand_term, limit)
+            if distance is not None:
+                return brand_term, distance
+    return None
+
+
+def _brand_match(query: str, brand_query: str) -> tuple[str, int] | None:
+    """Return the normalized brand term and edit distance that claimed a query."""
+    query_form, brand_form = _brand_form(query), _brand_form(brand_query)
+    if not query_form or not brand_form:
+        return None
+    if brand_form in query_form:
+        return brand_form, 0
+    brand_words = [_brand_form(word) for word in str(brand_query).split()]
+    brand_words = [word for word in brand_words if word]
+    if len(brand_words) >= 2:
+        shorter_brand = "".join(brand_words[:2])
+        if shorter_brand in query_form:
+            return shorter_brand, 0
+    # The inferred brand often includes a location suffix. Preserve a substantial
+    # shorter form such as "acme valley" / "acmevalley" as the same brand.
+    if query_form in brand_form and len(query_form) >= max(5, len(brand_form) // 2):
+        return query_form, 0
+    return _near_brand_match(query, brand_query)
 
 
 def is_branded_query(query: str, brand_query: str) -> bool:
     """Match normalized brand forms and deliberately bounded misspellings."""
-    query_form, brand_form = _brand_form(query), _brand_form(brand_query)
-    if not query_form or not brand_form:
-        return False
-    if brand_form in query_form:
-        return True
-    brand_words = [_brand_form(word) for word in str(brand_query).split()]
-    brand_words = [word for word in brand_words if word]
-    if len(brand_words) >= 2 and "".join(brand_words[:2]) in query_form:
-        return True
-    # The inferred brand often includes a location suffix. Preserve a substantial
-    # shorter form such as "acme valley" / "acmevalley" as the same brand.
-    if query_form in brand_form and len(query_form) >= max(5, len(brand_form) // 2):
-        return True
-    return _near_brand(query, brand_query)
+    return _brand_match(query, brand_query) is not None
+
+
+def _query_evidence(rows: list, alternate_urls: list[str] | None,
+                    result: dict, owns_brand: bool) -> tuple[list, bool]:
+    by_query: dict = {}
+    for row in rows:
+        by_query.setdefault(row["query"], []).append(row)
+
+    brand_query = result["branded"].get("query", "") if owns_brand else ""
+    evidence = []
+    for query, hits in by_query.items():
+        eligible = [hit for hit in hits if hit["impressions"] >= MIN_IMPRESSIONS]
+        summary = _query_summary(query, eligible, alternate_urls)
+        brand_match = _brand_match(query, brand_query) if brand_query else None
+        is_spread = len(eligible) >= MIN_PAGES
+        if is_spread and brand_match:
+            bucket = "branded_spread"
+        elif summary["page_count"] >= MIN_PAGES:
+            bucket = ("contested"
+                      if summary["positions_compared"] >= MIN_PAGES
+                      and summary["spread"] <= CONTESTED_POSITION_BAND
+                      else "cannibalized")
+        else:
+            bucket = "single_page"
+        item = {
+            "query": query,
+            "brand_form": _brand_form(query),
+            "page_count": summary["page_count"],
+            "impressions": summary["impressions"],
+            "spread": summary["spread"],
+            "positions_compared": summary["positions_compared"],
+            "bucket": bucket,
+        }
+        if brand_match:
+            item["matched_brand_term"], item["edit_distance"] = brand_match
+        evidence.append(item)
+
+    # The human-facing classified lists are bounded to 25 apiece. Put every query
+    # that satisfies a classification rule first, so the evidence cap does not
+    # inherit those display caps or orphan a classified query.
+    evidence.sort(key=lambda item: (
+        item["bucket"] == "single_page",
+        -item["impressions"],
+        item["query"],
+    ))
+    return evidence[:QUERY_EVIDENCE_LIMIT], len(evidence) > QUERY_EVIDENCE_LIMIT
 
 
 def find_branded(rows: list, site_url: str) -> dict:
@@ -245,6 +309,8 @@ def analyze(site_url: str, credentials: str, days: int,
         "property": site_url,
         "period": {"start": None, "end": None},
         "queries_analyzed": 0,
+        "queries": [],
+        "queries_truncated": False,
         "cannibalized": [],
         "branded_spread": [],
         "contested": [],
@@ -296,6 +362,8 @@ def analyze(site_url: str, credentials: str, days: int,
         "cannibalized_queries": len(result["cannibalized"]),
         "contested_queries": len(result["contested"]),
     }
+    result["queries"], result["queries_truncated"] = _query_evidence(
+        rows, alternate_urls, result, owns_brand)
 
     for c in result["cannibalized"][:10]:
         result["issues"].append({

@@ -10,6 +10,33 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.39.0 — NAP identity and query evidence follow the measured business
+
+NAP name comparison now keys business identity on equal normalized telephone,
+equal normalized street and locality, or an explicit `@id` link in either
+direction. A shared schema type, street without locality, and shared social
+profile are not identity evidence. This restores the live page's two name
+warnings while preserving the different-phone, different-address false-positive
+guard introduced in 0.38.0.
+
+The Search Console cannibalization artifact now retains every analyzed query with
+its normalized brand form, complete classification inputs, exclusive bucket, and
+bounded brand-match evidence. Classification is independent of the 25-entry
+human-facing list caps. The evidence list is capped at 1,000 with every classified
+query first and a `queries_truncated` flag; authentication failure still leaves
+the evidence empty and the verdict undecided.
+
+The eight-page live rerun retains all 243 queries without truncation: 8 are
+`branded_spread`, 2 are cannibalized (including the 1 `contested` query), and
+233 are `single_page`. `green valey` records `greenvalley` at edit distance 1.
+The evidence artifact grows from 1,667,888 to 1,729,670 bytes (+61,782). NAP
+findings grow from 2 to 4 and total entity issues from 8 to 10, but no checklist
+item status, measure or evidence changes; the run remains 88/100 at 62% coverage
+(510/826 weight). The 781-test baseline becomes 791.
+
+Registry `07e64f9c9fc6` is unchanged: no checklist item, title, threshold or
+assertion was edited.
+
 ## 0.38.0 — sampled evidence follows every graded page
 
 `--evidence-json` now keeps each sampled page's complete script output under a

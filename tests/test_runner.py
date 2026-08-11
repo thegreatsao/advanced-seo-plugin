@@ -2203,9 +2203,7 @@ class EntityAddressesAndNap(unittest.TestCase):
         self.assertIn("Molėtų r.", warning["finding"])
         self.assertFalse(any("streetAddress" in i["finding"] for i in issues))
 
-    def test_distinct_local_nodes_may_have_different_names(self):
-        """Types and distinct identifiers separate three co-located entities;
-        their two locality disagreements remain evidence, their names do not."""
+    def test_shared_nap_keys_compare_names_across_the_live_three_node_shape(self):
         nodes = (
             {"@id": "https://example.com/#restaurant", "@type": "Restaurant",
              "name": "Fixture Orchard", "telephone": "+37060000000",
@@ -2213,14 +2211,14 @@ class EntityAddressesAndNap(unittest.TestCase):
              "address": {"@type": "PostalAddress", "streetAddress": "One",
                          "addressLocality": "North District"}},
             {"@id": "https://example.com/#attraction",
-             "@type": "TouristAttraction", "name": "Lakeside Family Park",
+             "@type": "TouristAttraction",
+             "name": "Fixture Orchard — Lakeside Family Park",
              "telephone": "+37060000000",
              "sameAs": ["https://example.com/#restaurant",
                         "https://social.example/fixture-orchard"],
              "address": {"@type": "PostalAddress", "streetAddress": "One",
                          "addressLocality": "North District"}},
-            {"@id": "https://example.com/#organization",
-             "@type": "Organization", "name": "Fixture Orchard Company",
+            {"@type": "Organization", "name": "Fixture Orchard",
              "telephone": "+37060000000",
              "sameAs": ["https://social.example/fixture-orchard"],
              "address": {"@type": "PostalAddress", "streetAddress": "One",
@@ -2231,7 +2229,101 @@ class EntityAddressesAndNap(unittest.TestCase):
                              nodes)
                     if "differs" in issue["finding"]]
         self.assertEqual(sum("addressLocality" in finding for finding in findings), 2)
-        self.assertFalse(any("NAP name" in finding for finding in findings), findings)
+        self.assertEqual(sum("NAP name" in finding for finding in findings), 2)
+        self.assertEqual(len(findings), 4)
+
+    def test_equal_phone_identifies_one_business_despite_other_disagreements(self):
+        nodes = (
+            {"@id": "https://example.com/#one", "@type": "Restaurant",
+             "name": "Fixture Orchard", "telephone": "111",
+             "address": {"@type": "PostalAddress", "streetAddress": "One",
+                         "addressLocality": "North"}},
+            {"@id": "https://example.com/#two", "@type": "Organization",
+             "name": "Another Business", "telephone": "111",
+             "address": {"@type": "PostalAddress", "streetAddress": "Two",
+                         "addressLocality": "South"}},
+        )
+        self.assertTrue(any("NAP name differs" in issue["finding"]
+                            for issue in self.nap("One Two 111", nodes)))
+
+    def test_equal_normalized_street_and_locality_identify_one_business(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Fixture Orchard", "telephone": "111",
+             "address": {"@type": "PostalAddress",
+                         "streetAddress": "Kaimynų g. 2",
+                         "addressLocality": "Molėtų r. sav."}},
+            {"@type": "Organization", "name": "Another Business", "telephone": "222",
+             "address": {"@type": "PostalAddress",
+                         "streetAddress": "Kaimynų gatvė 2",
+                         "addressLocality": "Molėtų r sav"}},
+        )
+        self.assertTrue(any("NAP name differs" in issue["finding"]
+                            for issue in self.nap("111 222", nodes)))
+
+    def test_equal_street_in_different_localities_does_not_identify(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Fixture Orchard",
+             "address": {"@type": "PostalAddress", "streetAddress": "Market St 1",
+                         "addressLocality": "Vilnius"}},
+            {"@type": "Organization", "name": "Another Business",
+             "address": {"@type": "PostalAddress", "streetAddress": "Market St 1",
+                         "addressLocality": "Kaunas"}},
+        )
+        self.assertFalse(any("NAP name differs" in issue["finding"]
+                             for issue in self.nap(nodes=nodes)))
+
+    def test_text_addresses_without_explicit_localities_do_not_identify(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Fixture Orchard",
+             "address": "Kaimynų g. 2, Rudiliai"},
+            {"@type": "Organization", "name": "Another Business",
+             "address": "Kaimynų gatvė 2, Rudiliai"},
+        )
+        self.assertFalse(any("NAP name differs" in issue["finding"]
+                             for issue in self.nap(nodes=nodes)))
+
+    def test_text_and_structured_addresses_do_not_raise_or_identify(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Fixture Orchard",
+             "address": "Kaimynų g. 2, Rudiliai"},
+            {"@type": "Organization", "name": "Another Business",
+             "address": {"@type": "PostalAddress",
+                         "streetAddress": "Kaimynų g. 2, Rudiliai"}},
+        )
+        self.assertFalse(any("NAP name differs" in issue["finding"]
+                             for issue in self.nap(nodes=nodes)))
+
+    def test_absent_addresses_do_not_raise_or_identify(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Fixture Orchard"},
+            {"@type": "Organization", "name": "Another Business"},
+        )
+        self.assertFalse(any("NAP name differs" in issue["finding"]
+                             for issue in self.nap(nodes=nodes)))
+
+    def test_shared_social_profile_does_not_identify_one_business(self):
+        nodes = (
+            {"@id": "https://example.com/#one", "@type": "Restaurant",
+             "name": "Fixture Orchard", "telephone": "111",
+             "sameAs": ["https://social.example/shared"],
+             "address": {"@type": "PostalAddress", "streetAddress": "One"}},
+            {"@id": "https://example.com/#two", "@type": "Organization",
+             "name": "Another Business", "telephone": "222",
+             "sameAs": ["https://social.example/shared"],
+             "address": {"@type": "PostalAddress", "streetAddress": "Two"}},
+        )
+        self.assertFalse(any("NAP name differs" in issue["finding"]
+                             for issue in self.nap("One Two 111 222", nodes)))
+
+    def test_same_type_with_different_phone_and_street_is_not_name_compared(self):
+        nodes = (
+            {"@type": "Restaurant", "name": "Fixture Orchard", "telephone": "111",
+             "address": {"@type": "PostalAddress", "streetAddress": "One"}},
+            {"@type": "Restaurant", "name": "Another Business", "telephone": "222",
+             "address": {"@type": "PostalAddress", "streetAddress": "Two"}},
+        )
+        self.assertFalse(any("NAP name differs" in issue["finding"]
+                             for issue in self.nap("One Two 111 222", nodes)))
 
     def test_same_type_nodes_with_different_names_still_warn(self):
         nodes = (
@@ -2247,27 +2339,40 @@ class EntityAddressesAndNap(unittest.TestCase):
                           if "NAP name differs" in issue["finding"])
         self.assertEqual(name_issue["severity"], "Warning")
 
-    def test_cross_type_nodes_with_one_identity_still_compare_names(self):
-        shared_address = {"@type": "PostalAddress", "streetAddress": "One"}
+    def test_equal_or_explicitly_linked_ids_compare_names(self):
         identities = (
             ({"@id": "https://example.com/#place"},
              {"@id": "https://example.com/#place"}),
-            ({"sameAs": ["https://profiles.example/place"]},
-             {"sameAs": ["https://profiles.example/place"]}),
+            ({"@id": "https://example.com/#place"},
+             {"@id": "https://example.com/#organization",
+              "sameAs": ["https://example.com/#place"]}),
         )
         for left_identity, right_identity in identities:
             with self.subTest(identity=left_identity):
                 nodes = (
                     {"@type": "Restaurant", "name": "Fixture Orchard",
-                     "telephone": "12345678", "address": shared_address,
+                     "telephone": "111",
+                     "address": {"@type": "PostalAddress", "streetAddress": "One"},
                      **left_identity},
                     {"@type": "Organization", "name": "Fixture Orchard Company",
-                     "telephone": "12345678", "address": shared_address,
+                     "telephone": "222",
+                     "address": {"@type": "PostalAddress", "streetAddress": "Two"},
                      **right_identity},
                 )
-                issues = self.nap("One 12345678", nodes)
+                issues = self.nap("One Two 111 222", nodes)
                 self.assertTrue(any("NAP name differs" in issue["finding"]
                                     for issue in issues), issues)
+
+    def test_idless_node_can_link_to_the_other_nodes_id(self):
+        nodes = (
+            {"@id": "https://example.com/#restaurant", "@type": "Restaurant",
+             "name": "Fixture Orchard", "telephone": "111"},
+            {"@type": "Organization", "name": "Fixture Orchard Cafe",
+             "telephone": "222",
+             "sameAs": ["https://example.com/#restaurant"]},
+        )
+        self.assertTrue(any("NAP name differs" in issue["finding"]
+                            for issue in self.nap("111 222", nodes)))
 
     def test_equal_and_single_entity_nap_have_no_disagreement(self):
         node = {"@type": "Restaurant", "name": "R", "telephone": "12345678",

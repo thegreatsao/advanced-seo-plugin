@@ -320,12 +320,15 @@ def _nap_entities(entities: list) -> list:
     return out
 
 
-def _identity_refs(entity: dict) -> set[str]:
-    """Return schema identifiers that explicitly link descriptions of one thing."""
-    refs = set()
+def _entity_id(entity: dict) -> str:
+    """Return a node's explicit schema identifier."""
     entity_id = entity.get("id") or entity.get("@id")
-    if isinstance(entity_id, str) and entity_id.strip():
-        refs.add(entity_id.strip())
+    return entity_id.strip() if isinstance(entity_id, str) else ""
+
+
+def _same_as_refs(entity: dict) -> set[str]:
+    """Return identifiers explicitly named by ``sameAs``."""
+    refs = set()
     same_as = entity.get("sameAs") or []
     if isinstance(same_as, (str, dict)):
         same_as = [same_as]
@@ -340,20 +343,34 @@ def _identity_refs(entity: dict) -> set[str]:
 
 
 def _same_named_entity(left: dict, right: dict) -> bool:
-    """Names must agree only for a shared type or an explicit identity link."""
-    left_types = set(schema_types(left.get("types") or left.get("type")))
-    right_types = set(schema_types(right.get("types") or right.get("type")))
-    if left_types.intersection(right_types):
+    """Return whether positive NAP or @id evidence identifies one business."""
+    left_phone, right_phone = left.get("telephone"), right.get("telephone")
+    # A phone number is the strongest single business signal available here, so
+    # equality remains sufficient even when names differ. The known residual is a
+    # shared switchboard (for example co-located tenants or a food court), which
+    # can still conflate distinct businesses.
+    if (str(left_phone or "").strip() and str(right_phone or "").strip()
+            and _nap_form(left_phone) == _nap_form(right_phone)):
         return True
-    left_id = str(left.get("id") or left.get("@id") or "").strip()
-    right_id = str(right.get("id") or right.get("@id") or "").strip()
-    # Distinct node identifiers are the stronger signal: co-located entities can
-    # legitimately share an official social profile, and one node may even cite
-    # another in sameAs without becoming the same schema node. Use sameAs as an
-    # identity fallback only when neither node has its own identifier.
-    if left_id or right_id:
-        return bool(left_id and left_id == right_id)
-    return bool(_identity_refs(left).intersection(_identity_refs(right)))
+
+    left_address, right_address = left.get("address"), right.get("address")
+    if isinstance(left_address, dict) and isinstance(right_address, dict):
+        left_street = left_address.get("streetAddress")
+        right_street = right_address.get("streetAddress")
+        left_locality = left_address.get("addressLocality")
+        right_locality = right_address.get("addressLocality")
+        if (all(str(value or "").strip() for value in
+                (left_street, right_street, left_locality, right_locality))
+                and _nap_form(left_street) == _nap_form(right_street)
+                and _nap_form(left_locality) == _nap_form(right_locality)):
+            return True
+
+    left_id, right_id = _entity_id(left), _entity_id(right)
+    return bool(
+        (left_id and right_id and left_id == right_id)
+        or (right_id and right_id in _same_as_refs(left))
+        or (left_id and left_id in _same_as_refs(right))
+    )
 
 
 def _nap_disagreements(entities: list) -> list:

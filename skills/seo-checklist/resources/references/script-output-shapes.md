@@ -483,9 +483,25 @@ of this file.
 `property` — str
 `period.start` / `period.end` — str (`YYYY-MM-DD`)
 `queries_analyzed` — int
-`cannibalized[]` — array
+`queries[]` — array, capped at 1,000 with every classified query first
+  - item keys: query, brand_form, page_count, impressions, spread,
+    positions_compared,
+    bucket (`cannibalized`, `contested`, `branded_spread`, or `single_page`)
+  - matched brand queries also carry matched_brand_term and edit_distance
+  - the buckets are exclusive;
+    `summary.cannibalized_queries = bucket[cannibalized] + bucket[contested]`
+  - `single_page` is the catch-all for fewer than two eligible logical pages, not
+    a claim that exactly one page exists; a query can carry `page_count: 0`
+  - query, page_count, impressions and spread deliberately repeat classified-list
+    data so readers do not need a join; brand_form deliberately exposes the
+    normalized verdict rather than requiring readers to reproduce normalization
+`queries_truncated` — bool
+`cannibalized[]` — array, capped at 25 for human-facing output
   - item keys: query, pages[] (page, clicks, impressions, position), page_count,
-    clicks, impressions, spread (float — max minus min position)
+    clicks, impressions, spread (float — max minus min position),
+    positions_compared
+`branded_spread[]` / `contested[]` — arrays with the same item shape and
+human-facing 25-entry cap
 `branded.checked` — bool
 `branded.query` / `branded.owner_page` / `branded.host` — str
 `branded.position` — float
@@ -493,7 +509,7 @@ of this file.
 `branded.owns_homepage` — bool
 `branded.ranks_first` — bool
 `summary.cannibalized_queries` — int
-`summary.worst_spread` — float
+`summary.contested_queries` — int
 `issues[]` — array
 `error` — str | null
 
