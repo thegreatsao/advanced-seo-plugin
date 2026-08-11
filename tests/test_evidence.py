@@ -616,6 +616,14 @@ class SecurityHeaders(unittest.TestCase):
         self.assertIs(out["https"], False)
         self.assertEqual(verdict("SE-117", out), FAIL)
 
+    def test_missing_hsts_fails_se_115_instead_of_becoming_no_data(self):
+        """An absent required header is measured absence, not missing evidence."""
+        self.serve("https://example.com/", {})
+        out = self.sh.check_security_headers("https://example.com/")
+        self.assertIn("strict-transport-security", out["header_values"])
+        self.assertEqual(out["header_values"]["strict-transport-security"], "")
+        self.assertEqual(verdict("SE-115", out), FAIL)
+
     def test_this_script_cannot_decide_se_118_in_either_direction(self):
         """The regression guard for the 0.20 fix, and the reason it is two asserts.
 

@@ -1222,11 +1222,11 @@ to walk `rows[].decisions` directly; there is no aggregate to assert against.
 `headers_present.Referrer-Policy` — str
 `headers_present.Permissions-Policy` — str
 `headers_missing.Content-Security-Policy (CSP)` — str
-`header_values.strict-transport-security` — str
-`header_values.x-frame-options` — str
-`header_values.x-content-type-options` — str
-`header_values.referrer-policy` — str
-`header_values.permissions-policy` — str
+`header_values.strict-transport-security` — str — empty when absent
+`header_values.x-frame-options` — str — empty when absent
+`header_values.x-content-type-options` — str — empty when absent
+`header_values.referrer-policy` — str — empty when absent
+`header_values.permissions-policy` — str — empty when absent
 `issues[]` — array
 `recommendations[]` — array
 `error` — NoneType

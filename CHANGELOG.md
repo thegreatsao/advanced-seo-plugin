@@ -10,6 +10,21 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.42.0 — absent HSTS is a failure, not missing evidence
+
+`security_headers.py` now emits an empty value for every tracked response header
+that a successfully fetched page omits. SE-115 therefore fails an HTTPS page with
+no Strict-Transport-Security header instead of reporting `NO_DATA`; a real fetch
+failure still carries `error` and remains undecided.
+
+The fixture oracle now serves both site trees over verified TLS as well as HTTP.
+Its hardened TLS origin emits HSTS, CSP, Referrer-Policy, X-Content-Type-Options,
+and Permissions-Policy, while its sparse origin omits all six tracked headers. A
+direct crawler regression test also locks the 0.40.0 rule that a normalized page
+key is never substituted for the discovered trailing-slash URL at fetch time.
+
+Registry `07e64f9c9fc6` is unchanged. The 807-test baseline becomes 808.
+
 ## 0.41.0 — image verdicts distinguish absence, deferral and discoverability
 
 MB-096 and MB-097 no longer fail an image-free sampled page. The image audit omits

@@ -142,6 +142,11 @@ def check_security_headers(url: str, timeout: int = 15) -> dict:
                     if "includesubdomains" not in value.lower():
                         result["issues"].append("⚠️ HSTS missing includeSubDomains directive")
             else:
+                # A response was received, so an absent header is measured absence,
+                # not missing evidence. Keep every tracked path present: registry
+                # assertions such as SE-115's `truthy` can then fail normally while
+                # an actual fetch error remains distinguishable through `error`.
+                result["header_values"][header_key] = ""
                 result["headers_missing"][header_info["label"]] = header_info["description"]
                 result["recommendations"].append(
                     f"{header_info['label']}: {header_info['recommendation']}"

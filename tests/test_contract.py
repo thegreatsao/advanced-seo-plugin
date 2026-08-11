@@ -386,6 +386,7 @@ class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):
     # ago and the README still described them. This test found the documentation drift
     # by refusing to accept an exemption nothing needs.
     ACCUSED_ON_PURPOSE = {
+        "SE-115": "served over plain HTTP, where the fixture cannot enable HSTS",
         "SE-117": "served over plain HTTP by http.server: HSTS cannot be present",
         # SE-118 was here until 0.20, when it stopped reading `https` off
         # security_headers.py and started verifying an actual certificate. On an
