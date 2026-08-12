@@ -662,6 +662,24 @@ def main():
     extracted_kws = extract_keywords_frequency(full_text, lang=page_language(soup))
     target_kw = (args.keyword.lower() if args.keyword else "") or (extracted_kws[0] if extracted_kws else "")
 
+    keyword_usage = None
+    if args.keyword is not None:
+        # Match case-insensitively at word boundaries: "seo" must not match
+        # "seoul". `full_text` is the body corpus already assembled above for
+        # keyword extraction; using it here avoids inventing a second definition.
+        keyword_pattern = (re.compile(rf"(?<!\w){re.escape(args.keyword)}(?!\w)",
+                                      re.IGNORECASE)
+                           if args.keyword else None)
+        body_occurrences = (len(keyword_pattern.findall(full_text))
+                            if keyword_pattern else 0)
+        keyword_usage = {
+            "keyword": args.keyword,
+            "in_body": body_occurrences > 0,
+            "body_occurrences": body_occurrences,
+            "in_title": bool(keyword_pattern.search(content["title"]))
+                        if keyword_pattern else False,
+        }
+
     related_kws: list[str] = []
     if target_kw and not args.no_autocomplete:
         related_kws = get_google_autocomplete(target_kw)
@@ -703,6 +721,9 @@ def main():
     # reads absence as NO_DATA. An empty string used to turn uncertainty into FAIL.
     if target_kw:
         result["target_keyword"] = target_kw
+    # Absence means no keyword was supplied, so no usage measurement happened.
+    if keyword_usage is not None:
+        result["keyword_usage"] = keyword_usage
 
     if args.json:
         print(json.dumps(result, indent=2))
