@@ -1512,6 +1512,28 @@ class OneCheckCarriesWeightOnce(unittest.TestCase):
             self.assertEqual(by_id[item_id].get("scores_with"), "SE-114")
             self.assertEqual(self.shape(by_id[item_id]), self.shape(by_id["SE-114"]))
 
+    def test_md_189_uses_responsive_measurement_and_defers_to_mb_096(self):
+        by_id = {item["id"]: item for item in ITEMS}
+        self.assertEqual(by_id["MD-189"]["check"]["assert"],
+                         {"path": "responsive_count", "gte": 1})
+        self.assertEqual(by_id["MD-189"].get("scores_with"), "MB-096")
+
+    def test_mb_097_carries_the_modern_format_measurement(self):
+        by_id = {item["id"]: item for item in ITEMS}
+        self.assertEqual(by_id["MB-097"]["check"]["assert"],
+                         {"path": "modern_format_count", "gte": 1})
+        self.assertIsNone(by_id["MB-097"].get("scores_with"))
+
+    def test_image_format_and_responsive_theme_keeps_six_weight_points(self):
+        from checklist_runner import SEVERITY_WEIGHT
+
+        ids = {"MB-096", "MB-097", "MD-189"}
+        items = [item for item in ITEMS if item["id"] in ids]
+        self.assertEqual({item["id"] for item in items}, ids)
+        weight = sum(SEVERITY_WEIGHT[item["severity"]] for item in items
+                     if not item.get("scores_with"))
+        self.assertEqual(weight, 6)
+
     def test_a_twin_shares_its_primary_s_check_exactly(self):
         """The claim `scores_with` makes is *this is the same check*. If the shapes
         differ, two different questions are being asked and one of them stopped

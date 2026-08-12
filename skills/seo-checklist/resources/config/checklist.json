@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "2dd52fda3e6f",
+  "registry_version": "589f6741058a",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -1955,8 +1955,7 @@
         }
       },
       "effort": "medium",
-      "fix": "Move to WebP/AVIF and compress images",
-      "scores_with": "MD-189"
+      "fix": "Move to WebP/AVIF and compress images"
     },
     {
       "id": "MB-098",
@@ -3936,12 +3935,13 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "modern_format_count",
+          "path": "responsive_count",
           "gte": 1
         }
       },
       "effort": "medium",
-      "fix": "Modern formats and responsive images"
+      "fix": "Modern formats and responsive images",
+      "scores_with": "MB-096"
     },
     {
       "id": "MD-190",

@@ -1053,8 +1053,12 @@ item(187, "high", S, "image_weight_audit.py",
      {"path": "broken_image_count", "eq": 0},
      "Fix broken images")
 item(188, "low", L, fix="Use original contextual images, limit stock photography")
+# MD-189 names two halves which MB-096 and MB-097 measure separately. It takes
+# the responsive half and defers to MB-096 so that one fact is charged once. A
+# conjunction was rejected: it would raise this theme from 6 to 9 weight points
+# and make one missing-modern-format defect fail both MD-189 and MB-097.
 item(189, "medium", S, "image_weight_audit.py", PAGE,
-     {"path": "modern_format_count", "gte": 1},
+     {"path": "responsive_count", "gte": 1},
      "Modern formats and responsive images")
 item(190, "medium", S, "video_schema_checker.py", PAGE,
      ISSUES_ANY(),
@@ -1262,7 +1266,7 @@ SAME_CHECK = {
     "CI-017": "TE-181",   # both titled "Validate HTML (W3C)", word for word
     "GO-144": "GEO-004",  # featured snippets / answer blocks for AEO
     "GO-145": "GEO-005",  # AI Overviews / citation-ready content
-    "MD-189": "MB-097",   # modern formats — MD-189 medium, MB-097 medium, lower id
+    "MB-096": "MD-189",   # both medium; MB-096's title exactly names this assertion
     "MD-190": "MB-102",   # video SEO (medium) over "Optimize Video for Mobile" (low)
     # One Safe Browsing response, expressed three ways in the source checklists.
     # All three read the same threats list. The critical pair ties on severity, so

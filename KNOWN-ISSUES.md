@@ -784,6 +784,14 @@ name. A column called `url` would be read as "fix this page".
   declaration-only check. `tools/audit_item_semantics.py` now reports eight duplicate
   groups; TE-166 keeps the original declaration check and MB-104 carries its own weight.
 
+  **MD-189 moved from the MB-097 group to the MB-096 group in 0.45.0.** Its title names
+  modern formats and responsive images, two facts already measured separately by MB-097
+  and MB-096. MD-189 now reads the responsive count and defers to MB-096, whose title
+  names that shared assertion exactly; MB-097 carries the modern-format weight itself.
+  `tools/audit_item_semantics.py` still reports eight duplicate groups. A conjunction
+  would raise the theme from 6 to 9 weight points and charge a missing modern format to
+  both MD-189 and MB-097, so `scores_with` cannot make that aggregate honest.
+
 - **All four rulings are closed. Three Core Web Vitals items in 0.25.0, `CI-002` and
   `IN-127` in 0.26.0.** The entry below is the original finding; the paragraphs after it
   record what each repair cost.

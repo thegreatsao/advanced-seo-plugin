@@ -774,12 +774,14 @@ one — the script refuses the file instead.
 `modern_format_count` — int — absent when the page has no images; otherwise, images
   the browser can obtain in avif or webp, counting
   a `<picture><source type="image/webp">` as well as an `img` whose own src is one.
-  MB-097 reads this. Until 0.7.0 only the `img` was read, so the recommended pattern
+  MB-097 reads this and carries the modern-format weight. Until 0.7.0 only the `img`
+  was read, so the recommended pattern
   — modern format in a `<source>`, png fallback in the `<img>` — counted as no modern
   format at all and failed the item it exists to satisfy.
 `responsive_count` — int — absent when the page has no images; otherwise, images
   with a `srcset`, on the `img` or on a `<source>`
-  beside it. MB-096 reads this, and it was wrong in the same direction.
+  beside it. MB-096 and MD-189 read this; MD-189 defers to MB-096 so the shared
+  responsive-image fact carries weight once. The count was wrong in the same direction.
 `modern_format_on_img_count` — int — the narrow count: `img` src only
 `srcset_on_img_count` — int — the narrow count: `img` attribute only
 `picture_count` — int — images wrapped in a `<picture>` carrying a `<source>`
