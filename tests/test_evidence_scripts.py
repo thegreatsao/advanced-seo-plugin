@@ -28,9 +28,12 @@ the rest of the suite put together.
 """
 import json
 import os
+import socket
+import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -410,6 +413,71 @@ SITEMAP_BAD = ('<?xml version="1.0" encoding="UTF-8"?>'
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 900
 WEBP = b"RIFF\x00\x00\x00\x00WEBPVP8 " + b"\0" * 600
 
+
+def valid_png(width: int, height: int) -> bytes:
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
+
+    rows = b"".join(b"\0" + b"\0\0\0\xff" * width for _ in range(height))
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+
+def valid_ico(*sizes: tuple[int, int]) -> bytes:
+    """A real ICO directory plus uncompressed 32-bit DIB payloads."""
+    payloads = []
+    for width, height in sizes:
+        pixels = b"\0\0\0\xff" * width * height
+        mask = b"\0" * ((((width + 31) // 32) * 4) * height)
+        dib = struct.pack("<IIIHHIIIIII", 40, width, height * 2, 1, 32, 0,
+                          len(pixels), 0, 0, 0, 0) + pixels + mask
+        payloads.append(dib)
+    offset = 6 + 16 * len(sizes)
+    entries = []
+    for (width, height), payload in zip(sizes, payloads, strict=True):
+        entries.append(bytes((width if width < 256 else 0,
+                              height if height < 256 else 0, 0, 0))
+                       + struct.pack("<HHII", 1, 32, len(payload), offset))
+        offset += len(payload)
+    return struct.pack("<HHH", 0, 1, len(sizes)) + b"".join(entries + payloads)
+
+
+def valid_gif(width: int, height: int) -> bytes:
+    return (b"GIF89a" + struct.pack("<HH", width, height) + b"\x80\0\0"
+            + b"\0\0\0\xff\xff\xff" + b";")
+
+
+def valid_jpeg(width: int, height: int) -> bytes:
+    components = b"\x01\x11\0\x02\x11\0\x03\x11\0"
+    sof = struct.pack(">BHHB", 8, height, width, 3) + components
+    return b"\xff\xd8\xff\xc0" + struct.pack(">H", len(sof) + 2) + sof + b"\xff\xd9"
+
+
+def webp_chunk(kind: bytes, payload: bytes) -> bytes:
+    chunk = kind + struct.pack("<I", len(payload)) + payload
+    if len(payload) % 2:
+        chunk += b"\0"
+    return b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
+
+
+def valid_webp(width: int, height: int, kind: str) -> bytes:
+    if kind == "VP8X":
+        payload = (b"\0\0\0\0" + (width - 1).to_bytes(3, "little")
+                   + (height - 1).to_bytes(3, "little"))
+        return webp_chunk(b"VP8X", payload)
+    if kind == "VP8L":
+        w, h = width - 1, height - 1
+        packed = bytes((w & 0xFF, ((w >> 8) & 0x3F) | ((h & 0x03) << 6),
+                        (h >> 2) & 0xFF, (h >> 10) & 0x0F))
+        return webp_chunk(b"VP8L", b"\x2f" + packed)
+    payload = b"\0\0\0\x9d\x01\x2a" + struct.pack("<HH", width, height)
+    return webp_chunk(b"VP8 ", payload)
+
+
+FAVICON_ICO = valid_ico((48, 48))
+
 TEXT = {"Content-Type": "text/plain; charset=utf-8"}
 XML = {"Content-Type": "application/xml"}
 CSS = {"Content-Type": "text/css"}
@@ -447,7 +515,7 @@ GOOD_ROUTES = {
     "/i/a.png": (200, {"Content-Type": "image/png"}, PNG),
     "/i/a.webp": (200, {"Content-Type": "image/webp"}, WEBP),
     "/i/logo.png": (200, {"Content-Type": "image/png"}, PNG),
-    "/favicon.ico": (200, {"Content-Type": "image/x-icon"}, b"\0" * 40),
+    "/favicon.ico": (200, {"Content-Type": "image/x-icon"}, FAVICON_ICO),
     # Redirects, which a static file server cannot express and three items need.
     "/hop1": (301, {"Location": "PLACEHOLDER/hop2"}, ""),
     "/hop2": (302, {"Location": "PLACEHOLDER/hop3"}, ""),
@@ -512,6 +580,8 @@ RUNS = [
     ("entity", "entity_checker.py", ["{good}"]),
     ("extlinks", "external_link_quality.py", ["{good}"]),
     ("extlinks_bad", "external_link_quality.py", ["{bad}"]),
+    ("favicon", "favicon_check.py", ["{good}"]),
+    ("favicon_bad", "favicon_check.py", ["{bad}"]),
     ("facets", "faceted_nav_audit.py", ["{good}", "--from-page"]),
     ("facets_bad", "faceted_nav_audit.py", ["{bad}", "--from-page"]),
     ("fonts", "font_audit.py", ["{good}"]),
@@ -1358,6 +1428,138 @@ class Freshness(unittest.TestCase):
         self.assertEqual(bad["dates"], [])
         self.assertEqual(verdict("CN-056", bad), FAIL)
         self.assertEqual(verdict("CN-038", bad), FAIL)
+
+
+class FaviconDisplay(unittest.TestCase):
+    """MB-104 fetches the declaration and grades only dimensions it could read."""
+
+    PAGE = ('<!doctype html><html><head><title>Icon test</title>'
+            '<link rel="icon" href="/icon"></head><body></body></html>')
+
+    def run_url(self, url: str) -> dict:
+        proc = harness.spawn(
+            [sys.executable, os.path.join(SCRIPTS, "favicon_check.py"), url, "--json"],
+            env=script_env(), timeout=60)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue(proc.stdout.strip(), proc.stderr)
+        return json.loads(proc.stdout)
+
+    def served_icon(self, body: bytes | str, content_type: str = "image/png",
+                    status: int = 200) -> dict:
+        routes = {"/": self.PAGE,
+                  "/icon": (status, {"Content-Type": content_type}, body)}
+        with served(routes) as site:
+            return self.run_url(site.url)
+
+    def rule_evidence(self, output: dict) -> tuple[bool | None, str]:
+        return evaluate(ITEMS["MB-104"]["check"]["assert"], output)
+
+    def test_the_good_mock_reaches_a_measured_48px_pass(self):
+        result = out("favicon")
+        self.assertEqual(verdict("MB-104", result), PASS)
+        self.assertEqual(result["favicon"]["format"], "ico")
+        self.assertEqual(result["favicon"]["min_side_px"], 48)
+        self.assertEqual(self.rule_evidence(result),
+                         (True, "favicon.displays_at_48px = True"))
+
+    def test_no_declared_icon_is_a_failure_with_a_reason_and_issue(self):
+        result = out("favicon_bad")
+        self.assertEqual(verdict("MB-104", result), FAIL)
+        self.assertIs(result["favicon"]["displays_at_48px"], False)
+        self.assertIn("No favicon is declared", result["favicon"]["reason"])
+        self.assertTrue(result["issues"])
+
+    def test_a_declared_404_is_unreachable_not_too_small(self):
+        result = self.served_icon(b"", status=404)
+        self.assertEqual(verdict("MB-104", result), FAIL)
+        self.assertIn("unreachable", result["favicon"]["reason"].lower())
+        self.assertNotIn("small", result["favicon"]["reason"].lower())
+        self.assertIsNone(result["favicon"]["min_side_px"])
+        self.assertTrue(result["issues"])
+
+    def test_a_64px_png_passes_with_its_measured_size(self):
+        result = self.served_icon(valid_png(64, 64))
+        self.assertEqual(verdict("MB-104", result), PASS)
+        self.assertEqual(result["favicon"]["href"], "/icon")
+        self.assertTrue(result["favicon"]["url"].endswith("/icon"))
+        self.assertEqual((result["favicon"]["width"], result["favicon"]["height"]),
+                         (64, 64))
+        self.assertIn("64x64", result["favicon"]["reason"])
+
+    def test_a_32px_png_fails_and_names_the_measured_size(self):
+        result = self.served_icon(valid_png(32, 32))
+        self.assertEqual(verdict("MB-104", result), FAIL)
+        self.assertEqual(result["favicon"]["min_side_px"], 32)
+        self.assertIn("32x32", result["favicon"]["reason"])
+
+    def test_an_unrecognised_body_is_no_data_not_a_small_icon(self):
+        cases = (
+            (b"<!doctype html><title>error</title>", "text/html"),
+            (b"", "application/octet-stream"),
+            (b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR" + b"\0" * 8, "image/png"),
+        )
+        for body, content_type in cases:
+            with self.subTest(content_type=content_type, bytes=len(body)):
+                result = self.served_icon(body, content_type)
+                self.assertEqual(verdict("MB-104", result), NO_DATA)
+                self.assertNotIn("displays_at_48px", result["favicon"])
+                self.assertIsNone(result["favicon"]["min_side_px"])
+                self.assertIn("not recognised", result["favicon"]["reason"])
+
+    def test_an_unreachable_page_is_no_data(self):
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+        result = self.run_url(f"http://127.0.0.1:{port}/")
+        self.assertEqual(verdict("MB-104", result), NO_DATA)
+        self.assertNotIn("displays_at_48px", result["favicon"])
+        self.assertIn("could not be fetched", result["favicon"]["reason"])
+
+    def test_svg_passes_even_with_a_one_pixel_viewbox(self):
+        svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>'
+        result = self.served_icon(svg, "image/svg+xml")
+        self.assertEqual(verdict("MB-104", result), PASS)
+        self.assertEqual(result["favicon"]["format"], "svg")
+        self.assertEqual((result["favicon"]["width"], result["favicon"]["height"]),
+                         (1, 1))
+        self.assertIsNone(result["favicon"]["min_side_px"])
+
+    def test_the_largest_ico_entry_decides(self):
+        multi = self.served_icon(valid_ico((16, 16), (32, 32), (48, 48)),
+                                 "image/x-icon")
+        small = self.served_icon(valid_ico((16, 16)), "image/x-icon")
+        self.assertEqual(verdict("MB-104", multi), PASS)
+        self.assertEqual(multi["favicon"]["min_side_px"], 48)
+        self.assertEqual(verdict("MB-104", small), FAIL)
+        self.assertEqual(small["favicon"]["min_side_px"], 16)
+
+    def test_a_zero_ico_size_byte_means_256(self):
+        result = self.served_icon(valid_ico((256, 256)), "image/x-icon")
+        self.assertEqual(verdict("MB-104", result), PASS)
+        self.assertEqual((result["favicon"]["width"], result["favicon"]["height"]),
+                         (256, 256))
+
+    def test_a_non_square_icon_is_judged_on_its_shorter_side(self):
+        result = self.served_icon(valid_png(96, 32))
+        self.assertEqual(verdict("MB-104", result), FAIL)
+        self.assertEqual(result["favicon"]["min_side_px"], 32)
+        self.assertIn("96x32", result["favicon"]["reason"])
+
+    def test_gif_jpeg_and_each_webp_header_are_measured(self):
+        cases = (
+            ("gif", valid_gif(64, 64), "image/gif"),
+            ("jpeg", valid_jpeg(64, 64), "image/jpeg"),
+            ("webp", valid_webp(64, 64, "VP8 "), "image/webp"),
+            ("webp", valid_webp(64, 64, "VP8L"), "image/webp"),
+            ("webp", valid_webp(64, 64, "VP8X"), "image/webp"),
+        )
+        for expected_format, body, content_type in cases:
+            with self.subTest(format=expected_format, body=body[12:16]):
+                result = self.served_icon(body, content_type)
+                self.assertEqual(verdict("MB-104", result), PASS)
+                self.assertEqual(result["favicon"]["format"], expected_format)
+                self.assertEqual(result["favicon"]["min_side_px"], 64)
 
 
 class AnswerBlocks(unittest.TestCase):

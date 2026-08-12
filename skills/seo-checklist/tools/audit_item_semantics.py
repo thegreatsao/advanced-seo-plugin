@@ -68,6 +68,9 @@ REVIEWED: dict[str, str] = {
               "SE-114, SE-116 and TE-171 assert reputation, while TE-179 measures the "
               "otherwise-uncovered history half as whois.age_days >= 90. A younger "
               "domain warns but can never fail, and an absent age remains NO_DATA.",
+    "MB-104": "FIXED (0.44). The title promised a favicon that displays in a mobile "
+              "result and the assertion only asked whether a <link rel=icon> existed. "
+              "It now fetches the icon and measures it.",
     "GO-134": "FIXED (0.23). A defect from 0.20: 'Resolve Search Console issues' read "
               "`opportunities` through a severity gate, so position 4.0 with 115 "
               "impressions printed as a high failure. An opportunity is not a defect at "

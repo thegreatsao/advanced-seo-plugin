@@ -9,7 +9,7 @@ HTTP and source resolution are ``require_requests``, ``fetch_url``, ``fetch_html
 the ``safe_get`` re-export, ``read_urls``, ``load_html``, ``load_source`` and
 ``is_url``. URL handling is ``normalize_url``, ``origin``, ``clean_url`` and
 ``same_host``. HTML and image handling is the ``BeautifulSoup`` dependency handle,
-``require_bs4``, ``html_parser``, ``parse_html``, ``is_responsive_fill_image``,
+``require_bs4``, ``html_parser``, ``parse_html``, ``favicon_href``, ``is_responsive_fill_image``,
 ``srcset_urls``, ``picture_sources`` and ``likely_lcp_candidate``. Robots and
 sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
 ``discover_sitemap_urls`` and ``parse_sitemap_xml``. JSON-LD uses ``walk_json`` and
@@ -407,6 +407,31 @@ def html_parser() -> str:
         # the runner reports which parser ran. The structural checks are the ones
         # that differ — the divergence table in tests/test_parser.py says how.
         return "html.parser"
+
+
+def _rel_contains(value: Any, token: str) -> bool:
+    """Whether a parsed ``rel`` attribute contains one exact token."""
+    if not value:
+        return False
+    if isinstance(value, str):
+        values = value.lower().split()
+    else:
+        values = [str(item).lower() for item in value]
+    return token in values
+
+
+def favicon_href(soup, base_url: str | None = None) -> str | None:
+    """Resolve the first icon declaration recognised by every favicon check."""
+    for icon in soup.find_all("link"):
+        href = icon.get("href")
+        rel = icon.get("rel")
+        if href and (
+            _rel_contains(rel, "icon")
+            or _rel_contains(rel, "shortcut")
+            or _rel_contains(rel, "apple-touch-icon")
+        ):
+            return urljoin(base_url, href) if base_url else href
+    return None
 
 
 def walk_json(value):

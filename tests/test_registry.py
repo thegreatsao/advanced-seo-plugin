@@ -1474,12 +1474,12 @@ class APatternNeverReadsAnAddress(unittest.TestCase):
 
 
 class OneCheckCarriesWeightOnce(unittest.TestCase):
-    """`scores_with`, and the eight pairs it exists for.
+    """`scores_with`: ten twins across the eight duplicate groups it exists for.
 
     Two source checklists are merged into this registry and both of them ask some
-    questions. Eight pairs run one script with one set of arguments and one assertion
-    — `TE-166` *Add a Favicon* and `MB-104` *Ensure Favicon Displays in Mobile SERPs*
-    are one question written twice. Until 0.22 both halves scored, which did two
+    questions. Each group runs one script with one set of arguments and one assertion
+    — `CI-016` *Provide Meaningful Image Alt Text* and `MD-186` *Provide Meaningful Alt
+    Text* are one question written twice. Until 0.22 both halves scored, which did two
     things: a single defect pulled the headline down twice, and where the twins
     disagreed on severity the weight of one defect depended on which of them a reader
     happened to look at.

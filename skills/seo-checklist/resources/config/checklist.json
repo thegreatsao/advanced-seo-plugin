@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "95b74152fe4f",
+  "registry_version": "2dd52fda3e6f",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -2100,21 +2100,18 @@
       "severity": "low",
       "source": "script",
       "check": {
-        "script": "parse_html.py",
+        "script": "favicon_check.py",
         "args": [
-          "{html}",
-          "--url",
           "{url}"
         ],
-        "requires": "offline",
+        "requires": "fetch",
         "assert": {
-          "path": "favicon",
+          "path": "favicon.displays_at_48px",
           "truthy": true
         }
       },
       "effort": "medium",
-      "fix": "Add a favicon - it shows in mobile SERPs",
-      "scores_with": "TE-166"
+      "fix": "Serve a favicon that resolves and is at least 48x48 - a declared icon returning 404 shows nothing in a mobile result"
     },
     {
       "id": "MB-105",

@@ -676,9 +676,15 @@ item(102, "low", S, "video_schema_checker.py", PAGE,
 item(103, "medium", S, "rendered_audit.py", RENDERED,
      {"path": "tap_targets_below_48px", "eq": 0},
      "Increase tap targets to 48x48 CSS pixels")
-item(104, "low", S, "parse_html.py", HTMLARG,
-     {"path": "favicon", "truthy": True},
-     "Add a favicon - it shows in mobile SERPs")
+# MB-104 left TE-166's synonym group in 0.44 because its title promises an icon
+# that displays, not merely a declaration. It now fetches and measures the icon: an
+# unreachable declaration is FAIL because the declared resource is defective, while
+# an unrecognised format is NO_DATA because no size was measured. A resolvable SVG
+# passes as a scalable vector. The separate measurement now carries weight 1; as
+# TE-166's scores_with twin it carried 0.
+item(104, "low", S, "favicon_check.py", PAGE,
+     {"path": "favicon.displays_at_48px", "truthy": True},
+     "Serve a favicon that resolves and is at least 48x48 - a declared icon returning 404 shows nothing in a mobile result")
 item(105, "high", S, "javascript_render_audit.py", PAGE,
      {"path": "diffs", "len_eq": 0},
      "Content, meta and directives must match between mobile and desktop")
@@ -1233,8 +1239,8 @@ LENS_OF = {eid: lens for lens, ids in LENS.items() for eid in ids}
 # Pairs that run one script with one set of arguments and one assertion, because the
 # two source checklists merged here asked the same question twice. The key is the item
 # that keeps the weight; the value is the twin that stops carrying it. Both still run
-# and both still report a status — a reader looking up "Add a Favicon" should find an
-# answer — but the score counts the check once.
+# and both still report a status — a reader looking up either source title should find
+# an answer — but the score counts the check once.
 #
 # Two harms, and the second is the reason this is not merely tidy. A single defect
 # pulled the headline down twice. And where the twins disagree on severity — MB-102
@@ -1247,6 +1253,10 @@ LENS_OF = {eid: lens for lens, ids in LENS.items() for eid in ids}
 # defects, not duplicates, and 0.22 repaired the two it had — MS-027/MS-028 and
 # MS-029/CN-041. Adding a pair here is a claim that one check genuinely answers both
 # titles; check that before you do it.
+#
+# MB-104 left the TE-166 group in 0.44. Its new checker fetches and measures the
+# declared icon, so "displays in mobile SERPs" and "declares a favicon" are no longer
+# one check; MB-104 runs and scores independently.
 SAME_CHECK = {
     "CI-016": "MD-186",   # "Provide Meaningful Image Alt Text" / "...Alt Text"
     "CI-017": "TE-181",   # both titled "Validate HTML (W3C)", word for word
@@ -1254,7 +1264,6 @@ SAME_CHECK = {
     "GO-145": "GEO-005",  # AI Overviews / citation-ready content
     "MD-189": "MB-097",   # modern formats — MD-189 medium, MB-097 medium, lower id
     "MD-190": "MB-102",   # video SEO (medium) over "Optimize Video for Mobile" (low)
-    "TE-166": "MB-104",   # "Add a Favicon" / "Ensure Favicon Displays in Mobile SERPs"
     # One Safe Browsing response, expressed three ways in the source checklists.
     # All three read the same threats list. The critical pair ties on severity, so
     # the lower id SE-114 carries the weight; SE-116 and TE-171 are twins of that

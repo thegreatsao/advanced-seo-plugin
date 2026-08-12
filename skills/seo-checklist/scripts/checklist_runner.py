@@ -1264,10 +1264,11 @@ def score(graded: list[dict]) -> dict:
     scored = [g for g in graded if g["status"] in (PASS, FAIL, WARN)]
     applicable = [g for g in graded if g["status"] != NA]
 
-    # Weight is carried per *check*, not per item. Eight pairs in this registry run
-    # one script with one set of arguments and one assertion under two source numbers
-    # — "Add a Favicon" and "Ensure Favicon Displays in Mobile SERPs" are one question
-    # asked twice — and until 0.22 both halves scored. That did two things: it doubled
+    # Weight is carried per *check*, not per item. Eight duplicate groups in this
+    # registry carry ten `scores_with` twins: one script, one set of arguments and one
+    # assertion under multiple source numbers. "Provide Meaningful Image Alt Text" and
+    # "Provide Meaningful Alt Text" are one question asked twice, and until 0.22 both
+    # halves scored. That did two things: it doubled
     # a single defect's pull on the headline, and where the twins disagreed on severity
     # it made the weight of one defect depend on which of them a reader happened to
     # look at. The second item still runs and still reports its own status; it is left

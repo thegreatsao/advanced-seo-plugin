@@ -27,7 +27,7 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get
 
-from seo_common import html_parser, issue
+from seo_common import favicon_href, html_parser, issue
 
 
 def _fetch_url(url: str, timeout: int = 20) -> dict[str, Any]:
@@ -139,16 +139,6 @@ def _structure_issues(soup) -> list[dict[str, Any]]:
     # needs a reliable "this looks like navigation" test, which nothing here has,
     # so the check says less rather than guessing.
     return issues
-
-
-def _rel_contains(value: Any, token: str) -> bool:
-    if not value:
-        return False
-    if isinstance(value, str):
-        values = value.lower().split()
-    else:
-        values = [str(item).lower() for item in value]
-    return token in values
 
 
 def _is_responsive_fill_image(img) -> bool:
@@ -278,15 +268,7 @@ def parse_html(
         href = canonical.get("href")
         result["canonical"] = urljoin(base_url, href) if base_url and href else href
 
-    for icon in soup.find_all("link"):
-        rel = icon.get("rel")
-        if icon.get("href") and (
-            _rel_contains(rel, "icon")
-            or _rel_contains(rel, "shortcut")
-            or _rel_contains(rel, "apple-touch-icon")
-        ):
-            result["favicon"] = urljoin(base_url, icon.get("href")) if base_url else icon.get("href")
-            break
+    result["favicon"] = favicon_href(soup, base_url)
 
     # Hreflang
     for link in soup.find_all("link", rel="alternate"):

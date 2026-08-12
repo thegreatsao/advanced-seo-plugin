@@ -779,6 +779,11 @@ name. A column called `url` would be read as "fix this page".
   the desktop call that nothing asserted before, and `SAME_CHECK` gained a list value to
   hold a group of three instead of a pair.
 
+  **MB-104 left the MB-104/TE-166 group in 0.44.0.** It now fetches the icon and
+  measures whether its shorter side reaches 48px, rather than mirroring TE-166's
+  declaration-only check. `tools/audit_item_semantics.py` now reports eight duplicate
+  groups; TE-166 keeps the original declaration check and MB-104 carries its own weight.
+
 - **All four rulings are closed. Three Core Web Vitals items in 0.25.0, `CI-002` and
   `IN-127` in 0.26.0.** The entry below is the original finding; the paragraphs after it
   record what each repair cost.

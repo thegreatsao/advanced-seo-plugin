@@ -29,17 +29,28 @@ that decision was wrong on its facts. Age is still not reputation, and an unfixa
 FAIL still does not belong in a prioritised fix list. The proposition is different:
 SE-114, SE-116 and TE-171 assert reputation through Safe Browsing three times, while
 none of the 215 items otherwise asserts domain history, and a WARN costs half of one
-`low` point rather than the whole point a FAIL would cost. The audited site's weighed
-score moves from 467.5/516 to 468.0/517, so its headline score stays 91.
+`low` point rather than the whole point a FAIL would cost.
 
 This does not add an informational status or disturb GO-134's opportunities section.
 Those opportunities are a list of findings with no item to attach to; domain age is a
 single scalar with a row already named for it, and that row is the clearest place to
 render the evidence.
 
-Registry `95b74152fe4f` replaces `843026f5d5dd`. The fixture oracle remains 98 matched,
+MB-104 previously read only the favicon URL extracted by `parse_html.py`, so any
+declaration passed even when the icon returned 404 or was only 16px. It now fetches the
+declared icon and reads PNG, ICO, GIF, JPEG, WebP and SVG headers. A missing declaration,
+an unreachable icon, or a measured raster shorter than 48px is a FAIL. A fetched but
+unrecognised format is `NO_DATA`, because no size was measured; it does not invent a
+small dimension. A resolvable SVG passes as a scalable vector.
+
+That separate measurement removes MB-104 from TE-166's `scores_with` group. TE-166 keeps
+the declaration check; MB-104 now carries weight 1 where the synonym pointer made it
+carry 0. The item count, title, severity and fixture oracle do not change.
+
+Registry `2dd52fda3e6f` replaces `843026f5d5dd`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
-The 824-test baseline becomes 829.
+The 833-test Windows baseline becomes 852, with the POSIX-only signal-naming test still
+the one expected skip.
 
 ## 0.43.0 — registry assertions measure the facts their titles name
 

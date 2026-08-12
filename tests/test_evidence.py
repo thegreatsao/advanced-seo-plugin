@@ -78,7 +78,7 @@ class SharedHelpersStayShared(unittest.TestCase):
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name in (
                         "fetch_html", "walk_json", "_walk_json", "is_url",
-                        "_is_url", "as_list"):
+                        "_is_url", "as_list", "favicon_href", "_rel_contains"):
                     offenders.append(f"{name}:{node.lineno} defines {node.name}")
         self.assertEqual(offenders, [], "import it from seo_common instead: "
                                         + "; ".join(offenders))
@@ -1045,6 +1045,61 @@ class DomainHistory(unittest.TestCase):
             warn_ok = evaluate(self.check["warn"], out)[0]
             self.assertEqual({assert_ok, warn_ok}, {False, True}, age)
             self.assertNotEqual(verdict("TE-179", out), FAIL, age)
+
+
+class FaviconDisplayRule(unittest.TestCase):
+    """MB-104 distinguishes a measured defect from a measurement that never happened."""
+
+    def setUp(self):
+        self.check = registry_rule("MB-104")
+
+    def assert_rule(self, output, expected):
+        observed, evidence = evaluate(self.check["assert"], output)
+        self.assertIs(observed, expected)
+        return evidence
+
+    def test_no_icon_declared_is_a_measured_failure(self):
+        evidence = self.assert_rule({"favicon": {"declared": False,
+                                                  "displays_at_48px": False}}, False)
+        self.assertEqual(evidence, "favicon.displays_at_48px = False")
+
+    def test_a_declared_but_unreachable_icon_is_a_failure(self):
+        output = {"favicon": {"declared": True, "url": "https://example.test/icon",
+                              "displays_at_48px": False,
+                              "reason": "Declared favicon is unreachable: HTTP 404"}}
+        self.assert_rule(output, False)
+        self.assertEqual(verdict("MB-104", output), FAIL)
+
+    def test_a_64px_icon_passes(self):
+        output = {"favicon": {"width": 64, "height": 64, "min_side_px": 64,
+                              "displays_at_48px": True}}
+        self.assert_rule(output, True)
+        self.assertEqual(verdict("MB-104", output), PASS)
+
+    def test_a_32px_icon_fails(self):
+        output = {"favicon": {"width": 32, "height": 32, "min_side_px": 32,
+                              "displays_at_48px": False}}
+        self.assert_rule(output, False)
+        self.assertEqual(verdict("MB-104", output), FAIL)
+
+    def test_an_unrecognised_format_is_no_data_not_failure(self):
+        output = {"favicon": {"declared": True, "format": None,
+                              "reason": "format not recognised"}}
+        evidence = self.assert_rule(output, None)
+        self.assertEqual(evidence, "favicon.displays_at_48px missing")
+        self.assertEqual(verdict("MB-104", output), NO_DATA)
+
+    def test_an_unread_page_is_no_data(self):
+        output = {"fetch_error": "connection refused",
+                  "favicon": {"reason": "page could not be fetched"}}
+        self.assert_rule(output, None)
+        self.assertEqual(verdict("MB-104", output), NO_DATA)
+
+    def test_a_resolvable_svg_passes_without_a_raster_size(self):
+        output = {"favicon": {"format": "svg", "width": None, "height": None,
+                              "displays_at_48px": True}}
+        self.assert_rule(output, True)
+        self.assertEqual(verdict("MB-104", output), PASS)
 
 
 class ImageWeightAudit(unittest.TestCase):

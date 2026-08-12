@@ -444,6 +444,25 @@ than fetching them.
   - item keys: url, path, params, facet_params, flags
 `issues[]` — array
 
+### favicon_check.py
+
+`url` — str
+`favicon.declared` — bool or NoneType
+`favicon.href` — str or NoneType  (the href as declared in the page)
+`favicon.url` — str or NoneType  (resolved against the fetched page URL)
+`favicon.status` — int or NoneType
+`favicon.content_type` — str or NoneType
+`favicon.format` — str or NoneType  (png | ico | gif | jpeg | webp | svg)
+`favicon.width` — int or NoneType
+`favicon.height` — int or NoneType
+`favicon.min_side_px` — int or NoneType  (raster images only)
+`favicon.displays_at_48px` — bool  (absent when the page was not fetched or the
+  fetched icon's format was not recognised, so an unmade measurement stays NO_DATA)
+`favicon.reason` — str
+`issues[]` — array
+  - item keys: severity, message, url, evidence
+`fetch_error` — NoneType or str
+
 ### font_audit.py
 
 `url` — str
