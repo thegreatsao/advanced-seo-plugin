@@ -10,7 +10,7 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
-## 0.45.0 — image weight sits with the item that names it, and KW-076 can finally fail
+## 0.45.0 — image and render checks measure what they claim, and KW-076 can finally fail
 
 MD-189 *Use Modern Formats & Responsive Images* named two halves while asserting
 only the modern-format count. Both halves were already measured separately: MB-096
@@ -35,9 +35,18 @@ Its assertion now reads whether that supplied keyword occurs in the body copy, w
 is what the title says. A measured absence is therefore a reachable `FAIL` for the
 first time.
 
+MB-105 *Ensure Parity: Content, Meta & Directives Match Desktop* used to emit an empty
+`diffs` array when Playwright was unavailable, a browser failed or rendering timed out.
+That empty array passed every site without a renderer even though the raw and rendered
+documents had never been compared. `javascript_render_audit.py` now omits `diffs` when
+no render happened, so MB-105 reports `NO_DATA` instead of claiming parity. Its
+`diffs len_eq 0` assertion is unchanged: an actual matching render still passes and an
+actual difference still fails. TE-169 and TE-177 are unaffected because they assert
+the raw document, which is measured whether or not rendering succeeds.
+
 Registry `3d4dd03224f7` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
-The 852-test baseline becomes 861, with the POSIX-only signal-naming test still the one
+The 852-test baseline becomes 865, with the POSIX-only signal-naming test still the one
 expected skip.
 
 ## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise

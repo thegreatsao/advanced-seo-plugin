@@ -882,7 +882,9 @@ below are examples rather than a schema.
 `raw.schema_count` — int
 `raw.word_count` — int
 `rendered` — NoneType
-`diffs[]` — array
+`diffs[]` — array — **absent** when `rendered` is `None`. MB-105 asserts `len_eq: 0`
+  on it, and an absent key is NO_DATA: an empty array would claim parity for documents
+  that were never compared.
 `render_error` — str
 `fetch_error` — NoneType
 
