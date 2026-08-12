@@ -12,6 +12,12 @@ breaking change for whoever read the old number, and saying so is the point.
 
 ## 0.44.0 — TE-179 measures domain history without calling youth a defect
 
+The runner now resolves its fetched `{html}` temporary files against the disk on
+Windows instead of mistaking their backslash-separated paths for bare domains and
+fetching them from the network. The shared HTTP lock no longer requires POSIX, and
+`load_html` now prefers an existing file over a bare-domain spelling on every
+platform.
+
 TE-179 now asserts `whois.age_days >= 90`: an established domain passes, a younger
 one warns, and a missing whois age remains `NO_DATA`. The `lt 90` warning band is the
 assertion's exact complement, so FAIL is deliberately unreachable. The item no longer
