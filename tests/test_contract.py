@@ -236,8 +236,8 @@ SAME_ON_BOTH = {
     "CI-014": "http.server cannot be made to serve a redirect loop",
     "AR-150": "http.server issues no redirects, so the hop count is 0 on both",
     "AR-149": "no internal redirects to find without a server that redirects",
-    "MB-105": "both fixtures are static HTML: nothing changes after JavaScript runs, "
-              "so the rendered/raw diff is empty on both",
+    "MB-105": "no renderer is installed in the test environment, so neither fixture "
+              "is compared and both report the same absence",
     "TE-169": "both fixtures serve their links in the HTML, so the raw link count is "
               "non-zero on both — the check only fails a JS-rendered site",
 

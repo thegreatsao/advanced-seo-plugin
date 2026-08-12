@@ -51,12 +51,22 @@ def audit(source: str, timeout: int = 15, render_timeout: int = 30000) -> dict:
     else:
         render_error = "rendering requires an http(s) URL"
     rendered = summarize(rendered_html, final_url) if rendered_html else None
-    diffs = []
-    if rendered:
+    result = {
+        "url": final_url or source,
+        "raw": raw,
+        "rendered": rendered,
+        "render_error": render_error,
+        "fetch_error": fetched.get("error"),
+    }
+    if rendered is not None:
+        diffs = []
         for key in raw:
             if raw.get(key) != rendered.get(key):
                 diffs.append({"field": key, "raw": raw.get(key), "rendered": rendered.get(key)})
-    return {"url": final_url or source, "raw": raw, "rendered": rendered, "diffs": diffs, "render_error": render_error, "fetch_error": fetched.get("error")}
+        result["diffs"] = diffs
+    # Match mobile_render_checker.py's `available: False` shape: when rendering did
+    # not happen, omit its measurement so the runner reports NO_DATA rather than PASS.
+    return result
 
 
 def main() -> None:
@@ -67,7 +77,11 @@ def main() -> None:
     parser.add_argument("--json", "-j", action="store_true")
     args = parser.parse_args()
     result = audit(args.source, args.timeout, args.render_timeout)
-    print(json.dumps(result, indent=2) if args.json else f"Diffs: {len(result['diffs'])}; render_error={result['render_error']}")
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        diff_count = len(result["diffs"]) if "diffs" in result else "unavailable"
+        print(f"Diffs: {diff_count}; render_error={result['render_error']}")
 
 
 if __name__ == "__main__":

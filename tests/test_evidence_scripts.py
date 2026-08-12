@@ -2167,23 +2167,29 @@ class JavascriptRender(unittest.TestCase):
         """What CN-053 used to fail here, recorded rather than deleted.
 
         The page is twenty words with a cross-domain canonical and two h1s, and this
-        script's three remaining items all pass it — correctly. It serves a title
-        without JavaScript (TE-177), carries eight internal links (TE-169) and renders
-        to the same thing it ships (MB-105). None of those is a lie, and none of them
-        is about the page being thin, which is CN-039's question against the crawl.
-        Asserting the passes keeps the run in use: an unasserted run is a script
+        script's raw-document items both pass it — correctly. It serves a title
+        without JavaScript (TE-177) and carries eight internal links (TE-169). MB-105
+        reports NO_DATA because the test environment has no renderer. None of those
+        verdicts is about the page being thin, which is CN-039's question against the
+        crawl. Asserting them keeps the run in use: an unasserted run is a script
         nobody checked, hiding behind a green suite.
         """
         bad = out("jsrender_bad")
         self.assertLess(bad["raw"]["word_count"], 300)
-        for item_id in ("TE-169", "TE-177", "MB-105"):
+        for item_id in ("TE-169", "TE-177"):
             self.assertEqual(verdict(item_id, bad), PASS, item_id)
+        self.assertEqual(verdict("MB-105", bad), NO_DATA)
 
-    def test_static_html_shows_no_rendered_difference(self):
-        """MB-105 can only fail a site that needs JavaScript to produce its content,
-        which no fixture here is — recorded rather than left as a silent pass."""
-        self.assertEqual(out("jsrender")["diffs"], [])
-        self.assertEqual(verdict("MB-105", out("jsrender")), PASS)
+    def test_no_renderer_means_no_parity_measurement(self):
+        """The fixtures are static, but without Playwright they are never rendered.
+
+        An absent comparison is NO_DATA, not evidence that the two documents match.
+        """
+        result = out("jsrender")
+        self.assertIsNone(result["rendered"])
+        self.assertEqual(result["render_error"], "playwright not installed")
+        self.assertNotIn("diffs", result)
+        self.assertEqual(verdict("MB-105", result), NO_DATA)
 
 
 class Hreflang(unittest.TestCase):
