@@ -403,3 +403,47 @@ jobs:
           shutil.rmtree(sh.RATE_LIMIT_DIR, ignore_errors=True)
           print("robots policy holds")
           PY
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # This job answers a platform question, not the Python-floor syntax question
+      # already covered by the Linux matrix, so one current Python version is enough.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Registry is in step with its generator
+        run: python skills/seo-checklist/tools/build_checklist.py --check
+
+      # signal.Signals has no SIGKILL on Windows, so this legitimately reports
+      # OK (skipped=1); unittest still exits zero and no assertion is needed.
+      - name: Tests
+        run: python -m unittest discover -s tests
+
+      - name: Scripts compile
+        run: |
+          python -m compileall -q skills/seo-checklist/scripts skills/seo-checklist/tools
+
+      - name: No assertion can never fire
+        run: python skills/seo-checklist/tools/audit_assertions.py
+
+      - name: Every item asserts what its title says
+        run: python skills/seo-checklist/tools/audit_item_semantics.py
+
+      - name: No translation has drifted from its English
+        run: python skills/seo-checklist/tools/i18n_digest.py --check
+
+      - name: Public suffix snapshot ships and is dated
+        run: python skills/seo-checklist/tools/refresh_public_suffix_list.py --check
