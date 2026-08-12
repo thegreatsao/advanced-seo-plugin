@@ -1661,11 +1661,16 @@ class LocalBusinessInventory(unittest.TestCase):
         }
         with harness.allow_loopback(), served(routes) as site:
             inventory = site_crawl.crawl(site.url, use_sitemap=False, workers=1)
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as handle:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
+                                             delete=False) as handle:
                 json.dump(inventory, handle)
                 handle.flush()
+                path = handle.name
+            try:
                 result = local_seo_checker.check_local_business_inventory(
-                    site.url, handle.name)
+                    site.url, path)
+            finally:
+                os.unlink(path)
 
         self.assertEqual(inventory["pages"][site.url]["schema_nodes"], [])
         contact_row = inventory["pages"][site.base + "/contact"]

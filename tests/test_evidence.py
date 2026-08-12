@@ -84,6 +84,51 @@ class SharedHelpersStayShared(unittest.TestCase):
                                         + "; ".join(offenders))
 
 
+class LoadHtml(unittest.TestCase):
+    def setUp(self):
+        import seo_common
+        self.common = seo_common
+        self.saved_fetch = seo_common.fetch_url
+        self.saved_cwd = os.getcwd()
+        self.directory = tempfile.TemporaryDirectory()
+        os.chdir(self.directory.name)
+
+    def tearDown(self):
+        self.common.fetch_url = self.saved_fetch
+        os.chdir(self.saved_cwd)
+        self.directory.cleanup()
+
+    def test_a_dotted_filename_is_opened_without_fetching(self):
+        expected = "<html><body>read from disk</body></html>"
+        with open("page.html", "w", encoding="utf-8") as handle:
+            handle.write(expected)
+
+        def unexpected_fetch(*args, **kwargs):
+            self.fail(f"load_html fetched an existing file: {args}, {kwargs}")
+
+        self.common.fetch_url = unexpected_fetch
+        self.assertFalse(self.common.is_url("page.html"))
+        html, url, result = self.common.load_html("page.html")
+        self.assertEqual(html, expected)
+        self.assertEqual(url, "")
+        self.assertEqual(result["url"], "page.html")
+
+    def test_a_bare_domain_is_fetched_when_no_file_has_that_name(self):
+        calls = []
+
+        def fake_fetch(url, **kwargs):
+            calls.append((url, kwargs))
+            return {"text": "<html>fetched</html>", "url": "https://example.test/",
+                    "status": 200, "headers": {}, "error": None}
+
+        self.common.fetch_url = fake_fetch
+        self.assertTrue(self.common.is_url("example.test"))
+        html, url, _ = self.common.load_html("example.test", timeout=7)
+        self.assertEqual(html, "<html>fetched</html>")
+        self.assertEqual(url, "https://example.test/")
+        self.assertEqual(calls, [("example.test", {"timeout": 7})])
+
+
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>A page with everything the critical items ask for</title>

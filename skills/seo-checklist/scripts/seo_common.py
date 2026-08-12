@@ -301,7 +301,7 @@ def read_urls(values: list[str] | None = None, file_path: str | None = None) -> 
 
 
 def load_html(source: str, timeout: int = 15) -> tuple[str, str, dict]:
-    if re.match(r"^https?://", source, re.I) or "." in source and "/" not in source:
+    if is_url(source):
         fetched = fetch_url(source, timeout=timeout)
         return fetched.get("text") or "", fetched.get("url") or normalize_url(source), fetched
     with open(source, "r", encoding="utf-8") as fh:

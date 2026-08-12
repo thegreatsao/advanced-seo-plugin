@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import ipaddress
 import json
@@ -15,6 +14,16 @@ import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlparse, urlunparse
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None
 
 try:
     import requests
@@ -141,6 +150,40 @@ def _slot_path(host: str) -> str:
     return os.path.join(RATE_LIMIT_DIR, f"{digest}.slot")
 
 
+def _lock_exclusive(fd, *, blocking: bool) -> bool:
+    """Take an exclusive lock on `fd`. Returns whether it was taken."""
+    try:
+        if fcntl is not None:
+            flags = fcntl.LOCK_EX
+            if not blocking:
+                flags |= fcntl.LOCK_NB
+            fcntl.flock(fd, flags)
+            return True
+
+        # Windows byte-range locks are mandatory. That is safe here: cache and
+        # robots locks are separate sidecar files, while every accessor to a pacing
+        # slot takes its lock first. Lock and unlock must use the same offset and
+        # length; otherwise unlocking silently misses the region and leaks the lock
+        # until the descriptor closes.
+        os.lseek(fd, 0, os.SEEK_SET)
+        # LK_LOCK retries for about ten seconds and then raises; unlike LOCK_EX it
+        # does not wait forever. For pacing, that bounded failure deliberately falls
+        # back to this process's own delay instead of hanging the audit.
+        mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+        msvcrt.locking(fd, mode, 1)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock(fd) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
 def pace(host: str, rps: float | None = None) -> float:
     """Wait until this process may hit `host` again. Returns the seconds waited.
 
@@ -160,9 +203,14 @@ def pace(host: str, rps: float | None = None) -> float:
         # of the file whatever seek() and truncate() say, so two updates
         # concatenated into "153761.19671379115376.196978791" and float() raised —
         # out of `pace`, through safe_get, and into 36 evidence scripts at once.
+        # pwrite is deliberately not used: it does not exist on Windows, where its
+        # absence silently disabled shared coordination instead of failing the
+        # request.
         fd = os.open(_slot_path(host), os.O_RDWR | os.O_CREAT, 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if not _lock_exclusive(fd, blocking=True):
+            raise OSError("could not lock pacing slot")
         try:
+            os.lseek(fd, 0, os.SEEK_SET)
             raw = os.read(fd, 64).decode("ascii", "replace").strip()
             try:
                 last = float(raw) if raw else 0.0
@@ -180,10 +228,11 @@ def pace(host: str, rps: float | None = None) -> float:
             if waited:
                 time.sleep(waited)
             os.ftruncate(fd, 0)
-            os.pwrite(fd, str(time.monotonic()).encode("ascii"), 0)
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, str(time.monotonic()).encode("ascii"))
             return waited
         finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
+            _unlock(fd)
     except Exception:  # noqa: BLE001
         # Politeness must never be able to fail an audit. Whatever went wrong with
         # the shared state, the safe answer is to pace this process on its own.
@@ -253,8 +302,10 @@ def _take_lock(path: str):
     except OSError:
         return None
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        locked = _lock_exclusive(fd, blocking=False)
     except OSError:
+        locked = False
+    if not locked:
         _close_lock(fd)
         return None
     return fd
@@ -264,7 +315,7 @@ def _close_lock(fd) -> None:
     if fd is None:
         return
     try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        _unlock(fd)
     except OSError:
         pass
     try:

@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import signal
 import shutil
 import sys
 import tempfile
@@ -227,6 +228,20 @@ class RateLimiting(unittest.TestCase):
         start = time.monotonic()
         self.sh.pace("b.example", rps=2)
         self.assertLess(time.monotonic() - start, 0.2)
+
+    def test_the_lock_helper_excludes_and_releases(self):
+        path = os.path.join(self.dir, "exclusive.lock")
+        first = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        second = os.open(path, os.O_RDWR)
+        try:
+            self.assertTrue(self.sh._lock_exclusive(first, blocking=False))
+            self.assertFalse(self.sh._lock_exclusive(second, blocking=False))
+            self.sh._unlock(first)
+            self.assertTrue(self.sh._lock_exclusive(second, blocking=False))
+            self.sh._unlock(second)
+        finally:
+            os.close(first)
+            os.close(second)
 
     # Three processes at 5 rps: each must wait 0.2s behind the one before it, so the
     # run costs ~0.4s. Low enough to keep the suite quick, long enough that process
@@ -606,6 +621,8 @@ class AScriptTheOperatingSystemKilled(unittest.TestCase):
     this classification is the safety net rather than the fix.
     """
 
+    @unittest.skipUnless(hasattr(signal.Signals, "SIGKILL"),
+                         "signal.Signals has no SIGKILL name on this platform")
     def test_a_signal_death_is_its_own_kind_with_the_signal_named(self):
         from checklist_runner import _signal_failure
         out = _signal_failure("parse_html.py", 9, "")
