@@ -10,13 +10,16 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
-## 0.44.0 — TE-179 measures domain history without calling youth a defect
+## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise
 
 The runner now resolves its fetched `{html}` temporary files against the disk on
 Windows instead of mistaking their backslash-separated paths for bare domains and
 fetching them from the network. The shared HTTP lock no longer requires POSIX, and
 `load_html` now prefers an existing file over a bare-domain spelling on every
-platform.
+platform. A `test-windows` CI job runs the eight portable gates on `windows-latest`,
+which is how the drive-letter defect above was found: eight gates passed on a
+single-drive developer machine while `os.path.relpath` raised on a runner that checks
+out on `D:` with its temporary directory on `C:`.
 
 TE-179 now asserts `whois.age_days >= 90`: an established domain passes, a younger
 one warns, and a missing whois age remains `NO_DATA`. The `lt 90` warning band is the
