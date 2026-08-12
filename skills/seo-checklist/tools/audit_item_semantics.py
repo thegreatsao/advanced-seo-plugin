@@ -109,7 +109,15 @@ REVIEWED: dict[str, str] = {
               "objection to repairing it was right: reading `field_cwv.verdict` makes it "
               "identical to SP-108 in script, args and assertion. That is what "
               "`scores_with` is for — it is declared a twin of SP-108 in SAME_CHECK, "
-              "runs once, scores once, and keeps its own title and status.",
+              "runs once, scores once, and keeps its own title and status. "
+              "Reopened in 0.45 as a batch C candidate — 'in Search Console' while "
+              "reading PageSpeed reads like a title/evidence mismatch — and closed "
+              "again with no code change. The Search Console API exposes search "
+              "analytics, sitemaps and URL inspection and has no Core Web Vitals path "
+              "at all, so there is no other source to point the item at; the report "
+              "Search Console does show is built on CrUX, which is exactly what "
+              "`field_cwv` reads. The title names where a site owner sees these "
+              "numbers, not where the plugin fetches them.",
     "SP-113": "FIXED (0.25). Titled 'Meet Core Web Vitals Thresholds' (critical) with a "
               "fix text naming all three thresholds, it asserted metrics.LCP.rating — "
               "one metric — so a page failing CLS passed it. Worse, `metrics` carries "
