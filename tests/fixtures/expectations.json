@@ -166,7 +166,7 @@
       },
       "MB-104": {
         "expect": "PASS",
-        "why": "'Ensure Favicon Displays in Mobile SERPs' needs an icon declared on the page; every page in this fixture carries <link rel=\"icon\"> to /assets/logo.png. Whether the item should also verify the icon resolves at 48 px is REGISTRY-DECISIONS.md item 9 and does not stop the fixture from settling the rule as written"
+        "why": "'Ensure Favicon Displays in Mobile SERPs' needs an icon that a mobile result can actually render: declared, reachable, and at least 48 px on its shorter side. Every page in this fixture carries <link rel=\"icon\"> to /assets/logo.png, which the server returns as a 64x64 PNG"
       },
       "IN-123": {
         "expect": "PASS",
@@ -360,7 +360,7 @@
       },
       "MB-104": {
         "expect": "FAIL",
-        "why": "no page in this fixture declares an icon at all, so nothing can display in a mobile result"
+        "why": "no page in this fixture declares an icon at all, so nothing can display in a mobile result and the size threshold is never reached"
       },
       "IN-123": {
         "expect": "FAIL",
