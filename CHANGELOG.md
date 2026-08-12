@@ -12,6 +12,27 @@ breaking change for whoever read the old number, and saying so is the point.
 
 ## 0.45.0 — image and render checks measure what they claim, and KW-076 can finally fail
 
+CI-017 and TE-181 were the same *Validate HTML (W3C)* check twice: both asked Nu
+to fetch the served URL and both asserted `summary.errors == 0`. TE-181 now renders
+the page in headless Chromium and POSTs the browser-built DOM to Nu, while CI-017
+continues to validate the HTML the server sends. Served markup and a script-mutated
+DOM are two different documents and either can be valid while the other is not, so
+this is now a genuinely second measurement.
+
+The pair therefore carries 6 weight points rather than the 3 it carried through
+`scores_with`. This is not the double-charging rejected for MD-189: that proposed
+conjunction would have charged one missing-modern-format fact through two items;
+CI-017 and TE-181 now charge two independently observed documents. If Playwright is
+unavailable, Chromium fails, or rendering times out, TE-181 omits `summary` and
+reports `NO_DATA` rather than passing a DOM that never existed.
+
+TE-181 is now titled *Validate the Rendered DOM (W3C)* and its fix names validation
+errors in that rendered document. CI-017's title, fix, arguments, assertion and
+translations are unchanged. Playwright is now a required dependency, and both the
+Linux and Windows CI jobs install Chromium after installing Python dependencies;
+the two existing render scripts keep their graceful no-Playwright behavior for
+unsupported or incomplete installations.
+
 A page served as bare `text/html` is no longer read in the wrong character set. `requests`
 takes the charset from `Content-Type` and falls back to ISO-8859-1 when a `text/*` response
 names none, so a site that sends bare `text/html` and lets `<meta charset="utf-8">` speak
@@ -63,7 +84,7 @@ no render happened, so MB-105 reports `NO_DATA` instead of claiming parity. Its
 actual difference still fails. TE-169 and TE-177 are unaffected because they assert
 the raw document, which is measured whether or not rendering succeeds.
 
-Registry `3d4dd03224f7` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
+Registry `50ddb6a84302` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
 The 852-test baseline becomes 879, with the POSIX-only signal-naming test still the one
 expected skip.

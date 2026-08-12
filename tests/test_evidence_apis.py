@@ -148,21 +148,38 @@ class LinksExport(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class HtmlValidator(unittest.TestCase):
-    """TE-171 and TE-176 — whichever items read this script's counts.
+    """CI-017 checks served HTML; TE-181 checks the rendered DOM.
 
-    One stubbed call: the POST to validator.w3.org. Everything that turns its
-    response into counts is real.
+    The renderer and both Nu request methods are stubbed. Everything that turns a
+    response into counts and a registry verdict is real.
     """
 
     def setUp(self):
         import html_validator
         self.mod = html_validator
-        self.saved = html_validator.requests.get
+        self.saved_get = html_validator.requests.get
+        self.saved_post = html_validator.requests.post
+        self.saved_renderer = html_validator.render_with_playwright
+        self.get_calls = []
+        self.post_calls = []
+
+        def unexpected(*_args, **_kwargs):
+            raise AssertionError("an unstubbed Nu request was attempted")
+
+        html_validator.requests.get = unexpected
+        html_validator.requests.post = unexpected
+
+        def unexpected_render(*_args, **_kwargs):
+            raise AssertionError("served validation tried to launch a browser")
+
+        html_validator.render_with_playwright = unexpected_render
 
     def tearDown(self):
-        self.mod.requests.get = self.saved
+        self.mod.requests.get = self.saved_get
+        self.mod.requests.post = self.saved_post
+        self.mod.render_with_playwright = self.saved_renderer
 
-    def serve(self, messages, status=200):
+    def serve(self, messages, status=200, method="get"):
         class Response:
             status_code = status
             headers = {"Content-Type": "application/json"}
@@ -171,18 +188,25 @@ class HtmlValidator(unittest.TestCase):
             def json(self):
                 return {"messages": messages}
 
-        self.mod.requests.get = lambda *a, **k: Response()
+        calls = self.get_calls if method == "get" else self.post_calls
 
-    def items_for(self):
-        return [i for i in ITEMS.values()
-                if (i.get("check") or {}).get("script") == "html_validator.py"]
+        def answer(*args, **kwargs):
+            calls.append((args, kwargs))
+            return Response()
+
+        setattr(self.mod.requests, method, answer)
+
+    def render(self, html="<!doctype html><html><body></body></html>", error=None):
+        self.mod.render_with_playwright = lambda *_args, **_kwargs: (html, error)
 
     def test_a_clean_document_reports_no_errors(self):
         self.serve([])
         out = self.mod.validate("https://example.com/")
+        self.assertEqual(out["source"], "served")
         self.assertEqual(out["summary"]["errors"], 0)
-        for item in self.items_for():
-            self.assertEqual(verdict(item["id"], out), PASS, item["id"])
+        self.assertEqual(verdict("CI-017", out), PASS)
+        self.assertEqual(len(self.get_calls), 1)
+        self.assertEqual(self.post_calls, [])
 
     def test_errors_and_warnings_are_counted_apart(self):
         """Apart, because one of these two items reads each. Collapsing them would
@@ -196,9 +220,7 @@ class HtmlValidator(unittest.TestCase):
         out = self.mod.validate("https://example.com/")
         self.assertEqual(out["summary"]["errors"], 2)
         self.assertEqual(out["summary"]["warnings"], 1)
-        failing = [i["id"] for i in self.items_for()
-                   if verdict(i["id"], out) in (FAIL, WARN)]
-        self.assertTrue(failing, f"nothing failed on two errors: {out}")
+        self.assertEqual(verdict("CI-017", out), FAIL)
 
     def test_a_validator_outage_is_undecided_rather_than_clean(self):
         """The failure this family keeps producing: a service that answers with
@@ -209,8 +231,7 @@ class HtmlValidator(unittest.TestCase):
         self.mod.requests.get = boom
         out = self.mod.validate("https://example.com/")
         self.assertTrue(out.get("error"))
-        for item in self.items_for():
-            self.assertEqual(verdict(item["id"], out), NO_DATA, item["id"])
+        self.assertEqual(verdict("CI-017", out), NO_DATA)
 
     def test_the_validator_failing_to_fetch_the_page_is_not_a_clean_document(self):
         """The same failure one step further in, and it needs no outage to happen.
@@ -228,8 +249,7 @@ class HtmlValidator(unittest.TestCase):
         out = self.mod.validate("https://example.com/")
         self.assertIn("could not read the page", out.get("error") or "")
         self.assertEqual(out["summary"], {})
-        for item in self.items_for():
-            self.assertEqual(verdict(item["id"], out), NO_DATA, item["id"])
+        self.assertEqual(verdict("CI-017", out), NO_DATA)
 
     def test_a_warning_alongside_a_fetch_problem_is_still_read(self):
         """Only an answer that is *entirely* non-document errors means the document
@@ -241,6 +261,61 @@ class HtmlValidator(unittest.TestCase):
         out = self.mod.validate("https://example.com/")
         self.assertIsNone(out.get("error"))
         self.assertEqual(out["summary"]["errors"], 1)
+
+    def test_a_clean_rendered_dom_posts_the_document_and_passes(self):
+        document = "<!doctype html><html><body><p>rendered</p></body></html>"
+        self.render(document)
+        self.serve([], method="post")
+
+        out = self.mod.validate("https://example.com/", rendered=True)
+
+        self.assertEqual(out["source"], "rendered")
+        self.assertIsNone(out["render_error"])
+        self.assertEqual(out["summary"]["errors"], 0)
+        self.assertEqual(verdict("TE-181", out), PASS)
+        self.assertEqual(self.get_calls, [])
+        self.assertEqual(len(self.post_calls), 1)
+        args, kwargs = self.post_calls[0]
+        self.assertEqual(args, ("https://validator.w3.org/nu/?out=json",))
+        self.assertEqual(kwargs["data"], document.encode("utf-8"))
+        self.assertEqual(kwargs["headers"]["Content-Type"],
+                         "text/html; charset=utf-8")
+
+    def test_an_invalid_rendered_dom_fails(self):
+        self.render("<html><body><p></body></html>")
+        self.serve([{"type": "error", "message": "Unclosed element p."}],
+                   method="post")
+
+        out = self.mod.validate("https://example.com/", rendered=True)
+
+        self.assertEqual(out["summary"]["errors"], 1)
+        self.assertEqual(verdict("TE-181", out), FAIL)
+
+    def test_missing_playwright_is_no_data_and_never_calls_nu(self):
+        self.render(None, "playwright not installed")
+
+        out = self.mod.validate("https://example.com/", rendered=True)
+
+        self.assertNotIn("summary", out)
+        self.assertEqual(out["render_error"], "playwright not installed")
+        self.assertIn("playwright not installed", out["error"])
+        self.assertEqual(verdict("TE-181", out), NO_DATA)
+        self.assertEqual(self.get_calls, [])
+        self.assertEqual(self.post_calls, [])
+
+    def test_browser_failure_or_timeout_is_no_data_with_the_reason(self):
+        for reason in ("Timeout 30000ms exceeded", "browser executable is missing"):
+            with self.subTest(reason):
+                self.render(None, reason)
+
+                out = self.mod.validate("https://example.com/", rendered=True)
+
+                self.assertNotIn("summary", out)
+                self.assertEqual(out["render_error"], reason)
+                self.assertIn(reason, out["error"])
+                self.assertEqual(verdict("TE-181", out), NO_DATA)
+                self.assertEqual(self.get_calls, [])
+                self.assertEqual(self.post_calls, [])
 
 
 # ---------------------------------------------------------------------------

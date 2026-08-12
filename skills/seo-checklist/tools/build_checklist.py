@@ -1033,9 +1033,15 @@ item(179, "low", S, "domain_safety_check.py", PAGE,
 item(180, "medium", S, "a11y_seo_checker.py", PAGE,
      {"path": "score", "gte": 80},
      "Meet WCAG accessibility basics")
-item(181, "medium", S, "html_validator.py", PAGE,
+# CI-017 validates the bytes Nu fetches from the server; TE-181 validates the DOM a
+# browser builds after scripts run. Those are two documents that can independently be
+# valid or invalid, so the pair now carries 6 weight points rather than 3. Unlike the
+# rejected MD-189 conjunction, this does not charge one fact twice: it measures two
+# different facts. If the browser cannot build the DOM, html_validator.py omits
+# `summary`, making TE-181 NO_DATA rather than passing a document that never existed.
+item(181, "medium", S, "html_validator.py", ["{url}", "--rendered"],
      {"path": "summary.errors", "eq": 0},
-     "Pass W3C validation")
+     "Fix W3C validation errors in the rendered DOM")
 item(182, "low", M, fix="Show a compliant cookie banner")
 item(183, "high", M, fix="Handle migrations, parameters and status codes correctly")
 
@@ -1267,7 +1273,6 @@ LENS_OF = {eid: lens for lens, ids in LENS.items() for eid in ids}
 # one check; MB-104 runs and scores independently.
 SAME_CHECK = {
     "CI-016": "MD-186",   # "Provide Meaningful Image Alt Text" / "...Alt Text"
-    "CI-017": "TE-181",   # both titled "Validate HTML (W3C)", word for word
     "GO-144": "GEO-004",  # featured snippets / answer blocks for AEO
     "GO-145": "GEO-005",  # AI Overviews / citation-ready content
     "MB-096": "MD-189",   # both medium; MB-096's title exactly names this assertion

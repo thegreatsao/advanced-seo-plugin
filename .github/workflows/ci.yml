@@ -28,6 +28,9 @@ jobs:
           pip install -r requirements.txt
           pip install ruff
 
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
       # ruff was listed as a development dependency and never ran. Running it found
       # two half-implemented checks: a computed signal dropped instead of reported
       # in `entity_checker.py`, and another in `hreflang_checker.py`. That is the
@@ -420,6 +423,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install ruff
+
+      - name: Install Chromium
+        run: python -m playwright install chromium
 
       - name: Lint
         run: python -m ruff check .

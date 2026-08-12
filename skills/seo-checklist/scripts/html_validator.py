@@ -8,6 +8,7 @@ raises it in three separate places.
 
 Usage:
     python html_validator.py https://example.com
+    python html_validator.py https://example.com --rendered
     python html_validator.py https://example.com --json
 """
 
@@ -30,6 +31,8 @@ except ImportError:
     from scripts.lib.safe_http import (MAX_RETRY_AFTER_WAIT, default_headers, pace,
                                        retry_after_seconds)
 
+from javascript_render_audit import render_with_playwright
+
 NU_ENDPOINT = "https://validator.w3.org/nu/"
 # basis: inherited — more than 10 validation warnings, present at import. Warnings are
 #  advisory in Nu's own output, so this is a "the page has a pattern of them" line rather
@@ -41,35 +44,60 @@ MANY_WARNINGS = 10
 MAX_MESSAGES = 40
 
 
-def validate(url: str, timeout: int = 45) -> dict:
+def validate(url: str, timeout: int = 45, rendered: bool = False,
+             render_timeout: int = 30000) -> dict:
     result = {
         "url": url,
+        "source": "rendered" if rendered else "served",
         # Empty until the validator answers. `{"errors": None}` is not silence:
         # `eq: 0` reads a None as a failing value, so an outage or a 429 from a free
         # service reported "your HTML has validation errors" — CI-017 and TE-181,
         # invented out of the validator being busy. An absent key is NO_DATA.
-        "summary": {},
         "messages": [],
         "issues": [],
         "error": None,
+        "render_error": None,
     }
-    query = urlencode({"doc": url, "out": "json"})
+    document = None
+    if rendered:
+        document, render_error = render_with_playwright(url, render_timeout)
+        result["render_error"] = render_error
+        if document is None:
+            # No DOM means no validation result. In particular, do not add an empty
+            # summary: summary.errors == 0 would turn a missing browser or a failed
+            # render into a PASS for TE-181.
+            detail = render_error or "the browser returned no document"
+            result["error"] = f"could not render the page: {detail}"
+            return result
+
+    # Once there is a document for Nu to inspect, preserve the served-mode output
+    # shape while it answers. Validator failures leave this empty and therefore
+    # remain NO_DATA under the existing assertion semantics.
+    result["summary"] = {}
+    query = urlencode({"out": "json"} if rendered else {"doc": url, "out": "json"})
+    headers = default_headers({"Accept": "application/json"})
+    if rendered:
+        headers["Content-Type"] = "text/html; charset=utf-8"
+
+    def ask_nu():
+        if rendered:
+            return requests.post(f"{NU_ENDPOINT}?{query}",
+                                 data=document.encode("utf-8"), headers=headers,
+                                 timeout=timeout)
+        return requests.get(f"{NU_ENDPOINT}?{query}", headers=headers, timeout=timeout)
+
     # This is the one script that calls requests directly rather than through
     # safe_request, because it addresses a fixed third-party endpoint rather than
     # the audited site. It still has to be paced: the W3C validator is a free
-    # service and this asks it to fetch a page on our behalf.
+    # service. Served mode asks it to fetch the URL; rendered mode sends the DOM.
     try:
         pace("validator.w3.org")
-        resp = requests.get(f"{NU_ENDPOINT}?{query}",
-                            headers=default_headers({"Accept": "application/json"}),
-                            timeout=timeout)
+        resp = ask_nu()
         wait = retry_after_seconds(resp)
         if 0 < wait <= MAX_RETRY_AFTER_WAIT:
             time.sleep(wait)
             pace("validator.w3.org")
-            resp = requests.get(f"{NU_ENDPOINT}?{query}",
-                                headers=default_headers({"Accept": "application/json"}),
-                                timeout=timeout)
+            resp = ask_nu()
     except requests.RequestException as exc:
         result["error"] = f"validator unreachable: {exc}"
         return result
@@ -138,10 +166,12 @@ def main():
     parser = argparse.ArgumentParser(description="Validate HTML via the W3C Nu checker")
     parser.add_argument("url", help="URL to validate")
     parser.add_argument("--timeout", type=int, default=45)
+    parser.add_argument("--rendered", action="store_true",
+                        help="Render the URL in Chromium and validate the resulting DOM")
     parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
-    result = validate(args.url, args.timeout)
+    result = validate(args.url, args.timeout, args.rendered)
 
     if args.json:
         print(json.dumps(result, indent=2))

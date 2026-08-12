@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "3d4dd03224f7",
+  "registry_version": "50ddb6a84302",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -3769,13 +3769,14 @@
       "plerdy_ref": 181,
       "category": "technical",
       "category_label": "Technical SEO Checks",
-      "title": "Validate HTML (W3C)",
+      "title": "Validate the Rendered DOM (W3C)",
       "severity": "medium",
       "source": "script",
       "check": {
         "script": "html_validator.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--rendered"
         ],
         "requires": "api",
         "assert": {
@@ -3784,8 +3785,7 @@
         }
       },
       "effort": "low",
-      "fix": "Pass W3C validation",
-      "scores_with": "CI-017"
+      "fix": "Fix W3C validation errors in the rendered DOM"
     },
     {
       "id": "TE-182",

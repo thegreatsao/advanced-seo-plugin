@@ -3,5 +3,9 @@
   "CI-002": {
     "title": "Confirm Google Has Indexed the Audited URL",
     "why": "URL Inspection answers for one URL, and requires: gsc keeps the item out of the per-page sampled pass, so it answers for the audited URL only. The Plerdy wording 'Ensure Important Content Is Indexed' claims the site's important content. Checking a set of important URLs needs a quota-aware GSC sampling feature that does not exist, so the plugin must not keep a title that implies it. The wording also has to stay distinct from CI-001 'Ensure URL Is Indexed', which asks whether this page can be indexed rather than whether Google has."
+  },
+  "TE-181": {
+    "title": "Validate the Rendered DOM (W3C)",
+    "why": "TE-181 now sends the browser-built DOM to the Nu checker, while CI-017 keeps validating the HTML served at the URL. Keeping the inherited title on both would give two report rows the same name even when the two documents produce different verdicts."
   }
 }

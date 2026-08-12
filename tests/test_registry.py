@@ -900,7 +900,7 @@ class ChecklistProvenance(unittest.TestCase):
         sys.path.insert(0, os.path.join(SKILL, "tools"))
         import build_checklist
         overrides = build_checklist.load_title_overrides()
-        self.assertEqual(set(overrides), {"CI-002"})
+        self.assertEqual(set(overrides), {"CI-002", "TE-181"})
         self.assertNotIn("_comment", overrides)
 
     def test_every_numbered_title_is_referenced_by_exactly_one_item(self):
@@ -1474,7 +1474,7 @@ class APatternNeverReadsAnAddress(unittest.TestCase):
 
 
 class OneCheckCarriesWeightOnce(unittest.TestCase):
-    """`scores_with`: ten twins across the eight duplicate groups it exists for.
+    """`scores_with`: nine twins across the seven duplicate groups it exists for.
 
     Two source checklists are merged into this registry and both of them ask some
     questions. Each group runs one script with one set of arguments and one assertion
@@ -1530,6 +1530,36 @@ class OneCheckCarriesWeightOnce(unittest.TestCase):
         ids = {"MB-096", "MB-097", "MD-189"}
         items = [item for item in ITEMS if item["id"] in ids]
         self.assertEqual({item["id"] for item in items}, ids)
+        weight = sum(SEVERITY_WEIGHT[item["severity"]] for item in items
+                     if not item.get("scores_with"))
+        self.assertEqual(weight, 6)
+
+    def test_served_html_and_rendered_dom_are_distinct_checks(self):
+        by_id = {item["id"]: item for item in ITEMS}
+        served = by_id["CI-017"]
+        rendered = by_id["TE-181"]
+
+        self.assertEqual(served["title"], "Validate HTML (W3C)")
+        self.assertEqual(served["fix"],
+                         "Fix W3C validation errors - they affect rendering and parsing")
+        self.assertEqual(served["check"], {
+            "script": "html_validator.py",
+            "args": ["{url}"],
+            "requires": "api",
+            "assert": {"path": "summary.errors", "eq": 0},
+        })
+        self.assertEqual(rendered["title"], "Validate the Rendered DOM (W3C)")
+        self.assertEqual(rendered["check"]["args"], ["{url}", "--rendered"])
+        self.assertEqual(rendered["check"]["requires"], "api")
+        self.assertEqual(rendered["check"]["assert"], served["check"]["assert"])
+        self.assertNotEqual(self.shape(rendered), self.shape(served))
+        self.assertIsNone(rendered.get("scores_with"))
+
+    def test_served_html_and_rendered_dom_carry_six_weight_points(self):
+        from checklist_runner import SEVERITY_WEIGHT
+
+        items = [item for item in ITEMS if item["id"] in {"CI-017", "TE-181"}]
+        self.assertEqual(len(items), 2)
         weight = sum(SEVERITY_WEIGHT[item["severity"]] for item in items
                      if not item.get("scores_with"))
         self.assertEqual(weight, 6)
