@@ -10,7 +10,7 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
-## 0.45.0 — image checks now name the fact they score
+## 0.45.0 — image weight sits with the item that names it, and KW-076 can finally fail
 
 MD-189 *Use Modern Formats & Responsive Images* named two halves while asserting
 only the modern-format count. Both halves were already measured separately: MB-096
