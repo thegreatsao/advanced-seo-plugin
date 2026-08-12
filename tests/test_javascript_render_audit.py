@@ -64,3 +64,7 @@ class JavascriptRenderParity(unittest.TestCase):
         self.assertIn("diffs", result)
         self.assertEqual(result["diffs"], [])
         self.assertIs(evaluate(MB_105_ASSERTION, result)[0], True)
+
+
+if __name__ == "__main__":
+    unittest.main()
