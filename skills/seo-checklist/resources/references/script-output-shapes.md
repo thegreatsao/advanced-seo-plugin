@@ -690,7 +690,12 @@ because until then no rule read it. Absent, both land on `NO_DATA`.
 W3C Nu validator (`validator.w3.org/nu/`) — free, no key.
 
 `url` — str
-`summary.errors` — int
+`source` — str (`served` / `rendered`)
+`render_error` — str | null
+`summary.errors` — int — **absent** when `--rendered` was requested but Playwright
+  was unavailable, the browser failed, or rendering timed out. TE-181 asserts `eq: 0`
+  on it, and an absent key is NO_DATA: a DOM that was never built cannot pass or fail
+  validation. The render reason remains in `render_error` and `error`.
 `summary.warnings` — int
 `summary.info` — int
 `messages[]` — array, capped at 40
