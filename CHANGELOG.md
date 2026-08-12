@@ -10,6 +10,28 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.45.0 — image checks now name the fact they score
+
+MD-189 *Use Modern Formats & Responsive Images* named two halves while asserting
+only the modern-format count. Both halves were already measured separately: MB-096
+reads the responsive-image count, and MB-097 reads the modern-format count.
+
+MD-189 now takes the responsive half and defers to MB-096, whose title names that
+shared assertion exactly. MB-097 comes off the old pointer and carries the
+modern-format half itself. The three items still carry 6 weight points in total:
+one medium responsive-image check and one medium modern-format check, with MD-189
+reporting the shared responsive verdict without scoring it again.
+
+The literal alternative — making MD-189 require both counts — was rejected because
+it would raise the theme from 6 to 9 weight points and charge one missing-modern-format
+fact twice, through both MD-189 and MB-097. `scores_with` deliberately requires an
+exact shared check and cannot make a conjunction into a weightless aggregate.
+
+Registry `589f6741058a` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
+0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
+The 852-test baseline becomes 855, with the POSIX-only signal-naming test still the one
+expected skip.
+
 ## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise
 
 The runner now resolves its fetched `{html}` temporary files against the disk on
