@@ -67,6 +67,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 SCRIPTS = os.path.join(SKILL, "scripts")
 
+
+def _report_path(path: str) -> str:
+    """`path` relative to the skill, or absolute when no relation can be expressed.
+
+    `os.path.relpath` raises ValueError on Windows when the two paths sit on
+    different drive letters — the checkout on D: and a temp file on C: is the
+    ordinary case on a GitHub runner. This label is for a human reading a report,
+    so an unhelpful-but-correct absolute path beats an exception.
+    """
+    try:
+        return os.path.relpath(path, SKILL)
+    except ValueError:
+        return os.path.abspath(path)
+
+
 BASIS = re.compile(
     r"#\s*basis:\s*(standard|measured|convention|inherited|presentation)\s*[—-]\s*(\S.*)",
     re.I)
@@ -207,7 +222,7 @@ def basis_issues(path: str) -> list[dict]:
         rest = line[marker.end():].strip()
         kind_match = re.match(r"[a-z]+", rest, re.I)
         kind = kind_match.group(0).lower() if kind_match else ""
-        where = {"file": os.path.relpath(path, SKILL), "line": lineno}
+        where = {"file": _report_path(path), "line": lineno}
         if kind not in KINDS:
             out.append({**where, "type": "unknown", "kind": kind or "(none)",
                         "detail": (f"{kind!r} is not one of {', '.join(KINDS)}"
@@ -277,7 +292,7 @@ def named_thresholds(path: str) -> list[dict]:
         if name not in compared:
             continue
         kind, why = _basis_for(lines, lineno)
-        out.append({"file": os.path.relpath(path, SKILL), "name": name,
+        out.append({"file": _report_path(path), "name": name,
                     "line": lineno, "kind": kind, "why": why})
     return out
 
@@ -314,7 +329,7 @@ def unnamed_thresholds(path: str) -> list[dict]:
                 continue
             if about_status and value in HTTP_STATUS and float(value).is_integer():
                 continue
-            out.append({"file": os.path.relpath(path, SKILL), "line": node.lineno,
+            out.append({"file": _report_path(path), "line": node.lineno,
                         "value": value, "source": text.strip()[:90]})
     return out
 

@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL = os.path.join(ROOT, "skills", "seo-checklist")
@@ -222,6 +223,16 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 status = at.main(["--check"], paths=[path])
         return status, stdout.getvalue(), stderr.getvalue()
+
+    def test_report_path_is_relative_or_falls_back_to_absolute(self):
+        at = self._tool()
+        inside = os.path.join(at.SKILL, "scripts", "checklist_runner.py")
+        self.assertEqual(at._report_path(inside),
+                         os.path.relpath(inside, at.SKILL))
+
+        outside = os.path.join(tempfile.gettempdir(), "thresholds.py")
+        with mock.patch.object(at.os.path, "relpath", side_effect=ValueError):
+            self.assertEqual(at._report_path(outside), os.path.abspath(outside))
 
     def test_no_named_threshold_is_bare(self):
         at = self._tool()
