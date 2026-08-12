@@ -27,9 +27,17 @@ it would raise the theme from 6 to 9 weight points and charge one missing-modern
 fact twice, through both MD-189 and MB-097. `scores_with` deliberately requires an
 exact shared check and cannot make a conjunction into a weightless aggregate.
 
-Registry `589f6741058a` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
+KW-076 *Include the Primary Keyword in Body Copy* asserted a keyword that
+`article_seo.py` extracted from the page itself, so any page with enough prose passed
+and the item could never fail. The keyword is now an operator input supplied with
+`--keyword`; without one, KW-076 reports `NEEDS_INPUT` and does not affect the score.
+Its assertion now reads whether that supplied keyword occurs in the body copy, which
+is what the title says. A measured absence is therefore a reachable `FAIL` for the
+first time.
+
+Registry `3d4dd03224f7` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
-The 852-test baseline becomes 855, with the POSIX-only signal-naming test still the one
+The 852-test baseline becomes 861, with the POSIX-only signal-naming test still the one
 expected skip.
 
 ## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise

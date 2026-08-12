@@ -606,8 +606,12 @@ item(73, "high", L, fix="Include the primary keyword in the H1")
 item(74, "medium", L, fix="Include the primary keyword or a close variant in an H2")
 item(75, "medium", L,
      fix="Include the primary keyword in the meta description - it affects CTR")
-item(76, "medium", S, "article_seo.py", PAGE,
-     {"path": "target_keyword", "truthy": True},
+# The old rule asserted an echo of article_seo.py's own keyword extraction, so it
+# could not fail. The keyword is now an operator input and this item reports
+# NEEDS_INPUT without it. Assert `in_body`, not `target_keyword`, because the title
+# asks whether the keyword occurs in body copy rather than whether one was named.
+item(76, "medium", S, "article_seo.py", ["{url}", "--keyword", "{keyword}"],
+     {"path": "keyword_usage.in_body", "truthy": True},
      "The primary keyword should appear naturally in body copy")
 item(77, "medium", L, fix="Include the primary keyword in the opening paragraph")
 

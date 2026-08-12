@@ -554,6 +554,17 @@ def _length(value):
     return None
 
 
+def _named_measure_context(rule: dict, data: dict) -> str:
+    """Name a keyword carried beside the asserted measurement, when present."""
+    parent_path, separator, _ = rule.get("path", "").rpartition(".")
+    if not separator:
+        return ""
+    parent = resolve(data, parent_path)
+    if not isinstance(parent, dict) or "keyword" not in parent:
+        return ""
+    return f"; keyword = {parent['keyword']!r}"
+
+
 def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
     """Return (passed, evidence). passed is None when the data needed to
     decide is absent — the caller turns that into NO_DATA, never a false PASS.
@@ -669,7 +680,8 @@ def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
     ev = repr(value)[:120]
 
     if "truthy" in rule:
-        return bool(value), f"{rule['path']} = {ev}"
+        return bool(value), (f"{rule['path']} = {ev}"
+                             f"{_named_measure_context(rule, data)}")
     if "falsy" in rule:
         return not value, f"{rule['path']} = {ev}"
     if "eq" in rule:
@@ -872,6 +884,8 @@ HOW_TO_SUPPLY = {
     "rendered_json": "pass --rendered-json with a rendered-page measurement "
                      "(see rendered_audit.py for the shape)",
     "links_csv": "pass --links-csv with the Links export from Search Console",
+    "keyword": "pass --keyword with the primary keyword this page is meant to "
+               "rank for",
     "server_log": "pass --server-log with a server access log, ideally a week or "
                   "more of it (see server_log_audit.py)",
     "gsc_credentials": "pass --gsc-credentials, or set GSC_CREDENTIALS_PATH, for a "
@@ -2470,6 +2484,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Search Console Links report export (ZIP or CSV). The "
                          "Links report has no API, so incoming-link items stay "
                          "NEEDS_INPUT without it.")
+    ap.add_argument("--keyword", default="",
+                    help="primary keyword this page is meant to rank for. KW-076 "
+                         "stays NEEDS_INPUT without it.")
     ap.add_argument("--profile", default="",
                     help="site profile: default, local, ecommerce, saas, blog, "
                          "media, or 'auto' to accept the detector's suggestion. "
@@ -2829,6 +2846,8 @@ def main() -> int:
         ctx["gsc_property"] = gsc_property
     if a.links_csv:
         ctx["links_csv"] = os.path.expanduser(a.links_csv)
+    if a.keyword:
+        ctx["keyword"] = a.keyword
     if a.server_log:
         ctx["server_log"] = os.path.expanduser(a.server_log)
     if a.cwv_json:

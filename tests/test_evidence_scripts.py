@@ -46,7 +46,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import harness  # noqa: E402
 from harness import served  # noqa: E402
 
-from checklist_runner import NO_DATA, PASS, FAIL, WARN, evaluate  # noqa: E402
+from checklist_runner import (  # noqa: E402
+    FAIL, NEEDS_INPUT, NO_DATA, PASS, WARN, build_plan, evaluate,
+)
 
 with open(REGISTRY, encoding="utf-8") as f:
     ITEMS = {i["id"]: i for i in json.load(f)["items"]}
@@ -485,6 +487,16 @@ JS = {"Content-Type": "application/javascript"}
 
 GOOD_ROUTES = {
     "/": GOOD_PAGE,
+    "/seo-audit.html": ("<!doctype html><html><head><title>seo audit guide</title>"
+                        "</head><body><main><h1>seo audit guide</h1>"
+                        "<p>A seo audit checks technical signals and content so a "
+                        "team can prioritize improvements with reliable evidence."
+                        "</p></main></body></html>"),
+    "/seoul.html": ("<!doctype html><html><head><title>Seoul travel notes</title>"
+                    "</head><body><main><h1>Seoul travel notes</h1>"
+                    "<p>Seoul rewards patient travelers with neighborhood markets, "
+                    "quiet paths, careful planning, and memorable meals each day."
+                    "</p></main></body></html>"),
     "/about.html": ABOUT_PAGE,
     "/guide.html": GUIDE_PAGE,
     "/privacy.html": PRIVACY_PAGE,
@@ -563,6 +575,17 @@ RUNS = [
     ("answers_bad", "answer_block_scanner.py", ["{bad}"]),
     ("article", "article_seo.py", ["{good}", "--no-autocomplete"]),
     ("article_bad", "article_seo.py", ["{bad}", "--no-autocomplete"]),
+    ("article_keyword_present", "article_seo.py",
+     ["{good}", "--keyword", "sourdough starter", "--no-autocomplete"]),
+    ("article_keyword_absent", "article_seo.py",
+     ["{good}", "--keyword", "technical SEO", "--no-autocomplete"]),
+    ("article_keyword_substring", "article_seo.py",
+     ["{good}seoul.html", "--keyword", "seo", "--no-autocomplete"]),
+    ("article_keyword_case", "article_seo.py",
+     ["{good}seo-audit.html", "--keyword", "SEO Audit", "--no-autocomplete"]),
+    ("article_unfetched", "article_seo.py",
+     ["http://127.0.0.1:1/unreachable", "--keyword", "sourdough starter",
+      "--no-autocomplete"]),
     ("broken", "broken_links.py", ["{good}"]),
     ("broken_bad", "broken_links.py", ["{bad}"]),
     ("cache", "cache_compression_checker.py", ["{good}"]),
@@ -1593,20 +1616,56 @@ class CitationReadiness(unittest.TestCase):
 
 
 class ArticleKeyword(unittest.TestCase):
-    """KW-076 `target_keyword`."""
+    """KW-076 `keyword_usage.in_body`."""
 
-    def test_a_keyword_is_inferred_from_the_prose(self):
+    def test_a_supplied_keyword_present_in_body_passes(self):
         """`--no-autocomplete` because the script otherwise asks Google for related
         terms, and this suite does not leave loopback."""
-        self.assertTrue(out("article")["target_keyword"])
-        self.assertEqual(verdict("KW-076", out("article")), PASS)
+        result = out("article_keyword_present")
+        self.assertEqual(result["keyword_usage"]["keyword"], "sourdough starter")
+        self.assertGreater(result["keyword_usage"]["body_occurrences"], 0)
+        self.assertEqual(verdict("KW-076", result), PASS)
+
+    def test_a_supplied_keyword_absent_from_body_fails_and_names_the_keyword(self):
+        result = out("article_keyword_absent")
+        self.assertEqual(result["keyword_usage"]["body_occurrences"], 0)
+        self.assertEqual(verdict("KW-076", result), FAIL)
+        check = ITEMS["KW-076"]["check"]
+        _, evidence = evaluate(check["assert"], result)
+        self.assertIn("technical SEO", evidence)
+
+    def test_an_unfetched_page_has_no_measurement_and_is_undecided(self):
+        result = out("article_unfetched")
+        self.assertNotIn("keyword_usage", result)
+        self.assertEqual(verdict("KW-076", result), NO_DATA)
+
+    def test_no_keyword_input_stops_the_item_at_the_plan(self):
+        item = ITEMS["KW-076"]
+        plan, skipped = build_plan([item], {"url": GOOD.url}, {"fetch"}, "page")
+        self.assertEqual(plan, {})
+        self.assertEqual(skipped["KW-076"][0], NEEDS_INPUT)
+        self.assertIn("--keyword", skipped["KW-076"][1])
+
+    def test_a_substring_inside_a_longer_word_does_not_match(self):
+        result = out("article_keyword_substring")
+        self.assertIn("Seoul", " ".join(result["paragraphs"]))
+        self.assertEqual(result["keyword_usage"]["body_occurrences"], 0)
+        self.assertEqual(verdict("KW-076", result), FAIL)
+
+    def test_keyword_matching_is_case_insensitive(self):
+        result = out("article_keyword_case")
+        self.assertEqual(result["keyword_usage"]["keyword"], "SEO Audit")
+        self.assertEqual(verdict("KW-076", result), PASS)
+
+    def test_no_keyword_flag_emits_no_usage_measurement(self):
+        result = out("article")
+        self.assertTrue(result["target_keyword"])
+        self.assertNotIn("keyword_usage", result)
 
     def test_a_page_with_almost_no_prose_yields_none(self):
-        """The contract pair exempts this item on the grounds that the script "finds
-        one on any page with prose". Measured, that holds only for a page with enough
-        of it: nineteen words extract nothing."""
+        """Keep the independent target-keyword fallback contract unchanged."""
         self.assertNotIn("target_keyword", out("article_bad"))
-        self.assertEqual(verdict("KW-076", out("article_bad")), NO_DATA)
+        self.assertNotIn("keyword_usage", out("article_bad"))
 
     def test_lithuanian_stopwords_leave_a_content_phrase(self):
         import article_seo

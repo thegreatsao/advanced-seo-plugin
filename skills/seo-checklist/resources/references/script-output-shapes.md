@@ -180,6 +180,14 @@ Reads `--inventory` (see `site_crawl.py`); crawls one for itself without it.
 `readability.avg_sentence_length` — float
 `readability.avg_syllables_per_word` — float
 `target_keyword` — str, absent when no primary keyword can be determined
+`keyword_usage.keyword` — str
+`keyword_usage.in_body` — bool
+`keyword_usage.body_occurrences` — int
+`keyword_usage.in_title` — bool
+
+The `keyword_usage` object is absent when no `--keyword` was supplied, because no
+usage measurement happened.
+
 `extracted_keywords[]` — array
 `related_keywords[]` — array
 `seo_issues[]` — array

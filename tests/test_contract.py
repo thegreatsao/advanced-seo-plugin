@@ -271,8 +271,7 @@ SAME_ON_BOTH = {
     # fixtures do instead where a link only has to be counted.
     "GEO-006": "sameAs targets are verified by fetching wikipedia/wikidata; an "
                "offline fixture cannot demonstrate them without egress",
-    "KW-076": "article_seo infers the target keyword from the page's own prose, so "
-              "it finds one on any page with prose",
+    "KW-076": "no keyword is supplied to a fixture run, so neither side is measured",
     "TECH-001": "rich_results_guard emits warnings only for schema types it has "
                 "required-property rules for; neither fixture carries one",
     "GO-143": "schema_required_props reports on schemas that are present, so a site "
