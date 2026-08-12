@@ -350,11 +350,14 @@ class RateLimiting(unittest.TestCase):
 
     def test_an_unwritable_state_directory_still_paces(self):
         """Unable to co-ordinate is a reason to slow down alone, not to give up."""
-        self.sh.RATE_LIMIT_DIR = "/dev/null/nope"
-        start = time.monotonic()
-        waited = self.sh.pace("example.com", rps=20)
-        self.assertGreater(waited, 0)
-        self.assertGreaterEqual(time.monotonic() - start, 0.04)
+        # A merely unusable-looking path is creatable on Windows, so confinement
+        # would decide whether this test passes or fails.
+        with tempfile.NamedTemporaryFile(dir=self.dir) as blocker:
+            self.sh.RATE_LIMIT_DIR = os.path.join(blocker.name, "nope")
+            start = time.monotonic()
+            waited = self.sh.pace("example.com", rps=20)
+            self.assertGreater(waited, 0)
+            self.assertGreaterEqual(time.monotonic() - start, 0.04)
 
     def test_the_slot_holds_exactly_one_timestamp_after_many_writes(self):
         for _ in range(6):
