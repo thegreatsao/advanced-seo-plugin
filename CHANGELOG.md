@@ -10,7 +10,7 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
-## 0.45.0 — image and render checks measure what they claim, and KW-076 can finally fail
+## 0.45.0 — four items measure the document they name, and a page is read in the charset it declares
 
 CI-017 and TE-181 were the same *Validate HTML (W3C)* check twice: both asked Nu to
 fetch the served URL and both asserted `summary.errors == 0`. TE-181 now POSTs a
