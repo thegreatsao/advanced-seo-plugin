@@ -86,7 +86,7 @@ the raw document, which is measured whether or not rendering succeeds.
 
 Registry `50ddb6a84302` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
-The 852-test baseline becomes 879, with the POSIX-only signal-naming test still the one
+The 852-test baseline becomes 885, with the POSIX-only signal-naming test still the one
 expected skip.
 
 ## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise
