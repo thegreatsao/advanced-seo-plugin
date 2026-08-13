@@ -283,6 +283,28 @@ SAME_ON_BOTH = {
               "item cannot fail on absence, only on a malformed block",
 }
 
+# Warn bands the fixtures exercise the item around but never land in.
+#
+# The summary line of the oracle counts items, not states, so an item covered on
+# both sides can still carry a band nobody has ever seen. Twenty-eight items had a
+# band when this was first measured; eleven of them WARN on a fixture, and one —
+# CN-048 — turned out to be a band no page could reach at all, which is now
+# `audit_reachability.py`'s business rather than a fixture question.
+#
+# An item that answers the same on both sides is not listed here: `SAME_ON_BOTH`
+# already records why the fixtures cannot tell it apart, and a pair that cannot
+# make the assertion fail certainly cannot reach what lies past it. One fact, one
+# record. What is left is the item the fixtures *do* exercise, past the band and
+# into FAIL.
+BAND_UNSEEN = {
+    "CI-018": "the band needs a log whose worst finding is medium; the broken "
+              "fixture's log has 43.8% of bot requests returning nothing indexable, "
+              "which is graded above that, so the item fails before the band",
+    "MS-032": "the band is errors above zero with at most three warnings. Measured "
+              "on the fixtures: good is 0 errors and 2 warnings, broken is 3 errors "
+              "and 5 warnings, so one passes and the other overshoots",
+}
+
 
 class BothAuditsRan(unittest.TestCase):
     """If either audit did not really happen, every assertion below is vacuous."""
@@ -366,6 +388,61 @@ class EveryCheckCanTellTheSitesApart(unittest.TestCase):
     def test_every_exemption_names_an_item_that_exists(self):
         known = {i["id"] for i in RESULTS["good"]["items"]}
         self.assertEqual(sorted(set(SAME_ON_BOTH) - known), [])
+
+
+class EveryWarnBandTheFixturesReachHasBeenSeen(unittest.TestCase):
+    """A band is a third verdict, and a third verdict nobody has observed is a
+    promise rather than a measurement.
+
+    The oracle reports coverage per item, so an item declared on both sides and
+    matched on both counts as covered while its WARN has never happened. Of the
+    twenty-seven bands in the registry, eleven have produced a WARN on a fixture;
+    the rest are either out of the fixtures' reach entirely — an API, a Search
+    Console property, a video the fixtures do not embed — or listed above with the
+    reason the pair passes the band by.
+    """
+
+    def banded(self):
+        return [i for i in RESULTS["good"]["items"]
+                if (REG[i["id"]].get("check") or {}).get("warn")]
+
+    def states(self, item_id):
+        good = {i["id"]: i for i in RESULTS["good"]["items"]}
+        broken = {i["id"]: i for i in RESULTS["broken"]["items"]}
+        return good[item_id]["status"], broken[item_id]["status"]
+
+    def seen(self):
+        return {i["id"] for i in self.banded() if WARN in self.states(i["id"])}
+
+    def test_a_fixture_reaches_some_band(self):
+        """Otherwise the rest of this class is about an empty set."""
+        self.assertGreater(len(self.seen()), 5)
+
+    def test_every_band_the_fixtures_exercise_is_seen_or_explained(self):
+        unexplained = []
+        for item in self.banded():
+            item_id = item["id"]
+            good, broken = self.states(item_id)
+            if WARN in (good, broken) or item_id in BAND_UNSEEN:
+                continue
+            # Same answer on both: SAME_ON_BOTH holds the reason for the whole item,
+            # the band included. Undecided on either: the fixtures never got near it.
+            if good == broken or not (good in DECIDED and broken in DECIDED):
+                continue
+            unexplained.append(f"{item_id} ({script_of(item_id)}) {good} -> {broken}, "
+                               f"and its warn band has never fired")
+        self.assertEqual(unexplained, [], "\n".join(f"  {u}" for u in unexplained))
+
+    def test_no_band_reason_outlives_the_band(self):
+        """The twin of `test_no_exemption_outlives_the_reason_for_it`: a band that
+        now fires must leave this list, or the list is describing the past."""
+        stale = sorted(set(BAND_UNSEEN) & self.seen())
+        self.assertEqual(stale, [], "these now WARN on a fixture; drop them from "
+                                    "BAND_UNSEEN")
+
+    def test_every_band_reason_names_an_item_that_still_has_a_band(self):
+        banded = {i["id"] for i in self.banded()}
+        self.assertEqual(sorted(set(BAND_UNSEEN) - banded), [])
 
 
 class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):

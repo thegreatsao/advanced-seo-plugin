@@ -64,8 +64,10 @@ jobs:
       # for years. Some rules are unfailable on purpose — TE-179's warn band is its
       # assertion's exact complement — so the tool proves the mechanism from the
       # script's own source and checks it against what the registry declares, in
-      # both directions and on the mechanism.
-      - name: No rule is unable to fail without saying so
+      # both directions and on the mechanism. It also audits the other unreachable
+      # verdict: CN-048 promised a WARN over a script that grades everything it
+      # finds as an error, so the band could not fire on any page ever built.
+      - name: No verdict is unreachable without saying so
         run: python skills/seo-checklist/tools/audit_reachability.py
 
       # The other half of that objection: an assertion that fires correctly, on the
@@ -452,7 +454,7 @@ jobs:
       - name: No assertion can never fire
         run: python skills/seo-checklist/tools/audit_assertions.py
 
-      - name: No rule is unable to fail without saying so
+      - name: No verdict is unreachable without saying so
         run: python skills/seo-checklist/tools/audit_reachability.py
 
       - name: Every item asserts what its title says

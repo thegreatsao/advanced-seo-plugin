@@ -55,6 +55,16 @@ four times out of four. Asking "is the emitted value always this literal" needs
 dataflow this does not have; the surviving three ask questions answerable from shape
 alone. `test_reachability.py` keeps the oracle check that caught it.
 
+**The other unreachable verdict.** A `warn` band only fires when the assertion has
+already failed *and* the warn rule holds (`checklist_runner.py:1228`), so a band the two
+rules leave no room for is decoration: the item can only PASS or FAIL, while the registry
+promises a middle. `CN-048` *Use Hierarchical Headings and Semantic HTML* carried
+`ISSUES_ANY()` with `NOTHING_SERIOUS()` — the standard pair, meaning "an error-class
+finding fails this, a warning-class one only warns" — over `parse_html.py`, which grades
+a heading skip and a missing `<main>` as `error` and has no warning-class finding at all.
+The band could not fire on any page ever built. Unlike an unfailable rule, this is never
+a decision, so it is a plain error with nothing to declare.
+
     python3 tools/audit_reachability.py            # report, exit 1 on any mismatch
     python3 tools/audit_reachability.py --verbose  # show every proof, declared or not
 """
@@ -75,9 +85,11 @@ SHAPES = os.path.join(SKILL_DIR, "resources", "references",
 
 sys.path.insert(0, HERE)
 # Imported rather than restated. A second copy of "is this path one the probe has
-# seen" would drift from the one the path audit uses, and then the two tools would
-# disagree about the same field while both reported green.
-from audit_assertions import path_is_probed, probed_paths  # noqa: E402
+# seen", or of "which severities can this script say", would drift from the one the
+# assertion audit uses, and then the two tools would disagree about the same field
+# while both reported green.
+from audit_assertions import (SEVERITY_ALIAS, path_is_probed,  # noqa: E402
+                              probed_paths, severity_literals)
 
 # Every mechanism this tool can prove. A declaration naming anything else is an
 # error rather than an exemption: the vocabulary is closed so that "why" cannot
@@ -210,10 +222,19 @@ def changed_outside_the_scan(script: str, key: str,
 # --- the four proofs --------------------------------------------------------
 
 def prove_warn_complement(item: dict) -> dict | None:
-    """The warn band is the assertion's exact complement, so nothing is left to fail."""
+    """The warn band is the assertion's exact complement, so nothing is left to fail.
+
+    Both rules must be a single comparison. A two-sided assertion is not
+    complemented by a one-sided band: `gte 90` with `lte 100`, warned by `lt 90`,
+    leaves 101 and up failing both, and reading only the `gte`/`lt` pair would call
+    a live rule unfailable — the worst mistake here, because the repair for one is
+    a written declaration that the other must never receive.
+    """
     check = item["check"]
     rule, warn = check["assert"], check.get("warn")
     if not isinstance(warn, dict) or rule.get("path") != warn.get("path"):
+        return None
+    if len(set(rule) - {"path"}) != 1 or len(set(warn) - {"path"}) != 1:
         return None
     for left, right in COMPLEMENTS:
         if left in rule and right in warn and rule[left] == warn[right]:
@@ -275,6 +296,12 @@ def prove_guarded_by_assertion(item: dict, scripts_dir: str = SCRIPTS) -> dict |
     if not sites:
         return None
     for value, guards, _line in sites:
+        # Two identical expressions are the same value only if reading them twice
+        # means the same thing. `if obj.pop(): result["k"] = obj.pop()` dumps
+        # identically and returns two different things, so a call anywhere in the
+        # compared expression ends the proof. KW-076's real shape is a bare name.
+        if any(isinstance(n, ast.Call) for n in ast.walk(value)):
+            return None
         shape = ast.dump(value)
         if not any(ast.dump(test) == shape for test in guards):
             return None
@@ -282,6 +309,72 @@ def prove_guarded_by_assertion(item: dict, scripts_dir: str = SCRIPTS) -> dict |
             "evidence": f"{item['check']['script']} writes {path!r} only under a "
                         f"test that is the value itself, at line(s) "
                         f"{', '.join(str(s[2]) for s in sites)}"}
+
+
+# When is there no value that fails the assertion and satisfies the warn rule?
+# Only same-direction pairs on one path can be empty: `gte 90` with `warn lt 90`
+# leaves everything below the threshold to WARN, which is the complement case
+# above. Read `A` as the assertion's bound and `B` as the band's.
+EMPTY_BAND = {
+    ("lte", "lte"): lambda a, b: b <= a,
+    ("lte", "lt"): lambda a, b: b <= a,
+    ("lt", "lt"): lambda a, b: b <= a,
+    ("lt", "lte"): lambda a, b: b < a,
+    ("gte", "gte"): lambda a, b: b >= a,
+    ("gte", "gt"): lambda a, b: b >= a,
+    ("gt", "gt"): lambda a, b: b >= a,
+    ("gt", "gte"): lambda a, b: b > a,
+}
+
+
+def dead_warn_bands(registry_path: str = REGISTRY,
+                    scripts_dir: str = SCRIPTS) -> list[dict]:
+    """Warn bands no value can land in.
+
+    A band fires only when the assertion has already failed and the warn rule then
+    holds, so a pair that leaves no room between them promises a middle verdict the
+    item can never reach. Two shapes are decidable without knowing anything about
+    the site: a numeric band on the wrong side of its own assertion, and a severity
+    window over a script whose vocabulary has nothing to put in it.
+
+    Bands over a *different* path than the assertion — `has_loop` failing while
+    `total_hops` warns — are two measurements, and whether they can disagree is a
+    question about the script, not about the rules. Not claimed.
+    """
+    with open(registry_path, encoding="utf-8") as f:
+        registry = json.load(f)
+    dead = []
+    for item in registry["items"]:
+        check = item.get("check") or {}
+        rule, warn = check.get("assert"), check.get("warn")
+        if not (isinstance(rule, dict) and isinstance(warn, dict)):
+            continue
+        if rule.get("path") != warn.get("path"):
+            continue
+        for (left, right), empty in EMPTY_BAND.items():
+            if left in rule and right in warn and empty(rule[left], warn[right]):
+                dead.append({"id": item["id"], "script": check.get("script"),
+                             "detail": f"assert {left} {rule[left]} leaves "
+                                       f"{right} {warn[right]} nothing to warn about "
+                                       f"on {rule['path']}"})
+        if "none_severity" in rule and "none_severity" in warn:
+            def norm(names):
+                return {SEVERITY_ALIAS.get(n.lower(), n.lower()) for n in names}
+            window = norm(rule["none_severity"]) - norm(warn["none_severity"])
+            try:
+                emits = severity_literals(check["script"], scripts_dir)
+            except (OSError, SyntaxError):
+                continue
+            if not window:
+                dead.append({"id": item["id"], "script": check["script"],
+                             "detail": "the warn rule asks for at least as much as "
+                                       "the assertion, so nothing falls between them"})
+            elif not (window & emits):
+                dead.append({"id": item["id"], "script": check["script"],
+                             "detail": f"the band is {'/'.join(sorted(window))} and "
+                                       f"{check['script']} only ever says "
+                                       f"{'/'.join(sorted(emits)) or 'nothing'}"})
+    return dead
 
 
 def proofs(registry_path: str = REGISTRY, shapes_path: str = SHAPES,
@@ -313,7 +406,8 @@ def audit(registry_path: str = REGISTRY, shapes_path: str = SHAPES,
     with open(registry_path, encoding="utf-8") as f:
         registry = json.load(f)
     proven = proofs(registry_path, shapes_path, scripts_dir)
-    findings = []
+    findings = [{"id": row["id"], "kind": "dead warn band", "detail": row["detail"]}
+                for row in dead_warn_bands(registry_path, scripts_dir)]
     for item in registry["items"]:
         declared = ((item.get("check") or {}).get("cannot_fail") or {})
         hit = proven.get(item["id"])
@@ -361,7 +455,9 @@ def main() -> int:
     a = ap.parse_args()
 
     with open(a.registry, encoding="utf-8") as f:
-        items = script_backed(json.load(f))
+        registry = json.load(f)
+    items = script_backed(registry)
+    banded = [i for i in registry["items"] if (i.get("check") or {}).get("warn")]
     proven = proofs(a.registry, a.shapes, a.scripts)
     findings = audit(a.registry, a.shapes, a.scripts)
 
@@ -374,13 +470,16 @@ def main() -> int:
           f"report FAIL, {len(findings)} disagreeing with the registry")
     print(f"the other {len(items) - len(proven)} are not claimed either way: no "
           f"detector here proves them reachable")
+    print(f"{len(banded)} warn band(s) audited for a middle verdict nothing reaches")
     for f_ in findings:
         print(f"  {f_['id']} [{f_['kind']}] {f_['detail']}", file=sys.stderr)
     if findings:
-        print("\nA rule that cannot fail reports PASS for every site. If that is the "
-              "defect it looks like, repair the rule or the script. If it is "
-              "deliberate, record it in CANNOT_FAIL in build_checklist.py with the "
-              "mechanism this tool proved and a reason a reader can check.",
+        print("\nA rule that cannot fail reports PASS for every site, and a warn band "
+              "nothing can reach promises a middle verdict the item never returns. If "
+              "that is the defect it looks like, repair the rule or the script. If an "
+              "unfailable rule is deliberate, record it in CANNOT_FAIL in "
+              "build_checklist.py with the mechanism this tool proved and a reason a "
+              "reader can check. A dead warn band is never deliberate.",
               file=sys.stderr)
     return 1 if findings else 0
 

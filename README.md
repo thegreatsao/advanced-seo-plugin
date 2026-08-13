@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.46.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.47.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -577,6 +577,21 @@ never catch, and this repository has watched one rot in exactly that spot.
 It proves rather than surveys. Of 143 script-backed assertions, two are proved
 unable to fail and the other 141 are **not claimed either way** — the summary line
 prints that count instead of implying coverage it does not have.
+
+The same tool audits the other unreachable verdict. A `warn` band fires only when
+the assertion has already failed and the warn rule then holds, so a pair with no
+room between them promises a middle nobody can reach. `CN-048` *Use Hierarchical
+Headings and Semantic HTML* carried the standard "an error-class finding fails
+this, a warning-class one only warns" pair over `parse_html.py`, which grades a
+heading skip and a missing `<main>` as errors and says nothing milder anywhere.
+Unlike an unfailable rule that is never a decision, so it has no declaration — it
+is simply an error.
+
+A band that *can* fire and never has is a different question, and the fixture suite
+asks it: eleven of the registry's twenty-seven bands have produced a WARN against a
+fixture, and any band the two fixtures exercise the item around without ever
+landing in must carry a written reason in `BAND_UNSEEN`, which a test drops the
+moment the band starts firing.
 
 ## Core Web Vitals: field and lab, never merged
 

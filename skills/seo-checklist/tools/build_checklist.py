@@ -538,9 +538,21 @@ item(44, "medium", S, "eeat_signal_checker.py", PAGE,
 item(45, "medium", M, fix="Run a content gap analysis against competitors")
 item(46, "medium", L, fix="Review copy quality and content classification")
 item(47, "medium", L, fix="Check grammar and spelling")
+# `ISSUES_ANY()` with no `warn=`, and this is the decision the note on those helpers
+# asks to be said out loud. The pair means "an error-class finding fails this, a
+# warning-class one only warns", and `parse_html.py` has no warning-class finding:
+# `_structure_issues` grades a heading skip and a missing `<main>` as `error`, and
+# the script says nothing else anywhere. The band could not fire on any page ever
+# built — `audit_reachability.py` proves it from the script's own vocabulary — so it
+# promised a middle verdict that did not exist. Removing it changes no verdict.
+#
+# The other repair is real and is not this one: grade a heading skip below a missing
+# landmark inside `_structure_issues`, which would make a band live and turn some of
+# today's FAILs into WARNs. That is a pricing decision about a `high` item, and it
+# belongs to whoever makes it rather than to the audit that found the dead band.
 item(48, "high", S, "parse_html.py", HTMLARG,
      ISSUES_ANY(),
-     "Use hierarchical headings and semantic HTML", warn=NOTHING_SERIOUS())
+     "Use hierarchical headings and semantic HTML")
 item(49, "medium", L, fix="Target topics and queries, not isolated keywords")
 item(50, "high", L, fix="Follow Google Search Essentials - quality and spam policies")
 # mobile_render_checker.py reports viewport, fixed widths and sticky positioning.

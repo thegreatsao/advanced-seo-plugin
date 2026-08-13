@@ -10,6 +10,63 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.47.0 — the other unreachable verdict, and a warn band that could not fire
+
+A `warn` band fires only when the assertion has already failed *and* the warn rule then
+holds (`checklist_runner.py:1228`). A pair with no room between the two therefore
+promises a middle verdict the item never returns, and the registry has been carrying one.
+
+**`CN-048` *Use Hierarchical Headings and Semantic HTML*.** It used the standard
+`ISSUES_ANY()` with `NOTHING_SERIOUS()` — "an error-class finding fails this, a
+warning-class one only warns" — over `parse_html.py`, whose `_structure_issues` grades a
+heading skip and a missing `<main>` as `error` and which says nothing milder anywhere in
+the file. The band could not fire on any page ever built. The item now carries
+`ISSUES_ANY()` alone, which is the decision the note on those helpers asks to be said out
+loud, and **no verdict changes**: the band never fired, so nothing was ever decided by
+it. The other repair — grading a heading skip below a missing landmark, which would make
+a band live and turn some of today's FAILs into WARNs — is a pricing decision about a
+`high` item and is deliberately not taken here.
+
+`audit_reachability.py` grew the detector that found it. Two shapes are decidable without
+knowing anything about a site: a numeric band on the wrong side of its own assertion, and
+a severity window over a script whose vocabulary has nothing to put in it. Bands over a
+*different* field than the assertion — `CI-014` warns on `total_hops` while asserting
+`has_loop` — are two measurements, and whether they can disagree is a question about the
+script, so they are not claimed. Unlike an unfailable rule a dead band is never
+deliberate: there is no declaration for it and no vocabulary to write one. The registry
+is `afb4cb3d88dd`, still 215 items, and the oracle is unchanged at 53 declared, 108
+declarations, 98 matched, 0 disagreed, 42 opposed.
+
+**A band that can fire and never has is a different question**, and it was being counted
+wrong. The oracle's coverage line counts items, not states, so an item declared and
+matched on both sides reads as covered while its WARN has never happened. Measured
+against a real fixture run rather than against the declarations: **eleven of the
+twenty-seven bands produce a WARN**, not the three the declarations suggested. Of the
+rest, six are an API or a Search Console property no loopback fixture can be, three need
+an input or a video the fixtures do not have, five sit on items `SAME_ON_BOTH` already
+explains — and two, `CI-018` and `MS-032`, are exercised by the fixtures and passed
+straight by. Those two now carry a written reason in `BAND_UNSEEN` with the numbers
+behind it — `MS-032`: good is 0 errors and 2 warnings, broken is 3 and 5, and the band
+wants an error with at most three warnings — and the twin of
+`test_no_exemption_outlives_the_reason_for_it` drops an entry the day its band starts
+firing.
+
+**Two defects in 0.46.0's own gate, both found by handing the tool and its tests to a
+reviewer with no other context.** `prove_warn_complement` read one pair of operators and
+ignored the rest of the rule, so `gte 90` with `lte 100`, warned by `lt 90`, was called
+unfailable while everything over 100 fails both — a false claim, and the worst kind here,
+because the repair for one is a written declaration that the other must never receive.
+Both rules must now be a single comparison. And `guarded_by_assertion` compared two
+expressions by shape, so `if obj.pop(): result["k"] = obj.pop()` would have matched; a
+call anywhere in the compared expression now ends the proof, which costs nothing because
+the shape it exists for is a bare name.
+
+The same review found the two tests guarding the mutation check green for the wrong
+reason: their fixtures were refused earlier, at the guard comparison, so both would have
+passed with `changed_outside_the_scan` deleted. They now use sources that are otherwise
+provable — a third test asserts exactly that — so the mutation check is the only thing
+that can be refusing.
+
 ## 0.46.0 — a ninth gate, on rules that cannot fail
 
 `KW-076` *Use the Primary Keyword in Body Copy* asserted `target_keyword` truthy while

@@ -148,7 +148,7 @@ def emittable_strings(script: str) -> list[str]:
             and id(n) not in documentation]
 
 
-def severity_literals(script: str) -> set[str]:
+def severity_literals(script: str, scripts_dir: str = SCRIPTS) -> set[str]:
     """The severity values a script can actually put in an issues[] entry.
 
     Read from the AST rather than by regex, because the two ways this codebase
@@ -158,7 +158,7 @@ def severity_literals(script: str) -> set[str]:
     that cannot fire — the same mistake that let fifteen dead patterns through the
     first version of this tool.
     """
-    with open(os.path.join(SCRIPTS, script), encoding="utf-8") as f:
+    with open(os.path.join(scripts_dir, script), encoding="utf-8") as f:
         tree = ast.parse(f.read())
     out: set[str] = set()
     for node in ast.walk(tree):

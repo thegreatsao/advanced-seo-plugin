@@ -169,27 +169,71 @@ class TheDetectorsRefuseWhatTheyCannotSee(unittest.TestCase):
                     "    return result\n")
         self.assertEqual(tree.proved(), {})
 
-    def test_a_counter_started_at_a_passing_value_is_not_a_constant(self):
-        """`unminified_count` is initialised to 0 and counted up with `+=`; the site
-        scan sees the initialiser and not the increment, so it stands down."""
+    # Both sources below are guarded-by-their-own-value, so `guarded_by_assertion`
+    # would fire on each if the mutation check did not stand in the way. An earlier
+    # pair of these tests used sources whose guard did not match their value: they
+    # passed at the guard comparison and would have passed with the mutation check
+    # deleted, which is the failure they exist to prevent, one level up. Found by a
+    # review that was handed the two files and nothing else.
+
+    COUNTED_UP = ("def main():\n"
+                  "    result = {}\n"
+                  "    value = 0\n"
+                  "    if value:\n"
+                  "        result['value'] = value\n"
+                  "    result['value'] += 1\n"
+                  "    return result\n")
+    FILLED_LATER = ("def main():\n"
+                    "    result = {}\n"
+                    "    value = []\n"
+                    "    if value:\n"
+                    "        result['value'] = value\n"
+                    "    result['value'].append(1)\n"
+                    "    return result\n")
+
+    def scan_sees_the_change(self, source):
+        tree = Tree(a_registry({"path": "value", "truthy": True}), source)
+        self.assertTrue(R.changed_outside_the_scan("probe.py", "value", tree.scripts),
+                        "the mutation check must be what refuses here")
+        self.assertEqual(tree.proved(), {})
+
+    def test_a_counter_raised_after_a_guarded_write_is_not_proved(self):
+        """`unminified_count` is written once and counted up with `+=`; the site scan
+        sees the write and not the increment, so it stands down."""
+        self.scan_sees_the_change(self.COUNTED_UP)
+
+    def test_a_container_filled_after_a_guarded_write_is_not_proved(self):
+        """`duplicates` is written once and appended to later."""
+        self.scan_sees_the_change(self.FILLED_LATER)
+
+    def test_those_two_sources_are_otherwise_provable(self):
+        """Without the later change, each of them *is* the KW-076 shape. If this
+        fails, the two tests above are green for a reason that is not the one they
+        name."""
+        for source in (self.COUNTED_UP, self.FILLED_LATER):
+            trimmed = "".join(line for line in source.splitlines(keepends=True)
+                              if "+=" not in line and ".append(" not in line)
+            tree = Tree(a_registry({"path": "value", "truthy": True}), trimmed)
+            self.assertEqual(tree.proved()["ZZ-001"]["mechanism"],
+                             "guarded_by_assertion")
+
+    def test_a_repeated_call_is_not_a_repeated_value(self):
+        """`if obj.pop(): result['k'] = obj.pop()` dumps identically and reads two
+        different things, so an equal shape is not an equal value."""
         tree = Tree(a_registry({"path": "value", "truthy": True}),
-                    "def main():\n"
-                    "    result = {'value': 0}\n"
-                    "    for x in things():\n"
-                    "        if x:\n"
-                    "            result['value'] += 1\n"
+                    "def main(obj):\n"
+                    "    result = {}\n"
+                    "    if obj.pop():\n"
+                    "        result['value'] = obj.pop()\n"
                     "    return result\n")
         self.assertEqual(tree.proved(), {})
 
-    def test_a_container_filled_later_is_not_a_constant(self):
-        """`duplicates` is `[]` at line 46 and appended to at 73."""
-        tree = Tree(a_registry({"path": "value", "truthy": True}),
-                    "def main():\n"
-                    "    result = {}\n"
-                    "    if found():\n"
-                    "        result['value'] = []\n"
-                    "    result['value'].append(1)\n"
-                    "    return result\n")
+    def test_a_two_sided_assertion_is_not_complemented_by_one_band(self):
+        """`gte 90` with `lte 100`, warned by `lt 90`, leaves everything over 100
+        failing both rules. Reading only the gte/lt pair called that unfailable."""
+        tree = Tree(a_registry({"path": "value", "gte": 90, "lte": 100},
+                               warn={"path": "value", "lt": 90}),
+                    "def main():\n    return {'value': measure()}\n")
         self.assertEqual(tree.proved(), {})
 
     def test_a_field_the_probe_has_seen_is_never_called_unwritten(self):
@@ -207,6 +251,77 @@ class TheDetectorsRefuseWhatTheyCannotSee(unittest.TestCase):
                     "    out.update({k: 1 for k in ['absent']})\n"
                     "    return out\n")
         self.assertEqual(tree.proved(), {})
+
+
+class AWarnBandNothingCanReach(unittest.TestCase):
+    """A band fires only when the assertion has already failed and the warn rule
+    then holds (`checklist_runner.py:1228`), so a pair with no room between them
+    promises a middle verdict the item never returns.
+
+    `CN-048` *Use Hierarchical Headings and Semantic HTML* carried the standard
+    `ISSUES_ANY()`/`NOTHING_SERIOUS()` pair — "an error-class finding fails this, a
+    warning-class one only warns" — over `parse_html.py`, which grades a heading
+    skip and a missing `<main>` as `error` and says nothing milder anywhere. Run
+    against the registry as shipped in 0.46.0 the detector names it; 0.47.0 removed
+    the band. Unlike an unfailable rule this is never deliberate, so there is
+    nothing to declare and no vocabulary for declaring it.
+    """
+
+    ONLY_ERRORS = ("from seo_common import issue\n"
+                   "def main():\n"
+                   "    return {'issues': [issue('error', 'a markup defect')]}\n")
+    ALSO_WARNS = ("from seo_common import issue\n"
+                  "def main():\n"
+                  "    return {'issues': [issue('error', 'a markup defect'),\n"
+                  "                       issue('warning', 'a milder one')]}\n")
+    WINDOW = {"path": "issues", "none_severity": ["critical", "high", "medium"]}
+    BAND = {"path": "issues", "none_severity": ["critical", "high"]}
+
+    def bands(self, rule, warn, source):
+        tree = Tree(a_registry(rule, warn=warn), source)
+        return R.dead_warn_bands(tree.registry, tree.scripts)
+
+    def test_a_severity_window_over_a_script_that_cannot_speak_in_it(self):
+        dead = self.bands(self.WINDOW, self.BAND, self.ONLY_ERRORS)
+        self.assertEqual([d["id"] for d in dead], ["ZZ-001"])
+        self.assertIn("only ever says high", dead[0]["detail"])
+
+    def test_the_same_window_over_a_script_that_can(self):
+        self.assertEqual(self.bands(self.WINDOW, self.BAND, self.ALSO_WARNS), [])
+
+    def test_a_band_asking_for_at_least_as_much_as_the_assertion(self):
+        dead = self.bands(self.BAND, self.WINDOW, self.ALSO_WARNS)
+        self.assertEqual([d["id"] for d in dead], ["ZZ-001"])
+
+    def test_a_numeric_band_on_the_wrong_side_of_its_assertion(self):
+        """`lte 5` fails above 5, and `lte 3` cannot hold there."""
+        dead = self.bands({"path": "n", "lte": 5}, {"path": "n", "lte": 3},
+                          "def main():\n    return {'n': count()}\n")
+        self.assertEqual([d["id"] for d in dead], ["ZZ-001"])
+
+    def test_a_numeric_band_beyond_its_assertion_is_live(self):
+        """BL-084's real shape: `lte 50` failing, `lte 65` warning, so 51 to 65
+        warns."""
+        self.assertEqual(self.bands({"path": "n", "lte": 50}, {"path": "n", "lte": 65},
+                                    "def main():\n    return {'n': count()}\n"), [])
+
+    def test_a_complement_band_is_live_and_is_the_other_tool_s_business(self):
+        """TE-179: `gte 90` with `warn lt 90`. The band catches everything below the
+        threshold, so WARN is reachable — what is unreachable there is FAIL."""
+        self.assertEqual(self.bands({"path": "n", "gte": 90}, {"path": "n", "lt": 90},
+                                    "def main():\n    return {'n': age()}\n"), [])
+
+    def test_a_band_over_another_field_is_not_claimed(self):
+        """CI-014 warns on `total_hops` while asserting `has_loop`, and MS-032 warns
+        on `summary.warnings` while asserting `summary.errors`. Whether two
+        measurements can disagree is a question about the script."""
+        self.assertEqual(self.bands({"path": "errors", "eq": 0},
+                                    {"path": "warnings", "lte": 3},
+                                    "def main():\n    return {'errors': e()}\n"), [])
+
+    def test_the_shipped_registry_has_none(self):
+        dead = R.dead_warn_bands(REGISTRY)
+        self.assertEqual(dead, [], "; ".join(f"{d['id']} {d['detail']}" for d in dead))
 
 
 class ADeclarationCannotOutliveItsReason(unittest.TestCase):

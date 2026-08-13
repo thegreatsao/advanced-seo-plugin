@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "5b74045594e4",
+  "registry_version": "afb4cb3d88dd",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -1134,13 +1134,6 @@
             "critical",
             "high",
             "medium"
-          ]
-        },
-        "warn": {
-          "path": "issues",
-          "none_severity": [
-            "critical",
-            "high"
           ]
         }
       },
