@@ -10,6 +10,66 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.46.0 — a ninth gate, on rules that cannot fail
+
+`KW-076` *Use the Primary Keyword in Body Copy* asserted `target_keyword` truthy while
+`article_seo.py` wrote that field only when it already held something. The rule ran on
+every audit, read a real field, and could return PASS or `NO_DATA` and nothing else —
+on every site, for years. 0.45.0 repaired the item. Nothing repaired the class: the
+eight gates cover patterns that match nothing, severities no script emits and paths no
+probe has seen, and this rule was none of those. It read a field that existed, with an
+operator that worked, and the answer was settled before the site was.
+
+`tools/audit_reachability.py` is the ninth gate. It proves, from the answering script's
+own source, that a rule cannot report FAIL, under three mechanisms: `warn_complement`
+(the warn band is the assertion's exact complement), `path_never_emitted` (no code
+writes the field, and no probe has seen it), and `guarded_by_assertion` (the field is
+written only under a test that is the value itself — KW-076 verbatim). Run against
+`v0.44.0`'s registry and scripts it names `article_seo.py:705`, which is where the
+defect was.
+
+**Some rules cannot fail on purpose, and the code cannot say which.** `TE-179`'s warn
+band covers the number line below its threshold because a young domain is worth pricing
+rather than fixing; `TE-178` asserts a field `domain_safety_check.py` deliberately never
+fabricates, wanting a reverse-IP service this project does not buy. In the source those
+are indistinguishable from KW-076 — in all three the field is absent, or safe, exactly
+when the answer would have been bad. So intent is declared beside the rule, in
+`CANNOT_FAIL` in `build_checklist.py`, and lands on the item as `check.cannot_fail`
+with a mechanism and a reason. The registry is `5b74045594e4`, still 215 items; those
+two declarations are the only change to the contract and neither item is
+fixture-decidable, so the oracle is untouched at 53 declared, 108 declarations, 98
+matched, 0 disagreed, 42 opposed.
+
+**Why that is not another exemption list.** The tool holds no item ids. The declaration
+is checked in three directions: proved and undeclared fails the build, declared and no
+longer provable fails the build, and — the one an exemption list can never catch —
+declared under a different mechanism than the one proved fails the build. An exemption
+list rots because it is only ever read; this one is re-derived on every run, and the
+prose is anchored to a token the code has to keep earning.
+
+This repository had one rotting in exactly that spot. `audit_assertions.PATH_EXEMPT`
+carried `neighbors.suspicious` as "needs a Safe Browsing key" from 0.42, and that was
+never true — no credential produces that field, because nothing writes it. The entry
+described the symptom correctly and the cause wrongly for three releases while reading
+as true. It is now a `cannot_fail` declaration on TE-178, and a test asserts that every
+path still in `PATH_EXEMPT` is one its script demonstrably writes.
+
+**A fourth detector was written and removed before it shipped.** It claimed a rule could
+not fail when every write of its field was a literal that passed, and on its first run
+it reported `SE-115`, `GO-132`, `TE-174` and `TE-175` — four items, four different
+mistakes: a counter initialised to `0` and raised with `+=`, a list initialised to `[]`
+and filled with `.append`, a dict initialised to `{}` and written into by subscript, and
+a path whose last segment matched a static table of header descriptions having nothing
+to do with the field asserted. All four have a declared FAIL in the fixture oracle that
+a real run matched, so the registry was right and the detector was wrong four times out
+of four. The oracle check that caught it is now a permanent test, two of that
+detector's blind spots became explicit refusals, and `guarded_by_assertion` stands down
+on any field changed in a way its scan cannot follow.
+
+The gate proves rather than surveys, and says so: 143 script-backed assertions, 2 proved
+unable to fail, and **141 not claimed either way**. That number prints on every run,
+because a green gate here must not read as "every rule can fail".
+
 ## 0.45.0 — four items measure the document they name, and a page is read in the charset it declares
 
 CI-017 and TE-181 were the same *Validate HTML (W3C)* check twice: both asked Nu to

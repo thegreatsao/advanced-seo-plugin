@@ -342,6 +342,13 @@ rather than a repair, which is why it is last.
 > `low` point rather than a FAIL worth all of it, while an absent whois age remains
 > `NO_DATA` and FAIL is unreachable by construction.
 >
+> **0.46.0 made that last clause checkable.** "Unreachable by construction" was prose
+> here and nowhere a tool could read; it is now `check.cannot_fail` on the item, naming
+> the `warn_complement` mechanism, and `tools/audit_reachability.py` re-derives that
+> mechanism from the registry on every run. If the warn band ever stops complementing
+> the assertion, the declaration stops being provable and the build fails — which is
+> the difference between a decision and a sentence about one.
+>
 > The fact not on the table in 0.21.0 is coverage. SE-114, SE-116 and TE-171 assert the
 > reputation half three times over, while no other item among the 215 asserts domain
 > history. TE-179 now supplies that missing half without claiming age *is* reputation.

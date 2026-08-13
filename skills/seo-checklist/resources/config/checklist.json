@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "715c6bb46461",
+  "registry_version": "5b74045594e4",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -3711,6 +3711,10 @@
         "assert": {
           "path": "neighbors.suspicious",
           "len_eq": 0
+        },
+        "cannot_fail": {
+          "mechanism": "path_never_emitted",
+          "why": "check_neighbors() resolves the hosting IP and stops there. Judging the neighbours needs a paid reverse-IP service this project does not buy, and a fabricated `suspicious` would be worse than no answer, so the field is deliberately never written and the item is NO_DATA everywhere until that input exists."
         }
       },
       "effort": "low",
@@ -3737,6 +3741,10 @@
         "warn": {
           "path": "whois.age_days",
           "lt": 90
+        },
+        "cannot_fail": {
+          "mechanism": "warn_complement",
+          "why": "0.44.0 gave this item the domain-history half of its title through whois age: established passes, younger than 90 days warns, an absent age is NO_DATA. The warn band is the assertion's exact complement on purpose — a young domain is worth pricing, not a defect to fix — and the ruling that no 'worth knowing' status exists still stands. ROADMAP.md records the reasoning."
         }
       },
       "effort": "low",

@@ -47,10 +47,18 @@ from checklist_runner import SEVERITY_ALIAS  # noqa: E402
 # Asserted paths that are absent from the probed output on purpose, because the
 # probe ran without the credential that produces them. Each one reports NO_DATA
 # without its key, which is the documented state — not a silent pass.
+#
+# `neighbors.suspicious` sat here until 0.46.0 under "needs a Safe Browsing key",
+# and that was never true: `check_neighbors()` wants a paid reverse-IP service and
+# has never had one, so the field is not withheld for want of a credential — no
+# code writes it at all. The entry was right about the symptom for three releases
+# and wrong about the cause, which is what an exemption list does when it is only
+# ever read. It is now a `cannot_fail` declaration on the item, where
+# `audit_reachability.py` re-derives the mechanism from the source every run.
+# Everything left here must be a path its script demonstrably writes.
 PATH_EXEMPT = {
     ("domain_safety_check.py", "safe_browsing.threats"): "needs a Safe Browsing key",
     ("domain_safety_check.py", "safe_browsing.clean"): "needs a Safe Browsing key",
-    ("domain_safety_check.py", "neighbors.suspicious"): "needs a Safe Browsing key",
     ("indexnow_checker.py", "key_valid"): "needs an IndexNow key",
 }
 
@@ -244,6 +252,22 @@ def probed_paths(shapes_path: str = SHAPES) -> dict[str, set[str]]:
     return shapes
 
 
+def path_is_probed(path: str, known: set[str]) -> bool:
+    """Has any probe of the script reported this field path?
+
+    A function rather than four lines inside the loop below because
+    `audit_reachability.py` asks the same question — a field no probe has seen is
+    half of its proof that a rule can never fail — and two copies of this matching
+    would drift apart while both tools reported green.
+    """
+    # A list index in a rule is a position in an array the probe documents once.
+    norm = re.sub(r"\.\d+(?=\.|$)", "[]", path)
+    stem = norm.rstrip("[]")
+    return any(norm == k or k.startswith(norm + ".") or k == norm + "[]"
+               or k.rstrip("[]") == stem or norm.startswith(k.rstrip("[]") + ".")
+               for k in known)
+
+
 def audit_paths(registry_path: str = REGISTRY,
                 shapes_path: str = SHAPES) -> list[dict]:
     """Every assertion reading a field no probe of its script has ever seen.
@@ -266,17 +290,18 @@ def audit_paths(registry_path: str = REGISTRY,
             continue
         if (script, path) in PATH_EXEMPT:
             continue
+        # A field the script has no code to write is a stronger statement than a
+        # field this probe did not see, and `audit_reachability.py` proves it from
+        # the source. That claim is declared on the item, checked in both
+        # directions there, and would only rot a second time if restated here.
+        if (chk.get("cannot_fail") or {}).get("mechanism") == "path_never_emitted":
+            continue
         known = shapes.get(script)
         if known is None:
             missing.append({"id": item["id"], "script": script, "path": path,
                             "reason": "script has no section in the shapes reference"})
             continue
-        # A list index in a rule is a position in an array the probe documents once.
-        norm = re.sub(r"\.\d+(?=\.|$)", "[]", path)
-        stem = norm.rstrip("[]")
-        if not any(norm == k or k.startswith(norm + ".") or k == norm + "[]"
-                   or k.rstrip("[]") == stem or norm.startswith(k.rstrip("[]") + ".")
-                   for k in known):
+        if not path_is_probed(path, known):
             missing.append({"id": item["id"], "script": script, "path": path,
                             "reason": "not in the probed output"})
     return missing

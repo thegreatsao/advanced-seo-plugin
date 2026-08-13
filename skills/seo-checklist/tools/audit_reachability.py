@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+"""Find registry rules that cannot report FAIL, and make the deliberate ones say so.
+
+`KW-076` *Use the Primary Keyword in Body Copy* asserted `target_keyword` truthy, and
+`article_seo.py` wrote that field only when it already held something:
+
+    if target_kw:
+        result["target_keyword"] = target_kw
+
+So the value the rule read was true whenever it existed and absent otherwise. The item
+reported PASS or NO_DATA on every site ever audited, for years, and no gate saw it —
+`audit_assertions.py` audits patterns, severities and unseen paths, none of which this
+is. A rule that cannot fail is a rule that cannot find the defect its title names.
+
+Some rules cannot fail **on purpose**. `TE-179` grades domain age with a warn band that
+is the assertion's exact complement, so an established domain passes, a younger one
+warns, and there is no third value. `TE-178` asserts a field its script deliberately
+never fabricates. Both are decisions, and the difference between them and `KW-076` is
+not in the code: in all three the field is absent, or safe, exactly when the answer
+would have been bad. **The code cannot tell you which were meant.**
+
+So intent is declared, in the registry, beside the rule — `check.cannot_fail`, from the
+`CANNOT_FAIL` table in `build_checklist.py`. This tool holds no item ids at all. What it
+does hold is the machinery to re-derive, from the script's own source, *why* a rule
+cannot fail, and it checks the declaration in three directions:
+
+  * proven unreachable and undeclared — the `KW-076` class, and the reason this exists;
+  * declared and no longer provable — the declaration outlived its reason, the failure
+    `test_no_exemption_outlives_the_reason_for_it` catches for `SAME_ON_BOTH`;
+  * declared under one mechanism, provable only under another — the rule still cannot
+    fail, but not for the recorded reason. This is how an exemption list rots while
+    every entry in it still looks true: `audit_assertions.PATH_EXEMPT` carried
+    "needs a Safe Browsing key" against a field whose script wants a paid reverse-IP
+    service and has never had one.
+
+An exclusion list rots because it is only ever read. This one is derived again on every
+run, and the prose is anchored to a token the code has to keep earning.
+
+**What it does not claim.** Three detectors, each proving unreachability from a shape
+this registry has actually held. Silence about an item is not a finding that it can
+fail; it is the absence of a proof either way, and the summary line prints that count
+rather than implying coverage it does not have.
+
+A fourth was written and removed before it shipped, and the reason is worth keeping. It
+claimed a rule could not fail when every write of its field was a literal that passed.
+On its first run it reported four items, and all four were wrong in four different ways:
+`unminified_count` is initialised to `0` and counted up with `+=`, which the site scan
+does not model; `duplicates` is initialised to `[]` and filled with `.append`;
+`headers_missing` is initialised to `{}` and written *into* by subscript; and
+`strict-transport-security` is a key of a static table of header descriptions and has
+nothing to do with `header_values`, because the scan matched the last segment of the
+path and ignored its parent. Every one of those four has a declared FAIL in the fixture
+oracle that a real run matched, so the registry was right and the detector was wrong
+four times out of four. Asking "is the emitted value always this literal" needs
+dataflow this does not have; the surviving three ask questions answerable from shape
+alone. `test_reachability.py` keeps the oracle check that caught it.
+
+    python3 tools/audit_reachability.py            # report, exit 1 on any mismatch
+    python3 tools/audit_reachability.py --verbose  # show every proof, declared or not
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SKILL_DIR = os.path.dirname(HERE)
+SCRIPTS = os.path.join(SKILL_DIR, "scripts")
+REGISTRY = os.path.join(SKILL_DIR, "resources", "config", "checklist.json")
+SHAPES = os.path.join(SKILL_DIR, "resources", "references",
+                      "script-output-shapes.md")
+
+sys.path.insert(0, HERE)
+# Imported rather than restated. A second copy of "is this path one the probe has
+# seen" would drift from the one the path audit uses, and then the two tools would
+# disagree about the same field while both reported green.
+from audit_assertions import path_is_probed, probed_paths  # noqa: E402
+
+# Every mechanism this tool can prove. A declaration naming anything else is an
+# error rather than an exemption: the vocabulary is closed so that "why" cannot
+# quietly become a free-text field nobody checks.
+MECHANISMS = ("warn_complement", "path_never_emitted", "guarded_by_assertion")
+
+# Complementary comparison pairs. `gte 90` with `warn lt 90` covers the number line,
+# so no value is left for FAIL.
+COMPLEMENTS = (("gte", "lt"), ("gt", "lte"), ("lte", "gt"), ("lt", "gte"))
+
+
+def script_backed(registry: dict) -> list[dict]:
+    """Items answered by a script, with an assertion to be reached."""
+    out = []
+    for item in registry["items"]:
+        check = item.get("check") or {}
+        if check.get("script") and isinstance(check.get("assert"), dict):
+            out.append(item)
+    return out
+
+
+# --- reading what a script can write ----------------------------------------
+
+class _Sites(ast.NodeVisitor):
+    """Every place a script writes a given output key, with the tests guarding it.
+
+    Three spellings are in use across these scripts and all three matter:
+    `{"in_body": ...}` in a dict literal, `result["target_keyword"] = ...` by
+    subscript, and `results.setdefault("x", ...)`. A tool that saw only the first
+    would have cleared `KW-076`, which was written in the second.
+    """
+
+    def __init__(self, key: str):
+        self.key = key
+        self.sites: list[tuple[ast.AST, list[ast.AST], int]] = []
+        self.guards: list[ast.AST] = []
+
+    def visit_If(self, node: ast.If) -> None:
+        self.guards.append(node.test)
+        for child in node.body:
+            self.visit(child)
+        self.guards.pop()
+        # An `else` branch runs when the test is false, so the test does not
+        # guarantee anything about what is written there.
+        for child in node.orelse:
+            self.visit(child)
+
+    def _record(self, value: ast.AST, lineno: int) -> None:
+        self.sites.append((value, list(self.guards), lineno))
+
+    def visit_Dict(self, node: ast.Dict) -> None:
+        # `**expansion` puts a None in `keys`, which the isinstance below rejects;
+        # the two lists are the same length either way.
+        for key, value in zip(node.keys, node.values, strict=True):
+            if isinstance(key, ast.Constant) and key.value == self.key:
+                self._record(value, getattr(value, "lineno", node.lineno))
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        for target in node.targets:
+            if (isinstance(target, ast.Subscript)
+                    and isinstance(target.slice, ast.Constant)
+                    and target.slice.value == self.key):
+                self._record(node.value, node.lineno)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (getattr(node.func, "attr", None) == "setdefault" and len(node.args) == 2
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == self.key):
+            self._record(node.args[1], node.lineno)
+        self.generic_visit(node)
+
+
+def tree_of(script: str, scripts_dir: str = SCRIPTS) -> ast.Module:
+    with open(os.path.join(scripts_dir, script), encoding="utf-8") as f:
+        return ast.parse(f.read())
+
+
+def producing_sites(script: str, key: str, scripts_dir: str = SCRIPTS
+                    ) -> list[tuple[ast.AST, list[ast.AST], int]]:
+    """Where `key` is written, and what `if` tests were true to get there."""
+    finder = _Sites(key)
+    finder.visit(tree_of(script, scripts_dir))
+    return finder.sites
+
+
+def mentions_key(script: str, key: str, scripts_dir: str = SCRIPTS) -> bool:
+    """Does the key appear anywhere in the script as a string at all?
+
+    Deliberately looser than `producing_sites`: a key written through a helper, a
+    dict comprehension or a `**` merge would be missed by the structured search,
+    and claiming a field is never emitted when it is would be the worst mistake
+    this tool can make. Used only to refuse a claim, never to support one.
+    """
+    return any(isinstance(node, ast.Constant) and node.value == key
+               for node in ast.walk(tree_of(script, scripts_dir)))
+
+
+def changed_outside_the_scan(script: str, key: str,
+                             scripts_dir: str = SCRIPTS) -> bool:
+    """Is the field altered in a way `producing_sites` cannot see?
+
+    `result["n"] += 1`, `result["found"].append(...)` and
+    `result["missing"][label] = ...` all change what the rule will read while
+    leaving the write the scan found — usually an empty initialiser — looking like
+    the whole story. Three of the four false positives that retired the
+    `constant_value` detector were exactly these. A proof about the value must
+    stand down when the value moves somewhere it cannot follow.
+    """
+    def names_key(node) -> bool:
+        return (isinstance(node, ast.Subscript)
+                and isinstance(node.slice, ast.Constant) and node.slice.value == key)
+
+    for node in ast.walk(tree_of(script, scripts_dir)):
+        if isinstance(node, ast.AugAssign) and names_key(node.target):
+            return True
+        # A write into the container: `d[key][...] = ...`
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Subscript) and names_key(target.value):
+                    return True
+        # A mutating method on the container: `d[key].append(...)`
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and names_key(node.func.value)):
+            return True
+    return False
+
+
+# --- the four proofs --------------------------------------------------------
+
+def prove_warn_complement(item: dict) -> dict | None:
+    """The warn band is the assertion's exact complement, so nothing is left to fail."""
+    check = item["check"]
+    rule, warn = check["assert"], check.get("warn")
+    if not isinstance(warn, dict) or rule.get("path") != warn.get("path"):
+        return None
+    for left, right in COMPLEMENTS:
+        if left in rule and right in warn and rule[left] == warn[right]:
+            return {"mechanism": "warn_complement",
+                    "evidence": f"assert {left} {rule[left]} / warn {right} "
+                                f"{warn[right]} on {rule['path']}"}
+    return None
+
+
+def prove_path_never_emitted(item: dict, shapes: dict,
+                             scripts_dir: str = SCRIPTS) -> dict | None:
+    """No run of the script writes the field, so every verdict is NO_DATA.
+
+    Two independent sources have to agree: the machine-probed shapes reference has
+    never seen the path, **and** the key appears nowhere in the script's source.
+    One alone is not enough in either direction — a probe run without a credential
+    is missing fields the script writes perfectly well, which is why
+    `safe_browsing.threats` is not this and must not be reported as this.
+    """
+    check = item["check"]
+    script, path = check["script"], check["assert"].get("path")
+    if not path:
+        return None
+    known = shapes.get(script)
+    if known is None or path_is_probed(path, known):
+        return None
+    key = path.split(".")[-1]
+    if mentions_key(script, key, scripts_dir):
+        return None
+    return {"mechanism": "path_never_emitted",
+            "evidence": f"{script} never writes {key!r}, and no probe of it has "
+                        f"reported {path!r}"}
+
+
+def prove_guarded_by_assertion(item: dict, scripts_dir: str = SCRIPTS) -> dict | None:
+    """The field is written only under a test that is the assertion itself.
+
+    `if target_kw: result["target_keyword"] = target_kw` against `truthy` — the
+    value is emitted exactly when it would pass and withheld exactly when it would
+    fail. Narrow on purpose: the guard has to be the same expression as the value,
+    so `if args.keyword is not None:` around `"in_body": occurrences > 0` — a guard
+    about whether the input arrived, wrapping a value that can still be False — is
+    not this, and is the shape KW-076 was repaired into.
+
+    Only single-segment paths. The scan matches a key by name, and a dotted path's
+    last segment can belong to a different dict entirely — `header_values.
+    strict-transport-security` matched a static table of header descriptions, which
+    is how the retired fourth detector produced its fourth wrong answer.
+    """
+    rule = item["check"]["assert"]
+    path = rule.get("path")
+    if not path or "." in path:
+        return None
+    if set(rule) - {"path"} != {"truthy"} or rule["truthy"] is not True:
+        return None
+    if changed_outside_the_scan(item["check"]["script"], path, scripts_dir):
+        return None
+    sites = producing_sites(item["check"]["script"], path, scripts_dir)
+    if not sites:
+        return None
+    for value, guards, _line in sites:
+        shape = ast.dump(value)
+        if not any(ast.dump(test) == shape for test in guards):
+            return None
+    return {"mechanism": "guarded_by_assertion",
+            "evidence": f"{item['check']['script']} writes {path!r} only under a "
+                        f"test that is the value itself, at line(s) "
+                        f"{', '.join(str(s[2]) for s in sites)}"}
+
+
+def proofs(registry_path: str = REGISTRY, shapes_path: str = SHAPES,
+           scripts_dir: str = SCRIPTS) -> dict[str, dict]:
+    """Every item this tool can prove unable to report FAIL, by item id."""
+    with open(registry_path, encoding="utf-8") as f:
+        registry = json.load(f)
+    shapes = probed_paths(shapes_path)
+    found = {}
+    for item in script_backed(registry):
+        for prove in (lambda i: prove_warn_complement(i),
+                      lambda i: prove_path_never_emitted(i, shapes, scripts_dir),
+                      lambda i: prove_guarded_by_assertion(i, scripts_dir)):
+            try:
+                hit = prove(item)
+            except (OSError, SyntaxError) as exc:
+                hit = {"mechanism": "unreadable", "evidence": str(exc)}
+            if hit:
+                found[item["id"]] = dict(hit, id=item["id"],
+                                         script=item["check"]["script"],
+                                         path=item["check"]["assert"].get("path"))
+                break
+    return found
+
+
+def audit(registry_path: str = REGISTRY, shapes_path: str = SHAPES,
+          scripts_dir: str = SCRIPTS) -> list[dict]:
+    """Every disagreement between what the code proves and what the registry says."""
+    with open(registry_path, encoding="utf-8") as f:
+        registry = json.load(f)
+    proven = proofs(registry_path, shapes_path, scripts_dir)
+    findings = []
+    for item in registry["items"]:
+        declared = ((item.get("check") or {}).get("cannot_fail") or {})
+        hit = proven.get(item["id"])
+        if declared and not isinstance(declared, dict):
+            findings.append({"id": item["id"], "kind": "malformed",
+                             "detail": "cannot_fail must be an object with a "
+                                       "mechanism and a why"})
+            continue
+        if declared and declared.get("mechanism") not in MECHANISMS:
+            findings.append({"id": item["id"], "kind": "unknown mechanism",
+                             "detail": f"{declared.get('mechanism')!r} is not one of "
+                                       f"{', '.join(MECHANISMS)}"})
+            continue
+        if declared and not (declared.get("why") or "").strip():
+            findings.append({"id": item["id"], "kind": "unexplained",
+                             "detail": "a declaration without a reason is an "
+                                       "exemption, not a decision"})
+            continue
+        if hit and not declared:
+            findings.append({"id": item["id"], "kind": "undeclared",
+                             "detail": f"{hit['mechanism']}: {hit['evidence']}"})
+        elif declared and not hit:
+            findings.append({"id": item["id"], "kind": "stale",
+                             "detail": f"declared {declared['mechanism']}, and "
+                                       f"nothing proves this rule cannot fail any "
+                                       f"more — drop the declaration"})
+        elif hit and declared and hit["mechanism"] != declared["mechanism"]:
+            findings.append({"id": item["id"], "kind": "wrong mechanism",
+                             "detail": f"declared {declared['mechanism']}, proved "
+                                       f"{hit['mechanism']}: {hit['evidence']}"})
+    return findings
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--registry", default=REGISTRY)
+    ap.add_argument("--shapes", default=SHAPES)
+    ap.add_argument("--scripts", default=SCRIPTS,
+                    help="read the answering scripts from here instead of the "
+                         "shipped ones — used to re-run a proof against an older "
+                         "tree")
+    ap.add_argument("--verbose", action="store_true",
+                    help="list every rule proved unable to fail")
+    a = ap.parse_args()
+
+    with open(a.registry, encoding="utf-8") as f:
+        items = script_backed(json.load(f))
+    proven = proofs(a.registry, a.shapes, a.scripts)
+    findings = audit(a.registry, a.shapes, a.scripts)
+
+    if a.verbose:
+        for row in sorted(proven.values(), key=lambda r: r["id"]):
+            print(f"  {row['id']:9}{row['script']:28}{row['mechanism']:22}"
+                  f"{row['evidence']}")
+
+    print(f"\n{len(items)} script-backed assertion(s); {len(proven)} proved unable to "
+          f"report FAIL, {len(findings)} disagreeing with the registry")
+    print(f"the other {len(items) - len(proven)} are not claimed either way: no "
+          f"detector here proves them reachable")
+    for f_ in findings:
+        print(f"  {f_['id']} [{f_['kind']}] {f_['detail']}", file=sys.stderr)
+    if findings:
+        print("\nA rule that cannot fail reports PASS for every site. If that is the "
+              "defect it looks like, repair the rule or the script. If it is "
+              "deliberate, record it in CANNOT_FAIL in build_checklist.py with the "
+              "mechanism this tool proved and a reason a reader can check.",
+              file=sys.stderr)
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

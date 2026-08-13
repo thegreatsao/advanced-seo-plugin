@@ -4,7 +4,7 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.45.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
+Version 0.46.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
 in earlier versions in ways that *lower* the reported numbers, which is the point:
 the entries say which verdicts used to be fabricated.
 
@@ -553,6 +553,30 @@ vocabulary — where a value nobody mapped is `NO_DATA` rather than a pass:
 
 `tools/audit_assertions.py` reports any pattern that cannot match anything its
 script emits, a test runs it, and CI fails on it.
+
+### A rule can be alive and still never fail
+
+`KW-076` *Use the Primary Keyword in Body Copy* asserted `target_keyword` truthy,
+and `article_seo.py` wrote that field only when it already held something. The rule
+ran on every audit, read a real field, and could return PASS or `NO_DATA` and
+nothing else — for years, on every site.
+
+A few rules are meant to be that way. `TE-179` prices domain age with a warn band
+that is its assertion's exact complement, so an established domain passes, a young
+one warns, and no value is left over to fail. In the code the two look identical:
+the field is absent, or safe, exactly when the answer would have been bad.
+
+So intent is declared on the item as `check.cannot_fail` — written in `CANNOT_FAIL`
+in `build_checklist.py` — naming a **mechanism** from a closed vocabulary.
+`tools/audit_reachability.py` re-derives that mechanism from the script's own source
+on every run and fails the build three ways: a rule proved unfailable and not
+declared, a declaration nothing proves any more, and a declaration naming a
+mechanism other than the one proved. The third is the one an exemption list can
+never catch, and this repository has watched one rot in exactly that spot.
+
+It proves rather than surveys. Of 143 script-backed assertions, two are proved
+unable to fail and the other 141 are **not claimed either way** — the summary line
+prints that count instead of implying coverage it does not have.
 
 ## Core Web Vitals: field and lab, never merged
 

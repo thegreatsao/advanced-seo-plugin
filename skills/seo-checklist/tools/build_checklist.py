@@ -204,6 +204,40 @@ APPLIES_WHEN = {
     "MD-190": {"path": "videos", "gt": 0},
 }
 
+# Items whose rule cannot report FAIL, and are meant not to.
+#
+# KW-076 could not fail on any site for years and nothing noticed, because a rule
+# that always passes looks exactly like a rule that always holds.
+# `tools/audit_reachability.py` now proves unreachability from the script's source
+# and checks it against this table in three directions: a proved rule that is not
+# here fails the build, an entry here that is no longer provable fails the build,
+# and an entry naming a different mechanism than the one proved fails the build.
+# That last one is the difference between this and an exemption list — the reason
+# is anchored to a token the code has to keep earning, rather than to prose nobody
+# re-reads. `mechanism` must be one of `audit_reachability.MECHANISMS`.
+#
+# Adding an entry is a claim that a site cannot be wrong in the way the item's
+# title names. Make sure that is what you mean before writing one.
+CANNOT_FAIL = {
+    "TE-178": {
+        "mechanism": "path_never_emitted",
+        "why": "check_neighbors() resolves the hosting IP and stops there. Judging "
+               "the neighbours needs a paid reverse-IP service this project does "
+               "not buy, and a fabricated `suspicious` would be worse than no "
+               "answer, so the field is deliberately never written and the item is "
+               "NO_DATA everywhere until that input exists.",
+    },
+    "TE-179": {
+        "mechanism": "warn_complement",
+        "why": "0.44.0 gave this item the domain-history half of its title through "
+               "whois age: established passes, younger than 90 days warns, an "
+               "absent age is NO_DATA. The warn band is the assertion's exact "
+               "complement on purpose — a young domain is worth pricing, not a "
+               "defect to fix — and the ruling that no 'worth knowing' status "
+               "exists still stands. ROADMAP.md records the reasoning.",
+    },
+}
+
 # How much work a fix costs, so that priority can weigh severity against effort
 # instead of ranking by severity alone. These are per-category heuristics, not
 # per-item estimates: a meta tag is a config edit, a rewrite is not, and an
@@ -1343,6 +1377,8 @@ def build(titles: dict[int, str] | None = None,
                     entry["check"]["applies_when"] = APPLIES_WHEN[item_id]
                 if warn:
                     entry["check"]["warn"] = warn
+                if item_id in CANNOT_FAIL:
+                    entry["check"]["cannot_fail"] = CANNOT_FAIL[item_id]
             if source == L:
                 entry["lens"] = LENS_OF.get(entry["id"], "")
             entry["effort"] = effort_for(entry)
@@ -1379,6 +1415,8 @@ def build(titles: dict[int, str] | None = None,
                 entry["check"]["applies_when"] = APPLIES_WHEN[eid]
             if warn:
                 entry["check"]["warn"] = warn
+            if eid in CANNOT_FAIL:
+                entry["check"]["cannot_fail"] = CANNOT_FAIL[eid]
         if source == L:
             entry["lens"] = LENS_OF.get(entry["id"], "")
         entry["effort"] = effort_for(entry)
