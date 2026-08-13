@@ -1037,9 +1037,18 @@ item(180, "medium", S, "a11y_seo_checker.py", PAGE,
 # browser builds after scripts run. Those are two documents that can independently be
 # valid or invalid, so the pair now carries 6 weight points rather than 3. Unlike the
 # rejected MD-189 conjunction, this does not charge one fact twice: it measures two
-# different facts. If the browser cannot build the DOM, html_validator.py omits
-# `summary`, making TE-181 NO_DATA rather than passing a document that never existed.
-item(181, "medium", S, "html_validator.py", ["{url}", "--rendered"],
+# different facts.
+#
+# The DOM comes from the same rendered-page artifact `rendered_audit.py` reads, not
+# from a browser launched mid-audit. A browser inside the run fetches the page and its
+# subresources again, behind the response cache: measured on the fixture site that took
+# one audit from 22 requests to 31 and asked for the entry URL three times, which the
+# CI request-discipline step exists to forbid. Without the artifact the placeholder is
+# unresolved and the item reports NEEDS_INPUT; with an artifact that recorded no
+# document, `summary` is omitted and it reports NO_DATA. Neither passes a DOM nobody
+# built.
+item(181, "medium", S, "html_validator.py",
+     ["{url}", "--rendered-json", "{rendered_json}"],
      {"path": "summary.errors", "eq": 0},
      "Fix W3C validation errors in the rendered DOM")
 item(182, "low", M, fix="Show a compliant cookie banner")

@@ -1549,7 +1549,11 @@ class OneCheckCarriesWeightOnce(unittest.TestCase):
             "assert": {"path": "summary.errors", "eq": 0},
         })
         self.assertEqual(rendered["title"], "Validate the Rendered DOM (W3C)")
-        self.assertEqual(rendered["check"]["args"], ["{url}", "--rendered"])
+        # The DOM arrives in an artifact rather than from a browser started mid-audit:
+        # one launched inside the run refetches the page and its subresources behind
+        # the response cache, which the CI request-discipline step forbids.
+        self.assertEqual(rendered["check"]["args"],
+                         ["{url}", "--rendered-json", "{rendered_json}"])
         self.assertEqual(rendered["check"]["requires"], "api")
         self.assertEqual(rendered["check"]["assert"], served["check"]["assert"])
         self.assertNotEqual(self.shape(rendered), self.shape(served))

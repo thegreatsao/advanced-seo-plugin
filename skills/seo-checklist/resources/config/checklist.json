@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "50ddb6a84302",
+  "registry_version": "715c6bb46461",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -3776,7 +3776,8 @@
         "script": "html_validator.py",
         "args": [
           "{url}",
-          "--rendered"
+          "--rendered-json",
+          "{rendered_json}"
         ],
         "requires": "api",
         "assert": {

@@ -690,12 +690,18 @@ because until then no rule read it. Absent, both land on `NO_DATA`.
 W3C Nu validator (`validator.w3.org/nu/`) — free, no key.
 
 `url` — str
-`source` — str (`served` / `rendered`)
-`render_error` — str | null
-`summary.errors` — int — **absent** when `--rendered` was requested but Playwright
-  was unavailable, the browser failed, or rendering timed out. TE-181 asserts `eq: 0`
-  on it, and an absent key is NO_DATA: a DOM that was never built cannot pass or fail
-  validation. The render reason remains in `render_error` and `error`.
+`source` — str (`served` / `rendered`) — CI-017 validates what the server sent;
+  TE-181 passes `--rendered-json` and validates the DOM recorded in a rendered-page
+  artifact. That is the same artifact `rendered_audit.py` reads, with an added `html`
+  key holding the serialised DOM. **No browser runs inside the audit**: one launched
+  mid-run fetches the page and its subresources again behind the response cache, which
+  took a fixture audit from 22 requests to 31 and asked for the entry URL three times.
+`render_error` — str | null — why there was no document to validate: the artifact was
+  unreadable, was not JSON, was not an object, or recorded measurements without `html`.
+`summary.errors` — int — **absent** when `--rendered-json` was given but the artifact
+  yielded no document. TE-181 asserts `eq: 0` on it, and an absent key is NO_DATA: a
+  DOM that was never built cannot pass or fail validation. Without the flag at all the
+  placeholder is unresolved and the runner reports NEEDS_INPUT before the script runs.
 `summary.warnings` — int
 `summary.info` — int
 `messages[]` — array, capped at 40

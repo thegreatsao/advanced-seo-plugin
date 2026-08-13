@@ -235,12 +235,20 @@ Resize to a phone viewport first (375×812), load the page, then run one
 
   return {url: location.href, viewport: {width: vw, height: vh},
           text_nodes_below_12px: small, links_indistinct: indistinct,
-          overlays_covering_content: overlays, tap_targets_below_48px: taps};
+          overlays_covering_content: overlays, tap_targets_below_48px: taps,
+          html: document.documentElement.outerHTML};
 })()
 ```
 
 Save the object, adding a `source` line that says how it was taken, and pass
 `--rendered-json /path/to/rendered.json`.
+
+The `html` key is the serialised DOM after scripts have run, and `TE-181` *Validate
+the Rendered DOM (W3C)* sends it to the W3C checker. It is captured here rather than
+by a browser inside the audit on purpose: a browser started mid-run fetches the page
+and its subresources again behind the response cache, which took one audit of the
+test fixture from 22 requests to 31. Omit the key and TE-181 reports `NO_DATA`, which
+is honest — the other items in this file are unaffected either way.
 
 `viewport.width` is required. From a desktop render the tap-target and
 mobile-interstitial keys are **dropped**, and those items report `NO_DATA` — a

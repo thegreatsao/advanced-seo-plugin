@@ -159,9 +159,9 @@ class HtmlValidator(unittest.TestCase):
         self.mod = html_validator
         self.saved_get = html_validator.requests.get
         self.saved_post = html_validator.requests.post
-        self.saved_renderer = html_validator.render_with_playwright
         self.get_calls = []
         self.post_calls = []
+        self.artifacts = tempfile.TemporaryDirectory()
 
         def unexpected(*_args, **_kwargs):
             raise AssertionError("an unstubbed Nu request was attempted")
@@ -169,15 +169,10 @@ class HtmlValidator(unittest.TestCase):
         html_validator.requests.get = unexpected
         html_validator.requests.post = unexpected
 
-        def unexpected_render(*_args, **_kwargs):
-            raise AssertionError("served validation tried to launch a browser")
-
-        html_validator.render_with_playwright = unexpected_render
-
     def tearDown(self):
         self.mod.requests.get = self.saved_get
         self.mod.requests.post = self.saved_post
-        self.mod.render_with_playwright = self.saved_renderer
+        self.artifacts.cleanup()
 
     def serve(self, messages, status=200, method="get"):
         class Response:
@@ -196,8 +191,21 @@ class HtmlValidator(unittest.TestCase):
 
         setattr(self.mod.requests, method, answer)
 
-    def render(self, html="<!doctype html><html><body></body></html>", error=None):
-        self.mod.render_with_playwright = lambda *_args, **_kwargs: (html, error)
+    def artifact(self, payload, name="rendered.json"):
+        """Write a rendered-page artifact and return its path.
+
+        `payload` is written verbatim so a test can supply one that recorded
+        measurements but no document, which is the case TE-181 must not pass.
+        """
+        path = os.path.join(self.artifacts.name, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        return path
+
+    def render(self, html="<!doctype html><html><body></body></html>"):
+        return self.artifact({"url": "https://example.com/",
+                              "viewport": {"width": 390, "height": 844},
+                              "html": html})
 
     def test_a_clean_document_reports_no_errors(self):
         self.serve([])
@@ -264,10 +272,10 @@ class HtmlValidator(unittest.TestCase):
 
     def test_a_clean_rendered_dom_posts_the_document_and_passes(self):
         document = "<!doctype html><html><body><p>rendered</p></body></html>"
-        self.render(document)
+        path = self.render(document)
         self.serve([], method="post")
 
-        out = self.mod.validate("https://example.com/", rendered=True)
+        out = self.mod.validate("https://example.com/", rendered_json=path)
 
         self.assertEqual(out["source"], "rendered")
         self.assertIsNone(out["render_error"])
@@ -282,40 +290,70 @@ class HtmlValidator(unittest.TestCase):
                          "text/html; charset=utf-8")
 
     def test_an_invalid_rendered_dom_fails(self):
-        self.render("<html><body><p></body></html>")
+        path = self.render("<html><body><p></body></html>")
         self.serve([{"type": "error", "message": "Unclosed element p."}],
                    method="post")
 
-        out = self.mod.validate("https://example.com/", rendered=True)
+        out = self.mod.validate("https://example.com/", rendered_json=path)
 
         self.assertEqual(out["summary"]["errors"], 1)
         self.assertEqual(verdict("TE-181", out), FAIL)
 
-    def test_missing_playwright_is_no_data_and_never_calls_nu(self):
-        self.render(None, "playwright not installed")
+    def test_an_artifact_without_a_document_is_no_data_and_never_calls_nu(self):
+        """The shape that matters: a trace that recorded measurements but not the DOM.
 
-        out = self.mod.validate("https://example.com/", rendered=True)
+        `summary.errors == 0` here would claim the rendered document is valid when no
+        rendered document exists — the defect MB-105 shipped with for two releases.
+        """
+        path = self.artifact({"url": "https://example.com/",
+                              "viewport": {"width": 390, "height": 844},
+                              "tap_targets_below_48px": 0})
+
+        out = self.mod.validate("https://example.com/", rendered_json=path)
 
         self.assertNotIn("summary", out)
-        self.assertEqual(out["render_error"], "playwright not installed")
-        self.assertIn("playwright not installed", out["error"])
+        self.assertIn("carries no `html`", out["render_error"])
         self.assertEqual(verdict("TE-181", out), NO_DATA)
         self.assertEqual(self.get_calls, [])
         self.assertEqual(self.post_calls, [])
 
-    def test_browser_failure_or_timeout_is_no_data_with_the_reason(self):
-        for reason in ("Timeout 30000ms exceeded", "browser executable is missing"):
-            with self.subTest(reason):
-                self.render(None, reason)
+    def test_an_unreadable_or_malformed_artifact_is_no_data_with_the_reason(self):
+        missing = os.path.join(self.artifacts.name, "not-there.json")
+        malformed = os.path.join(self.artifacts.name, "bad.json")
+        with open(malformed, "w", encoding="utf-8") as handle:
+            handle.write("{not json")
+        listy = self.artifact(["not", "an", "object"], name="listy.json")
 
-                out = self.mod.validate("https://example.com/", rendered=True)
+        for path, expected in ((missing, "could not be read"),
+                               (malformed, "is not JSON"),
+                               (listy, "not an object")):
+            with self.subTest(os.path.basename(path)):
+                out = self.mod.validate("https://example.com/", rendered_json=path)
 
                 self.assertNotIn("summary", out)
-                self.assertEqual(out["render_error"], reason)
-                self.assertIn(reason, out["error"])
+                self.assertIn(expected, out["render_error"])
                 self.assertEqual(verdict("TE-181", out), NO_DATA)
                 self.assertEqual(self.get_calls, [])
                 self.assertEqual(self.post_calls, [])
+
+    def test_an_empty_document_in_the_artifact_is_not_a_document(self):
+        for blank in ("", "   \n"):
+            with self.subTest(repr(blank)):
+                path = self.render(blank)
+                out = self.mod.validate("https://example.com/", rendered_json=path)
+                self.assertNotIn("summary", out)
+                self.assertEqual(verdict("TE-181", out), NO_DATA)
+                self.assertEqual(self.post_calls, [])
+
+    def test_validating_the_served_page_never_reads_an_artifact(self):
+        """CI-017 must be untouched by any of this."""
+        self.serve([])
+        out = self.mod.validate("https://example.com/")
+        self.assertEqual(out["source"], "served")
+        self.assertIsNone(out["render_error"])
+        self.assertEqual(verdict("CI-017", out), PASS)
+        self.assertEqual(self.post_calls, [])
+        self.assertEqual(len(self.get_calls), 1)
 
 
 # ---------------------------------------------------------------------------

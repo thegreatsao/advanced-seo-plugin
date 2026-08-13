@@ -12,26 +12,32 @@ breaking change for whoever read the old number, and saying so is the point.
 
 ## 0.45.0 — image and render checks measure what they claim, and KW-076 can finally fail
 
-CI-017 and TE-181 were the same *Validate HTML (W3C)* check twice: both asked Nu
-to fetch the served URL and both asserted `summary.errors == 0`. TE-181 now renders
-the page in headless Chromium and POSTs the browser-built DOM to Nu, while CI-017
-continues to validate the HTML the server sends. Served markup and a script-mutated
-DOM are two different documents and either can be valid while the other is not, so
-this is now a genuinely second measurement.
+CI-017 and TE-181 were the same *Validate HTML (W3C)* check twice: both asked Nu to
+fetch the served URL and both asserted `summary.errors == 0`. TE-181 now POSTs a
+rendered DOM to Nu instead, while CI-017 keeps validating the HTML the server sends.
+Served markup and a script-mutated DOM are two different documents and either can be
+valid while the other is not, so this is a genuinely second measurement.
 
-The pair therefore carries 6 weight points rather than the 3 it carried through
-`scores_with`. This is not the double-charging rejected for MD-189: that proposed
-conjunction would have charged one missing-modern-format fact through two items;
-CI-017 and TE-181 now charge two independently observed documents. If Playwright is
-unavailable, Chromium fails, or rendering times out, TE-181 omits `summary` and
-reports `NO_DATA` rather than passing a DOM that never existed.
+The DOM comes from a rendered-page artifact — the one `rendered_audit.py` already
+reads, with an added `html` key — and **not** from a browser launched inside the run.
+That was tried first and the request-discipline step caught it: a browser fetches the
+page and its subresources again behind the response cache, taking one audit of the
+6-page fixture from 22 requests to 31 and asking for the entry URL three times. One
+audited page, one fetch, is a property worth more than the convenience of rendering
+in-line, and the measurement belongs outside the run exactly as `cwv_metrics.py`'s
+trace does. Playwright therefore stays an optional dependency and CI installs no
+browser.
+
+The pair carries 6 weight points rather than the 3 it carried through `scores_with`.
+This is not the double-charging rejected for MD-189: that conjunction would have
+charged one missing-modern-format fact through two items, while CI-017 and TE-181
+charge two independently observed documents. Without `--rendered-json` the item
+reports `NEEDS_INPUT`; with an artifact that recorded measurements but no document it
+reports `NO_DATA`. Neither passes a DOM nobody built.
 
 TE-181 is now titled *Validate the Rendered DOM (W3C)* and its fix names validation
 errors in that rendered document. CI-017's title, fix, arguments, assertion and
-translations are unchanged. Playwright is now a required dependency, and both the
-Linux and Windows CI jobs install Chromium after installing Python dependencies;
-the two existing render scripts keep their graceful no-Playwright behavior for
-unsupported or incomplete installations.
+translations are unchanged.
 
 A page served as bare `text/html` is no longer read in the wrong character set. `requests`
 takes the charset from `Content-Type` and falls back to ISO-8859-1 when a `text/*` response
@@ -84,9 +90,9 @@ no render happened, so MB-105 reports `NO_DATA` instead of claiming parity. Its
 actual difference still fails. TE-169 and TE-177 are unaffected because they assert
 the raw document, which is measured whether or not rendering succeeds.
 
-Registry `50ddb6a84302` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
+Registry `715c6bb46461` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
-The 852-test baseline becomes 885, with the POSIX-only signal-naming test still the one
+The 852-test baseline becomes 887, with the POSIX-only signal-naming test still the one
 expected skip.
 
 ## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise

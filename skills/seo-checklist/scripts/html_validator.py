@@ -8,7 +8,7 @@ raises it in three separate places.
 
 Usage:
     python html_validator.py https://example.com
-    python html_validator.py https://example.com --rendered
+    python html_validator.py https://example.com --rendered-json rendered.json
     python html_validator.py https://example.com --json
 """
 
@@ -31,8 +31,6 @@ except ImportError:
     from scripts.lib.safe_http import (MAX_RETRY_AFTER_WAIT, default_headers, pace,
                                        retry_after_seconds)
 
-from javascript_render_audit import render_with_playwright
-
 NU_ENDPOINT = "https://validator.w3.org/nu/"
 # basis: inherited — more than 10 validation warnings, present at import. Warnings are
 #  advisory in Nu's own output, so this is a "the page has a pattern of them" line rather
@@ -44,8 +42,35 @@ MANY_WARNINGS = 10
 MAX_MESSAGES = 40
 
 
-def validate(url: str, timeout: int = 45, rendered: bool = False,
-             render_timeout: int = 30000) -> dict:
+def rendered_document(path: str) -> tuple[str | None, str | None]:
+    """The serialised DOM out of a rendered-page artifact, or why there is none.
+
+    Deliberately read from an artifact rather than rendered here. A browser launched
+    inside an audit fetches the page again — and its subresources — behind the shared
+    response cache's back, which is exactly what the CI request-discipline gate
+    forbids: one audited page, one fetch. Measured on the fixture site, rendering from
+    inside the run took an audit from 22 requests to 31 and asked for the entry URL
+    three times. The measurement belongs outside the run, like `cwv_metrics.py`'s
+    trace; `SKILL.md` carries the snippet that writes one.
+    """
+    try:
+        with open(path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except OSError as exc:
+        return None, f"rendered artifact could not be read: {exc}"
+    except json.JSONDecodeError as exc:
+        return None, f"rendered artifact is not JSON: {exc}"
+    if not isinstance(payload, dict):
+        return None, "rendered artifact is not an object"
+    document = payload.get("html")
+    if not isinstance(document, str) or not document.strip():
+        return None, ("rendered artifact carries no `html`; the trace recorded "
+                      "measurements but not the document")
+    return document, None
+
+
+def validate(url: str, timeout: int = 45, rendered_json: str | None = None) -> dict:
+    rendered = rendered_json is not None
     result = {
         "url": url,
         "source": "rendered" if rendered else "served",
@@ -60,14 +85,13 @@ def validate(url: str, timeout: int = 45, rendered: bool = False,
     }
     document = None
     if rendered:
-        document, render_error = render_with_playwright(url, render_timeout)
+        document, render_error = rendered_document(rendered_json)
         result["render_error"] = render_error
         if document is None:
             # No DOM means no validation result. In particular, do not add an empty
-            # summary: summary.errors == 0 would turn a missing browser or a failed
-            # render into a PASS for TE-181.
-            detail = render_error or "the browser returned no document"
-            result["error"] = f"could not render the page: {detail}"
+            # summary: summary.errors == 0 would turn a missing artifact into a PASS
+            # for TE-181, claiming a rendered document was valid without one existing.
+            result["error"] = f"no rendered document to validate: {render_error}"
             return result
 
     # Once there is a document for Nu to inspect, preserve the served-mode output
@@ -166,12 +190,13 @@ def main():
     parser = argparse.ArgumentParser(description="Validate HTML via the W3C Nu checker")
     parser.add_argument("url", help="URL to validate")
     parser.add_argument("--timeout", type=int, default=45)
-    parser.add_argument("--rendered", action="store_true",
-                        help="Render the URL in Chromium and validate the resulting DOM")
+    parser.add_argument("--rendered-json",
+                        help="Validate the DOM recorded in a rendered-page artifact "
+                             "instead of the HTML the server sends")
     parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
-    result = validate(args.url, args.timeout, args.rendered)
+    result = validate(args.url, args.timeout, args.rendered_json)
 
     if args.json:
         print(json.dumps(result, indent=2))
