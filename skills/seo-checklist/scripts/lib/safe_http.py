@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import ipaddress
 import json
 import os
+import re
 import socket
 import sys
 import tempfile
@@ -639,6 +641,80 @@ def assert_safe_url(url: str) -> str:
     return normalized
 
 
+# How far into a document to look for its own encoding declaration. The HTML spec
+# tells a browser to give up after 1024 bytes; this doubles that because a `<head>`
+# padded with preload hints can push the `<meta>` past 1KB, and reading 2KB of a body
+# we have already downloaded costs nothing.
+ENCODING_SNIFF_BYTES = 2048
+
+_META_CHARSET = re.compile(rb"""<meta[^>]+?charset\s*=\s*["']?\s*([a-zA-Z0-9_\-:.]+)""",
+                           re.IGNORECASE)
+_XML_ENCODING = re.compile(rb"""<\?xml[^>]+?encoding\s*=\s*["']([a-zA-Z0-9_\-:.]+)["']""",
+                           re.IGNORECASE)
+_BOMS = ((b"\xef\xbb\xbf", "utf-8-sig"), (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"))
+# `charset=` with optional spaces around the `=`. A plain substring test misses
+# `text/html; charset = utf-8`, which `requests` itself parses happily — and missing it
+# means overwriting an encoding the server did name, which is the one thing this must
+# never do.
+_HEADER_CHARSET = re.compile(r"charset\s*=", re.IGNORECASE)
+# Comments are stripped before the prescan. The HTML spec has a browser skip comments
+# and script content when sniffing, and a commented-out `<meta charset>` — the shape a
+# template leaves behind — would otherwise decide how the live page is read.
+_COMMENT = re.compile(rb"<!--.*?-->", re.DOTALL)
+
+
+def _declared_encoding(head: bytes) -> str | None:
+    """The encoding the document states for itself, or None if it states none.
+
+    Deliberately only what is *declared* — a BOM, an XML declaration, or a `<meta>`.
+    Character-set detection is not consulted: `apparent_encoding` guesses, and a guess
+    that silently rewrites a page's text is the kind of measurement this repository
+    keeps having to apologise for. A document that declares nothing keeps whatever
+    `requests` decided, which is the behaviour every caller has had until now.
+    """
+    for bom, name in _BOMS:
+        if head.startswith(bom):
+            return name
+    head = _COMMENT.sub(b"", head)
+    found = _XML_ENCODING.search(head) or _META_CHARSET.search(head)
+    if not found:
+        return None
+    name = found.group(1).decode("ascii", "ignore").strip()
+    try:
+        codecs.lookup(name)
+    except (LookupError, ValueError):
+        return None
+    return name
+
+
+def _honour_declared_encoding(response) -> None:
+    """Let the document's own charset win when the server named none.
+
+    `requests` reads the charset out of `Content-Type`, and when a `text/*` response
+    carries none it falls back to ISO-8859-1 — the old HTTP default. A server that
+    sends bare `text/html` and lets `<meta charset="utf-8">` speak for the page is
+    therefore decoded as latin-1, and every title, heading and word count downstream
+    is mojibake: `—` arrives as `â\x80\x94`. Browsers honour the meta; so must we, or
+    the audit reports text the site never served.
+
+    Only touched when the header is silent. If the server named a charset it wins,
+    even if the document disagrees — disagreeing with the server is a site defect for
+    an item to report, not something to paper over here.
+    """
+    ctype = response.headers.get("Content-Type", "") or ""
+    if _HEADER_CHARSET.search(ctype):
+        return
+    kind = ctype.split(";", 1)[0].strip().lower()
+    # JSON is UTF-8 by RFC 8259 and `response.json()` handles it; binary types have no
+    # text to get wrong. Only markup and plain text are in scope.
+    if kind and not (kind.startswith("text/") or kind in
+                     ("application/xhtml+xml", "application/xml")):
+        return
+    declared = _declared_encoding(response.content[:ENCODING_SNIFF_BYTES])
+    if declared:
+        response.encoding = declared
+
+
 def _consume_capped(response, max_response_bytes: int | None):
     if max_response_bytes is None:
         response._content = response.content
@@ -1102,6 +1178,9 @@ def _finish(response, slot, method: str, stream: bool,
     if stream:
         return response
     _consume_capped(response, max_response_bytes)
+    # Before the cache stores it: `_entry_from_response` records `response.encoding`,
+    # and a restored response has to decode the same way the live one did.
+    _honour_declared_encoding(response)
     if slot is not None:
         slot.store(response, response.content)
     return response

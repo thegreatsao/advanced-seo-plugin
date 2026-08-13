@@ -2168,28 +2168,42 @@ class JavascriptRender(unittest.TestCase):
 
         The page is twenty words with a cross-domain canonical and two h1s, and this
         script's raw-document items both pass it — correctly. It serves a title
-        without JavaScript (TE-177) and carries eight internal links (TE-169). MB-105
-        reports NO_DATA because the test environment has no renderer. None of those
-        verdicts is about the page being thin, which is CN-039's question against the
+        without JavaScript (TE-177) and carries eight internal links (TE-169). Neither
+        verdict is about the page being thin, which is CN-039's question against the
         crawl. Asserting them keeps the run in use: an unasserted run is a script
         nobody checked, hiding behind a green suite.
+
+        MB-105 is deliberately not asserted here — its verdict depends on whether a
+        browser is installed, and `test_parity_is_reported_exactly_when_it_was_measured`
+        pins the rule that holds either way.
         """
         bad = out("jsrender_bad")
         self.assertLess(bad["raw"]["word_count"], 300)
         for item_id in ("TE-169", "TE-177"):
             self.assertEqual(verdict(item_id, bad), PASS, item_id)
-        self.assertEqual(verdict("MB-105", bad), NO_DATA)
 
-    def test_no_renderer_means_no_parity_measurement(self):
-        """The fixtures are static, but without Playwright they are never rendered.
+    def test_parity_is_reported_exactly_when_it_was_measured(self):
+        """The contract, stated so it holds with or without a browser present.
 
-        An absent comparison is NO_DATA, not evidence that the two documents match.
+        This test used to assert `rendered is None` and `render_error == "playwright
+        not installed"` — true only because the environment happened to have no
+        browser. It passed for a reason that was about the machine rather than the
+        code, and it broke the moment CI began installing Chromium. What matters is
+        not which branch runs but that the two agree: `diffs` exists precisely when a
+        render produced something to compare, and MB-105 is NO_DATA precisely when it
+        did not.
         """
-        result = out("jsrender")
-        self.assertIsNone(result["rendered"])
-        self.assertEqual(result["render_error"], "playwright not installed")
-        self.assertNotIn("diffs", result)
-        self.assertEqual(verdict("MB-105", result), NO_DATA)
+        for label in ("jsrender", "jsrender_bad"):
+            with self.subTest(label):
+                result = out(label)
+                rendered = result["rendered"] is not None
+                self.assertEqual("diffs" in result, rendered,
+                                 "diffs must be present exactly when a render happened")
+                self.assertEqual(verdict("MB-105", result) != NO_DATA, rendered,
+                                 "MB-105 must be NO_DATA exactly when nothing rendered")
+                if not rendered:
+                    self.assertTrue(result["render_error"],
+                                    "an absent render must say why")
 
 
 class Hreflang(unittest.TestCase):

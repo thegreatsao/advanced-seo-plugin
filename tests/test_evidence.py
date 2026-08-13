@@ -84,6 +84,125 @@ class SharedHelpersStayShared(unittest.TestCase):
                                         + "; ".join(offenders))
 
 
+class ADocumentDeclaresItsOwnEncoding(unittest.TestCase):
+    """A server that sends bare `text/html` must not cost us the page's characters.
+
+    `requests` reads the charset from `Content-Type` and falls back to ISO-8859-1 for
+    `text/*` without one — the old HTTP default. A site that sends bare `text/html`
+    and lets `<meta charset="utf-8">` speak for the page was therefore decoded as
+    latin-1, so `—` arrived as `â\x80\x94` and every title, heading and word count
+    downstream carried it. Nothing caught it until MB-105 compared the raw document
+    against a rendered one and found two differences in a fixture built to have none:
+    the browser had read the meta and we had not.
+
+    Only a *declaration* wins — a BOM, an XML declaration, or a `<meta>`. Detection is
+    deliberately not consulted, because a guess that rewrites a page's text silently is
+    the failure this repository keeps paying for.
+    """
+
+    def response(self, body: bytes, content_type: str = "text/html"):
+        import requests
+        from lib.safe_http import _honour_declared_encoding
+        made = requests.Response()
+        made.status_code = 200
+        made.headers = requests.structures.CaseInsensitiveDict(
+            {"Content-Type": content_type} if content_type else {})
+        made._content = body
+        made._content_consumed = True
+        made.encoding = requests.utils.get_encoding_from_headers(made.headers)
+        _honour_declared_encoding(made)
+        return made
+
+    def test_a_meta_charset_is_honoured_when_the_header_is_silent(self):
+        body = '<html><head><meta charset="utf-8"><title>a — b</title>'.encode("utf-8")
+        made = self.response(body)
+        self.assertEqual(made.encoding, "utf-8")
+        self.assertIn("a — b", made.text)
+
+    def test_the_server_wins_when_it_names_a_charset(self):
+        """A document disagreeing with its server is a site defect for an item to
+        report, not something to quietly correct here."""
+        body = '<html><head><meta charset="utf-8"><title>a — b</title>'.encode("utf-8")
+        made = self.response(body, "text/html; charset=iso-8859-1")
+        self.assertEqual(made.encoding.lower(), "iso-8859-1")
+        self.assertNotIn("a — b", made.text)
+
+    def test_a_document_that_declares_nothing_is_left_alone(self):
+        made = self.response(b"<html><head><title>plain</title>")
+        self.assertEqual((made.encoding or "").upper(), "ISO-8859-1")
+
+    def test_an_xml_declaration_counts(self):
+        body = '<?xml version="1.0" encoding="utf-8"?><urlset><loc>a — b</loc>'.encode("utf-8")
+        made = self.response(body, "application/xml")
+        self.assertEqual(made.encoding, "utf-8")
+
+    def test_a_utf8_bom_counts(self):
+        made = self.response("﻿<html><title>a — b</title>".encode("utf-8-sig"))
+        self.assertEqual(made.encoding, "utf-8-sig")
+        self.assertIn("a — b", made.text)
+
+    def test_an_unknown_charset_name_is_ignored_rather_than_raising(self):
+        body = b'<html><head><meta charset="totally-not-a-codec"><title>x</title>'
+        made = self.response(body)
+        self.assertEqual((made.encoding or "").upper(), "ISO-8859-1")
+        self.assertIn("x", made.text)
+
+    def test_a_binary_content_type_is_never_touched(self):
+        """The sniff is for markup and plain text. A PNG that happens to contain the
+        bytes `charset=` is not declaring anything."""
+        made = self.response(b'\x89PNG\r\n\x1a\n charset="utf-8"', "image/png")
+        self.assertIsNone(made.encoding)
+
+    def test_the_declaration_may_sit_past_the_first_kilobyte(self):
+        padding = b"<link rel='preload' href='/a.css'>" * 40
+        body = b"<html><head>" + padding + b'<meta charset="utf-8">'
+        self.assertGreater(len(body), 1024)
+        self.assertEqual(self.response(body).encoding, "utf-8")
+
+    def test_a_declaration_past_the_sniff_window_is_not_read(self):
+        """The window is a bound, not a suggestion; prove it stops rather than trusting
+        that it does."""
+        from lib.safe_http import ENCODING_SNIFF_BYTES
+        body = (b" " * (ENCODING_SNIFF_BYTES + 1)) + b'<meta charset="utf-8">'
+        self.assertEqual((self.response(body).encoding or "").upper(), "ISO-8859-1")
+
+    def test_spaces_around_the_header_charset_still_count_as_the_server_naming_one(self):
+        """`text/html; charset = utf-8` is parsed by `requests` as utf-8, so a substring
+        test for `charset=` misses it and overwrites an encoding the server did name.
+        That was a real defect in the first version of this code."""
+        import requests
+        from requests.structures import CaseInsensitiveDict
+        headers = CaseInsensitiveDict({"Content-Type": "text/html; charset = utf-8"})
+        self.assertEqual(requests.utils.get_encoding_from_headers(headers), "utf-8")
+        made = self.response(b'<meta charset="iso-8859-1">', "text/html; charset = utf-8")
+        self.assertEqual(made.encoding, "utf-8")
+
+    def test_the_older_http_equiv_spelling_is_read(self):
+        body = (b'<meta http-equiv="Content-Type" '
+                b'content="text/html; charset=windows-1251">')
+        self.assertEqual(self.response(body).encoding, "windows-1251")
+
+    def test_a_commented_out_meta_does_not_decide_the_encoding(self):
+        """A template that leaves `<!-- <meta charset="utf-8"> -->` behind must not
+        thereby set the encoding of the live page. Browsers skip comments in the
+        prescan for the same reason."""
+        self.assertEqual(
+            (self.response(b'<!-- <meta charset="utf-8"> --><title>x</title>')
+             .encoding or "").upper(), "ISO-8859-1")
+        # ...but a real declaration after a comment is still found.
+        self.assertEqual(
+            self.response(b'<!-- theme header --><meta charset="utf-8">').encoding,
+            "utf-8")
+
+    def test_a_missing_content_type_header_is_sniffed(self):
+        """No header at all is the strongest case for reading the document."""
+        self.assertEqual(self.response(b'<meta charset="utf-8">', "").encoding, "utf-8")
+
+    def test_a_bom_outranks_a_meta_that_disagrees_with_it(self):
+        body = "﻿".encode("utf-8") + b'<meta charset="windows-1251">'
+        self.assertEqual(self.response(body).encoding, "utf-8-sig")
+
+
 class LoadHtml(unittest.TestCase):
     def setUp(self):
         import seo_common

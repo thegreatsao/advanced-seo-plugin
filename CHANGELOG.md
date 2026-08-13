@@ -12,6 +12,25 @@ breaking change for whoever read the old number, and saying so is the point.
 
 ## 0.45.0 — image and render checks measure what they claim, and KW-076 can finally fail
 
+A page served as bare `text/html` is no longer read in the wrong character set. `requests`
+takes the charset from `Content-Type` and falls back to ISO-8859-1 when a `text/*` response
+names none, so a site that sends bare `text/html` and lets `<meta charset="utf-8">` speak
+for the page was decoded as latin-1: `—` arrived as `â\x80\x94`, and every title, heading,
+description and word count downstream carried the damage. The shared HTTP path now lets the
+document's own declaration decide **when, and only when, the server named no charset** — a
+BOM, an XML declaration, or a `<meta>`, with comments skipped as a browser skips them. A
+server that does name a charset still wins, because a document disagreeing with its server
+is a site defect for an item to report rather than something to quietly correct. Character-set
+*detection* is deliberately not consulted: a guess that silently rewrites a page's text is
+the failure this project keeps paying for, so a document declaring nothing keeps the old
+behaviour.
+
+Nothing had caught this because nothing compared two readings of the same page. MB-105 began
+to, one release after it stopped passing sites it had never rendered, and immediately found
+two differences in a fixture built to have none — the browser had honoured the meta and we
+had not. Sites whose servers do send `charset=` — including the audited one — were never
+affected.
+
 MD-189 *Use Modern Formats & Responsive Images* named two halves while asserting
 only the modern-format count. Both halves were already measured separately: MB-096
 reads the responsive-image count, and MB-097 reads the modern-format count.
@@ -46,7 +65,7 @@ the raw document, which is measured whether or not rendering succeeds.
 
 Registry `3d4dd03224f7` replaces `2dd52fda3e6f`. The fixture oracle remains 98 matched,
 0 disagreed and 10 indeterminate across 53 items and 108 declarations, with 42 opposed.
-The 852-test baseline becomes 865, with the POSIX-only signal-naming test still the one
+The 852-test baseline becomes 879, with the POSIX-only signal-naming test still the one
 expected skip.
 
 ## 0.44.0 — the plugin runs on Windows, and two items measure what their titles promise
