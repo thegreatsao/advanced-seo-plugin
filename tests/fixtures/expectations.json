@@ -110,7 +110,7 @@
       },
       "MS-030": {
         "expect": "PASS",
-        "why": "the sampled high-value pages carry clear meta descriptions in the fixture's intended 120–160-character range"
+        "why": "the sampled high-value pages carry clear meta descriptions in the fixture's intended 120\u2013160-character range"
       },
       "MS-031": {
         "expect": "PASS",
@@ -263,6 +263,74 @@
       "MD-187": {
         "expect": "PASS",
         "why": "every image the tree references is a file the tree contains"
+      },
+      "AR-149": {
+        "expect": "PASS",
+        "why": "every internal link in this tree names a file the tree serves directly, so no crawled URL answers with a redirect and 'Eliminate Internal Redirects' has nothing to eliminate"
+      },
+      "AR-154": {
+        "expect": "INDETERMINATE",
+        "why": "'Optimize E-commerce Category Pages' needs a category page to judge; this fixture is a five-page bakery with no collection, listing or category page anywhere, so whatever the item reports would not be about its own subject"
+      },
+      "AR-163": {
+        "expect": "INDETERMINATE",
+        "why": "'Control Faceted Navigation' needs facets; no page here exposes a filter, sort or facet URL, so the fixture cannot settle the item either way"
+      },
+      "CI-018": {
+        "expect": "INDETERMINATE",
+        "why": "the check reads {server_log}; this tree ships an access log under tests/fixtures/artifacts/good/, but the oracle audit hands the run only the rendered, CWV and links artifacts, so the log is never supplied and no verdict is reachable"
+      },
+      "CN-039": {
+        "expect": "PASS",
+        "why": "every crawlable page carries several hundred words of prose; the one short page, /private/secret.html, is disallowed in robots.txt and is never crawled"
+      },
+      "CN-068": {
+        "expect": "FAIL",
+        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: /privacy.html carries no byline, no named author and no credentials, so the worst sampled page is below the floor 'Strengthen Authorship & E-E-A-T Signals' asks for. Whether an exemplary site must carry authorship on a policy page is KNOWN-ISSUES.md \u00a76, and this is declared before that repair. Not a blind declaration: HANDOFF-4 \u00a75.2 records the sampled outcome of the withdrawn attempt"
+      },
+      "GEO-008": {
+        "expect": "PASS",
+        "why": "no page carries a robots meta, so nothing restricts the snippet an AI answer or a result would be built from"
+      },
+      "GO-131": {
+        "expect": "FAIL",
+        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: the gtag snippet is on the entry page only, and /about.html and /privacy.html carry no GA4 tag at all. Not a blind declaration: HANDOFF-4 \u00a75.2 records the sampled outcome of the withdrawn attempt"
+      },
+      "GO-136": {
+        "expect": "PASS",
+        "why": "the sitemap is well-formed, lists only URLs this origin serves, every one of which answers 200, and each lastmod is a real date. Its one deliberate oddity, the robots-disallowed /private/secret.html, is orphan arithmetic by the fixture's own note rather than sitemap hygiene"
+      },
+      "MB-102": {
+        "expect": "N/A",
+        "why": "the check applies only where videos are present; no page in either tree embeds a video, so 'Optimize Video for Mobile' is out of scope rather than satisfied"
+      },
+      "MD-190": {
+        "expect": "N/A",
+        "why": "the check applies only where videos are present; no page in either tree embeds a video, so 'Implement Video SEO Essentials' is out of scope rather than satisfied"
+      },
+      "MS-032": {
+        "expect": "PASS",
+        "why": "the entry page's four JSON-LD blocks are complete for the types they declare, and the two other sampled pages carry no structured data that could be wrong"
+      },
+      "MS-033": {
+        "expect": "FAIL",
+        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: /privacy.html carries no Open Graph and no Twitter tag at all, so the worst sampled page has nothing for a social preview to read. Not a blind declaration: HANDOFF-4 \u00a75.2 records the sampled outcome of the withdrawn attempt"
+      },
+      "SP-109": {
+        "expect": "PASS",
+        "why": "the only third-party script in the tree is the gtag loader and it is async, so nothing third-party holds the render up"
+      },
+      "SP-110": {
+        "expect": "PASS",
+        "why": "the entry page requests one 340-byte stylesheet and one async script, and nothing chains behind either; the other two sampled pages request less"
+      },
+      "TE-170": {
+        "expect": "FAIL",
+        "why": "the harness serves both HTTP origins from SimpleHTTPRequestHandler with no added headers, so every response arrives with no Content-Encoding, no Cache-Control and no ETag \u2014 the three things 'Configure Server Rewrites & Headers' exists to ask for. The exemplary origin fails this for a property of the test server, not of the fixture's content"
+      },
+      "TECH-002": {
+        "expect": "PASS",
+        "why": "no page loads a web font: the stylesheet sets a system-ui stack and neither tree contains an @font-face rule or a font host"
       }
     },
     "broken": {
@@ -525,6 +593,74 @@
       "MD-187": {
         "expect": "FAIL",
         "why": "the entry page references /assets/no-such-image.png, which is not in the tree and is served as a 404"
+      },
+      "AR-149": {
+        "expect": "PASS",
+        "why": "this tree's defects are 404s, duplicates and an orphan, not redirects; every link that resolves resolves in one hop"
+      },
+      "AR-154": {
+        "expect": "INDETERMINATE",
+        "why": "'Optimize E-commerce Category Pages' needs a category page to judge, and this tree has none either \u2014 its defects are elsewhere"
+      },
+      "AR-163": {
+        "expect": "INDETERMINATE",
+        "why": "'Control Faceted Navigation' needs facets; the only form here posts nowhere and no URL carries a filter or sort parameter"
+      },
+      "CI-018": {
+        "expect": "INDETERMINATE",
+        "why": "the check reads {server_log}; this tree ships an access log under tests/fixtures/artifacts/broken/, but the oracle audit never hands it to the run, so no verdict is reachable"
+      },
+      "CN-039": {
+        "expect": "WARN",
+        "why": "the tree deliberately carries a thin page (/blog/thin.html, three words of body), two short duplicates and a short orphan \u2014 at most four of its five crawlable pages, which is inside the up-to-five band the item preserves, so this fixture demonstrates the warn band rather than the failure"
+      },
+      "CN-068": {
+        "expect": "FAIL",
+        "why": "no page on this origin carries an author, a byline, credentials, a policy page or a date, so there is nothing for 'Strengthen Authorship & E-E-A-T Signals' to find"
+      },
+      "GEO-008": {
+        "expect": "WARN",
+        "why": "the entry page carries meta robots nosnippet, which is exactly the directive that makes a page unusable in an AI answer; the item's warn rule is the complement of its assertion, so a restricted page can only come back WARN"
+      },
+      "GO-131": {
+        "expect": "FAIL",
+        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: only the entry page carries a gtag snippet, and the sampled duplicate post and orphan page carry none"
+      },
+      "GO-136": {
+        "expect": "FAIL",
+        "why": "the sitemap lists a URL on another host, two URLs that 404, and a lastmod reading 'not-a-date' \u2014 none of which a clean sitemap has"
+      },
+      "MB-102": {
+        "expect": "N/A",
+        "why": "the check applies only where videos are present; no page in this tree embeds a video either"
+      },
+      "MD-190": {
+        "expect": "N/A",
+        "why": "the check applies only where videos are present; no page in this tree embeds a video either"
+      },
+      "MS-032": {
+        "expect": "FAIL",
+        "why": "the entry page carries an unparseable JSON-LD block, a Product with no offers, price or availability, and a BreadcrumbList with no itemListElement"
+      },
+      "MS-033": {
+        "expect": "FAIL",
+        "why": "no page on this origin carries an Open Graph or Twitter tag"
+      },
+      "SP-109": {
+        "expect": "PASS",
+        "why": "the render-blocking stylesheet and the synchronous script are both first-party; the only third-party script is the same async gtag loader, so the count this item asserts on is zero on a page built to be slow"
+      },
+      "SP-110": {
+        "expect": "FAIL",
+        "why": "the entry page holds the render up on a 21 KB stylesheet and a synchronous script, both in the head, which is the chain this item exists to report"
+      },
+      "TE-170": {
+        "expect": "FAIL",
+        "why": "served by the same header-less SimpleHTTPRequestHandler as the good origin: no Content-Encoding, no Cache-Control, no ETag"
+      },
+      "TECH-002": {
+        "expect": "PASS",
+        "why": "neither this tree nor its stylesheet loads a web font, so no font can be blocking the render"
       }
     },
     "good_tls": {

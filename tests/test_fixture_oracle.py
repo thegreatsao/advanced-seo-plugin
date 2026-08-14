@@ -37,13 +37,22 @@ HTTP_DECLARED_IDS = {
     "BL-083", "CI-001", "CI-003", "CI-005", "CI-015", "LO-198",
     "AR-147", "AR-155", "CI-006", "CI-009", "CI-011", "CI-012", "CI-016",
     "GEO-001", "MD-186", "MD-187", "TE-176",
-    # MS-033, CN-068 and GO-131 were declared in this batch and withdrawn.
-    # They were reasoned about from the entry page, and this audit samples
-    # three URLs and takes the worst verdict: about.html carries no Open
-    # Graph tags and no analytics snippet, so the good fixture fails all
-    # three under sampling while passing each on its entry page. Whether the
-    # exemplary site should carry those sitewide is a fixture decision, and
-    # a declaration written after reading the answer would not test it.
+    # Stage 2c: the five crawl items left undeclared above, the twelve fetch
+    # items whose verdicts a warn-band measurement had already printed, and
+    # the three that were declared and withdrawn. No session that had read
+    # those verdicts could declare them; this batch was written by one that
+    # had not.
+    #
+    # MS-033, CN-068 and GO-131 are the withdrawn three, and their `good` side
+    # is honest about not being blind: HANDOFF-4 §5.2 records what the sampled
+    # run answered. Each is reasoned from /privacy.html, which carries no
+    # social tags, no analytics snippet and no byline, and all three are
+    # declared *before* the fixture question in KNOWN-ISSUES.md §6 is settled,
+    # so repairing the fixture has to disagree with a declaration rather than
+    # quietly agree with itself.
+    "AR-149", "AR-154", "AR-163", "CI-018", "CN-039", "CN-068", "GEO-008",
+    "GO-131", "GO-136", "MB-102", "MD-190", "MS-032", "MS-033", "SP-109",
+    "SP-110", "TE-170", "TECH-002",
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
 DECLARED_IDS = {
