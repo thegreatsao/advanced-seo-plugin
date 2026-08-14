@@ -53,6 +53,13 @@ HTTP_DECLARED_IDS = {
     "AR-149", "AR-154", "AR-163", "CI-018", "CN-039", "CN-068", "GEO-008",
     "GO-131", "GO-136", "MB-102", "MD-190", "MS-032", "MS-033", "SP-109",
     "SP-110", "TE-170", "TECH-002",
+    # Stage 2d. Two are INDETERMINATE on purpose and neither is a shrug:
+    # KW-076 reads {keyword}, an operator input this audit does not pass, and
+    # MB-105 compares served HTML against a rendered DOM, which exists only where
+    # a browser does — Playwright is installed here and on no CI runner, so any
+    # settled verdict for it would be a claim about this laptop.
+    "AR-152", "CI-013", "CN-036", "GEO-002", "GEO-003", "KW-076", "MB-095",
+    "MB-098", "MB-100", "MB-105", "MD-184", "MD-189", "TE-169", "TE-177",
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
 DECLARED_IDS = {

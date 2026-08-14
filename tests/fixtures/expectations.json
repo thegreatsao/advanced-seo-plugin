@@ -331,6 +331,62 @@
       "TECH-002": {
         "expect": "PASS",
         "why": "no page loads a web font: the stylesheet sets a system-ui stack and neither tree contains an @font-face rule or a font host"
+      },
+      "AR-152": {
+        "expect": "PASS",
+        "why": "robots.txt declares a policy for `*` and disallows five paths, so the file has user-agent groups in it"
+      },
+      "CI-013": {
+        "expect": "PASS",
+        "why": "robots.txt disallows /private/, /search, /cart, /checkout and /login and nothing under /assets/, so no stylesheet, script or image this tree serves is closed to Googlebot"
+      },
+      "CN-036": {
+        "expect": "PASS",
+        "why": "no page in this tree carries a style attribute, so there is no inline colour pair for the contrast scan to weigh"
+      },
+      "GEO-002": {
+        "expect": "PASS",
+        "why": "llms.txt is the canonical shape the item asks for: a title, a one-line summary as a blockquote, a Pages section of annotated links and a contact address"
+      },
+      "GEO-003": {
+        "expect": "PASS",
+        "why": "this origin publishes both a robots.txt naming its policy and an llms.txt, which is the documented end of the item's scale rather than the permitted-by-silence end"
+      },
+      "KW-076": {
+        "expect": "INDETERMINATE",
+        "why": "the check reads {keyword}, which is an operator input; the oracle audit passes no --keyword, so the placeholder never resolves and no verdict is reachable. Wiring one into tests/test_fixture_oracle.py would make it decidable"
+      },
+      "MB-095": {
+        "expect": "PASS",
+        "why": "the tree's only raster image is a 64-pixel loaf mark, so nothing here is heavy enough to be reported as weight"
+      },
+      "MB-098": {
+        "expect": "PASS",
+        "why": "the one image is served at the size it is displayed at, and the two other sampled pages request no images at all"
+      },
+      "MB-100": {
+        "expect": "PASS",
+        "why": "every page in this tree declares width=device-width with an initial scale, which is the defect this item exists to find"
+      },
+      "MB-105": {
+        "expect": "INDETERMINATE",
+        "why": "deliberately undeclared as a verdict: the raw-versus-rendered comparison exists only where a browser does, and Playwright is installed on the machine this fixture was declared on and on no CI runner. A settled declaration here would be a claim about the laptop \u2014 see HANDOFF-3 \u00a74 and HANDOFF-5 \u00a74"
+      },
+      "MD-184": {
+        "expect": "FAIL",
+        "why": "the sample is the entry page plus /about.html and /privacy.html and the worst decides: /about.html and /privacy.html reference no image at all, and the item asks each page for at least one. A policy page without images is not an image-usage defect, so this declaration records a rule that reads a site-wide question one page at a time"
+      },
+      "MD-189": {
+        "expect": "FAIL",
+        "why": "the sample is the entry page plus /about.html and /privacy.html and the worst decides: the entry page carries the responsive picture/source pair the item asks for, and the two other sampled pages carry no image at all, so the responsive count on them is zero. Same shape as MD-184: the rule cannot tell 'no responsive images' from 'no images'"
+      },
+      "TE-169": {
+        "expect": "PASS",
+        "why": "every sampled page carries internal links in the served HTML, so the no-JavaScript crawl path is not empty on any of them"
+      },
+      "TE-177": {
+        "expect": "PASS",
+        "why": "every sampled page carries a title element in the served HTML"
       }
     },
     "broken": {
@@ -661,6 +717,62 @@
       "TECH-002": {
         "expect": "PASS",
         "why": "neither this tree nor its stylesheet loads a web font, so no font can be blocking the render"
+      },
+      "AR-152": {
+        "expect": "FAIL",
+        "why": "this origin serves no robots.txt at all \u2014 the tree carries robots-note.txt explaining the omission \u2014 so there are no user-agent groups to find"
+      },
+      "CI-013": {
+        "expect": "PASS",
+        "why": "with no robots.txt there is nothing disallowing anything, so no stylesheet, script or image is blocked. The tree's defects are elsewhere, and this item cannot see them"
+      },
+      "CN-036": {
+        "expect": "FAIL",
+        "why": "the entry page carries a paragraph styled inline as #bbb text on a #ccc background, planted for exactly this check"
+      },
+      "GEO-002": {
+        "expect": "FAIL",
+        "why": "this origin serves no llms.txt, so there is no quality to score"
+      },
+      "GEO-003": {
+        "expect": "FAIL",
+        "why": "neither a robots.txt nor an llms.txt exists here, so every AI crawler is allowed by silence and nothing documents the policy"
+      },
+      "KW-076": {
+        "expect": "INDETERMINATE",
+        "why": "the check reads {keyword}, an operator input the oracle audit does not supply, so no verdict is reachable on either origin"
+      },
+      "MB-095": {
+        "expect": "PASS",
+        "why": "the tree references one heavy image, /assets/huge.png, from several img elements on one page, which is at most a couple of weight issues against a rule that tolerates five. A page built to be slow passes this"
+      },
+      "MB-098": {
+        "expect": "PASS",
+        "why": "the undeclared-dimension image and the heavy one together raise far fewer than the ten size issues this rule tolerates"
+      },
+      "MB-100": {
+        "expect": "FAIL",
+        "why": "the entry page declares no viewport at all, which is the mobile rendering failure rather than a warning about one"
+      },
+      "MB-105": {
+        "expect": "INDETERMINATE",
+        "why": "deliberately undeclared as a verdict, for the same reason as the good origin: the comparison exists only where a browser does"
+      },
+      "MD-184": {
+        "expect": "FAIL",
+        "why": "the sample is the entry page plus /blog/duplicate-a.html and /orphan.html and the worst decides: the entry page carries five img elements, and the sampled duplicate post and orphan page carry none"
+      },
+      "MD-189": {
+        "expect": "FAIL",
+        "why": "no image in this tree offers a srcset, a modern format or a picture/source pair, and the two other sampled pages carry no images at all"
+      },
+      "TE-169": {
+        "expect": "FAIL",
+        "why": "the sample is the entry page plus /blog/duplicate-a.html and /orphan.html and the worst decides: /blog/duplicate-a.html and /orphan.html are a heading and a paragraph with no link in either, so the served HTML offers a crawler nowhere to go"
+      },
+      "TE-177": {
+        "expect": "FAIL",
+        "why": "the entry page has no title element \u2014 the tree's own comment lists it first among the things the page exists to fail"
       }
     },
     "good_tls": {
