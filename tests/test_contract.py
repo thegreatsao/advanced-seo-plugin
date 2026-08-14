@@ -173,7 +173,12 @@ SAME_ON_BOTH = {
     "MD-188": "neither fixture embeds video",
     "MD-190": "neither fixture embeds video",
     "MB-102": "neither fixture embeds video",
-    "AR-153": "neither fixture is an ecommerce catalogue",
+    # Measured 2026-08-14 by the fixture oracle, which declared FAIL for both
+    # origins and got PASS for both. The previous reason here was the one on the
+    # line below, for a different item: silos have nothing to do with catalogues.
+    "AR-153": "topical_cluster_mapper scores a flat five-page tree above its "
+              "floor, and scores the duplicate-and-orphan tree there too, so "
+              "the silo score does not separate structure from its absence",
     "AR-156": "neither fixture is an ecommerce catalogue",
     "AR-163": "neither fixture has faceted navigation",
     "LO-196": "neither fixture claims a physical location beyond the same address",

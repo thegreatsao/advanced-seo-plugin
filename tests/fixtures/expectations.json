@@ -389,8 +389,8 @@
         "why": "every sampled page carries a title element in the served HTML"
       },
       "AR-153": {
-        "expect": "FAIL",
-        "why": "'Design Clear Topic Hubs (Silos)' asks for a hub-and-spoke shape. This tree is five flat pages and a two-post blog with no hub page, no cluster and no silo, so there is no structure here to score highly"
+        "expect": "PASS",
+        "why": "corrected from FAIL after the run: five flat pages and a two-post blog clear the silo score's floor, so 'Design Clear Topic Hubs (Silos)' cannot tell a site with hubs from one without. test_contract.py already had AR-153 in SAME_ON_BOTH, but under a reason belonging to its neighbour \u2014 'neither fixture is an ecommerce catalogue' \u2014 which is repaired in the same commit as this correction"
       },
       "GEO-004": {
         "expect": "FAIL",
@@ -835,8 +835,8 @@
         "why": "the entry page has no title element \u2014 the tree's own comment lists it first among the things the page exists to fail"
       },
       "AR-153": {
-        "expect": "FAIL",
-        "why": "the same absence, with less: this tree is an entry page, two identical posts, a thin page and an orphan, which is the opposite of a silo"
+        "expect": "PASS",
+        "why": "corrected from FAIL after the run, and the same verdict as the good origin is the finding: duplicates, a thin page and an orphan score as well on topic structure as a coherent five-page site"
       },
       "GEO-004": {
         "expect": "FAIL",
@@ -855,8 +855,8 @@
         "why": "the check reads {indexnow_key}, which the oracle audit does not pass on either origin"
       },
       "GO-143": {
-        "expect": "FAIL",
-        "why": "no page here declares a WebSite block at all, so there is no SearchAction for a sitelinks search box to be built from"
+        "expect": "PASS",
+        "why": "corrected from FAIL after the run, against behaviour the repository had already recorded precisely: schema_required_props reports on schemas that are present, so a tree with no WebSite block produces no issue for the pattern to match and the item cannot fail on absence, only on a malformed block (test_contract.py SAME_ON_BOTH). The declaration could not have been checked against that register beforehand without reading the verdict it states"
       },
       "GO-144": {
         "expect": "FAIL",
