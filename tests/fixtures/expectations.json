@@ -285,8 +285,8 @@
         "why": "every crawlable page carries several hundred words of prose; the one short page, /private/secret.html, is disallowed in robots.txt and is never crawled"
       },
       "CN-068": {
-        "expect": "PASS",
-        "why": "declared with the repair that makes it true, in the same commit: /about.html and /privacy.html now carry a named author with rel=author, a published and an updated date, and the site's contact route, which is what 'Strengthen Authorship & E-E-A-T Signals' asks of a page. Flipped from FAIL. If it comes back FAIL anyway, the finding is about the floor rather than about the fixture \u2014 which is exactly the question KNOWN-ISSUES.md \u00a76 left open, and the reason the threshold was not moved first"
+        "expect": "FAIL",
+        "why": "corrected back to FAIL after the run, and the correction is the answer to the question \u00a76 left open: the repair was not enough, so this is about the floor rather than about the fixture. Measured on the repaired tree \u2014 the entry page scores 75, /about.html and /privacy.html score 35 each against a floor of 60. Both carry a named author, two dates, a privacy link and a contact route; what they cannot carry is credential markers, external citations and first-hand-experience markers, which is where the missing 25 points live and which belong to a content page rather than to a policy page. See KNOWN-ISSUES.md \u00a76"
       },
       "GEO-008": {
         "expect": "PASS",

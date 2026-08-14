@@ -403,6 +403,28 @@ name. A column called `url` would be read as "fix this page".
   `CN-068` still comes back FAIL the finding is about the floor and is measured rather
   than guessed.
 
+  **It did fail, and here are the numbers.** On the repaired tree the entry page scores
+  75 and both sampled pages score 35, against a floor of 60. The breakdown says why: all
+  three report one author, a privacy link and several trust links, and only the entry
+  page reports credential markers (3), external citations (3) and first-hand-experience
+  markers (2). The missing 25 points are exactly the three signals a policy page has no
+  business carrying.
+
+  Two things follow and neither is a threshold tweak. **`CN-068` is a content item
+  applied to every page type** — the third instance of that shape this week, beside
+  `LO-200` (a page-level rule for a site-level fact, found on the live audit) and
+  `MD-184` (which asks every page for an image). A floor no policy page can clear fails
+  every real site that has one, because the sample takes the worst page. **And the
+  markers are matched literally**: `/about.html` states eleven years in restaurant
+  kitchens and four in bread, in plain English, and scores zero for experience, because
+  the phrase the scan knows is the entry page's bolded 'years of experience'.
+
+  Deliberately not taken here, because both change live verdicts and one changes the
+  registry: scoring `CN-068` per site rather than per sampled page, and widening the
+  marker vocabulary. Writing the marker phrases into the fixture to make it green was
+  rejected outright — that is shaping the fixture to suit the check, which is the
+  failure this tree exists to refuse.
+
 - **`image_inventory.py` emits `count: 0` for a page it found no images on, and `MD-184`
   grades it.** Measured on 2026-08-14 against the good fixture: on `/about.html` and
   `/privacy.html`, which reference no image at all, `image_inventory.py` returns `count:
