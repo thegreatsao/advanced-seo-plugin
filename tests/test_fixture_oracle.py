@@ -35,6 +35,8 @@ HTTP_DECLARED_IDS = {
     # declared them, and a declaration made after seeing the answer proves
     # nothing. See ROADMAP.md.
     "BL-083", "CI-001", "CI-003", "CI-005", "CI-015", "LO-198",
+    "AR-147", "AR-155", "CI-006", "CI-009", "CI-011", "CI-012", "CI-016",
+    "CN-068", "GEO-001", "GO-131", "MD-186", "MD-187", "MS-033", "TE-176",
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
 DECLARED_IDS = {

@@ -219,6 +219,62 @@
       "LO-198": {
         "expect": "PASS",
         "why": "the entry page carries a Bakery node, a LocalBusiness subtype, with name, address, telephone, geo and opening hours"
+      },
+      "GEO-001": {
+        "expect": "PASS",
+        "why": "the tree carries /llms.txt with a title, a one-line summary, a Pages section of annotated links and a contact block"
+      },
+      "CI-006": {
+        "expect": "PASS",
+        "why": "robots.txt ends with a Sitemap: line pointing at the served sitemap.xml"
+      },
+      "CI-009": {
+        "expect": "PASS",
+        "why": "every page in the tree carries a self-referencing canonical at its own served URL"
+      },
+      "CI-011": {
+        "expect": "PASS",
+        "why": "the entry page is self-canonical, carries no robots meta and is listed in its own sitemap - the three signals agree"
+      },
+      "TE-176": {
+        "expect": "PASS",
+        "why": "every page canonicalises to the URL it is served at"
+      },
+      "CI-012": {
+        "expect": "PASS",
+        "why": "the audited entry is the origin root, which has no query string, no session id and no extension"
+      },
+      "AR-147": {
+        "expect": "PASS",
+        "why": "the audited entry is the origin root: short by construction and carrying no parameters"
+      },
+      "AR-155": {
+        "expect": "PASS",
+        "why": "the audited entry is the origin root, so there is no slug to be inconsistent with"
+      },
+      "MS-033": {
+        "expect": "PASS",
+        "why": "the entry page carries og:title, description, type, url, image, site_name and locale, plus twitter:card, title, description and image"
+      },
+      "CN-068": {
+        "expect": "PASS",
+        "why": "the entry page states a named craft, eleven years of experience, original measurement run in-house and a review step before publication"
+      },
+      "GO-131": {
+        "expect": "PASS",
+        "why": "the entry page loads gtag.js and configures the measurement ID G-FIXTURE01"
+      },
+      "CI-016": {
+        "expect": "PASS",
+        "why": "the tree's only image is the loaf mark, and it carries descriptive alt text"
+      },
+      "MD-186": {
+        "expect": "PASS",
+        "why": "the tree's only image is the loaf mark, and it carries descriptive alt text"
+      },
+      "MD-187": {
+        "expect": "PASS",
+        "why": "every image the tree references is a file the tree contains"
       }
     },
     "broken": {
@@ -437,6 +493,62 @@
       "LO-198": {
         "expect": "FAIL",
         "why": "the tree's only schema nodes are a truncated HowTo, a Product and an empty BreadcrumbList, and no LocalBusiness type of any kind"
+      },
+      "GEO-001": {
+        "expect": "FAIL",
+        "why": "there is no llms.txt anywhere in this tree"
+      },
+      "CI-006": {
+        "expect": "FAIL",
+        "why": "there is deliberately no robots.txt in this tree, so it declares no sitemap location"
+      },
+      "CI-009": {
+        "expect": "FAIL",
+        "why": "the entry page's canonical points at https://not-this-site.example.net/elsewhere, a domain the fixture does not own or serve"
+      },
+      "CI-011": {
+        "expect": "FAIL",
+        "why": "the entry page says noindex and points its canonical at another domain: two directives about indexing that contradict each other"
+      },
+      "TE-176": {
+        "expect": "FAIL",
+        "why": "the entry page canonicalises to a URL on a domain the fixture does not serve, so nothing resolves the duplicate it claims"
+      },
+      "CI-012": {
+        "expect": "PASS",
+        "why": "the audited entry is the origin root here too; this tree's defects are in its markup, not in the URL it is entered at"
+      },
+      "AR-147": {
+        "expect": "PASS",
+        "why": "the audited entry is the origin root here too"
+      },
+      "AR-155": {
+        "expect": "PASS",
+        "why": "the audited entry is the origin root here too"
+      },
+      "MS-033": {
+        "expect": "FAIL",
+        "why": "the entry page carries no Open Graph and no Twitter Card tag at all"
+      },
+      "CN-068": {
+        "expect": "FAIL",
+        "why": "the entry page's prose says only that it exists to fail things; it claims no author, no experience and no review"
+      },
+      "GO-131": {
+        "expect": "PASS",
+        "why": "this tree needs two GA4 configurations for GO-132, so it necessarily has analytics installed"
+      },
+      "CI-016": {
+        "expect": "FAIL",
+        "why": "the entry page carries an img with no alt attribute at all and another with an empty one on a meaningful image"
+      },
+      "MD-186": {
+        "expect": "FAIL",
+        "why": "the entry page carries an img with no alt attribute at all and another with an empty one on a meaningful image"
+      },
+      "MD-187": {
+        "expect": "FAIL",
+        "why": "the entry page references /assets/no-such-image.png, which is not in the tree and is served as a 404"
       }
     },
     "good_tls": {
