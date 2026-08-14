@@ -450,7 +450,7 @@
       },
       "CN-038": {
         "expect": "PASS",
-        "why": "every sampled page now names a publication date and a review date, and the tree mixes evergreen method pages with dated posts, which is the balance the item's title asks for"
+        "why": "every sampled page now names a publication date and a review date, which is what the score this item asserts on is built from. The clause about the tree balancing evergreen pages against dated posts was removed after review: the rule scores one page at a time and does not measure that balance, so naming it was decoration rather than cause"
       },
       "CN-040": {
         "expect": "PASS",
