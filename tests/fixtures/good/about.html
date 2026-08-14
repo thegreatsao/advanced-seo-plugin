@@ -8,17 +8,43 @@
 <link rel="canonical" href="http://127.0.0.1:8000/about.html">
 <link rel="icon" href="/assets/logo.png" type="image/png">
 <link rel="stylesheet" href="/assets/site.css">
+<!-- Social tags and the analytics snippet are here, not only on the entry page,
+     because the audit samples three URLs and takes the worst: an exemplary site
+     carries these sitewide, and a fixture that carried them on one page only was
+     failing MS-033 and GO-131 while looking exemplary to anything that reads the
+     entry page alone. See KNOWN-ISSUES.md §6. -->
+<meta property="og:title" content="About Fixture Bakery in Vilnius">
+<meta property="og:description" content="Who runs the fixture bakery, and the fixture street it stands on.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="http://127.0.0.1:8000/about.html">
+<meta property="og:image" content="http://127.0.0.1:8000/assets/logo.png">
+<meta property="og:site_name" content="Fixture Bakery">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="About Fixture Bakery in Vilnius">
+<meta name="twitter:description" content="Who runs the fixture bakery, and the fixture street it stands on.">
+<meta name="twitter:image" content="http://127.0.0.1:8000/assets/logo.png">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-FIXTURE01"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js',new Date());gtag('config','G-FIXTURE01');
+</script>
 </head>
 <body>
 <header><nav><a href="/">Home</a> <a href="/blog/first-post.html">How we bake</a></nav></header>
 <main>
 <h1>About the fixture bakery</h1>
-<p>The title of this page is one word, on purpose: the entry page has a good one,
-this page does not, and a sampling run has to end up with the worse of the two.
-Aggregation used to take the verdict from the worst page and the measurement from
-the entry page, which printed a passing number underneath a failing verdict.</p>
-<p>Everything else here is ordinary: a canonical, a description, one heading, and
-prose long enough not to trip the thin-page warning.</p>
+<p>This page is one of the three the audit samples, and the sample takes the worst
+of them. It used to carry a one-word title so that aggregation could be caught
+printing a passing measurement underneath a failing verdict; the title was repaired
+when MS-021 was declared, and the rest of the page was brought up to the entry
+page's standard when MS-033, GO-131 and CN-068 landed on the same difference.</p>
+<p>Everything here is ordinary and deliberate: a canonical, a description, headings
+in order, prose long enough not to trip the thin-page warning, the dates and the
+byline the trust checks look for, and the same social tags and analytics the entry
+page carries.</p>
+<p>Published <time datetime="2026-07-18">18 July 2026</time>, last reviewed
+<time datetime="2026-08-01">1 August 2026</time>.</p>
 <h2>Who writes here</h2>
 <p>A Baker keeps the culture, runs the ovens six mornings a week, and writes these
 pages. Before the bakery there were eleven years in restaurant kitchens, four of them
@@ -39,6 +65,18 @@ figure quoted for the wrong flour, and a proofing time that assumed a warmer kit
 than most people have. Both are noted on the pages themselves rather than quietly
 edited, because a correction nobody can see is indistinguishable from never having
 been wrong.</p>
+<h2 id="contact">Contact</h2>
+<!-- The entry page and this page's own footer both link to /about.html#contact,
+     and until this heading existed the anchor pointed at nothing. -->
+<p>Telephone <a href="tel:+37050000000">+370 5 000 0000</a>, or write to
+<a href="mailto:hello@example.invalid">hello@example.invalid</a>. The person who
+answers is the one who does the baking.</p>
 </main>
+<footer>
+<p>Fixture Bakery, 1 Fixture Street, Vilnius. Not a real bakery.</p>
+<p>Written by <a rel="author" href="/about.html">A Fixture Baker</a>.
+<a href="/privacy.html">Privacy policy</a> ·
+<a href="/about.html#contact">Contact</a></p>
+</footer>
 </body>
 </html>

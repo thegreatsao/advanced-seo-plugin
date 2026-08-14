@@ -285,16 +285,16 @@
         "why": "every crawlable page carries several hundred words of prose; the one short page, /private/secret.html, is disallowed in robots.txt and is never crawled"
       },
       "CN-068": {
-        "expect": "FAIL",
-        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: /privacy.html carries no byline, no named author and no credentials, so the worst sampled page is below the floor 'Strengthen Authorship & E-E-A-T Signals' asks for. Whether an exemplary site must carry authorship on a policy page is KNOWN-ISSUES.md \u00a76, and this is declared before that repair. Not a blind declaration: HANDOFF-4 \u00a75.2 records the sampled outcome of the withdrawn attempt"
+        "expect": "PASS",
+        "why": "declared with the repair that makes it true, in the same commit: /about.html and /privacy.html now carry a named author with rel=author, a published and an updated date, and the site's contact route, which is what 'Strengthen Authorship & E-E-A-T Signals' asks of a page. Flipped from FAIL. If it comes back FAIL anyway, the finding is about the floor rather than about the fixture \u2014 which is exactly the question KNOWN-ISSUES.md \u00a76 left open, and the reason the threshold was not moved first"
       },
       "GEO-008": {
         "expect": "PASS",
         "why": "no page carries a robots meta, so nothing restricts the snippet an AI answer or a result would be built from"
       },
       "GO-131": {
-        "expect": "FAIL",
-        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: the gtag snippet is on the entry page only, and /about.html and /privacy.html carry no GA4 tag at all. Not a blind declaration: HANDOFF-4 \u00a75.2 records the sampled outcome of the withdrawn attempt"
+        "expect": "PASS",
+        "why": "declared with the repair that makes it true, in the same commit: /about.html and /privacy.html now carry the same GA4 snippet and the single measurement ID the entry page configures, so the sample no longer finds a page with no analytics. Flipped from FAIL, which described the tree before this commit"
       },
       "GO-136": {
         "expect": "PASS",
@@ -313,8 +313,8 @@
         "why": "the entry page's four JSON-LD blocks are complete for the types they declare, and the two other sampled pages carry no structured data that could be wrong"
       },
       "MS-033": {
-        "expect": "FAIL",
-        "why": "the audit samples three pages and takes the worst, so this is declared about the sampled set, not the entry page: /privacy.html carries no Open Graph and no Twitter tag at all, so the worst sampled page has nothing for a social preview to read. Not a blind declaration: HANDOFF-4 \u00a75.2 records the sampled outcome of the withdrawn attempt"
+        "expect": "PASS",
+        "why": "declared with the repair that makes it true, in the same commit: /about.html and /privacy.html now carry the full Open Graph and Twitter set the entry page carries, so every sampled page has something for a social preview to read. Flipped from FAIL, which described the tree before this commit"
       },
       "SP-109": {
         "expect": "PASS",
@@ -447,6 +447,26 @@
       "TECH-003": {
         "expect": "PASS",
         "why": "the fixture is served from a loopback socket with the file already on disk, so time to first byte is a few milliseconds against a budget of 800"
+      },
+      "CN-038": {
+        "expect": "PASS",
+        "why": "every sampled page now names a publication date and a review date, and the tree mixes evergreen method pages with dated posts, which is the balance the item's title asks for"
+      },
+      "CN-040": {
+        "expect": "PASS",
+        "why": "every sampled page links /privacy.html from its footer, and the policy it points at is current and dated"
+      },
+      "CN-044": {
+        "expect": "PASS",
+        "why": "every sampled page links /about.html#contact, the anchor now exists as a Contact heading, and it carries a telephone and an email"
+      },
+      "CN-056": {
+        "expect": "PASS",
+        "why": "every sampled page carries a published and an updated date in a machine-readable time element"
+      },
+      "CN-057": {
+        "expect": "PASS",
+        "why": "every sampled page carries a rel=author link naming the same person, and the page it points at describes who that is"
       }
     },
     "broken": {
@@ -893,6 +913,26 @@
       "TECH-003": {
         "expect": "PASS",
         "why": "served from the same loopback socket as the good origin, so its time to first byte is the same few milliseconds. The tree is slow in ways this item does not measure"
+      },
+      "CN-038": {
+        "expect": "FAIL",
+        "why": "no page in this tree carries a date of any kind, so there is nothing to tell evergreen from stale"
+      },
+      "CN-040": {
+        "expect": "FAIL",
+        "why": "this tree has no privacy policy and no page links to one"
+      },
+      "CN-044": {
+        "expect": "FAIL",
+        "why": "no page here offers a telephone, an email or a contact route of any kind"
+      },
+      "CN-056": {
+        "expect": "FAIL",
+        "why": "no page here carries a publication or an updated date"
+      },
+      "CN-057": {
+        "expect": "FAIL",
+        "why": "no page here names an author or a publisher"
       }
     },
     "good_tls": {

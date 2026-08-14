@@ -75,6 +75,13 @@ HTTP_DECLARED_IDS = {
     "AR-153", "GEO-004", "GEO-005", "GEO-006", "GEO-007", "GO-143", "GO-144",
     "GO-145", "IN-121", "IN-122", "IN-127", "IN-128", "SE-118", "TE-180",
     "TECH-003",
+    # Stage 2f, and the last of the decidable items. These five needed the good tree
+    # to be exemplary on every sampled page rather than only on its entry page, so
+    # they are declared in the same commit as the repair that makes them true —
+    # the shape MS-021 used, where a declaration says what the fixture ought to be
+    # and the fixture is moved to match, rather than being written to agree with a
+    # tree nobody intended.
+    "CN-038", "CN-040", "CN-044", "CN-056", "CN-057",
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-118", "SE-120",
                     "TE-175"}

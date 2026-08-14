@@ -389,6 +389,20 @@ name. A column called `url` would be read as "fix this page".
   commit as the repair**, which is a change that has to argue for itself rather than
   quietly agree with itself.
 
+  **Closed on 2026-08-14, by repairing the tree rather than by moving a threshold.**
+  `/about.html` and `/privacy.html` now carry the full Open Graph and Twitter set, the
+  same GA4 snippet and single measurement ID, a named `rel=author`, published and
+  updated dates, and the site's contact route — everything the entry page carried alone.
+  The three FAIL declarations were flipped to PASS in the same commit as the repair,
+  which is the shape `MS-021` established: a declaration says what the fixture ought to
+  be, and the fixture is moved to match.
+
+  `CN-068`'s threshold was deliberately **not** touched. Lowering a `high` item's floor
+  so a fixture goes green is the registry taking instruction from the fixture, which is
+  backwards. The repaired policy page now carries an author, dates and a contact, so if
+  `CN-068` still comes back FAIL the finding is about the floor and is measured rather
+  than guessed.
+
 - **`image_inventory.py` emits `count: 0` for a page it found no images on, and `MD-184`
   grades it.** Measured on 2026-08-14 against the good fixture: on `/about.html` and
   `/privacy.html`, which reference no image at all, `image_inventory.py` returns `count:
