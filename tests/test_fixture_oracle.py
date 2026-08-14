@@ -36,7 +36,14 @@ HTTP_DECLARED_IDS = {
     # nothing. See ROADMAP.md.
     "BL-083", "CI-001", "CI-003", "CI-005", "CI-015", "LO-198",
     "AR-147", "AR-155", "CI-006", "CI-009", "CI-011", "CI-012", "CI-016",
-    "CN-068", "GEO-001", "GO-131", "MD-186", "MD-187", "MS-033", "TE-176",
+    "GEO-001", "MD-186", "MD-187", "TE-176",
+    # MS-033, CN-068 and GO-131 were declared in this batch and withdrawn.
+    # They were reasoned about from the entry page, and this audit samples
+    # three URLs and takes the worst verdict: about.html carries no Open
+    # Graph tags and no analytics snippet, so the good fixture fails all
+    # three under sampling while passing each on its entry page. Whether the
+    # exemplary site should carry those sitewide is a fixture decision, and
+    # a declaration written after reading the answer would not test it.
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
 DECLARED_IDS = {

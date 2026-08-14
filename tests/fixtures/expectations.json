@@ -252,18 +252,6 @@
         "expect": "PASS",
         "why": "the audited entry is the origin root, so there is no slug to be inconsistent with"
       },
-      "MS-033": {
-        "expect": "PASS",
-        "why": "the entry page carries og:title, description, type, url, image, site_name and locale, plus twitter:card, title, description and image"
-      },
-      "CN-068": {
-        "expect": "PASS",
-        "why": "the entry page states a named craft, eleven years of experience, original measurement run in-house and a review step before publication"
-      },
-      "GO-131": {
-        "expect": "PASS",
-        "why": "the entry page loads gtag.js and configures the measurement ID G-FIXTURE01"
-      },
       "CI-016": {
         "expect": "PASS",
         "why": "the tree's only image is the loaf mark, and it carries descriptive alt text"
@@ -525,18 +513,6 @@
       "AR-155": {
         "expect": "PASS",
         "why": "the audited entry is the origin root here too"
-      },
-      "MS-033": {
-        "expect": "FAIL",
-        "why": "the entry page carries no Open Graph and no Twitter Card tag at all"
-      },
-      "CN-068": {
-        "expect": "FAIL",
-        "why": "the entry page's prose says only that it exists to fail things; it claims no author, no experience and no review"
-      },
-      "GO-131": {
-        "expect": "PASS",
-        "why": "this tree needs two GA4 configurations for GO-132, so it necessarily has analytics installed"
       },
       "CI-016": {
         "expect": "FAIL",

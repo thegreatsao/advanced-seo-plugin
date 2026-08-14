@@ -358,6 +358,29 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **The good fixture is exemplary on its entry page and not under sampling.** The two
+  suites that run it audit differently: `test_contract.py` runs one page, and
+  `test_fixture_oracle.py` runs `--sample 3`, where the worst sampled page decides the
+  verdict. `about.html` and `privacy.html` deliberately carry less than the entry page,
+  and three items land on that difference — `MS-033` (no Open Graph or Twitter tags
+  outside the entry), `GO-131` (no GA4 snippet outside the entry) and `CN-068`
+  (authorship signals thin enough on one sampled page to drop the score under its
+  threshold). Each passes the good site in the contract suite and fails it in the
+  oracle, and **both suites are green**, because one never samples and the other has
+  never had these three declared.
+
+  Measured on 2026-08-13 while declaring oracle stage 2b: on the entry page `MS-033`
+  scores 85 against a floor of 80, `CN-068` scores 75 against 60, and `GO-131` finds its
+  one measurement ID. Sampled, all three are FAIL.
+
+  The open decision is a fixture one, and it is not the same for all three. An exemplary
+  site plainly does carry social tags and analytics on every page, which argues for
+  repairing the fixture the way `MS-021`'s declaration repaired `about.html`'s title.
+  Whether a privacy policy is supposed to carry authorship and experience signals is a
+  real question about `CN-068`'s threshold rather than about the fixture. **Declare all
+  three before repairing anything** — this note exists because the session that found
+  them had already read their verdicts and could no longer declare them honestly.
+
 - **KW-071 asks about keyword overuse, while its evidence measures SERP competition.**
   `gsc_cannibalization.py` now reports close non-branded competition honestly as
   `summary.contested_queries` and retains each query's raw position `spread`. A wide
