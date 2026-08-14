@@ -381,6 +381,46 @@ name. A column called `url` would be read as "fix this page".
   three before repairing anything** — this note exists because the session that found
   them had already read their verdicts and could no longer declare them honestly.
 
+  Declared on 2026-08-14, all three as FAIL against the good origin, by a session that
+  had not read their verdicts — reasoned from `/privacy.html`, which carries no Open
+  Graph tag, no analytics snippet and no byline. The fixture decision is still open and
+  is now the harder half: repairing the good tree the way `MS-021`'s declaration
+  repaired `about.html`'s title means **flipping three declarations to PASS in the same
+  commit as the repair**, which is a change that has to argue for itself rather than
+  quietly agree with itself.
+
+- **FAIL is unreachable for five items, because their warn band names severities their
+  script never emits.** The registry asserts in critical/high/medium/low; most evidence
+  scripts speak error/warning/info, and `SEVERITY_ALIAS` (`checklist_runner.py:467`)
+  maps error to high, warning to medium, info to low. An item asserting `none_severity:
+  [critical, high, medium]` with a warn band of `none_severity: [critical, high]`
+  therefore returns WARN for every issue its script can raise, unless that script can
+  say `error`. Five items are in that shape and none of their scripts holds an `error`
+  literal: `SP-110` (`critical_request_chain.py`), `TE-170`
+  (`cache_compression_checker.py`), `MD-185` (`image_weight_audit.py`), `AR-163`
+  (`faceted_nav_audit.py`) and `TECH-002` (`font_audit.py`).
+
+  Two are proven rather than argued. On 2026-08-14 the oracle declared FAIL for `SP-110`
+  and `TE-170` on the broken fixture — a 21 KB render-blocking stylesheet with a
+  synchronous script in the head, and responses carrying no compression and no cache
+  headers — and the run answered WARN for both, on **both** origins. `MD-185` reached
+  the same conclusion by hand in an earlier declaration, "a medium optimization issue,
+  which belongs in the rule's warning band". `AR-163` and `TECH-002` are unverified:
+  neither fixture gives either item a subject to judge.
+
+  This is the mirror of the dead warn band `0.47.0` removed from `CN-048` — there a
+  middle verdict the item could never return, here a bottom verdict it can never reach —
+  and it is a fourth mechanism `audit_reachability.py` does not have: its three proofs
+  are all about the assertion's own logic, none about the severity vocabulary underneath
+  it. **Do not ship it as a gate before the oracle has calibrated it**: the fourth
+  detector 0.46.0 attempted named four items and was wrong about all four.
+
+  Not a defect, and checked before filing one: `GO-136` looks unreachable in the same
+  way and is not. `sitemap_checker.py` does emit `error` — no sitemap found, an
+  unreadable one, one over 50,000 URLs — and the dead sitemap URLs its own invocation
+  never fetches (`fetch_urls: bool = False`, `sitemap_checker.py:35`) belong to
+  `GO-138`, which is the invocation that carries `--fetch-urls`.
+
 - **KW-071 asks about keyword overuse, while its evidence measures SERP competition.**
   `gsc_cannibalization.py` now reports close non-branded competition honestly as
   `summary.contested_queries` and retains each query's raw position `spread`. A wide
