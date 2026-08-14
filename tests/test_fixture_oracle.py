@@ -29,6 +29,12 @@ HTTP_DECLARED_IDS = {
     "MD-185", "MS-020", "MS-021", "MS-022", "MS-026", "MS-028",
     "MS-029", "MS-030", "MS-031", "SP-214", "SP-215", "SP-216",
     "SE-117", "TE-166", "TE-168", "TE-172", "TE-174", "TECH-001",
+    # Stage 2b, the first six of the sixty-eight decidable items nobody had
+    # declared. Five more crawl items were left undeclared on purpose: their
+    # verdicts had already been read off a run in the session that would have
+    # declared them, and a declaration made after seeing the answer proves
+    # nothing. See ROADMAP.md.
+    "BL-083", "CI-001", "CI-003", "CI-005", "CI-015", "LO-198",
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
 DECLARED_IDS = {
