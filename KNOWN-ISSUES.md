@@ -389,6 +389,27 @@ name. A column called `url` would be read as "fix this page".
   commit as the repair**, which is a change that has to argue for itself rather than
   quietly agree with itself.
 
+- **`image_inventory.py` emits `count: 0` for a page it found no images on, and `MD-184`
+  grades it.** Measured on 2026-08-14 against the good fixture: on `/about.html` and
+  `/privacy.html`, which reference no image at all, `image_inventory.py` returns `count:
+  0` while `image_weight_audit.py` omits `responsive_count` from its output altogether.
+  Under `--sample 3` the first produces a `medium` FAIL for *Audit Sitewide Image Usage*
+  on the exemplary fixture; the second correctly reports nothing and lets the entry page
+  decide.
+
+  The oracle found it as a disagreement rather than a crash: `MD-189` was declared FAIL
+  for the same reason and came back PASS, and the two scripts differing on identical
+  input is the whole of the explanation. This is the class three releases were already
+  spent on — a script emitting a default for an input it never measured — surviving in
+  one script while its neighbour has the fix.
+
+  `MD-184`'s declaration is deliberately left at FAIL on both origins, describing the
+  behaviour as it is and saying in its own `why` that the rule reads a site-wide
+  question one page at a time. **Repairing `image_inventory.py` flips it to PASS on
+  both**, at which point the item no longer distinguishes the fixtures at all and the
+  real question is whether `count gte 1` is the assertion *Audit Sitewide Image Usage*
+  wants. Not taken here: it changes live verdicts.
+
 - **FAIL is unreachable for five items, because their warn band names severities their
   script never emits.** The registry asserts in critical/high/medium/low; most evidence
   scripts speak error/warning/info, and `SEVERITY_ALIAS` (`checklist_runner.py:467`)

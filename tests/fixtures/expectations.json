@@ -377,8 +377,8 @@
         "why": "the sample is the entry page plus /about.html and /privacy.html and the worst decides: /about.html and /privacy.html reference no image at all, and the item asks each page for at least one. A policy page without images is not an image-usage defect, so this declaration records a rule that reads a site-wide question one page at a time"
       },
       "MD-189": {
-        "expect": "FAIL",
-        "why": "the sample is the entry page plus /about.html and /privacy.html and the worst decides: the entry page carries the responsive picture/source pair the item asks for, and the two other sampled pages carry no image at all, so the responsive count on them is zero. Same shape as MD-184: the rule cannot tell 'no responsive images' from 'no images'"
+        "expect": "PASS",
+        "why": "corrected from FAIL after the run, and the disagreement is itself the finding: image_weight_audit.py omits responsive_count entirely on a page carrying no images, so /about.html and /privacy.html report nothing rather than zero and the entry page's picture/source pair decides. That is what 'empty input must not emit zero' asks for. Its neighbour image_inventory.py does the opposite on the same two pages, which is why MD-184 above is a FAIL \u2014 see KNOWN-ISSUES.md \u00a76"
       },
       "TE-169": {
         "expect": "PASS",
