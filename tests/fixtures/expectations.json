@@ -387,6 +387,66 @@
       "TE-177": {
         "expect": "PASS",
         "why": "every sampled page carries a title element in the served HTML"
+      },
+      "AR-153": {
+        "expect": "FAIL",
+        "why": "'Design Clear Topic Hubs (Silos)' asks for a hub-and-spoke shape. This tree is five flat pages and a two-post blog with no hub page, no cluster and no silo, so there is no structure here to score highly"
+      },
+      "GEO-004": {
+        "expect": "FAIL",
+        "why": "declared against the sampled set, and the entry page is not the one that decides: it was built for exactly this item \u2014 the entry page carries two question-shaped headings with their answers immediately under them. /privacy.html carries none, and a policy page is not where answer blocks belong, so the worst sampled page decides against an item the site satisfies where it matters. Same shape as MS-033 and CN-068 \u2014 KNOWN-ISSUES.md \u00a76"
+      },
+      "GEO-005": {
+        "expect": "FAIL",
+        "why": "declared against the sampled set, and the entry page is not the one that decides: it was built for exactly this item \u2014 the entry page carries a cited blockquote, outbound citations, an experience claim and two dates. /privacy.html carries a date and nothing else a citation would rest on"
+      },
+      "GEO-006": {
+        "expect": "FAIL",
+        "why": "'Entity is resolvable (Wikidata / KG)' asks for identifiers that resolve. The Organization and Bakery blocks here declare a name, a logo, an address and hours and no `sameAs` at all, so nothing points at an external identity"
+      },
+      "GEO-007": {
+        "expect": "INDETERMINATE",
+        "why": "the check reads {indexnow_key}, an operator input the oracle audit does not pass, so the placeholder never resolves and no verdict is reachable"
+      },
+      "GO-143": {
+        "expect": "PASS",
+        "why": "the entry page carries a complete WebSite block with a SearchAction and its query-input, which is the markup 'Optimize for Sitelinks & Sitelinks Search Box' names; the other sampled pages declare no schema that could be reported against it"
+      },
+      "GO-144": {
+        "expect": "FAIL",
+        "why": "twin of GEO-004 through scores_with, same script and same floor, so it must land on the same verdict: the entry page's answer blocks are real and /privacy.html has none"
+      },
+      "GO-145": {
+        "expect": "FAIL",
+        "why": "twin of GEO-005 through scores_with, same script and same floor: the entry page is built to be cited and the sampled policy page is not"
+      },
+      "IN-121": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "IN-122": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "IN-127": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "IN-128": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "SE-118": {
+        "expect": "INDETERMINATE",
+        "why": "this origin is served over plain HTTP, so there is no certificate to call valid or invalid. The item's subject is the HTTPS pair, where it is declared"
+      },
+      "TE-180": {
+        "expect": "PASS",
+        "why": "every page declares a language, carries one h1, keeps its headings in order, gives its only image descriptive alt text, labels its navigation landmark and sets a viewport"
+      },
+      "TECH-003": {
+        "expect": "PASS",
+        "why": "the fixture is served from a loopback socket with the file already on disk, so time to first byte is a few milliseconds against a budget of 800"
       }
     },
     "broken": {
@@ -773,6 +833,66 @@
       "TE-177": {
         "expect": "FAIL",
         "why": "the entry page has no title element \u2014 the tree's own comment lists it first among the things the page exists to fail"
+      },
+      "AR-153": {
+        "expect": "FAIL",
+        "why": "the same absence, with less: this tree is an entry page, two identical posts, a thin page and an orphan, which is the opposite of a silo"
+      },
+      "GEO-004": {
+        "expect": "FAIL",
+        "why": "no page here poses a question or answers one; the entry page is filler prose, the duplicates are one paragraph twice and the orphan is three sentences"
+      },
+      "GEO-005": {
+        "expect": "FAIL",
+        "why": "nothing here carries a citation, a date, an author or an evidence claim, which is the whole of what makes content citable"
+      },
+      "GEO-006": {
+        "expect": "FAIL",
+        "why": "the only parseable schema here is a Product with a name and an image; there is no organization, no identifier and no `sameAs`"
+      },
+      "GEO-007": {
+        "expect": "INDETERMINATE",
+        "why": "the check reads {indexnow_key}, which the oracle audit does not pass on either origin"
+      },
+      "GO-143": {
+        "expect": "FAIL",
+        "why": "no page here declares a WebSite block at all, so there is no SearchAction for a sitelinks search box to be built from"
+      },
+      "GO-144": {
+        "expect": "FAIL",
+        "why": "twin of GEO-004 through scores_with: no answer blocks anywhere"
+      },
+      "GO-145": {
+        "expect": "FAIL",
+        "why": "twin of GEO-005 through scores_with: nothing here is citable"
+      },
+      "IN-121": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "IN-122": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "IN-127": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "IN-128": {
+        "expect": "INDETERMINATE",
+        "why": "no page in either tree declares an alternate locale, a hreflang link or a language-prefixed path, so the fixture has no international dimension for this item to judge. Building one is fixture work, not a decision"
+      },
+      "SE-118": {
+        "expect": "INDETERMINATE",
+        "why": "plain HTTP here too, so there is no certificate to examine"
+      },
+      "TE-180": {
+        "expect": "FAIL",
+        "why": "the entry page declares no language, carries two h1 elements, serves an image with no alt attribute and another with an empty one on meaningful content, puts unreadable grey-on-grey text on the page and offers a form input with no label"
+      },
+      "TECH-003": {
+        "expect": "PASS",
+        "why": "served from the same loopback socket as the good origin, so its time to first byte is the same few milliseconds. The tree is slow in ways this item does not measure"
       }
     },
     "good_tls": {
@@ -799,6 +919,10 @@
       "AR-150": {
         "expect": "PASS",
         "why": "the audited HTTPS entry responds directly and therefore has no redirect hops"
+      },
+      "SE-118": {
+        "expect": "PASS",
+        "why": "both HTTPS origins present the same certificate, issued for 127.0.0.1 with a matching subjectAltName and in date, and the audit child is given it as its trust anchor, so verification succeeds"
       }
     },
     "broken_tls": {
@@ -825,6 +949,10 @@
       "AR-150": {
         "expect": "INDETERMINATE",
         "why": "the shared TLS entry has no chain; the fixture needs a dedicated audited entry URL with more than one redirect hop"
+      },
+      "SE-118": {
+        "expect": "PASS",
+        "why": "both HTTPS origins present the same certificate, issued for 127.0.0.1 with a matching subjectAltName and in date, and the audit child is given it as its trust anchor, so verification succeeds"
       }
     }
   }

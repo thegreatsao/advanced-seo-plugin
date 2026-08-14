@@ -60,8 +60,15 @@ HTTP_DECLARED_IDS = {
     # settled verdict for it would be a claim about this laptop.
     "AR-152", "CI-013", "CN-036", "GEO-002", "GEO-003", "KW-076", "MB-095",
     "MB-098", "MB-100", "MB-105", "MD-184", "MD-189", "TE-169", "TE-177",
+    # Stage 2e. SE-118 is declared on all four origins and means different things on
+    # each pair: the HTTP origins have no certificate to judge, and the HTTPS pair is
+    # where the item has a subject at all.
+    "AR-153", "GEO-004", "GEO-005", "GEO-006", "GEO-007", "GO-143", "GO-144",
+    "GO-145", "IN-121", "IN-122", "IN-127", "IN-128", "SE-118", "TE-180",
+    "TECH-003",
 }
-TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-120", "TE-175"}
+TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-118", "SE-120",
+                    "TE-175"}
 DECLARED_IDS = {
     "good": HTTP_DECLARED_IDS,
     "broken": HTTP_DECLARED_IDS,
