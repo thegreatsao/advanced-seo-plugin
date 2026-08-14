@@ -3,6 +3,15 @@
 The manifest is the oracle. Its verdicts were written from checklist titles and
 fixture construction before this module was run; this file only loads and reports
 them. A mismatch is a triage input, not permission to edit either side silently.
+
+Nothing in this module can be run without running the fixtures. `setUpModule`
+audits all four origins whichever test is selected, so
+`unittest tests.test_fixture_oracle.ManifestContract` — a check that the id sets
+and the manifest agree, touching no verdict — answers every undeclared item on the
+way. **Commit a new declaration before running anything here at all**, including
+the tests that look like they only read the manifest. This cost the ordering proof
+for one batch on 2026-08-14; the declarations were written first and git cannot
+show it.
 """
 from __future__ import annotations
 
