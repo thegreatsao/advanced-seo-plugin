@@ -656,7 +656,15 @@ item(75, "medium", L,
 # could not fail. The keyword is now an operator input and this item reports
 # NEEDS_INPUT without it. Assert `in_body`, not `target_keyword`, because the title
 # asks whether the keyword occurs in body copy rather than whether one was named.
-item(76, "medium", S, "article_seo.py", ["{url}", "--keyword", "{keyword}"],
+#
+# `--no-autocomplete` because without it the script asks Google Suggest for related
+# terms — once per sampled page, sending the operator's keyword to a third party for
+# a field (`related_keywords`) no item asserts. `article_seo.py` is `fetch` in
+# REQUIRES above, and `fetch` says "requests the single target URL"; the flag is what
+# makes that true. Every direct test of this script has passed it since the keyword
+# input landed, so the audit path was the only caller still making the request.
+item(76, "medium", S, "article_seo.py",
+     ["{url}", "--keyword", "{keyword}", "--no-autocomplete"],
      {"path": "keyword_usage.in_body", "truthy": True},
      "The primary keyword should appear naturally in body copy")
 item(77, "medium", L, fix="Include the primary keyword in the opening paragraph")

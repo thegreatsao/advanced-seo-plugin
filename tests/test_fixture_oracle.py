@@ -62,11 +62,14 @@ HTTP_DECLARED_IDS = {
     "AR-149", "AR-154", "AR-163", "CI-018", "CN-039", "CN-068", "GEO-008",
     "GO-131", "GO-136", "MB-102", "MD-190", "MS-032", "MS-033", "SP-109",
     "SP-110", "TE-170", "TECH-002",
-    # Stage 2d. Two are INDETERMINATE on purpose and neither is a shrug:
-    # KW-076 reads {keyword}, an operator input this audit does not pass, and
-    # MB-105 compares served HTML against a rendered DOM, which exists only where
-    # a browser does — Playwright is installed here and on no CI runner, so any
-    # settled verdict for it would be a claim about this laptop.
+    # Stage 2d. One is INDETERMINATE on purpose and it is not a shrug: MB-105
+    # compares served HTML against a rendered DOM, which exists only where a browser
+    # does — Playwright is installed here and on no CI runner, so any settled verdict
+    # for it would be a claim about this laptop.
+    #
+    # KW-076 was the other, until 0.48.0 gave the registry `--no-autocomplete` and
+    # this module a keyword to pass. Its declaration was written before the first run
+    # that could answer it, as every declaration here is.
     "AR-152", "CI-013", "CN-036", "GEO-002", "GEO-003", "KW-076", "MB-095",
     "MB-098", "MB-100", "MB-105", "MD-184", "MD-189", "TE-169", "TE-177",
     # Stage 2e. SE-118 is declared on all four origins and means different things on
@@ -92,6 +95,16 @@ DECLARED_IDS = {
     "broken_tls": TLS_DECLARED_IDS,
 }
 ALLOWED = {"PASS", "WARN", "FAIL", "N/A", "INDETERMINATE"}
+# The primary keyword handed to every origin, for KW-076. It is the site's own
+# subject rather than a word picked to produce a verdict: both trees are the same
+# bakery, and `bread` is what the good tree's title leads with and what the broken
+# tree's own `keywords` meta lists last. One keyword for one audit, so all four
+# origins get the same one — that is what an operator does.
+#
+# Safe to pass only since 0.48.0. Before it the registry invoked `article_seo.py`
+# without `--no-autocomplete`, so supplying a keyword here would have sent it to
+# Google Suggest once per sampled page and taken this suite off loopback.
+KEYWORD = "bread"
 SITE = None
 RESULTS: dict[str, dict[str, str]] = {}
 
@@ -114,6 +127,10 @@ def audit(label: str, url: str) -> dict[str, str]:
     `FixtureSite` stages artifacts for the HTTP pair only, so the TLS origins get no
     flags at all — which is why CI-018 is declared on `good` and `broken` and nowhere
     else.
+
+    `--keyword` is the one operator input that is not a file, and it goes to all four
+    origins because it describes the site rather than the run. See `KEYWORD` above for
+    the word and for why passing it at all had to wait for 0.48.0.
     """
     out = os.path.join(SITE.dir, f"oracle-{label}.json")
     artifacts = []
@@ -128,7 +145,8 @@ def audit(label: str, url: str) -> dict[str, str]:
         [sys.executable, os.path.join(SCRIPTS, "checklist_runner.py"), url,
          "--allow-private", "--sample", "3", "--max-rps", "0",
          "--no-history", "--no-prompt", "--quiet", "--timeout", "120",
-         "--json", out, *artifacts], env=SITE.environment(label),
+         "--keyword", KEYWORD, "--json", out, *artifacts],
+        env=SITE.environment(label),
         timeout=900)
     if proc.returncode != 0:
         raise AssertionError(

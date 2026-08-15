@@ -193,6 +193,12 @@ usage measurement happened.
 `seo_issues[]` — array
   - item keys: severity, area, finding, fix
 
+`related_keywords` is Google Suggest's answer when the script is run by hand, and the
+page's own extracted terms when it is run by the audit: **KW-076 passes
+`--no-autocomplete`**, because a check that asserts `keyword_usage.in_body` has no use
+for suggestions and every sampled page would otherwise send the operator's keyword to
+a third party.
+
 ### broken_links.py
 
 With `--inventory` the scope is the whole site's **internal** links, read out of the

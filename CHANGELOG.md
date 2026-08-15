@@ -10,6 +10,33 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.48.0 — an audit that asked Google a question nobody had answered for
+
+`KW-076` *Include the Primary Keyword in Body Copy* invoked `article_seo.py` as
+`{url} --keyword {keyword}`, and that invocation makes a request to
+`suggestqueries.google.com` — **once per sampled page, carrying the operator's
+keyword**, for `related_keywords`, a field no item in the registry asserts. The item
+now passes `--no-autocomplete`. The registry is `10aa24c02669`, still 215 items, and
+**no verdict changes anywhere**: the assertion reads `keyword_usage.in_body`, which
+the suggestion lookup never touched.
+
+Three things made it invisible. `article_seo.py` is `fetch` in the requirements
+table, and `fetch` is documented there as "requests the single target URL" — true of
+the script, false of the way the registry called it. Every direct test of the script
+has passed `--no-autocomplete` since the keyword input landed in 0.45.0, with a
+docstring saying why — *"this suite does not leave loopback"* — so the tests were
+built around the request rather than over it. And the item reports `NEEDS_INPUT`
+without a `--keyword`, so the audit path only made the call for the operators who
+had asked the item to work at all.
+
+The fixture oracle now supplies a keyword, which is what surfaced this: wiring
+`--keyword` into `tests/test_fixture_oracle.py` would have taken the suite online on
+every CI run, and only the flag makes the wiring safe. `KW-076` is declared on both
+fixture origins for the first time — the keyword is `bread`, the word the good tree's
+own title leads with, carried by all three of its sampled pages and absent from two of
+the broken tree's three. The oracle's tally is at the end of this entry, and it was
+written after the run rather than with the declaration.
+
 ## 0.47.0 — the other unreachable verdict, and a warn band that could not fire
 
 A `warn` band fires only when the assertion has already failed *and* the warn rule then

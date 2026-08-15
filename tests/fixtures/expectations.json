@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "afb4cb3d88dd",
+  "registry_version": "10aa24c02669",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -353,8 +353,8 @@
         "why": "this origin publishes both a robots.txt naming its policy and an llms.txt, which is the documented end of the item's scale rather than the permitted-by-silence end"
       },
       "KW-076": {
-        "expect": "INDETERMINATE",
-        "why": "the check reads {keyword}, which is an operator input; the oracle audit passes no --keyword, so the placeholder never resolves and no verdict is reachable. Wiring one into tests/test_fixture_oracle.py would make it decidable"
+        "expect": "PASS",
+        "why": "the audit now supplies --keyword bread, and 'Include the Primary Keyword in Body Copy' is answered per page with the worst of the three sampled deciding. The sample is the entry page, /about.html and /privacy.html, and the word is in the copy article_seo.py reads on all three: 'Sourdough keeps longer than yeasted bread' on the entry page, 'four of them in bread specifically' on /about.html, and the 'Ordering bread' heading on /privacy.html — headings count, the corpus is h1, h2s, h3s and paragraphs inside <main>. A site whose own subject is on every page it publishes is what this item passes"
       },
       "MB-095": {
         "expect": "PASS",
@@ -819,8 +819,8 @@
         "why": "neither a robots.txt nor an llms.txt exists here, so every AI crawler is allowed by silence and nothing documents the policy"
       },
       "KW-076": {
-        "expect": "INDETERMINATE",
-        "why": "the check reads {keyword}, an operator input the oracle audit does not supply, so no verdict is reachable on either origin"
+        "expect": "FAIL",
+        "why": "the sampled set here is the entry page, /blog/duplicate-a.html and /orphan.html. The entry page carries 'bread' five times over, inside the stuffed 'best sourdough bread vilnius' anchors, so on its own it would pass; the duplicate post is four sentences about being a duplicate and the orphan is two about being an orphan, and neither says the word at all. The worst sampled page decides, so FAIL — a site that names its subject on the home page and nowhere else is the shape this item exists to catch"
       },
       "MB-095": {
         "expect": "PASS",
