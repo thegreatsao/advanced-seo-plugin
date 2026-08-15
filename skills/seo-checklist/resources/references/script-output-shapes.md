@@ -769,12 +769,20 @@ one — the script refuses the file instead.
 ### image_inventory.py
 
 `url` — str
-`count` — int
-`missing_alt` — int
+`count` — int — **absent on a page with no images**
+`missing_alt` — int — **absent on a page with no images**
 `summary.images` — int
 `summary.lazy_lcp_candidates` — int — CN-054's compatibility path: JS-deferred images
   with `data-src`/`data-srcset` but no native `src`, `srcset`, or `<picture>` source.
   Native `loading=lazy` remains discoverable and does not increment this count.
+  **Absent on a page with no images.**
+
+Those three are the fields the registry reads as a verdict, and since 0.49.0 a page
+with no images emits none of them, so the four items over this script report `NO_DATA`
+there rather than a FAIL for MD-184 and a free PASS for CI-016, MD-186 and CN-054. The
+descriptive counts stay: `summary.images` is 0 because the page has none, which is a
+fact about the page rather than a claim about its images. Same rule, same reason, as
+`responsive_count` and `modern_format_count` in `image_weight_audit.py` below.
 `issues[]` — array
   - item keys: severity, message, url
 `images[]` — array

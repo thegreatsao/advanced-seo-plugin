@@ -425,26 +425,34 @@ name. A column called `url` would be read as "fix this page".
   rejected outright — that is shaping the fixture to suit the check, which is the
   failure this tree exists to refuse.
 
-- **`image_inventory.py` emits `count: 0` for a page it found no images on, and `MD-184`
-  grades it.** Measured on 2026-08-14 against the good fixture: on `/about.html` and
-  `/privacy.html`, which reference no image at all, `image_inventory.py` returns `count:
-  0` while `image_weight_audit.py` omits `responsive_count` from its output altogether.
-  Under `--sample 3` the first produces a `medium` FAIL for *Audit Sitewide Image Usage*
-  on the exemplary fixture; the second correctly reports nothing and lets the entry page
-  decide.
+- **Fixed in 0.49.0 — `image_inventory.py` emitted `count: 0` for a page it found no
+  images on, and four items graded it.** Measured on 2026-08-14 against the good
+  fixture: on `/about.html` and `/privacy.html`, which reference no image at all,
+  `image_inventory.py` returned `count: 0` while `image_weight_audit.py` omitted
+  `responsive_count` from its output altogether. Under `--sample 3` the first produced
+  a `medium` FAIL for *Audit Sitewide Image Usage* on the exemplary fixture; the second
+  correctly reported nothing and let the entry page decide.
 
   The oracle found it as a disagreement rather than a crash: `MD-189` was declared FAIL
   for the same reason and came back PASS, and the two scripts differing on identical
   input is the whole of the explanation. This is the class three releases were already
   spent on — a script emitting a default for an input it never measured — surviving in
-  one script while its neighbour has the fix.
+  one script while its neighbour had the fix.
 
-  `MD-184`'s declaration is deliberately left at FAIL on both origins, describing the
-  behaviour as it is and saying in its own `why` that the rule reads a site-wide
-  question one page at a time. **Repairing `image_inventory.py` flips it to PASS on
-  both**, at which point the item no longer distinguishes the fixtures at all and the
-  real question is whether `count gte 1` is the assertion *Audit Sitewide Image Usage*
-  wants. Not taken here: it changes live verdicts.
+  The repair withholds the three fields the registry reads as a verdict — `count`,
+  `missing_alt` and `summary.lazy_lcp_candidates` — when the page carries no images.
+  **`MD-184`'s FAIL was the visible half; the other three were the quiet half**, because
+  `missing_alt: 0` and `lazy_lcp_candidates: 0` gave `CI-016`, `MD-186` and `CN-054` a
+  free PASS on every image-free page ever audited. Neither fixture verdict moves for
+  those three — the sample's worst *decided* page already came from a page with images
+  — so nothing here would have shown it. `MD-184` is now PASS on both origins and is
+  re-declared accordingly.
+
+  **Still open, and deliberately not taken with it: whether `count gte 1` is the
+  assertion *Audit Sitewide Image Usage* wants at all.** The item now agrees with every
+  page that has an image and says nothing about pages that do not, which is not an
+  audit of sitewide usage — it is a check that images exist somewhere in the sample.
+  That is a registry question, and it changes what a live audit reports.
 
 - **Five items assert a thinner thing than their titles promise, and one family of them
   shares a script.** Collected rather than filed separately, because the shape is the

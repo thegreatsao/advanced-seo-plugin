@@ -1781,6 +1781,46 @@ class ImageInventory(unittest.TestCase):
         self.assertEqual(verdict("MD-184", out("images")), PASS)
         self.assertEqual(out("images_bad")["count"], 2)
 
+    def image_free(self) -> dict:
+        import tempfile
+        import image_inventory
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write("<!doctype html><html><body><p>No images here.</p>"
+                     "</body></html>")
+            path = fh.name
+        try:
+            return image_inventory.inventory(path)
+        finally:
+            os.unlink(path)
+
+    def test_an_image_free_page_decides_none_of_the_four_image_items(self):
+        """The twin of `test_an_image_free_page_does_not_fail_responsive_images`
+        in `test_evidence.py`, which `image_weight_audit.py` has passed since 0.45.
+
+        Emitted as zero, these three fields answered four items about images for a
+        page that has none: a FAIL for MD-184 and a free PASS for the other three.
+        Under `--sample 3` the FAIL was the one that showed — on the *good* fixture,
+        whose `/about.html` and `/privacy.html` carry no image at all.
+        """
+        result = self.image_free()
+        for field in ("count", "missing_alt"):
+            self.assertNotIn(field, result, field)
+        self.assertNotIn("lazy_lcp_candidates", result["summary"])
+        for item_id in ("MD-184", "CI-016", "MD-186", "CN-054"):
+            self.assertEqual(verdict(item_id, result), NO_DATA, item_id)
+
+    def test_the_descriptive_counts_survive_on_an_image_free_page(self):
+        """Only the three fields the registry reads as a verdict are withheld. A
+        page describing itself as having zero images is a fact; an item claiming
+        its images are fine is not."""
+        result = self.image_free()
+        self.assertEqual(result["summary"]["images"], 0)
+        self.assertEqual(result["empty_alt"], 0)
+        self.assertEqual(result["skipped_no_src"], 0)
+        self.assertEqual(result["images"], [])
+        self.assertEqual(result["issues"], [])
+
 
 class VideoSchema(unittest.TestCase):
     """MD-188, MD-190 and MB-102, all `issues` by severity."""

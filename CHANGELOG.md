@@ -10,6 +10,39 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.49.0 — a page with no images stops answering four questions about images
+
+`image_inventory.py` emitted `count`, `missing_alt` and `summary.lazy_lcp_candidates`
+for a page that references no image at all, and they are the three fields the registry
+reads as a verdict: `MD-184` asserts `count gte 1`, `CI-016` and `MD-186` assert
+`missing_alt eq 0`, `CN-054` asserts `summary.lazy_lcp_candidates eq 0`. Emitted as
+zero they turn "there was nothing here to judge" into a verdict — **a FAIL for the
+first and a free PASS for the other three.** All three are now withheld on a page with
+no images, so those items report `NO_DATA` there and the pages that do carry images
+decide. The descriptive counts stay: `summary.images` is 0 because the page has none,
+which is a fact about the page rather than a claim about its images. The registry is
+untouched at `10aa24c02669`, 215 items.
+
+`image_weight_audit.py` has done exactly this with `responsive_count` and
+`modern_format_count` since 0.45.0, and **the two scripts disagreeing on the same two
+fixture pages is how this surfaced**: `MD-189` was declared FAIL, came back PASS, and
+its neighbour `MD-184` failed the *exemplary* fixture for the crime of having a privacy
+policy with no pictures on it. One script had the fix and the one beside it did not.
+
+**The FAIL was the visible half.** `missing_alt: 0` and `lazy_lcp_candidates: 0` handed
+`CI-016`, `MD-186` and `CN-054` a pass on every image-free page ever audited, and no
+fixture verdict moves for those three even now — under `--sample 3` the worst *decided*
+page already came from a page with images, so the fixtures were never going to show it.
+It was found by asking what else the same function emits, not by a suite going red.
+
+`MD-184` becomes PASS on both fixture origins and is re-declared there, which leaves it
+agreeing with every page that has an image and silent about pages that do not.
+**Whether `count gte 1` is the assertion *Audit Sitewide Image Usage* wants is now the
+open question**, and it is a registry change: recorded in `KNOWN-ISSUES.md` §6, not
+taken here.
+
+Oracle after the change: measured below, and written after the run.
+
 ## 0.48.0 — an audit that asked Google a question nobody had answered for
 
 `KW-076` *Include the Primary Keyword in Body Copy* invoked `article_seo.py` as

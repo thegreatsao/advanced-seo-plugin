@@ -62,14 +62,29 @@ def inventory(source: str, fetch_images: bool = False, timeout: int = 15) -> dic
                               if r["deferred_source"] and not r["discoverable"])
     missing_alt = sum(1 for r in rows if not r["has_alt"])
     empty_alt = sum(1 for r in rows if r["empty_alt"])
-    return {"url": url or source, "count": len(rows), "missing_alt": missing_alt,
-            "empty_alt": empty_alt, "skipped_no_src": skipped_no_src,
-            "summary": {"images": len(rows),
-                        # Retained at the registry's existing path: this is the
-                        # CN-054 verdict input, now aligned with discoverability.
-                        "lazy_lcp_candidates": undiscoverable_lazy,
-                        "empty_alt": empty_alt, "skipped_no_src": skipped_no_src},
-            "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
+    out = {"url": url or source,
+           "empty_alt": empty_alt, "skipped_no_src": skipped_no_src,
+           "summary": {"images": len(rows),
+                       "empty_alt": empty_alt, "skipped_no_src": skipped_no_src},
+           "issues": issues, "images": rows, "fetch_error": fetched.get("error")}
+    # A page with no images is not a page whose images are missing, unlabelled or
+    # undiscoverable. These three are the only fields the registry reads as a verdict
+    # — MD-184 asserts `count gte 1`, CI-016 and MD-186 assert `missing_alt eq 0`,
+    # CN-054 asserts `summary.lazy_lcp_candidates eq 0` — and emitted as 0 they turn
+    # "there was nothing here to judge" into a verdict: a FAIL for the first and a
+    # free PASS for the other three. An absent key is NO_DATA, so a sampled page with
+    # no images stays undecided and the pages that have images decide the item.
+    #
+    # `image_weight_audit.py:152` already does exactly this with `responsive_count`
+    # and `modern_format_count`, and the two scripts disagreeing on the same two
+    # fixture pages is how this was found: MD-189 was declared FAIL, came back PASS,
+    # and its neighbour MD-184 failed the exemplary fixture. The descriptive counts
+    # above stay at 0 — `summary.images` is a fact about the page, not a verdict.
+    if rows:
+        out["count"] = len(rows)
+        out["missing_alt"] = missing_alt
+        out["summary"]["lazy_lcp_candidates"] = undiscoverable_lazy
+    return out
 
 
 def main() -> None:
