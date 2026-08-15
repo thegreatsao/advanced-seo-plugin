@@ -1011,7 +1011,16 @@ item(162, "high", S, "link_profile.py", CRAWLARG,
 # one URL yields one path and each parameter counted once, and both thresholds need
 # more. With the flag it audits the internal links of the page, which is also the
 # truer question, since a facet becomes a trap when the site links to it.
-item(163, "medium", S, "faceted_nav_audit.py", ["{url}", "--from-page"],
+#
+# `--fetch` for the same reason, added in 0.50.0. The fix text has always said
+# "canonical, noindex, robots", and those three are exactly what the script declines
+# to look at without the flag: `facet_missing_canonical` and `facet_not_noindexed`
+# are computed inside `if fetch:` and were never reached, so the item graded a
+# parameter count and called it faceted-navigation control. Grading the uncontrolled
+# facet without passing this would have been worse than leaving it alone — the
+# reachability gate reads severity literals, so a finding that exists and can never
+# run would have silenced the gate while changing nothing.
+item(163, "medium", S, "faceted_nav_audit.py", ["{url}", "--from-page", "--fetch"],
      ISSUES_ANY(),
      "Control faceted navigation: canonical, noindex, robots", warn=NOTHING_SERIOUS())
 item(164, "medium", M, fix="Handle out-of-stock products via 301/410 plus clear UX")
@@ -1112,7 +1121,14 @@ item(183, "high", M, fix="Handle migrations, parameters and status codes correct
 item(184, "medium", S, "image_inventory.py", PAGE,
      {"path": "count", "gte": 1},
      "Audit sitewide image usage")
-item(185, "medium", S, "image_weight_audit.py", PAGE,
+# `--fetch-images` since 0.50.0, and the band is why. Grading the lazy LCP candidate
+# `error` left `Large image transfer size` as the only `warning` this script can raise,
+# and it reads `content_length`, which `_local_size` returns `None` for over http —
+# so on a live site nothing medium could happen and the warn band promised a middle
+# verdict no site could reach. The item is *Optimize Images*: weight is its subject,
+# MD-187 already HEADs the same images for its own count, and measuring bytes is what
+# makes the middle verdict real rather than decorative.
+item(185, "medium", S, "image_weight_audit.py", ["{url}", "--fetch-images"],
      ISSUES_ANY(),
      "Optimize images", warn=NOTHING_SERIOUS())
 item(186, "high", S, "image_inventory.py", PAGE,

@@ -448,18 +448,18 @@ name. A column called `url` would be read as "fix this page".
   — so nothing here would have shown it. `MD-184` is now PASS on both origins and is
   re-declared accordingly.
 
-  **A third divergence between the same two scripts, found reviewing the repair and
-  left standing on purpose.** An `<img>` carrying no `src` is skipped by
-  `image_inventory.py` (`if not src: skipped_no_src += 1; continue`) and processed by
-  `image_weight_audit.py` (`src = img.get("src") or ""`, then appended like any other
-  row). So a page whose only `<img>` has no `src` is `NO_DATA` for the four items over
-  the first script and a `FAIL` for `MB-096` and `MD-189` over the second, from one
-  page. Both sides have a reason — an inventory keyed by `src` cannot list a row with
-  no `src`, and an `<img>` with a `srcset` and no `src` is valid responsive markup the
-  weight audit must still judge — so the case that actually diverges is markup with
-  neither, which is broken either way. Recorded rather than repaired: it changes live
-  verdicts on a shape neither fixture has, and which of the two is right is a decision,
-  not a defect.
+  **Fixed in 0.50.0 — a third divergence between the same two scripts.** An `<img>`
+  carrying no `src` was skipped by `image_inventory.py` and processed by
+  `image_weight_audit.py`, so a page whose only `<img>` had nothing to load was
+  `NO_DATA` for the four items over the first script and `FAIL` for `MB-096` and
+  `MD-189` over the second. **The 0.49.0 entry called that a decision rather than a
+  defect and left it standing; that was wrong, and the wrongness is the useful part.**
+  An `<img>` with a `srcset` and no `src` is valid responsive markup and is still
+  judged. An `<img>` with none of `src`, `srcset` or a `<picture>` source will never
+  load anything, and grading it as an unresponsive legacy-format image reports two
+  image defects for a page that has no image there. `image_weight_audit.py` now skips
+  exactly that shape and reports the count as `skipped_no_src`, the name its neighbour
+  already uses.
 
   **Still open, and deliberately not taken with it: whether `count gte 1` is the
   assertion *Audit Sitewide Image Usage* wants at all.** The item now agrees with every

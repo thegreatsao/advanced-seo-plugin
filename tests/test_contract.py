@@ -189,11 +189,15 @@ SAME_ON_BOTH = {
     "SE-118": "both fixtures are served over plain HTTP by the same server",
     "SE-120": "both fixtures are served by the same header-free http.server",
     "TE-175": "both fixtures are served by the same header-free http.server",
-    "TE-170": "both fixtures are served by the same http.server: no cache headers, no gzip",
+    # `TE-170` and `SP-110` were here until 0.50.0, both for the same reason: the
+    # scripts behind them could say only `warning`, so the exemplary tree and the
+    # tree built to be slow landed in one band. Grading the two findings that are
+    # defects on every site — text served uncompressed, and a parser-blocking script
+    # in `<head>` — separated them, and the good origin now compresses. Two entries
+    # that read as facts about the fixtures were facts about the severity vocabulary.
     "TE-167": "both fixtures are up; downtime is not something a fixture can show",
     "TE-179": "no loopback fixture host has a whois record, so neither side can be dated",
     "SP-109": "neither fixture loads a third-party script",
-    "SP-110": "both fixtures block rendering on a stylesheet in the head",
     "TECH-002": "neither fixture loads a web font",
     "TECH-003": "the same server answers both, so TTFB does not differ",
     "CO-191": "competitor comparison has no data path at all yet",
@@ -308,6 +312,17 @@ BAND_UNSEEN = {
     "MS-032": "the band is errors above zero with at most three warnings. Measured "
               "on the fixtures: good is 0 errors and 2 warnings, broken is 3 errors "
               "and 5 warnings, so one passes and the other overshoots",
+    "TE-170": "the band needs a medium with no high, and this invocation reaches "
+              "only one: a compressed response whose Vary omits accept-encoding. "
+              "The good origin compresses and sends Vary: Accept-Encoding, so it "
+              "has nothing medium; the broken origin compresses nothing and takes "
+              "the high instead. The cache-lifetime medium needs --include-assets, "
+              "which TE-170 does not pass",
+    "MD-185": "the band needs Large image transfer size, which fires above "
+              "LARGE_IMAGE_BYTES = 250,000. The largest image in either tree is "
+              "broken/assets/huge.png at 54,606 bytes, kept small on purpose — the "
+              "same reason MB-095 is in SAME_ON_BOTH, and not something a fixture "
+              "can change without bloating the repository",
 }
 
 
@@ -485,7 +500,11 @@ class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):
         # sites are plaintext and http.server does not speak TLS. Its only coverage
         # is tests/test_tls_certificate.py, which stands up its own TLS origin.
         "SE-120": "http.server sends no security headers at all",
-        "TE-170": "http.server sends no cache headers and no gzip",
+        # TE-170 was here until 0.50.0, on the same http.server reasoning as TE-175
+        # below. It left because the reasoning stopped being true rather than because
+        # the item softened: the good origin now serves gzip with Vary and a validator
+        # header, so an exemplary tree passes the item about server configuration
+        # instead of being excused from it.
         "TE-175": "http.server sends no cache headers and no gzip",
         "SP-110": "the fixture blocks rendering on one stylesheet in the head, which "
                   "is the defect SP-110 exists to find and it has to be somewhere",

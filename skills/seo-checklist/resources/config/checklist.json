@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "10aa24c02669",
+  "registry_version": "754ea7e0b9b1",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -3370,7 +3370,8 @@
         "script": "faceted_nav_audit.py",
         "args": [
           "{url}",
-          "--from-page"
+          "--from-page",
+          "--fetch"
         ],
         "requires": "fetch",
         "assert": {
@@ -3845,7 +3846,8 @@
       "check": {
         "script": "image_weight_audit.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--fetch-images"
         ],
         "requires": "fetch",
         "assert": {

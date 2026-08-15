@@ -36,10 +36,20 @@ cannot fail, and it checks the declaration in three directions:
 An exclusion list rots because it is only ever read. This one is derived again on every
 run, and the prose is anchored to a token the code has to keep earning.
 
-**What it does not claim.** Three detectors, each proving unreachability from a shape
+**What it does not claim.** Four detectors, each proving unreachability from a shape
 this registry has actually held. Silence about an item is not a finding that it can
 fail; it is the absence of a proof either way, and the summary line prints that count
 rather than implying coverage it does not have.
+
+**And `severity_vocabulary` reads literals, not reachable code.** A script that writes
+`"severity": "error"` under a flag the registry never passes has the word and cannot
+say it, so this tool falls silent while FAIL stays unreachable. That is not
+hypothetical: 0.50.0 graded the uncontrolled facet in `faceted_nav_audit.py` as
+`error`, and the finding sits inside `if fetch:` while `AR-163` was invoking the script
+without `--fetch`. **Adding the severity silenced this gate and changed nothing**, and
+it was caught by reading the invocation rather than by any check here. The flag is
+passed now. When you grade a finding to make an item failable, check that the
+registry's own arguments reach the line.
 
 A fourth was written and removed before it shipped, and the reason is worth keeping. It
 claimed a rule could not fail when every write of its field was a literal that passed.
@@ -94,7 +104,8 @@ from audit_assertions import (SEVERITY_ALIAS, path_is_probed,  # noqa: E402
 # Every mechanism this tool can prove. A declaration naming anything else is an
 # error rather than an exemption: the vocabulary is closed so that "why" cannot
 # quietly become a free-text field nobody checks.
-MECHANISMS = ("warn_complement", "path_never_emitted", "guarded_by_assertion")
+MECHANISMS = ("warn_complement", "path_never_emitted", "guarded_by_assertion",
+              "severity_vocabulary")
 
 # Complementary comparison pairs. `gte 90` with `warn lt 90` covers the number line,
 # so no value is left for FAIL.
@@ -311,6 +322,59 @@ def prove_guarded_by_assertion(item: dict, scripts_dir: str = SCRIPTS) -> dict |
                         f"{', '.join(str(s[2]) for s in sites)}"}
 
 
+def prove_severity_vocabulary(item: dict, scripts_dir: str = SCRIPTS) -> dict | None:
+    """The warn band refuses severities the script has no word for, so FAIL is dead.
+
+    A `none_severity` assertion fails when an issue carries one of the severities it
+    grades. The band is then consulted, and FAIL arrives only if the band fails too —
+    so **FAIL needs an issue graded at something the band refuses.** A script that
+    cannot say any of those words stops at WARN on every site there will ever be.
+
+    This is the mirror of `dead_warn_bands`' severity case below and not the same
+    check: there the band can never fire, here it can never *not* fire. Both read the
+    same two sets and neither implies the other.
+
+    Three conditions, and each rules out a way of being wrong:
+
+      * both rules grade the same path, or they are two measurements and this says
+        nothing about either — `CI-014` warns on `total_hops` while asserting
+        `has_loop`;
+      * the script's vocabulary is non-empty. A script that says no severity at all
+        cannot fail the assertion either, which is a different shape with a different
+        repair, and claiming it here would put two findings under one word;
+      * the assertion is failable — the vocabulary contains something it grades. An
+        item that can only ever PASS is again not this.
+
+    The vocabulary comes from `severity_literals`, which reads the whole file. That
+    matters more than it looks: `cache_compression_checker.py` builds its issues in
+    `_check_url` and re-emits them in `audit` as `{**item, "url": ...}`, three hops
+    from the returned list, so anything reading only the function that returns
+    `issues` sees no severity at all. A reviewer handed exactly that file read the
+    unpack as an upstream producer and concluded the opposite. Whole file, always.
+    """
+    check = item["check"]
+    rule, warn = check["assert"], check.get("warn")
+    if not isinstance(warn, dict):
+        return None
+    if "none_severity" not in rule or "none_severity" not in warn:
+        return None
+    if rule.get("path") != warn.get("path"):
+        return None
+
+    def norm(names) -> set[str]:
+        return {SEVERITY_ALIAS.get(n.lower(), n.lower()) for n in names}
+
+    emits = severity_literals(check["script"], scripts_dir)
+    graded, refused = norm(rule["none_severity"]), norm(warn["none_severity"])
+    if not emits or not (emits & graded) or (emits & refused):
+        return None
+    return {"mechanism": "severity_vocabulary",
+            "evidence": f"{check['script']} can only say "
+                        f"{'/'.join(sorted(emits))}; FAIL needs "
+                        f"{'/'.join(sorted(refused))}, which the band refuses and "
+                        f"the script never writes"}
+
+
 # When is there no value that fails the assertion and satisfies the warn rule?
 # Only same-direction pairs on one path can be empty: `gte 90` with `warn lt 90`
 # leaves everything below the threshold to WARN, which is the complement case
@@ -387,7 +451,8 @@ def proofs(registry_path: str = REGISTRY, shapes_path: str = SHAPES,
     for item in script_backed(registry):
         for prove in (lambda i: prove_warn_complement(i),
                       lambda i: prove_path_never_emitted(i, shapes, scripts_dir),
-                      lambda i: prove_guarded_by_assertion(i, scripts_dir)):
+                      lambda i: prove_guarded_by_assertion(i, scripts_dir),
+                      lambda i: prove_severity_vocabulary(i, scripts_dir)):
             try:
                 hit = prove(item)
             except (OSError, SyntaxError) as exc:

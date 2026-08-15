@@ -66,17 +66,30 @@ def audit(source: str, fetch_css: bool = False, timeout: int = 15) -> dict:
     for script in soup.find_all("script", src=True):
         src = normalize_url(script.get("src"), url) if url else script.get("src")
         blocking = not script.has_attr("async") and not script.has_attr("defer") and script.get("type") != "module"
+        # Where it sits decides what it costs, and until 0.50.0 this did not look.
+        # A synchronous script in `<head>` stops the parser before anything has been
+        # painted; the same tag before `</body>` blocks a parser that has already
+        # emitted the page. Grading both the same left SP-110 with one severity for
+        # two different defects — and it is the reason the item could not fail, since
+        # `warning` is the only word the whole file had.
+        in_head = any(parent.name == "head" for parent in script.parents)
         node = {
             "type": "script",
             "url": src,
             "blocking": blocking,
+            "in_head": in_head,
             "preloaded": src in preloads,
             "cross_origin": _is_cross_origin(src, url),
             "children": [],
         }
         chains.append(node)
-        if blocking:
-            issues.append({"severity": "warning", "message": "Parser-blocking script", "url": src})
+        if blocking and in_head:
+            issues.append({"severity": "error",
+                           "message": "Parser-blocking script in <head>",
+                           "url": src})
+        elif blocking:
+            issues.append({"severity": "warning", "message": "Parser-blocking script",
+                           "url": src})
 
     for node in chains:
         if node["cross_origin"]:

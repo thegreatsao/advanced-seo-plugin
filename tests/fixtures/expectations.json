@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "10aa24c02669",
+  "registry_version": "754ea7e0b9b1",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -322,11 +322,11 @@
       },
       "SP-110": {
         "expect": "WARN",
-        "why": "corrected from PASS after the run, and the fact was right while the grade was not: the exemplary page's only chain observations are a render-blocking stylesheet, graded 'warning' = medium, and an info-level missing preconnect. critical_request_chain.py emits nothing above 'warning', so this item cannot reach FAIL on any site and cannot reach PASS on any page that links a stylesheet in the head \u2014 see KNOWN-ISSUES.md \u00a76"
+        "why": "re-declared for 0.50.0, which split the parser-blocking script by where it sits. The exemplary page's chain observations are a render-blocking stylesheet \u2014 one ordinary stylesheet in the head, which every site has and which stays 'warning' = medium \u2014 and an info-level missing preconnect. Its only script in the head is the async gtag loader, which blocks nothing. A medium finding fails the assertion and satisfies the band, so WARN, and FAIL is now reachable for the page that earns it"
       },
       "TE-170": {
-        "expect": "WARN",
-        "why": "corrected from FAIL after the run: the missing headers were predicted correctly and their price was not. cache_compression_checker.py reports the uncompressed response as 'warning' = medium and emits nothing above it, so FAIL is unreachable here \u2014 see KNOWN-ISSUES.md \u00a76"
+        "expect": "PASS",
+        "why": "re-declared for 0.50.0. Serving text uncompressed is now graded 'error' = high, and the good origin compresses: the fixture server offers gzip on textual responses to a client that asks for it, with Vary and a validator header, which is what a competently configured server does and what this item's title is about. Nothing else here fires on an HTML entry page \u2014 the cache-lifetime findings are for static assets, which this invocation does not request"
       },
       "TECH-002": {
         "expect": "PASS",
@@ -527,8 +527,8 @@
         "why": "a 54 KB PNG of simple line art may already be efficiently compressed, and no quality target or alternative encoding is supplied"
       },
       "MD-185": {
-        "expect": "WARN",
-        "why": "the title says 'Optimize Images'; the constructed lazy LCP candidate is a medium optimization issue, which belongs in the rule's warning band"
+        "expect": "FAIL",
+        "why": "re-declared for 0.50.0. The title says 'Optimize Images', and the constructed lazy LCP candidate — a 1200x600 hero, first in document order, with loading=lazy — is now graded 'error' = high rather than medium: telling the browser to defer the image the page is judged on is a defect in every layout, unlike the format and srcset advice around it, which stays informational. The other sampled pages carry no images and are undecided, so this page decides"
       },
       "MS-022": {
         "expect": "FAIL",
@@ -787,12 +787,12 @@
         "why": "the render-blocking stylesheet and the synchronous script are both first-party; the only third-party script is the same async gtag loader, so the count this item asserts on is zero on a page built to be slow"
       },
       "SP-110": {
-        "expect": "WARN",
-        "why": "corrected from FAIL after the run: the 21 KB render-blocking stylesheet and the synchronous script in the head are both reported, and both are graded 'warning' = medium, so the page built to be slow lands in the same band as the exemplary one. FAIL is unreachable for this item \u2014 see KNOWN-ISSUES.md \u00a76"
+        "expect": "FAIL",
+        "why": "re-declared for 0.50.0. This page carries `<script src=\"/assets/blocking.js\">` in its head with neither async nor defer, which is now graded 'error' = high: the parser stops before anything has been painted. The 21 KB render-blocking stylesheet beside it stays medium, because a stylesheet in the head is what every site does. FAIL needs a high finding and this page has one, which is the whole point of a tree built to be slow"
       },
       "TE-170": {
-        "expect": "WARN",
-        "why": "corrected from FAIL after the run, for the same reason as the good origin: the same header-less server, the same single 'warning' issue, the same unreachable FAIL"
+        "expect": "FAIL",
+        "why": "re-declared for 0.50.0, and now the opposite of the good origin rather than its twin: this tree's server is deliberately left without compression, and text sent uncompressed is graded 'error' = high. One high finding is all FAIL needs"
       },
       "TECH-002": {
         "expect": "PASS",

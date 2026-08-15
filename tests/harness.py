@@ -46,7 +46,9 @@ of neither being a stub.
 """
 from __future__ import annotations
 
+import gzip
 import http.server
+import io
 import os
 import shutil
 import socketserver
@@ -93,6 +95,18 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
     root = ""
     response_headers: dict[str, str] = {}
+    # Whether this origin compresses textual responses the way a competently
+    # configured server does. Off by default, and on for the `good` tree only.
+    #
+    # It is here because half this registry asks about server behaviour, and a
+    # fixture pair that answers identically on a server question cannot tell a good
+    # site from a bad one. `TE-170` *Configure Server Rewrites & Headers* is the
+    # case: uncompressed text is graded `error` since 0.50.0, and with neither
+    # origin compressing anything, the exemplary tree failed the item for a property
+    # of the test harness. Serving gzip here is the repair; declaring both sides
+    # FAIL would have been a note about the harness in place of the fixture doing
+    # its job.
+    gzip_text = False
 
     def translate_path(self, path):
         rel = path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
@@ -107,6 +121,60 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
             self.send_header(key, value)
         super().end_headers()
 
+    def send_head(self):
+        """Serve gzip for textual files when the origin offers it and the client asks.
+
+        Content negotiation, both halves: a client that did not send
+        `Accept-Encoding: gzip` still gets the plain bytes, because a server that
+        compresses regardless is a different defect from the one this models. The
+        response carries the compressed length, so `Content-Length` stays truthful —
+        `cache_compression_checker.py` reads it, and a size that describes the
+        uncompressed file would be a fixture lying about the thing under test.
+        """
+        if not self.gzip_text:
+            return super().send_head()
+        accepted = self.headers.get("Accept-Encoding") or ""
+        path = self.translate_path(self.path)
+        # A request for `/` translates to a directory, and a directory name does not
+        # end in `.html`. Resolving the index here rather than testing the raw path
+        # is the difference between compressing the fixture and compressing every
+        # page of it *except its entry* — which is the one page most items are
+        # audited on, and which made the first version of this look like the whole
+        # feature did nothing.
+        if os.path.isdir(path):
+            # A directory requested without its trailing slash is a 301 to the slashed
+            # form, and that redirect is load-bearing: the crawler's dedup test asserts
+            # it, and serving the index here instead turned a 301 into a 200 and broke
+            # a check that has nothing to do with compression. Hand those back to the
+            # base class rather than reimplementing its rule.
+            if not self.path.split("?", 1)[0].endswith("/"):
+                return super().send_head()
+            for index in ("index.html", "index.htm"):
+                candidate = os.path.join(path, index)
+                if os.path.isfile(candidate):
+                    path = candidate
+                    break
+        if "gzip" not in accepted.lower() or not path.endswith(TEXTUAL):
+            return super().send_head()
+        try:
+            with open(path, "rb") as handle:
+                body = gzip.compress(handle.read())
+                modified = os.fstat(handle.fileno()).st_mtime
+        except OSError:
+            return super().send_head()
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(path))
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Vary", "Accept-Encoding")
+        # The base class sends this on every file it serves, and dropping it here
+        # would have made compression cost the fixture a validator header — a
+        # `No validator header` finding introduced by the thing meant to remove a
+        # finding. A server that compresses still answers conditional requests.
+        self.send_header("Last-Modified", self.date_time_string(int(modified)))
+        self.end_headers()
+        return io.BytesIO(body)
+
 
 class _Site:
     """One served fixture tree on its own port.
@@ -118,7 +186,8 @@ class _Site:
     """
 
     def __init__(self, source: str, into: str, *, tls: bool = False,
-                 response_headers: dict[str, str] | None = None):
+                 response_headers: dict[str, str] | None = None,
+                 gzip_text: bool = False):
         self.dir = shutil.copytree(source, into)
         socketserver.ThreadingTCPServer.allow_reuse_address = True
         # Threading: several evidence scripts fetch concurrently, and a
@@ -127,6 +196,7 @@ class _Site:
         handler = type("Handler", (_Quiet,), {
             "root": self.dir,
             "response_headers": dict(response_headers or {}),
+            "gzip_text": gzip_text,
         })
         self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
         self.server.daemon_threads = True
@@ -158,8 +228,9 @@ class FixtureSite:
 
     `good`, `broken`, `good_tls`, and `broken_tls` are absolute URLs ending in `/`.
     The HTTPS pair deliberately differs only in response-header policy: `good_tls`
-    emits the hardened set and `broken_tls` emits none. Use as a context manager or
-    call `start()`/`stop()`.
+    emits the hardened set and `broken_tls` emits none. The good origins also
+    compress textual responses and the broken ones do not, which is the same kind of
+    difference one layer down. Use as a context manager or call `start()`/`stop()`.
     """
 
     GOOD_TLS_HEADERS = {
@@ -178,17 +249,23 @@ class FixtureSite:
 
     def start(self) -> "FixtureSite":
         self.dir = tempfile.mkdtemp(prefix="seo-fixture-")
+        # The fourth column is compression, and it belongs to the good tree for the
+        # same reason the hardened header set does: half this registry asks about
+        # server behaviour, and a pair that answers identically on a server question
+        # cannot tell a good site from a bad one. Both good origins serve gzip to a
+        # client that asks; neither broken origin does.
         origins = (
-            ("good", "good", False, {}),
-            ("broken", "broken", False, {}),
-            ("good_tls", "good", True, self.GOOD_TLS_HEADERS),
-            ("broken_tls", "broken", True, {}),
+            ("good", "good", False, {}, True),
+            ("broken", "broken", False, {}, False),
+            ("good_tls", "good", True, self.GOOD_TLS_HEADERS, True),
+            ("broken_tls", "broken", True, {}, False),
         )
-        for name, source_name, tls, headers in origins:
+        for name, source_name, tls, headers, gzip_text in origins:
             src = os.path.join(self.source, source_name)
             if os.path.isdir(src):
                 self._sites[name] = _Site(src, os.path.join(self.dir, name), tls=tls,
-                                          response_headers=headers)
+                                          response_headers=headers,
+                                          gzip_text=gzip_text)
                 if not tls:
                     self._copy_artifacts(name)
         # Each site's external links point at its same-protocol neighbour, once both

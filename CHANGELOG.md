@@ -10,6 +10,80 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.50.0 — five items that could not fail, and the vocabulary that stopped them
+
+A `none_severity` assertion fails when an issue carries one of the severities it
+grades; the warn band is then consulted, and FAIL arrives only if the band fails too.
+So **FAIL needs an issue graded at something the band refuses** — and five items sat
+over scripts whose whole vocabulary was `warning` and `info`, which alias to medium and
+low. `SP-110`, `TE-170`, `MD-185`, `AR-163` and `TECH-002` could not report FAIL on any
+site in the world, and nothing in the repository said so.
+
+**`audit_reachability.py` grew a fourth mechanism, `severity_vocabulary`,** and it
+names exactly those five and nothing else: 143 script-backed assertions, 7 proved
+unable to report FAIL, 136 not claimed either way. That last number is the point — the
+detector removed in 0.46.0 named four items and was wrong about all four, so this one
+was written against a list derived by hand first and had to reproduce it.
+
+**The repair is in the scripts, not in the rules.** Deleting the warn bands would have
+made every `warning` a FAIL and repriced every audit to avoid five judgement calls;
+declaring `cannot_fail` would have written an accident into a table whose contract is
+intent. Instead each script now grades the one finding that is a defect on every site,
+and the rest stay advice:
+
+- `critical_request_chain.py` splits the parser-blocking script by where it sits. A
+  synchronous `<script src>` in `<head>` stops the parser before anything is painted
+  and is graded `error`; the same tag before `</body>` blocks a parser that has already
+  emitted the page and stays `warning`. **A render-blocking stylesheet stays `warning`
+  too, deliberately** — every site has one in the head, and grading it `error` would
+  have failed `SP-110` on the entire web.
+- `cache_compression_checker.py` grades text served uncompressed as `error`. One
+  directive in the server config, bytes on every request, and the item's own subject.
+- `image_weight_audit.py` grades a lazy-loaded LCP candidate as `error`: deferring the
+  image the page is judged on is a defect in every layout, unlike the format and
+  `srcset` advice around it.
+- `font_audit.py` grades `@font-face` with no `font-display` as `error`. The item is
+  *Font loading does not block render*, and that is the markup that makes it block.
+- `faceted_nav_audit.py` grades a facet URL that is **neither canonicalised nor
+  noindexed** as `error` — the defect *Control Faceted Navigation* is named after. Both
+  flags were already computed and dropped into `rows`, where no rule reads them.
+
+**Two items needed an argument as well as a severity, and without it the grading would
+have been theatre.** `AR-163` was invoking its script without `--fetch`, and the two
+flags its new `error` reads are computed inside `if fetch:` — the finding existed and
+could never run. `MD-185` was worse: grading the lazy LCP candidate `error` left `Large
+image transfer size` as the only `warning` the script can raise, and that reads
+`content_length`, which is `None` over http unless images are fetched. The band
+promised a middle verdict no live site could reach. Both items now pass the flag.
+**The reachability gate reads severity literals rather than reachable code**, so in
+both cases the severity alone would have silenced it while changing nothing on any
+site; that trap is now written into the tool's own docstring. The registry is
+`754ea7e0b9b1`, still 215 items.
+
+**The good fixture now compresses.** `TE-170` was the awkward one: both origins are
+served by the same `http.server`, so grading uncompressed text `error` failed the
+exemplary tree for a property of the test harness. The harness serves gzip on textual
+responses to a client that asks, with `Vary` and a validator header, for the good
+origins only — the same kind of deliberate difference as the hardened TLS header set.
+Recording "the fixture cannot compress" would have been a note about the harness in
+place of the fixture doing its job.
+
+`image_weight_audit.py` also stops grading an `<img>` with none of `src`, `srcset` or a
+`<picture>` source, which the 0.49.0 entry called a decision rather than a defect. It is
+a defect: that markup will never load anything, and reporting it as an unresponsive
+legacy-format image gave one page two image findings and the opposite answer from its
+neighbour script.
+
+Four fixture verdicts move, all of them re-declared before the run and all matched at
+the first attempt: `SP-110` broken WARN→FAIL, `TE-170` good WARN→PASS and broken
+WARN→FAIL, `MD-185` broken WARN→FAIL. Two `SAME_ON_BOTH` entries and one
+`ACCUSED_ON_PURPOSE` entry left with them, because they had stopped being true, and two
+warn bands stopped firing on the fixtures and gained a measured reason in `BAND_UNSEEN`
+instead: nine of the twenty-seven bands now produce a WARN here rather than eleven. The
+oracle: **121 items declared, 246 declarations, 218 matched, 0 disagreed, 28
+indeterminate, 106 settled on both sides, 77 opposed**, `differences: none` — two more
+opposed than 0.49.0, which is `SP-110` and `TE-170` learning to tell the fixtures apart.
+
 ## 0.49.0 — a page with no images stops answering four questions about images
 
 `image_inventory.py` emitted `count`, `missing_alt` and `summary.lazy_lcp_candidates`

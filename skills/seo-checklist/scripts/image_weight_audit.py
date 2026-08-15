@@ -71,12 +71,23 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     parsed = parse_html(html, url)
     images = []
     issues = []
+    skipped_no_source = 0
 
     for index, img in enumerate(parsed["images"]):
         src = img.get("src") or ""
         ext = _extension(src)
         sources = img.get("picture_sources") or []
         modern_sources = _modern_sources(sources)
+        # An `<img>` with no `src`, no `srcset` and no `<picture>` source is not an
+        # image the browser will ever load — it is broken markup, and grading it as
+        # "not responsive, not a modern format" reports two image defects for a page
+        # that has no image there. `image_inventory.py` has always skipped these and
+        # counted them as `skipped_no_src`; this file graded them, so one page could
+        # be NO_DATA for the four items over that script and FAIL for MB-096 and
+        # MD-189 over this one. Two scripts, one page, opposite answers.
+        if not src and not img.get("srcset") and not sources:
+            skipped_no_source += 1
+            continue
         likely_lcp = likely_lcp_candidate(img, index)
         row = {
             "src": src,
@@ -111,8 +122,13 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
             row["content_length"] = int(length) if length and length.isdigit() else None
             row["content_type"] = headers.get("content-type")
 
+        # Deferring the largest paint is the one finding in this file that is a defect
+        # on every site and in every layout: the browser is told to wait for the image
+        # the page is judged on. Everything else here is advice whose weight depends
+        # on the page, which is why they stay `warning` and `info` — and why, before
+        # 0.50.0, MD-185's FAIL was unreachable on every site there has ever been.
         if likely_lcp and row["loading"] == "lazy":
-            issues.append({"severity": "warning", "message": "Likely LCP image is lazy-loaded", "url": src})
+            issues.append({"severity": "error", "message": "Likely LCP image is lazy-loaded", "url": src})
         if likely_lcp and row["fetchpriority"] != "high":
             issues.append({"severity": "info", "message": "Likely LCP image lacks fetchpriority=high", "url": src})
         if ext in RASTER_FORMATS and not modern_sources:
@@ -135,6 +151,10 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     out = {
         "url": url or source,
         "image_count": len(images),
+        # Reported rather than swallowed, and named as `image_inventory.py` names it:
+        # a page whose only `<img>` has nothing to load is now undecided by both
+        # scripts, and a reader who wants to know why has the count.
+        "skipped_no_src": skipped_no_source,
         "images_status_checked": len(checked),
         "known_image_bytes": known_bytes if fetch_images or any(row["content_length"] for row in images) else None,
         # The same two counts restricted to the `<img>` tag, which is what these

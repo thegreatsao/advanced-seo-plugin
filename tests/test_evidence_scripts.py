@@ -2091,14 +2091,48 @@ class FacetedNavigation(unittest.TestCase):
 class CacheAndCompression(unittest.TestCase):
     """TE-170 `issues`."""
 
-    def test_an_uncompressed_response_warns_with_the_reason(self):
-        """One direction only: `http.server` sends no `Content-Encoding` and no cache
-        headers, and nothing in this harness can make it. The value is that the
-        vocabulary maps — the script says `warning`, the rule asks about `medium`, and
-        0.5.0 is where those two stopped being unable to intersect."""
+    def test_an_uncompressed_response_fails_with_the_reason(self):
+        """Both directions now, which is new in 0.50.0.
+
+        The docstring this replaces said "one direction only: nothing in this harness
+        can make `http.server` send a `Content-Encoding`". That had stopped being a
+        fact about the harness and become a fact about nobody having tried — the
+        fixture server compresses for the good origins now, and the item that grades
+        server configuration can tell a configured server from an unconfigured one.
+
+        Text served uncompressed is graded `error` = high, so this is FAIL rather than
+        the WARN it was: before, `cache_compression_checker.py` had no word above
+        `warning` and TE-170 could not reach FAIL on any site in the world.
+        """
         cache = out("cache")
-        self.assertEqual(verdict("TE-170", cache), WARN)
+        self.assertEqual(verdict("TE-170", cache), FAIL)
         self.assertRegex(json.dumps(cache["issues"]), "(?i)gzip|brotli|encod")
+
+    def test_a_compressed_response_passes(self):
+        """The other direction, which is what stops this being a check that can only
+        ever accuse. Same page, same script, one server setting apart.
+
+        Run against `FixtureSite` rather than this module's `served()` routes, because
+        compression is a property of the origin and only the fixture pair has one
+        origin that compresses and one that does not. As a subprocess with that
+        origin's own environment, for the reason the whole file runs scripts that way:
+        called in-process it inherits this process's environment, the private-address
+        guard refuses 127.0.0.1, and every header comes back `None` — which reads
+        exactly like a server that sends no `Content-Encoding`.
+        """
+        rows = {}
+        with harness.FixtureSite() as fixture:
+            for label in ("good", "broken"):
+                proc = harness.spawn(
+                    [sys.executable,
+                     os.path.join(SCRIPTS, "cache_compression_checker.py"),
+                     getattr(fixture, label), "--json"],
+                    env=fixture.environment(label), timeout=120)
+                rows[label] = json.loads(proc.stdout)
+        self.assertEqual(rows["good"]["resources"][0]["content_encoding"], "gzip")
+        self.assertIsNone(rows["broken"]["resources"][0]["content_encoding"])
+        self.assertEqual(verdict("TE-170", rows["good"]), PASS)
+        self.assertEqual(verdict("TE-170", rows["broken"]), FAIL)
 
 
 class CriticalChain(unittest.TestCase):

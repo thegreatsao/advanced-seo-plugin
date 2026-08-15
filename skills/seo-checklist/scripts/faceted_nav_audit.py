@@ -72,6 +72,20 @@ def audit(urls: list[str], fetch: bool = False, timeout: int = 15) -> dict:
         rows.append(row)
     path_explosions = {path: vals for path, vals in by_path.items() if len(vals) >= PATH_EXPLOSION_VARIANTS}
     issues = []
+    # *Control* Faceted Navigation, and this is what control means: a facet URL is
+    # either canonicalised onto the page it varies or kept out of the index. A facet
+    # that is neither is duplicate content by construction — not a judgement about
+    # the site, a fact about the two flags, which were computed here and dropped into
+    # `rows` where no rule reads them. Until 0.50.0 the only graded finding in this
+    # file was the parameter count, so the item's own subject produced no verdict and
+    # its FAIL was unreachable.
+    uncontrolled = [row["url"] for row in rows
+                    if "facet_missing_canonical" in row["flags"]
+                    and "facet_not_noindexed" in row["flags"]]
+    if uncontrolled:
+        issues.append({"severity": "error",
+                       "message": "Facet URL is neither canonicalised nor noindexed",
+                       "count": len(uncontrolled), "evidence": uncontrolled[:10]})
     if path_explosions:
         issues.append({"severity": "warning", "message": "Multiple parameter variants share the same path", "count": len(path_explosions)})
     frequent_params = {k: v for k, v in param_counts.items() if v >= FREQUENT_PARAM_COUNT}

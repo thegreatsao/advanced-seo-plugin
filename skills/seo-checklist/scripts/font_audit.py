@@ -79,7 +79,12 @@ def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
                 abs_url = normalize_url(font_url, url) if url else font_url
                 font_files.append(abs_url)
             if not face["font_display"]:
-                issues.append({"severity": "warning", "message": "@font-face missing font-display", "evidence": face.get("family")})
+                # The item is *Font loading does not block render*, and this is the
+                # markup that makes it block: with no `font-display`, the browser
+                # hides the text until the font arrives. The other findings in this
+                # file cost a round trip or some bytes; this one costs the words on
+                # the page, and it is what makes TECH-002's FAIL reachable.
+                issues.append({"severity": "error", "message": "@font-face missing font-display", "evidence": face.get("family")})
             elif face["font_display"].lower() not in ("swap", "optional", "fallback"):
                 issues.append({"severity": "info", "message": "font-display may delay text rendering", "evidence": face["font_display"]})
 
