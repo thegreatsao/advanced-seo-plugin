@@ -32,16 +32,19 @@ had asked the item to work at all.
 The fixture oracle now supplies a keyword, which is what surfaced this: wiring
 `--keyword` into `tests/test_fixture_oracle.py` would have taken the suite online on
 every CI run, and only the flag makes the wiring safe. `KW-076` is declared on both
-fixture origins for the first time — the keyword is `bread`, the word the good tree's
-own title leads with, carried by all three of its sampled pages and absent from two of
-the broken tree's three.
+fixture origins for the first time — the keyword is `bread`, which the good tree's own
+`<title>` names and the broken tree's 2004-era `keywords` meta lists last. All three
+of the good tree's sampled pages carry it and two of the broken tree's three do not.
 
 The oracle, measured after the run rather than written with the declaration:
 **121 items declared, 246 declarations, 218 matched, 0 disagreed, 28 indeterminate,
 106 settled on both sides, 75 opposed**, `differences: none`. Both of this release's
 declarations matched at the first attempt, as did the two for `CI-018`, which the
 commit before this release declared once the oracle audit started handing the run
-each tree's access log. Those twenty-eight are sixteen items, and **one of them is
+each tree's access log. The last two counts overlap by one and are meant to:
+`SE-118` is `INDETERMINATE` on the HTTP pair, where there is no certificate to judge,
+and settled on the TLS pair, so it is both settled on both sides and indeterminate
+somewhere. Those twenty-eight are sixteen items, and **one of them is
 still an unsupplied input**: `GEO-007` reads `{indexnow_key}`, which `offline_env`
 deliberately clears along with every other credential. It is not the same shape as
 the two settled here — a key is not a keyword, and the fixture would have to serve

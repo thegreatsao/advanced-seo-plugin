@@ -97,9 +97,15 @@ DECLARED_IDS = {
 ALLOWED = {"PASS", "WARN", "FAIL", "N/A", "INDETERMINATE"}
 # The primary keyword handed to every origin, for KW-076. It is the site's own
 # subject rather than a word picked to produce a verdict: both trees are the same
-# bakery, and `bread` is what the good tree's title leads with and what the broken
-# tree's own `keywords` meta lists last. One keyword for one audit, so all four
-# origins get the same one — that is what an operator does.
+# bakery, and `bread` is what the good tree's <title> names and what the broken tree's
+# own `keywords` meta lists last. One keyword for one audit, so all four origins get
+# the same one — that is what an operator does.
+#
+# The sample it is judged over is measured, not assumed: `--sample 3` picks the entry
+# page, /about.html and /privacy.html on `good`, and the entry page,
+# /blog/duplicate-a.html and /orphan.html on `broken`. The broken tree has no
+# /about.html, which is the thing to check before reasoning about `stride()` from the
+# good tree's page list.
 #
 # Safe to pass only since 0.48.0. Before it the registry invoked `article_seo.py`
 # without `--no-autocomplete`, so supplying a keyword here would have sent it to

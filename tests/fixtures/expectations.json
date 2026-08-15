@@ -278,7 +278,7 @@
       },
       "CI-018": {
         "expect": "PASS",
-        "why": "the audit now hands the run this tree's access log. 'Manage Crawl Budget' asks what the crawl was spent on, and this log spends none of it: 21 days in which Googlebot fetched all five sitemap URLs and then revalidated them with 304s, bingbot took one page a day, and nothing answered 404, 301 or 5xx. /private/secret.html is in the sitemap, disallowed in robots.txt and deliberately absent from the log, so the never-crawled subtraction has to exclude it rather than report our own Disallow as a page nobody visited. Nothing wasted, nothing unoffered, no parameterised URL and a window long enough to judge coverage leaves no issue at any severity, so the assertion's 'no critical, high or medium issue' holds"
+        "why": "the audit now hands the run this tree's access log. 'Manage Crawl Budget' asks what the crawl was spent on, and this log spends none of it: 21 days in which Googlebot fetched every sitemap URL robots.txt allows — five of the six listed — and then revalidated them with 304s, bingbot took one page a day, and nothing answered 404, 301 or 5xx. /private/secret.html is in the sitemap, disallowed in robots.txt and deliberately absent from the log, so the never-crawled subtraction has to exclude it rather than report our own Disallow as a page nobody visited. Nothing wasted, nothing unoffered, no parameterised URL and a window long enough to judge coverage leaves no issue at any severity, so the assertion's 'no critical, high or medium issue' holds"
       },
       "CN-039": {
         "expect": "PASS",
@@ -820,7 +820,7 @@
       },
       "KW-076": {
         "expect": "FAIL",
-        "why": "the sampled set here is the entry page, /blog/duplicate-a.html and /orphan.html. The entry page carries 'bread' five times over, inside the stuffed 'best sourdough bread vilnius' anchors, so on its own it would pass; the duplicate post is four sentences about being a duplicate and the orphan is two about being an orphan, and neither says the word at all. The worst sampled page decides, so FAIL — a site that names its subject on the home page and nowhere else is the shape this item exists to catch"
+        "why": "the sampled set here is the entry page, /blog/duplicate-a.html and /orphan.html. The entry page carries 'bread' five times over, inside the stuffed 'best sourdough bread vilnius' anchors, so on its own it would pass; the duplicate post is a heading and two sentences about being a duplicate, and the orphan is a heading and two about being an orphan, and neither says the word at all. The worst sampled page decides, so FAIL — a site that names its subject on the home page and nowhere else is the shape this item exists to catch"
       },
       "MB-095": {
         "expect": "PASS",
