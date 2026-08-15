@@ -34,8 +34,21 @@ The fixture oracle now supplies a keyword, which is what surfaced this: wiring
 every CI run, and only the flag makes the wiring safe. `KW-076` is declared on both
 fixture origins for the first time — the keyword is `bread`, the word the good tree's
 own title leads with, carried by all three of its sampled pages and absent from two of
-the broken tree's three. The oracle's tally is at the end of this entry, and it was
-written after the run rather than with the declaration.
+the broken tree's three.
+
+The oracle, measured after the run rather than written with the declaration:
+**121 items declared, 246 declarations, 218 matched, 0 disagreed, 28 indeterminate,
+106 settled on both sides, 75 opposed**, `differences: none`. Both of this release's
+declarations matched at the first attempt, as did the two for `CI-018`, which the
+commit before this release declared once the oracle audit started handing the run
+each tree's access log. Those twenty-eight are sixteen items, and **one of them is
+still an unsupplied input**: `GEO-007` reads `{indexnow_key}`, which `offline_env`
+deliberately clears along with every other credential. It is not the same shape as
+the two settled here — a key is not a keyword, and the fixture would have to serve
+the key file for the check to have a subject — but it is the one remaining item where
+the fixture is not the obstacle. The other fifteen need a paginated series, a
+redirect chain, a category page, facets, an index inventory, an alternate locale, a
+review profile, a parseable HowTo, or a browser.
 
 ## 0.47.0 — the other unreachable verdict, and a warn band that could not fire
 
