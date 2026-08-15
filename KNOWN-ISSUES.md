@@ -477,11 +477,19 @@ name. A column called `url` would be read as "fix this page".
   scripts speak error/warning/info, and `SEVERITY_ALIAS` (`checklist_runner.py:467`)
   maps error to high, warning to medium, info to low. An item asserting `none_severity:
   [critical, high, medium]` with a warn band of `none_severity: [critical, high]`
-  therefore returns WARN for every issue its script can raise, unless that script can
-  say `error`. Five items are in that shape and none of their scripts holds an `error`
-  literal: `SP-110` (`critical_request_chain.py`), `TE-170`
-  (`cache_compression_checker.py`), `MD-185` (`image_weight_audit.py`), `AR-163`
-  (`faceted_nav_audit.py`) and `TECH-002` (`font_audit.py`).
+  therefore returns WARN for every issue its script can raise **that the assertion
+  notices at all**, unless that script can say `error`. The qualifier is not
+  decoration: `warning` becomes medium, which fails the assertion and satisfies the
+  band, so WARN; `info` becomes low, which the assertion tolerates, so a run whose
+  issues are all `info` reports **PASS** and prints the issue underneath it. An
+  earlier version of this paragraph said "every issue its script can raise" and was
+  wrong in that corner — found by a reviewer given the rule and the five scripts, on
+  2026-08-15.
+
+  Five items are in that shape and none of their scripts holds an `error` literal:
+  `SP-110` (`critical_request_chain.py`), `TE-170` (`cache_compression_checker.py`),
+  `MD-185` (`image_weight_audit.py`), `AR-163` (`faceted_nav_audit.py`) and
+  `TECH-002` (`font_audit.py`).
 
   Two are proven rather than argued. On 2026-08-14 the oracle declared FAIL for `SP-110`
   and `TE-170` on the broken fixture — a 21 KB render-blocking stylesheet with a
@@ -497,6 +505,18 @@ name. A column called `url` would be read as "fix this page".
   are all about the assertion's own logic, none about the severity vocabulary underneath
   it. **Do not ship it as a gate before the oracle has calibrated it**: the fourth
   detector 0.46.0 attempted named four items and was wrong about all four.
+
+  **And when it is written, it cannot work by scanning for severity literals in the
+  function that returns `issues`.** `cache_compression_checker.py` is the counter-shape
+  already in the tree: `_check_url` initialises `row["issues"]` at line 61 and appends
+  to it only at lines 86-95, all `warning` or `info`, and `audit` re-emits those at
+  line 129 as `{**item, "url": row["url"]}`. The severities are three hops from the
+  returned list. Checked on 2026-08-15 because a reviewer handed the rule and every
+  `severity` line in all five scripts read that unpack as evidence of an upstream
+  producer and concluded `TE-170` can fail after all — an accurate citation and a wrong
+  inference, which is the exact error a literal-scanning detector would make in the
+  other direction. Of the five, only `faceted_nav_audit.py` builds and returns its list
+  in one contiguous scope.
 
   Not a defect, and checked before filing one: `GO-136` looks unreachable in the same
   way and is not. `sitemap_checker.py` does emit `error` — no sitemap found, an
