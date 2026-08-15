@@ -102,12 +102,25 @@ def manifest() -> dict:
 
 
 def audit(label: str, url: str) -> dict[str, str]:
-    """Run the unmodified checker against one served fixture."""
+    """Run the unmodified checker against one served fixture.
+
+    Every operator-supplied input this tree ships is handed to the run. The access
+    log is the newest of them and it is the only evidence here about the past: the
+    other three describe the page as it is now, and `server_log_audit.py` reads what
+    crawlers actually did. Without it CI-018 was NEEDS_INPUT on both origins and the
+    good/broken comparison measured nothing, which is the same hole
+    `tests/fixtures/artifacts/README.md` describes for the other three.
+
+    `FixtureSite` stages artifacts for the HTTP pair only, so the TLS origins get no
+    flags at all — which is why CI-018 is declared on `good` and `broken` and nowhere
+    else.
+    """
     out = os.path.join(SITE.dir, f"oracle-{label}.json")
     artifacts = []
     for flag, filename in (("--rendered-json", "rendered.json"),
                            ("--cwv-json", "cwv.json"),
-                           ("--links-csv", "top-linking-sites.csv")):
+                           ("--links-csv", "top-linking-sites.csv"),
+                           ("--server-log", "access.log")):
         path = SITE.artifact(label, filename)
         if path:
             artifacts += [flag, path]

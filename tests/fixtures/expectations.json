@@ -277,8 +277,8 @@
         "why": "'Control Faceted Navigation' needs facets; no page here exposes a filter, sort or facet URL, so the fixture cannot settle the item either way"
       },
       "CI-018": {
-        "expect": "INDETERMINATE",
-        "why": "the check reads {server_log}; this tree ships an access log under tests/fixtures/artifacts/good/, but the oracle audit hands the run only the rendered, CWV and links artifacts, so the log is never supplied and no verdict is reachable"
+        "expect": "PASS",
+        "why": "the audit now hands the run this tree's access log. 'Manage Crawl Budget' asks what the crawl was spent on, and this log spends none of it: 21 days in which Googlebot fetched all five sitemap URLs and then revalidated them with 304s, bingbot took one page a day, and nothing answered 404, 301 or 5xx. /private/secret.html is in the sitemap, disallowed in robots.txt and deliberately absent from the log, so the never-crawled subtraction has to exclude it rather than report our own Disallow as a page nobody visited. Nothing wasted, nothing unoffered, no parameterised URL and a window long enough to judge coverage leaves no issue at any severity, so the assertion's 'no critical, high or medium issue' holds"
       },
       "CN-039": {
         "expect": "PASS",
@@ -743,8 +743,8 @@
         "why": "'Control Faceted Navigation' needs facets; the only form here posts nowhere and no URL carries a filter or sort parameter"
       },
       "CI-018": {
-        "expect": "INDETERMINATE",
-        "why": "the check reads {server_log}; this tree ships an access log under tests/fixtures/artifacts/broken/, but the oracle audit never hands it to the run, so no verdict is reachable"
+        "expect": "FAIL",
+        "why": "this tree's log is the crawl budget going nowhere the item's title is about: every day for 21 days Googlebot spent six requests on a deleted /archive/ that answers 404, one on a /legacy/old-home redirect, one on an /about.html that answers 500, and five on ?sort= multiplying one page — against three requests that fetched a real page. The wasted share is far past the fifth of the crawl server_log_audit.py grades high, and any 5xx to a crawler is graded at least medium, so this is FAIL rather than WARN: the warn band tolerates a medium issue and this log carries high ones"
       },
       "CN-039": {
         "expect": "WARN",
