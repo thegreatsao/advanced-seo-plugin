@@ -41,7 +41,24 @@ agreeing with every page that has an image and silent about pages that do not.
 open question**, and it is a registry change: recorded in `KNOWN-ISSUES.md` §6, not
 taken here.
 
-Oracle after the change: measured below, and written after the run.
+The oracle, measured after the run: **121 items declared, 246 declarations, 218
+matched, 0 disagreed, 28 indeterminate, 106 settled on both sides, 75 opposed**,
+`differences: none`. Both re-declarations matched at the first attempt. The suite is
+922 tests.
+
+**One of the two new tests was green for the wrong reason, and a reviewer caught it.**
+`test_the_descriptive_counts_survive_on_an_image_free_page` asserted the fields the
+repair *keeps* — none of which the repair touches — so it passed just as happily with
+the repair reverted. It now asserts the whole key set instead, which fails in both
+directions: an extra key means a verdict field came back, a missing one means a later
+repair withheld too much. Verified by reverting the guard and watching both tests fail,
+after a first attempt at that proof silently patched nothing and proved only that the
+probe was wrong.
+
+The same review turned up a third divergence between these two scripts, over an `<img>`
+with no `src`: `image_inventory.py` skips it, `image_weight_audit.py` grades it.
+Recorded in `KNOWN-ISSUES.md` §6 and not repaired — the case that genuinely diverges is
+markup with neither `src` nor `srcset`, and which script is right there is a decision.
 
 ## 0.48.0 — an audit that asked Google a question nobody had answered for
 

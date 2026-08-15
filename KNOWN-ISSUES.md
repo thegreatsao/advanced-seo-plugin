@@ -448,6 +448,19 @@ name. A column called `url` would be read as "fix this page".
   — so nothing here would have shown it. `MD-184` is now PASS on both origins and is
   re-declared accordingly.
 
+  **A third divergence between the same two scripts, found reviewing the repair and
+  left standing on purpose.** An `<img>` carrying no `src` is skipped by
+  `image_inventory.py` (`if not src: skipped_no_src += 1; continue`) and processed by
+  `image_weight_audit.py` (`src = img.get("src") or ""`, then appended like any other
+  row). So a page whose only `<img>` has no `src` is `NO_DATA` for the four items over
+  the first script and a `FAIL` for `MB-096` and `MD-189` over the second, from one
+  page. Both sides have a reason — an inventory keyed by `src` cannot list a row with
+  no `src`, and an `<img>` with a `srcset` and no `src` is valid responsive markup the
+  weight audit must still judge — so the case that actually diverges is markup with
+  neither, which is broken either way. Recorded rather than repaired: it changes live
+  verdicts on a shape neither fixture has, and which of the two is right is a decision,
+  not a defect.
+
   **Still open, and deliberately not taken with it: whether `count gte 1` is the
   assertion *Audit Sitewide Image Usage* wants at all.** The item now agrees with every
   page that has an image and says nothing about pages that do not, which is not an

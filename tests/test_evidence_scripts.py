@@ -1810,11 +1810,23 @@ class ImageInventory(unittest.TestCase):
         for item_id in ("MD-184", "CI-016", "MD-186", "CN-054"):
             self.assertEqual(verdict(item_id, result), NO_DATA, item_id)
 
-    def test_the_descriptive_counts_survive_on_an_image_free_page(self):
+    def test_an_image_free_page_emits_these_keys_and_no_others(self):
         """Only the three fields the registry reads as a verdict are withheld. A
         page describing itself as having zero images is a fact; an item claiming
-        its images are fine is not."""
+        its images are fine is not.
+
+        The assertion is the whole key set rather than the fields I kept, and that
+        is the point: naming only the survivors passes just as happily with the
+        repair reverted, because the repair did not touch how any of them is
+        populated. A set fails in both directions — an extra key means a verdict
+        field came back, a missing one means the next repair withheld too much.
+        """
         result = self.image_free()
+        self.assertEqual(set(result), {"url", "empty_alt", "skipped_no_src",
+                                       "summary", "issues", "images",
+                                       "fetch_error"})
+        self.assertEqual(set(result["summary"]),
+                         {"images", "empty_alt", "skipped_no_src"})
         self.assertEqual(result["summary"]["images"], 0)
         self.assertEqual(result["empty_alt"], 0)
         self.assertEqual(result["skipped_no_src"], 0)
