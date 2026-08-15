@@ -26,15 +26,19 @@ Every run happens once, in `setUpModule`, in parallel, and is cached: 40 scripts
 ~80 process launches, and doing them per test method would make this file slower than
 the rest of the suite put together.
 """
+import http.client
+import http.server
 import json
 import os
 import socket
 import struct
 import sys
 import tempfile
+import threading
 import unittest
 import zlib
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL = os.path.join(ROOT, "skills", "seo-checklist")
@@ -2083,6 +2087,32 @@ class FacetedNavigation(unittest.TestCase):
         self.assertEqual(verdict("AR-163", bad), WARN)
         self.assertRegex(json.dumps(bad["issues"]), "(?i)parameter")
 
+    def test_robots_disallow_is_a_third_facet_control(self):
+        """Checking only that the allowed facet errors would pass before this repair;
+        the blocked URL's absence from the error evidence makes a revert fail.
+        """
+        page = "<html><head><title>Facet</title></head><body></body></html>"
+        routes = {
+            "/robots.txt": (200, {"Content-Type": "text/plain"},
+                            "User-agent: *\nDisallow: /blocked\n"),
+            "/blocked": page,
+            "/allowed": page,
+        }
+        with served(routes) as site:
+            blocked = f"{site.base}/blocked?color=red"
+            allowed = f"{site.base}/allowed?color=red"
+            proc = harness.spawn(
+                [sys.executable, os.path.join(SCRIPTS, "faceted_nav_audit.py"),
+                 blocked, allowed, "--fetch", "--json"],
+                env=script_env(), timeout=60)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        errors = [issue for issue in result["issues"]
+                  if issue["severity"] == "error"]
+        self.assertEqual(len(errors), 1, errors)
+        self.assertEqual(errors[0]["evidence"], [allowed])
+        self.assertNotIn(blocked, errors[0]["evidence"])
+
 
 # ---------------------------------------------------------------------------
 # Speed, mobile, technical
@@ -2090,6 +2120,72 @@ class FacetedNavigation(unittest.TestCase):
 
 class CacheAndCompression(unittest.TestCase):
     """TE-170 `issues`."""
+
+    def test_uncompressed_text_is_graded_by_known_size(self):
+        """A large-only assertion would still pass before this repair; the small and
+        unknown-length branches make a revert fail as well as checking the high path.
+        """
+        bodies = {
+            "/small": b"{" + (b" " * 298) + b"}",
+            "/large": b"{" + (b" " * 1023) + b"}",
+            "/unknown": b"{" + (b" " * 2046) + b"}",
+        }
+
+        class LengthHandler(http.server.BaseHTTPRequestHandler):
+            def _respond(self, body_too):
+                body = bodies[self.path]
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Last-Modified", "Sat, 15 Aug 2026 12:00:00 GMT")
+                if self.path != "/unknown":
+                    self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if body_too:
+                    self.wfile.write(body)
+
+            def do_GET(self):
+                self._respond(True)
+
+            def do_HEAD(self):
+                self._respond(False)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), LengthHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_address[1]}"
+            rows = {}
+            for label in ("small", "large", "unknown"):
+                proc = harness.spawn(
+                    [sys.executable,
+                     os.path.join(SCRIPTS, "cache_compression_checker.py"),
+                     f"{base}/{label}", "--json"],
+                    env=script_env(), timeout=60)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                rows[label] = json.loads(proc.stdout)["resources"][0]
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        compression = {
+            label: [issue for issue in row["issues"]
+                    if issue["message"].startswith("Compressible response")]
+            for label, row in rows.items()
+        }
+        self.assertEqual(compression["small"], [])
+        self.assertEqual(compression["large"], [{
+            "severity": "error",
+            "message": "Compressible response is not Brotli/gzip encoded",
+        }])
+        self.assertEqual(compression["unknown"], [{
+            "severity": "warning",
+            "message": "Compressible response is not Brotli/gzip encoded "
+                       "(length unknown)",
+        }])
 
     def test_an_uncompressed_response_fails_with_the_reason(self):
         """Both directions now, which is new in 0.50.0.
@@ -2133,6 +2229,36 @@ class CacheAndCompression(unittest.TestCase):
         self.assertIsNone(rows["broken"]["resources"][0]["content_encoding"])
         self.assertEqual(verdict("TE-170", rows["good"]), PASS)
         self.assertEqual(verdict("TE-170", rows["broken"]), FAIL)
+
+    def test_good_fixture_honours_its_last_modified_validator(self):
+        """An unconditional gzip assertion still passes without this repair; requiring
+        the same request with the returned validator to become 304 makes a revert fail.
+        """
+        with harness.FixtureSite() as fixture:
+            parsed = urlsplit(fixture.good)
+
+            def request(headers):
+                connection = http.client.HTTPConnection(parsed.hostname, parsed.port,
+                                                        timeout=10)
+                try:
+                    connection.request("GET", parsed.path or "/", headers=headers)
+                    response = connection.getresponse()
+                    result = response.status, dict(response.getheaders())
+                    response.read()
+                    return result
+                finally:
+                    connection.close()
+
+            status, headers = request({"Accept-Encoding": "gzip"})
+            self.assertEqual(status, 200)
+            self.assertEqual(headers.get("Content-Encoding"), "gzip")
+            modified = headers["Last-Modified"]
+            status, conditional_headers = request({
+                "Accept-Encoding": "gzip",
+                "If-Modified-Since": modified,
+            })
+        self.assertEqual(status, 304)
+        self.assertNotIn("Content-Encoding", conditional_headers)
 
 
 class CriticalChain(unittest.TestCase):

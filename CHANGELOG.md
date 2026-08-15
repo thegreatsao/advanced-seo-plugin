@@ -37,16 +37,23 @@ and the rest stay advice:
   emitted the page and stays `warning`. **A render-blocking stylesheet stays `warning`
   too, deliberately** — every site has one in the head, and grading it `error` would
   have failed `SP-110` on the entire web.
-- `cache_compression_checker.py` grades text served uncompressed as `error`. One
-  directive in the server config, bytes on every request, and the item's own subject.
+- `cache_compression_checker.py` grades text served uncompressed as `error` only when
+  its known length is greater than 1024 bytes. A known smaller response produces no
+  finding; an unknown length is `warning`, because the high-severity premise is not
+  proved.
 - `image_weight_audit.py` grades a lazy-loaded LCP candidate as `error`: deferring the
   image the page is judged on is a defect in every layout, unlike the format and
   `srcset` advice around it.
 - `font_audit.py` grades `@font-face` with no `font-display` as `error`. The item is
   *Font loading does not block render*, and that is the markup that makes it block.
 - `faceted_nav_audit.py` grades a facet URL that is **neither canonicalised nor
-  noindexed** as `error` — the defect *Control Faceted Navigation* is named after. Both
-  flags were already computed and dropped into `rows`, where no rule reads them.
+  noindexed and is allowed by robots.txt** as `error`. A robots `Disallow` is the third
+  control named by the item's own fix text, alongside the two flags already computed
+  and dropped into `rows`, where no rule reads them.
+
+Both refinements came from a review of this change before it merged. The reviewer also
+claimed an `SP-110` false positive on inline scripts, but that is not real:
+`critical_request_chain.py` only inspects `find_all("script", src=True)`.
 
 **Two items needed an argument as well as a severity, and without it the grading would
 have been theatre.** `AR-163` was invoking its script without `--fetch`, and the two

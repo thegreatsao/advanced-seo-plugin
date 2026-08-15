@@ -21,6 +21,11 @@ import json
 from collections import Counter, defaultdict
 from urllib.parse import parse_qs, urlparse
 
+try:
+    from lib.safe_http import robots_allows
+except ImportError:
+    from scripts.lib.safe_http import robots_allows
+
 from seo_common import fetch_url, parse_html, read_urls, same_host
 
 
@@ -73,15 +78,18 @@ def audit(urls: list[str], fetch: bool = False, timeout: int = 15) -> dict:
     path_explosions = {path: vals for path, vals in by_path.items() if len(vals) >= PATH_EXPLOSION_VARIANTS}
     issues = []
     # *Control* Faceted Navigation, and this is what control means: a facet URL is
-    # either canonicalised onto the page it varies or kept out of the index. A facet
-    # that is neither is duplicate content by construction — not a judgement about
-    # the site, a fact about the two flags, which were computed here and dropped into
-    # `rows` where no rule reads them. Until 0.50.0 the only graded finding in this
-    # file was the parameter count, so the item's own subject produced no verdict and
-    # its FAIL was unreachable.
-    uncontrolled = [row["url"] for row in rows
-                    if "facet_missing_canonical" in row["flags"]
-                    and "facet_not_noindexed" in row["flags"]]
+    # either canonicalised onto the page it varies, noindexed, or disallowed by
+    # robots.txt. The item's own fix text names all three controls. A facet that has
+    # none is duplicate content by construction — not a judgement about the site, a
+    # fact about the two flags and the robots policy. Until 0.50.0 the only graded
+    # finding in this file was the parameter count, so the item's own subject produced
+    # no verdict and its FAIL was unreachable.
+    uncontrolled = []
+    for row in rows:
+        if ("facet_missing_canonical" in row["flags"]
+                and "facet_not_noindexed" in row["flags"]
+                and robots_allows(row["url"])[0]):
+            uncontrolled.append(row["url"])
     if uncontrolled:
         issues.append({"severity": "error",
                        "message": "Facet URL is neither canonicalised nor noindexed",

@@ -23,6 +23,10 @@ STATIC_MAX_AGE_MIN = 604800
 #  carry `immutable`, because a month of caching with no fingerprint in the URL is a
 #  month of serving a file that has changed.
 STATIC_IMMUTABLE_MAX_AGE = 2_592_000
+# basis: convention — one kibibyte, the minimum length below which compression plus its
+#  header overhead rarely reduces what goes over the wire. Every serious server ships
+#  the same knob with a number of this order; none of them measured it here.
+COMPRESSIBLE_MIN_BYTES = 1024
 
 STATIC_EXTENSIONS = (".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".woff2", ".woff")
 TEXT_EXTENSIONS = (".html", ".css", ".js", ".mjs", ".json", ".xml", ".svg", ".txt")
@@ -84,13 +88,21 @@ def _check_url(url: str, timeout: int) -> dict:
     is_text = path.endswith(TEXT_EXTENSIONS) or (row["content_type"] and any(t in row["content_type"] for t in ("text/", "javascript", "json", "xml", "svg")))
     if is_text and row["content_encoding"] not in ("br", "gzip", "deflate"):
         # The one finding here that is a misconfiguration on every server and for
-        # every visitor: text sent uncompressed costs bytes on every request, and the
-        # repair is one directive in the server config, which is the item's own
-        # subject. The rest of this file is graded on how much it costs — a missing
-        # validator header is a round trip, `immutable` is an optimisation — so they
-        # stay `warning` and `info`. Before 0.50.0 nothing here said `error`, which is
-        # exactly why TE-170 could not report FAIL on any site.
-        row["issues"].append({"severity": "error", "message": "Compressible response is not Brotli/gzip encoded"})
+        # every visitor when the response is large: text sent uncompressed costs bytes
+        # on every request, and the repair is one directive in the server config,
+        # which is the item's own subject. The rest of this file is graded on how much
+        # it costs — a missing validator header is a round trip, `immutable` is an
+        # optimisation — so they stay `warning` and `info`. Before 0.50.0 nothing here
+        # said `error`, which is exactly why TE-170 could not report FAIL on any site.
+        # A known large response is therefore `error`, a known small response is no
+        # finding because compression overhead can outweigh it, and an unknown length
+        # is `warning` because the high-severity premise cannot be proved.
+        message = "Compressible response is not Brotli/gzip encoded"
+        if row["content_length"] is None:
+            row["issues"].append({"severity": "warning",
+                                  "message": f"{message} (length unknown)"})
+        elif row["content_length"] > COMPRESSIBLE_MIN_BYTES:
+            row["issues"].append({"severity": "error", "message": message})
     max_age = _cache_max_age(row["cache_control"])
     if is_static and (max_age is None or max_age < STATIC_MAX_AGE_MIN):
         row["issues"].append({"severity": "warning", "message": "Static asset cache lifetime is short or missing"})

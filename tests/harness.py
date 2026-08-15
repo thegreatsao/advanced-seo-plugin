@@ -133,6 +133,12 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
         """
         if not self.gzip_text:
             return super().send_head()
+        # The base class answers validators with `304 Not Modified`, and this
+        # fixture's own access log is full of 304s. A server that ignores a validator
+        # it just sent is a worse fixture than one that does not compress, so let the
+        # base class preserve conditional-request semantics before the gzip path.
+        if self.headers.get("If-Modified-Since") or self.headers.get("If-None-Match"):
+            return super().send_head()
         accepted = self.headers.get("Accept-Encoding") or ""
         path = self.translate_path(self.path)
         # A request for `/` translates to a directory, and a directory name does not
