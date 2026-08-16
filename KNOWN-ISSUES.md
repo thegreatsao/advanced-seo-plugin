@@ -48,15 +48,16 @@ question rather than a suspicion**, which is the return on the exercise.
 
 Two are already answered, and both are worth reading before the rest:
 
-- **`TECH-002` cannot fail on a real site, and 0.50.0's repair for it did not repair
-  it.** That release graded `@font-face` with no `font-display` as `error` precisely to
-  make this item's FAIL reachable. Measured on three pages: the declaration in an
-  **external** stylesheet produces no finding and PASS; the identical declaration
-  **inline** produces `error` and FAIL. `font_audit.py:75` reads `@font-face` only out of
-  inline `<style>` blocks — it collects `<link rel=stylesheet>` hrefs at line 62 and
-  never opens them. Every real site puts its fonts in a stylesheet. This is a third
-  instance of the trap that release's own entry names, *adding the severity silenced the
-  gate and changed nothing*, and it shipped in that release unseen.
+- **`TECH-002` is fixed in 0.54.0: `font_audit.py` now reads the stylesheets it
+  links.** The 0.50.0 repair graded `@font-face` with no `font-display` as `error` but
+  left that branch reachable only for inline `<style>` blocks; an external declaration
+  still produced no finding and PASS. The script now fetches every linked stylesheet
+  through the shared response cache, sends its faces through the same branch as inline
+  faces, and names the stylesheet URL on each finding. A file that cannot be read adds
+  a `warning` with the URL and reason instead of looking clean. Re-running the same
+  three-page measurement gives FAIL for an external blocking face, FAIL for the inline
+  face, and PASS for external `font-display: swap`; the corpus census moved only
+  `TECH-002` on `failing-shapes`, and the never-FAIL count fell from 29 to 28.
 - **`AR-155` fails where `AR-147` and `CI-012` pass, on the same URL through the same
   script.** `/Category_Page/Item_One_FINAL.html` raises `url_quality` flags — enough for
   `AR-155`'s `flags len_eq 0` — while leaving `score >= 70` satisfied for the other two.

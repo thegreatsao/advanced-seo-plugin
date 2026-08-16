@@ -10,6 +10,27 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.54.0 — font_audit reads the stylesheets it links
+
+`TECH-002` *Font loading does not block render* asserts the issues from
+`font_audit.py`. Version 0.50.0 tried to make its FAIL reachable by grading an
+`@font-face` with no `font-display` as `error`, but the script inspected only inline
+`<style>` blocks: it collected linked stylesheet URLs and never opened them. Measured
+across three pages, the same blocking declaration produced PASS externally and FAIL
+inline, while external `font-display: swap` produced PASS. The repair had silenced the
+reachability gate without repairing the real web shape.
+
+The script now fetches every linked stylesheet through the same shared response cache
+already used by `css_minify_check.py`, parses its faces through the inline branch, and
+puts the stylesheet URL on each finding. An unreadable stylesheet now produces a
+`warning` naming the URL and fetch reason instead of reading as clean. Operators will
+therefore see `TECH-002` change from PASS to FAIL when a blocking web font is declared
+in external CSS; `swap`, `optional` and `fallback` remain passing.
+
+No registry rule or threshold changes; the registry remains `5c6290bca280`. In the
+corpus census, only `TECH-002` on `failing-shapes` moved, from PASS to FAIL, and the
+count that could not be seen failing dropped from 29 to 28.
+
 ## 0.53.0 — the audit stops starting a browser
 
 `javascript_render_audit.py` no longer launches Chromium. A browser started inside

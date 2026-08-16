@@ -3510,13 +3510,14 @@
     },
     "TECH-002": {
       "answers": {
-        "failing-shapes": "PASS",
+        "failing-shapes": "FAIL",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
+        "FAIL",
         "PASS"
       ],
       "script": "font_audit.py",

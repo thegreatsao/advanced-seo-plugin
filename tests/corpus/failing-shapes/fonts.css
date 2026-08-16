@@ -1,19 +1,12 @@
 /* TECH-002: a web font with no `font-display`, so the browser blocks the first paint
-   on a network round trip. The item is "font loading does not block render", and this
-   is the declaration that makes it block.
+   on a network round trip. This stays in an external stylesheet because that is the
+   real web shape the 0.50.0 repair missed. As of 0.54.0 `font_audit.py` fetches linked
+   CSS through the shared response cache, reports this face as an error naming this
+   stylesheet, and the census sees TECH-002 fail.
 
    Served from the root rather than from /assets/ on purpose: robots.txt disallows
    /assets/ for CI-013, and a stylesheet a crawler may not fetch is a stylesheet the
-   font audit cannot judge.
-
-   **TECH-002 still reports PASS on this tree, and the declaration is deliberately not
-   moved inline to change that.** `font_audit.py` reads `@font-face` only out of inline
-   `<style>` blocks; it collects external stylesheets and never opens them. Measured:
-   this exact declaration inline produces `severity: error` and FAIL, and in an
-   external file produces no finding at all. Writing it inline here would make the
-   census green by modelling the checker instead of the web — and every real site puts
-   its fonts in a stylesheet. The corpus keeps the real shape and the census keeps
-   saying TECH-002 cannot be seen failing, until the script reads what it links. */
+   font audit cannot judge. */
 @font-face {
   font-family: "CorpusSans";
   src: url("/corpus-sans.woff2") format("woff2");

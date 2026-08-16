@@ -394,10 +394,31 @@ LAZY_HERO = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <img src="/i/a.png" alt="A round sourdough loaf" width="800" height="400" loading="lazy">
 <p>The first and largest image on the page, told to wait.</p></body></html>"""
 
+FONT_EXTERNAL_BLOCKING = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Blocking external font</title><link rel="stylesheet" href="/font-blocking.css">
+</head><body><h1>Blocking external font</h1></body></html>"""
+
+FONT_EXTERNAL_SWAP = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Swapped external font</title><link rel="stylesheet" href="/font-swap.css">
+</head><body><h1>Swapped external font</h1></body></html>"""
+
+FONT_INLINE_BLOCKING = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Blocking inline font</title><style>
+@font-face { font-family: InlineBlocking; src: url('/inline.woff2') format('woff2'); }
+</style></head><body><h1>Blocking inline font</h1></body></html>"""
+
+FONT_UNFETCHABLE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Unreadable font stylesheet</title><link rel="stylesheet" href="/missing-fonts.css">
+</head><body><h1>Unreadable font stylesheet</h1></body></html>"""
+
 CSS_MIN = "body{color:#222}h1{font-size:2rem}a{color:#06c}"
 CSS_FAT = "\n".join(f"  .rule-{n} {{ color : #222222 ;  margin : 0 auto ; }} "
                     f"/* rule number {n}, with a comment nobody needed */"
                     for n in range(120))
+FONT_BLOCKING_CSS = ("@font-face { font-family: ExternalBlocking; "
+                     "src: url('/external.woff2') format('woff2'); }")
+FONT_SWAP_CSS = ("@font-face { font-family: ExternalSwap; "
+                 "src: url('/external.woff2') format('woff2'); font-display: swap; }")
 
 SITEMAP_GOOD = ('<?xml version="1.0" encoding="UTF-8"?>'
                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -514,6 +535,10 @@ GOOD_ROUTES = {
     "/thin.html": BAD_PAGE,
     "/spammy.html": SPAMMY_ANCHORS,
     "/lazy.html": LAZY_HERO,
+    "/font-external-blocking.html": FONT_EXTERNAL_BLOCKING,
+    "/font-external-swap.html": FONT_EXTERNAL_SWAP,
+    "/font-inline-blocking.html": FONT_INLINE_BLOCKING,
+    "/font-unfetchable.html": FONT_UNFETCHABLE,
     "/shop.html": ABOUT_PAGE,
     "/robots.txt": (200, TEXT, "User-agent: *\nAllow: /\nDisallow: /private/\n"
                                "User-agent: GPTBot\nAllow: /\n"
@@ -527,6 +552,8 @@ GOOD_ROUTES = {
     "/sitemap.xml": (200, XML, SITEMAP_GOOD),
     "/s.min.css": (200, CSS, CSS_MIN),
     "/s.css": (200, CSS, CSS_FAT),
+    "/font-blocking.css": (200, CSS, FONT_BLOCKING_CSS),
+    "/font-swap.css": (200, CSS, FONT_SWAP_CSS),
     "/s.js": (200, JS, "console.log(1);"),
     "/i/a.png": (200, {"Content-Type": "image/png"}, PNG),
     "/i/a.webp": (200, {"Content-Type": "image/webp"}, WEBP),
@@ -612,6 +639,10 @@ RUNS = [
     ("facets", "faceted_nav_audit.py", ["{good}", "--from-page"]),
     ("facets_bad", "faceted_nav_audit.py", ["{bad}", "--from-page"]),
     ("fonts", "font_audit.py", ["{good}"]),
+    ("fonts_external_blocking", "font_audit.py", ["{good}font-external-blocking.html"]),
+    ("fonts_external_swap", "font_audit.py", ["{good}font-external-swap.html"]),
+    ("fonts_inline_blocking", "font_audit.py", ["{good}font-inline-blocking.html"]),
+    ("fonts_unfetchable", "font_audit.py", ["{good}font-unfetchable.html"]),
     ("fresh", "freshness_checker.py", ["{good}"]),
     ("fresh_bad", "freshness_checker.py", ["{bad}"]),
     ("ga4", "ga4_tag_checker.py", ["{good}"]),
@@ -2389,10 +2420,39 @@ class FontLoading(unittest.TestCase):
     """TECH-002 `issues`."""
 
     def test_a_page_loading_no_web_font_raises_nothing(self):
-        """One direction, and the honest reason: a fixture cannot serve a real font
-        file without committing a binary to the repository for one `low` item."""
+        """Fails if a page with no font face stops reading as clean."""
         self.assertEqual(verdict("TECH-002", out("fonts")), PASS)
         self.assertEqual(out("fonts")["font_face_count"], 0)
+
+    def test_an_external_font_face_without_font_display_fails(self):
+        """Fails if linked CSS is not read or its blocking face is not an error."""
+        result = out("fonts_external_blocking")
+        blocking = [issue for issue in result["issues"]
+                    if issue["message"] == "@font-face missing font-display"]
+        self.assertEqual([issue["severity"] for issue in blocking], ["error"])
+        self.assertTrue(blocking[0]["url"].endswith("/font-blocking.css"))
+        self.assertEqual(verdict("TECH-002", result), FAIL)
+
+    def test_an_external_font_face_with_swap_passes(self):
+        """Fails if a non-blocking face in linked CSS is graded as an error."""
+        result = out("fonts_external_swap")
+        self.assertFalse(any(issue["severity"] == "error" for issue in result["issues"]))
+        self.assertEqual(verdict("TECH-002", result), PASS)
+
+    def test_an_inline_font_face_without_font_display_still_fails(self):
+        """Fails if adding linked-CSS support loses the existing inline path."""
+        result = out("fonts_inline_blocking")
+        self.assertIn("error", [issue["severity"] for issue in result["issues"]])
+        self.assertEqual(verdict("TECH-002", result), FAIL)
+
+    def test_an_unfetchable_stylesheet_is_not_clean(self):
+        """Fails if unreadable linked CSS is mistaken for CSS with no font defect."""
+        result = out("fonts_unfetchable")
+        unreadable = [issue for issue in result["issues"]
+                      if issue["message"] == "Stylesheet could not be fetched"]
+        self.assertEqual([issue["severity"] for issue in unreadable], ["warning"])
+        self.assertTrue(unreadable[0]["url"].endswith("/missing-fonts.css"))
+        self.assertIn("404", unreadable[0]["evidence"])
 
 
 class LcpSubparts(unittest.TestCase):

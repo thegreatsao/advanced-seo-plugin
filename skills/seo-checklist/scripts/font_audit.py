@@ -8,7 +8,14 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import BeautifulSoup, fetch_url, load_source, normalize_url, require_bs4
+from seo_common import (
+    BeautifulSoup,
+    fetch_url,
+    load_source,
+    normalize_url,
+    require_bs4,
+    safe_get,
+)
 
 
 # basis: measured — corpus=tools/calibration/font-weight.json; date=2026-08-10; method=file byte distributions over pinned npm packages.
@@ -41,6 +48,42 @@ def _extract_font_faces(css: str) -> list[dict]:
     return faces
 
 
+def _record_font_faces(
+    css: str,
+    *,
+    base_url: str,
+    stylesheet_url: str | None,
+    font_faces: list[dict],
+    font_files: list[str],
+    issues: list[dict],
+) -> None:
+    for face in _extract_font_faces(css):
+        font_faces.append(face)
+        for font_url in face["urls"]:
+            font_files.append(normalize_url(font_url, base_url) if base_url else font_url)
+
+        finding_url = {"url": stylesheet_url} if stylesheet_url else {}
+        if not face["font_display"]:
+            # The item is *Font loading does not block render*, and this is the
+            # markup that makes it block: with no `font-display`, the browser
+            # hides the text until the font arrives. The other findings in this
+            # file cost a round trip or some bytes; this one costs the words on
+            # the page, and it is what makes TECH-002's FAIL reachable.
+            issues.append({
+                "severity": "error",
+                "message": "@font-face missing font-display",
+                "evidence": face.get("family"),
+                **finding_url,
+            })
+        elif face["font_display"].lower() not in ("swap", "optional", "fallback"):
+            issues.append({
+                "severity": "info",
+                "message": "font-display may delay text rendering",
+                "evidence": face["font_display"],
+                **finding_url,
+            })
+
+
 def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
     html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
@@ -51,7 +94,7 @@ def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
     preconnects = []
     stylesheets = []
     font_files = []
-    inline_faces = []
+    font_faces = []
 
     for link in soup.find_all("link"):
         rel = " ".join(link.get("rel") or []).lower()
@@ -73,20 +116,35 @@ def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
             font_files.append(href)
 
     for style in soup.find_all("style"):
-        for face in _extract_font_faces(style.get_text() or ""):
-            inline_faces.append(face)
-            for font_url in face["urls"]:
-                abs_url = normalize_url(font_url, url) if url else font_url
-                font_files.append(abs_url)
-            if not face["font_display"]:
-                # The item is *Font loading does not block render*, and this is the
-                # markup that makes it block: with no `font-display`, the browser
-                # hides the text until the font arrives. The other findings in this
-                # file cost a round trip or some bytes; this one costs the words on
-                # the page, and it is what makes TECH-002's FAIL reachable.
-                issues.append({"severity": "error", "message": "@font-face missing font-display", "evidence": face.get("family")})
-            elif face["font_display"].lower() not in ("swap", "optional", "fallback"):
-                issues.append({"severity": "info", "message": "font-display may delay text rendering", "evidence": face["font_display"]})
+        _record_font_faces(
+            style.get_text() or "",
+            base_url=url,
+            stylesheet_url=None,
+            font_faces=font_faces,
+            font_files=font_files,
+            issues=issues,
+        )
+
+    for href in dict.fromkeys(stylesheets):
+        try:
+            response = safe_get(href, timeout=timeout)
+            response.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 — unreadable CSS is audit evidence
+            issues.append({
+                "severity": "warning",
+                "message": "Stylesheet could not be fetched",
+                "url": href,
+                "evidence": str(exc)[:200],
+            })
+            continue
+        _record_font_faces(
+            response.text,
+            base_url=response.url,
+            stylesheet_url=href,
+            font_faces=font_faces,
+            font_files=font_files,
+            issues=issues,
+        )
 
     rows = []
     for font_url in sorted(set(font_files)):
@@ -119,12 +177,12 @@ def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
     return {
         "url": url or source,
         "font_file_count": len(rows),
-        "font_face_count": len(inline_faces),
+        "font_face_count": len(font_faces),
         "preload_count": len(preloads),
         "preconnect_count": len(preconnects),
         "issues": issues,
         "fonts": rows,
-        "font_faces": inline_faces,
+        "font_faces": font_faces,
         "fetch_error": fetched.get("error"),
     }
 
