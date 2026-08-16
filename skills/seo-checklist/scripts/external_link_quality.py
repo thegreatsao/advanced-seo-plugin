@@ -7,7 +7,8 @@ import argparse
 from collections import Counter
 from urllib.parse import urlparse
 
-from seo_common import fetch_url, normalize_url, parse_html, print_json_or_text, same_host
+from seo_common import (DEAD_FETCH_ERROR_KINDS, fetch_url, normalize_url,
+                        parse_html, print_json_or_text, same_host)
 
 
 LOW_TRUST_HOST_HINTS = (
@@ -45,19 +46,8 @@ def extract_external_links(html: str, page_url: str, site_url: str) -> list[dict
     return output
 
 
-# What a failed request has to say before we are willing to call a link dead. DNS
-# failure and a refused connection are properties of the link; a timeout, a TLS
-# handshake we could not complete and a rate limit are properties of this run.
-DEAD_ERRORS = ("nodename nor servname", "name or service not known",
-               "temporary failure in name resolution", "no address associated",
-               "nameresolutionerror", "failed to resolve",
-               "connection refused", "connectionrefusederror",
-               "network is unreachable", "no route to host")
-
-
-def _is_dead(error: str | None) -> bool:
-    text = (error or "").lower()
-    return bool(text) and any(marker in text for marker in DEAD_ERRORS)
+def _is_dead(error_kind: str | None) -> bool:
+    return error_kind in DEAD_FETCH_ERROR_KINDS
 
 
 def _check_external_url(url: str, timeout: int) -> dict:
@@ -74,9 +64,13 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
     for source in urls:
         source_url = normalize_url(source)
         fetched = fetch_url(source_url, timeout=timeout, max_bytes=2_000_000)
-        pages.append({"url": source_url, "status": fetched.get("status"), "error": fetched.get("error")})
+        pages.append({"url": source_url, "status": fetched.get("status"),
+                      "error": fetched.get("error"),
+                      "error_kind": fetched.get("error_kind")})
         if fetched.get("status") != 200 or not fetched.get("text"):
-            errors.append({"url": source_url, "status": fetched.get("status"), "error": fetched.get("error")})
+            errors.append({"url": source_url, "status": fetched.get("status"),
+                           "error": fetched.get("error"),
+                           "error_kind": fetched.get("error_kind")})
             continue
         links.extend(extract_external_links(fetched["text"], fetched.get("url") or source_url, source_url))
 
@@ -96,21 +90,23 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
             row["final_url"] = fetched.get("url")
             row["redirect_chain"] = fetched.get("redirect_chain", [])
             row["error"] = fetched.get("error")
+            row["error_kind"] = fetched.get("error_kind")
         checked.append(row)
 
-    # A host that does not resolve is broken. It used to be invisible here: the test
-    # was `status >= 400`, and a dead domain never produces a status at all — it
-    # produces an error and a `status` of None. That is the *ordinary* form of external
-    # link rot, and it was the one form this check could not see, so a page full of
-    # links to expired domains reported zero broken links.
+    # An error kind says whether no status is evidence about the link. Before that
+    # typed contract this guessed from Requests/urllib3 prose, so changing an error
+    # message could make the same dead domain stop counting. Resolution, refusal and
+    # TLS failures are link defects; our policy and robots refusals are not.
     #
     # A timeout is deliberately not in that set. It means the request did not finish,
     # which is a fact about this run rather than about the link, and calling it broken
     # would put a slow host in a client's fix list as a dead one.
     unreachable = [link for link in checked
-                   if link.get("status") is None and _is_dead(link.get("error"))]
-    unresolved = [link for link in checked
-                  if link.get("status") is None and not _is_dead(link.get("error"))]
+                   if link.get("status") is None
+                   and _is_dead(link.get("error_kind"))]
+    unchecked = [link for link in checked
+                 if link.get("status") is None
+                 and not _is_dead(link.get("error_kind"))]
     broken = [link for link in checked
               if (link.get("status") and link["status"] >= 400)] + unreachable
     redirects = [link for link in checked if link.get("redirect_chain")]
@@ -122,15 +118,15 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
     issues = []
     if broken:
         issues.append({"severity": "error", "type": "broken_external_links", "count": len(broken),
-                       "message": "External links are dead: 4xx/5xx, or a host that "
-                                  "does not resolve"})
-    if unresolved:
+                       "message": "External links are dead: 4xx/5xx, resolution, "
+                                  "connection refusal or TLS failure"})
+    if unchecked:
         # Reported, and not as a defect in the site: the run could not settle these,
         # which is the honest thing to say about them.
         issues.append({"severity": "info", "type": "unchecked_external_links",
-                       "count": len(unresolved),
-                       "message": "External links could not be checked (timeout, TLS "
-                                  "or a refusal aimed at crawlers)"})
+                       "count": len(unchecked),
+                       "message": "External links could not be checked (timeout, "
+                                  "policy, robots or an unclassified failure)"})
     if redirects:
         issues.append({"severity": "warning", "type": "redirecting_external_links", "count": len(redirects), "message": "External links redirect"})
     if low_trust:
@@ -150,7 +146,7 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
             # "this domain is gone" rather than "this link returns 404".
             "broken_links": len(broken),
             "unreachable_links": len(unreachable),
-            "unchecked_links": len(unresolved),
+            "unchecked_links": len(unchecked),
             "redirecting_links": len(redirects),
             "low_trust_pattern_links": len(low_trust),
             "commercial_rel_review": len(commercial_without_rel),

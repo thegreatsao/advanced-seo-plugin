@@ -87,8 +87,9 @@ class PinnedTransport(unittest.TestCase):
         self.assertEqual(connected, [PUBLIC_A])
         self.assertNotIn(LOOPBACK, connected)
 
-    def test_resolution_failure_is_fetched_without_a_pin(self):
-        """Refusal waits for 0.60.0: changing error prose with the pin moved BL-083."""
+    def test_resolution_failure_is_refused_before_a_request(self):
+        """The guard failed open for 0.59.0 because changing its error prose moved
+        BL-083; the typed failure contract lets 0.60.0 close that one-release hole."""
         attempted = []
 
         def request(_session, method, url, **kwargs):
@@ -101,12 +102,12 @@ class PinnedTransport(unittest.TestCase):
         with mock.patch.object(sh.socket, "getaddrinfo", side_effect=error), \
                 mock.patch.object(sh.requests.Session, "request", new=request), \
                 mock.patch.object(sh, "_PinnedAdapter") as pinned:
-            result = sh.safe_get("https://servfail.example/")
+            with self.assertRaises(sh.HostResolutionError) as caught:
+                sh.safe_get("https://servfail.example/")
 
-        self.assertEqual(result.url, "https://servfail.example/")
-        self.assertEqual(len(attempted), 1)
-        self.assertEqual(attempted[0][:2], ("GET", "https://servfail.example/"))
-        self.assertEqual(attempted[0][2]["Host"], "servfail.example")
+        import seo_common
+        self.assertEqual(seo_common.fetch_error_kind(caught.exception), "unresolved")
+        self.assertEqual(attempted, [])
         pinned.assert_not_called()
 
     def test_private_metadata_and_mapped_loopback_answers_stay_blocked(self):

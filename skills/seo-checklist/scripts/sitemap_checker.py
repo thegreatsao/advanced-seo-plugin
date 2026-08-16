@@ -72,6 +72,7 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
             "url_count": 0,
             "sitemap_count": 0,
             "error": fetched.get("error"),
+            "error_kind": fetched.get("error_kind"),
         }
         if fetched.get("status") != 200:
             if sm_url in probed:
@@ -86,6 +87,8 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
         parsed = parse_sitemap_xml(fetched.get("text") or "", sm_url)
         entry["type"] = parsed["type"]
         entry["error"] = parsed["error"]
+        if parsed["error"]:
+            entry["error_kind"] = "other"
         entry["url_count"] = len(parsed["urls"])
         entry["sitemap_count"] = len(parsed["sitemaps"])
         if parsed["error"]:
@@ -123,6 +126,8 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
                 url_entry["checks"]["status"] = page.get("status")
                 url_entry["checks"]["final_url"] = page.get("url")
                 url_entry["checks"]["redirects"] = page.get("redirect_chain", [])
+                url_entry["checks"]["error"] = page.get("error")
+                url_entry["checks"]["error_kind"] = page.get("error_kind")
                 if page.get("status") and page["status"] >= 400:
                     result["issues"].append(issue("error", f"Sitemap URL returns HTTP {page['status']}", loc))
                 if page.get("redirect_chain"):

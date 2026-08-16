@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
 import site_crawl
+from seo_common import DEAD_FETCH_ERROR_KINDS, fetch_error_kind
 
 try:
     import requests
@@ -78,7 +79,8 @@ def extract_links(html: str, base_url: str) -> list:
 def check_link(link: dict, timeout: int = 10) -> dict:
     """Check a single link's HTTP status."""
     url = link["url"]
-    result = {**link, "status": None, "error": None, "redirect": None, "response_time_ms": None}
+    result = {**link, "status": None, "error": None, "error_kind": None,
+              "redirect": None, "response_time_ms": None}
 
     try:
         resp = safe_head(url, timeout=timeout, headers=HEADERS, allow_redirects=True)
@@ -100,14 +102,18 @@ def check_link(link: dict, timeout: int = 10) -> dict:
                 "codes": [r.status_code for r in resp.history],
             }
 
-    except requests.exceptions.Timeout:
+    except requests.exceptions.Timeout as exc:
         result["error"] = "timeout"
-    except requests.exceptions.ConnectionError:
+        result["error_kind"] = fetch_error_kind(exc)
+    except requests.exceptions.ConnectionError as exc:
         result["error"] = "connection_failed"
-    except requests.exceptions.TooManyRedirects:
+        result["error_kind"] = fetch_error_kind(exc)
+    except requests.exceptions.TooManyRedirects as exc:
         result["error"] = "too_many_redirects"
+        result["error_kind"] = fetch_error_kind(exc)
     except requests.exceptions.RequestException as e:
         result["error"] = str(e)[:100]
+        result["error_kind"] = fetch_error_kind(e)
 
     return result
 
@@ -146,6 +152,7 @@ def check_broken_links(url: str, internal_only: bool = False,
         "broken": [],
         "redirected": [],
         "timeout": [],
+        "unchecked": [],
         "healthy": 0,
         "summary": {},
         "issues": [],
@@ -195,11 +202,13 @@ def check_broken_links(url: str, internal_only: bool = False,
     for link in checked:
         status = link["status"]
 
-        if link["error"]:
-            if link["error"] == "timeout":
+        if link["error_kind"]:
+            if link["error_kind"] == "timeout":
                 result["timeout"].append(link)
-            else:
+            elif link["error_kind"] in DEAD_FETCH_ERROR_KINDS:
                 result["broken"].append(link)
+            else:
+                result["unchecked"].append(link)
         elif status and status >= 400:
             result["broken"].append(link)
         elif link["redirect"]:
@@ -215,6 +224,7 @@ def check_broken_links(url: str, internal_only: bool = False,
         "redirected": len(result["redirected"]),
         "broken_or_redirected": len(result["broken"]) + len(result["redirected"]),
         "timeout": len(result["timeout"]),
+        "unchecked": len(result["unchecked"]),
     }
 
     # Generate issues
@@ -272,6 +282,7 @@ def links_from_inventory(inventory: dict) -> dict:
         row = pages.get(target)
         entry = {"url": target, "anchor_text": anchor_for(target),
                  "is_internal": True, "status": None, "error": None,
+                 "error_kind": None,
                  "redirect": None, "response_time_ms": None,
                  "linked_from": sorted({s["source"] for s in inbound[target]})}
         if row is None:
@@ -283,6 +294,7 @@ def links_from_inventory(inventory: dict) -> dict:
         result["checked"] += 1
         entry["status"] = row.get("status")
         entry["error"] = row.get("error")
+        entry["error_kind"] = row.get("error_kind")
         if row.get("redirect_chain"):
             entry["redirect"] = {"from": target, "to": row.get("final_url"),
                                  "hops": len(row["redirect_chain"]),
@@ -290,8 +302,16 @@ def links_from_inventory(inventory: dict) -> dict:
         if row.get("robots_blocked"):
             result["unchecked"].append(entry)
             result["checked"] -= 1
-        elif entry["error"]:
+        elif entry["error_kind"] in DEAD_FETCH_ERROR_KINDS:
             result["broken"].append(entry)
+        elif entry["error_kind"]:
+            result["unchecked"].append(entry)
+            result["checked"] -= 1
+        elif entry["error"]:
+            # An inventory written before error_kind existed cannot prove what the
+            # failure meant. Keep it out of both verdict directions.
+            result["unchecked"].append(entry)
+            result["checked"] -= 1
         elif (entry["status"] or 0) >= 400:
             result["broken"].append(entry)
         elif entry["redirect"]:

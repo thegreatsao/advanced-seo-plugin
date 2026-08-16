@@ -219,7 +219,8 @@ def load_sitemap_urls(site_url: str, sitemap_urls: list[str] | None = None,
         fetched = fetch(sitemap_url, timeout=timeout, max_bytes=8_000_000)
         if fetched.get("status") != 200 or not fetched.get("text"):
             errors.append({"url": sitemap_url, "status": fetched.get("status"),
-                           "error": fetched.get("error")})
+                           "error": fetched.get("error"),
+                           "error_kind": fetched.get("error_kind")})
             continue
         parsed = parse_sitemap_xml(fetched["text"], sitemap_url)
         if parsed.get("error"):
@@ -295,6 +296,7 @@ def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
         "redirect_chain": fetched.get("redirect_chain") or [],
         "bytes": fetched.get("bytes") or 0,
         "error": fetched.get("error"),
+        "error_kind": fetched.get("error_kind"),
         "robots_blocked": bool(fetched.get("robots_blocked")),
         "title": None,
         "meta_description": None,
@@ -500,6 +502,7 @@ def _finish(site_url: str, entry: str, pages: dict, robots_blocked: dict,
                 "url": row["url"],
                 "status": row["status"],
                 "error": row["error"],
+                "error_kind": row.get("error_kind"),
                 "linked_from": sorted({s["source"] for s in inbound.get(key, [])}),
             })
     redirected = [{"url": pages[key]["url"], "to": pages[key]["final_url"],

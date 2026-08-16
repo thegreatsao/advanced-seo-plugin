@@ -29,6 +29,11 @@ PROBE_GSC_PROPERTY=sc-domain:example.com \
 `severity` (`critical`/`high`/`medium`/`low`) plus `message`. Checklist rules lean on this
 rather than on per-script bespoke fields wherever possible.
 
+**Shared fetch result:** `error_kind` is `None` when `error` is `None`; otherwise it is
+one of the closed vocabulary `unresolved`, `refused`, `timeout`, `tls`, `blocked`,
+`robots`, `other`. Scripts that expose a shared fetch result retain the kind beside
+the existing human-readable `error`; no reader has to classify library prose.
+
 **Scripts exposing a 0-100 `score`:** security_headers, social_meta, eeat_signal_checker,
 freshness_checker, answer_block_scanner, citation_readiness, a11y_seo_checker,
 topical_cluster_mapper, llms_txt_checker (`quality.score`), pagespeed (`performance_score`).
@@ -211,10 +216,11 @@ one it fetches a single page and checks every link on it, internal and external.
 `checked` — int
 `truncated` — bool
 `broken[]` — array
-  - item keys: url, anchor_text, is_internal, status, error, redirect, response_time_ms, linked_from
+  - item keys: url, anchor_text, is_internal, status, error, error_kind, redirect, response_time_ms, linked_from
 `redirected[]` — array
 `timeout[]` — array
-`unchecked[]` — array (targets the crawl did not reach; counted in neither direction)
+`unchecked[]` — array (targets the crawl did not reach or policy/robots declined;
+counted in neither direction)
 `healthy` — int
 `summary.total` — int
 `summary.healthy` — int
@@ -453,21 +459,23 @@ than fetching them.
 
 `sources[]` — array
 `pages[]` — array
-  - item keys: url, status, error
+  - item keys: url, status, error, error_kind
 `summary.external_links_found` — int
 `summary.unique_external_links` — int
 `summary.checked_links` — int
 `summary.broken_links` — int
+`summary.unreachable_links` — int
+`summary.unchecked_links` — int
 `summary.redirecting_links` — int
 `summary.low_trust_pattern_links` — int
 `summary.commercial_rel_review` — int
 `top_external_hosts[]` — array
   - item keys: host, count
 `links[]` — array
-  - item keys: source, url, anchor, rel, nofollow, sponsored, ugc, host, low_trust_pattern, status, final_url, redirect_chain
+  - item keys: source, url, anchor, rel, nofollow, sponsored, ugc, host, low_trust_pattern, status, final_url, redirect_chain, error, error_kind
 `issues[]` — array
   - item keys: severity, type, count, message
-`errors[]` — array
+`errors[]` — array — item keys: url, status, error, error_kind
 
 ### faceted_nav_audit.py
 
@@ -1414,7 +1422,7 @@ output contracts derive from it, so a change here moves them at once.
 `pages.<key>` — object, one per deduplicated page; the key is the page key and
   `url` is the first discovered spelling that was fetched
   - `url`, `final_url`, `status`, `content_type`, `redirect_chain[]`, `redirected`,
-    `bytes`, `error`, `robots_blocked`, `html`, `depth`, `discovered_by`
+    `bytes`, `error`, `error_kind`, `robots_blocked`, `html`, `depth`, `discovered_by`
     (`entry`/`sitemap`/`link`), `in_sitemap`
   - `title`, `meta_description`, `meta_robots`, `canonical`, `noindex`
     (meta **and** `X-Robots-Tag`)
@@ -1425,8 +1433,9 @@ output contracts derive from it, so a change here moves them at once.
 `reachable[]` — array of page keys
 `unchecked_internal_targets[]` — array
 `robots_blocked.<key>` — str
-`sitemap.urls[]` / `.off_host[]` / `.sitemaps_checked[]` / `.errors[]`
-`broken[]` — array — item keys: url, status, error, linked_from
+`sitemap.urls[]` / `.off_host[]` / `.sitemaps_checked[]` / `.errors[]` — a fetch
+error item retains `error_kind` beside `error`
+`broken[]` — array — item keys: url, status, error, error_kind, linked_from
 `redirected[]` — array — item keys: url, to, hops, linked_from
 `external_targets.<url>[]` — array — item keys: source, anchor, nofollow
 
@@ -1437,9 +1446,10 @@ root. `--out PATH` writes the inventory to a file and prints the summary instead
 
 `site` — str
 `sitemaps_checked[]` — array
-  - item keys: url, status, final_url, redirects, type, url_count, sitemap_count, error
+  - item keys: url, status, final_url, redirects, type, url_count, sitemap_count, error, error_kind
 `urls[]` — array
-  - item keys: url, lastmod, changefreq, priority, checks
+  - item keys: url, lastmod, changefreq, priority, checks (status, final_url, redirects,
+    error and error_kind when `--fetch-urls` requests the URL)
 `summary.sitemaps` — int
 `summary.urls` — int
 `summary.indexes` — int

@@ -10,6 +10,22 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.60.0 — a fetch failure says what kind it is, and the guard closes
+
+Registry version: `98d748a44afa` (unchanged).
+
+The shared fetch result now carries `error_kind` beside the unchanged `error` text.
+Its closed vocabulary is `unresolved`, `refused`, `timeout`, `tls`, `blocked`,
+`robots` and `other`. Link checks use that typed field instead of matching
+Requests/urllib3 error prose, so an unresolvable host remains a broken link while a
+request refused by our own policy or robots.txt is reported as unchecked rather than
+as a site defect.
+
+A host which cannot be resolved is now refused by the SSRF guard before any request
+goes out. `HostResolutionError` is a `SafeHTTPError`, but the shared classifier marks
+it `unresolved`, not `blocked`: the host genuinely has no address, rather than being
+rejected by our private-address or scheme policy.
+
 ## 0.59.0 — the SSRF guard connects to the address it validated
 
 Registry version: `98d748a44afa` (unchanged).

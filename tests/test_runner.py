@@ -824,6 +824,7 @@ class Robots(unittest.TestCase):
             seo_common.safe_request = saved
         self.assertTrue(out["robots_blocked"])
         self.assertIn("robots.txt", out["error"])
+        self.assertEqual(out["error_kind"], "robots")
 
     def inventory(self, sitemap_urls, pages, robots_blocked=()):
         """A crawl inventory in the shape `site_crawl.py` writes one.

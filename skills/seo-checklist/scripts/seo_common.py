@@ -5,9 +5,10 @@ If a script needs one of these helpers, it imports it. A second copy is a defect
 not a convenience; ``test_no_script_carries_its_own_copy_of_a_shared_helper``
 enforces that rule for the helpers that have already escaped into copies.
 
-HTTP and source resolution are ``require_requests``, ``fetch_url``, ``fetch_html``,
-the ``safe_get`` re-export, ``read_urls``, ``load_html``, ``load_source`` and
-``is_url``. URL handling is ``normalize_url``, ``origin``, ``clean_url`` and
+HTTP and source resolution are ``require_requests``, ``fetch_url``,
+``fetch_error_kind``, ``fetch_html``, the ``safe_get`` re-export, ``read_urls``,
+``load_html``, ``load_source`` and ``is_url``. URL handling is ``normalize_url``,
+``origin``, ``clean_url`` and
 ``same_host``. HTML and image handling is the ``BeautifulSoup`` dependency handle,
 ``require_bs4``, ``html_parser``, ``parse_html``, ``favicon_href``, ``has_byline_class``,
 ``is_responsive_fill_image``, ``srcset_urls``, ``picture_sources`` and
@@ -16,7 +17,8 @@ sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
 ``discover_sitemap_urls`` and ``parse_sitemap_xml``. JSON-LD uses ``walk_json`` and
 ``as_list``. Output and directive handling is ``issue``, ``extract_directives`` and
 ``print_json_or_text``. The shared policy constants are ``USER_AGENT``,
-``HTML_CTYPES``, ``XML_CTYPES``, ``BYLINE_CLASS_TOKENS``, ``THIN_CONTENT_WORDS``,
+``HTML_CTYPES``, ``XML_CTYPES``, ``FETCH_ERROR_KINDS``,
+``DEAD_FETCH_ERROR_KINDS``, ``BYLINE_CLASS_TOKENS``, ``THIN_CONTENT_WORDS``,
 ``LCP_MIN_AREA`` and ``CONVENTIONAL_SITEMAP_PATHS``.
 
 Scripts launched directly use ``from seo_common import x``. A script that must also
@@ -31,6 +33,7 @@ import gzip
 import json
 import os
 import re
+import socket
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -48,16 +51,71 @@ except ImportError:  # pragma: no cover - exercised by users without deps
     BeautifulSoup = None
 
 try:
-    from lib.safe_http import (AGENTIC_SEO_USER_AGENT, RobotsDisallowed,
-                               safe_get, safe_request)
+    from lib.safe_http import (AGENTIC_SEO_USER_AGENT, HostResolutionError,
+                               RobotsDisallowed, SafeHTTPError, safe_get,
+                               safe_request)
 except ImportError:
-    from scripts.lib.safe_http import (AGENTIC_SEO_USER_AGENT, RobotsDisallowed,
-                                       safe_get, safe_request)
+    from scripts.lib.safe_http import (AGENTIC_SEO_USER_AGENT,
+                                       HostResolutionError, RobotsDisallowed,
+                                       SafeHTTPError, safe_get, safe_request)
+
+try:
+    from urllib3.exceptions import NameResolutionError as _NameResolutionError
+except ImportError:  # pragma: no cover - requests normally supplies urllib3
+    _NameResolutionError = None
 
 
 USER_AGENT = AGENTIC_SEO_USER_AGENT
 HTML_CTYPES = ("text/html", "application/xhtml+xml")
 XML_CTYPES = ("xml", "text/plain", "application/octet-stream")
+FETCH_ERROR_KINDS = (
+    "unresolved", "refused", "timeout", "tls", "blocked", "robots", "other",
+)
+DEAD_FETCH_ERROR_KINDS = ("unresolved", "refused", "tls")
+
+
+def _has_name_resolution_cause(exc: BaseException) -> bool:
+    """Whether a typed exception chain contains a resolver failure.
+
+    Requests wraps urllib3's ``NameResolutionError`` in ``MaxRetryError`` and then
+    ``ConnectionError``. Those links live partly in exception arguments and partly
+    in urllib3's ``reason`` attribute, so follow both without inspecting prose.
+    """
+    pending = [exc]
+    seen = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, socket.gaierror):
+            return True
+        if (_NameResolutionError is not None
+                and isinstance(current, _NameResolutionError)):
+            return True
+        linked = (current.__cause__, current.__context__,
+                  getattr(current, "reason", None), *current.args)
+        pending.extend(item for item in linked if isinstance(item, BaseException))
+    return False
+
+
+def fetch_error_kind(exc: BaseException) -> str:
+    """Classify a failed shared fetch from exception types and attributes only."""
+    if isinstance(exc, HostResolutionError) or _has_name_resolution_cause(exc):
+        return "unresolved"
+    if isinstance(exc, RobotsDisallowed):
+        return "robots"
+    if isinstance(exc, SafeHTTPError):
+        return "blocked"
+    if requests is not None:
+        if isinstance(exc, requests.exceptions.Timeout):
+            return "timeout"
+        # SSLError subclasses ConnectionError, so the narrower type comes first.
+        if isinstance(exc, requests.exceptions.SSLError):
+            return "tls"
+        if isinstance(exc, requests.exceptions.ConnectionError):
+            return "refused"
+    return "other"
 
 # Class tokens that name a byline, compared against each whitespace-separated class
 # token exactly and case-insensitively, with `_` read as `-`. The substring match this
@@ -247,10 +305,10 @@ def fetch_url(
 
     Pass `respect_robots=True` for a URL found by crawling, never for the one the
     operator asked about — see `lib.safe_http.safe_request` for why the asymmetry
-    matters. A refusal arrives as `result["error"]` naming robots.txt, and
-    `result["robots_blocked"]` is True. A caller that counts errors as site defects
-    **must** separate those out: a page we politely declined to fetch is not a page
-    the site got wrong.
+    matters. A refusal arrives as `result["error"]` naming robots.txt, with
+    `result["error_kind"] == "robots"` and `result["robots_blocked"]` True. A
+    caller that counts errors as site defects **must** separate those out: a page we
+    politely declined to fetch is not a page the site got wrong.
     """
     require_requests()
     url = normalize_url(url)
@@ -264,10 +322,12 @@ def fetch_url(
         "bytes": 0,
         "redirect_chain": [],
         "error": None,
+        "error_kind": None,
         "robots_blocked": False,
     }
     if parsed.scheme not in ("http", "https"):
         result["error"] = f"Unsupported URL scheme: {parsed.scheme}"
+        result["error_kind"] = "blocked"
         return result
 
     # No Accept of its own any more. It used to send one differing from
@@ -299,9 +359,11 @@ def fetch_url(
         # Flagged, not merely errored. Callers that turn "not fetched" into a site
         # defect have to be able to tell our restraint from the site's problem.
         result["error"] = str(exc)
+        result["error_kind"] = fetch_error_kind(exc)
         result["robots_blocked"] = True
     except requests.exceptions.RequestException as exc:
         result["error"] = str(exc)
+        result["error_kind"] = fetch_error_kind(exc)
     return result
 
 

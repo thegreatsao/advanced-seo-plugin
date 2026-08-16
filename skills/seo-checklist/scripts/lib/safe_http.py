@@ -82,6 +82,10 @@ class SafeHTTPError(requests.exceptions.RequestException if requests else Except
     installed there is nothing to subclass and nothing to catch it from."""
 
 
+class HostResolutionError(SafeHTTPError):
+    """Raised when a host has no address to validate or connect to."""
+
+
 def default_headers(extra: dict | None = None) -> dict:
     """Return request headers with the shared Agentic SEO User-Agent."""
     headers = dict(DEFAULT_HEADERS)
@@ -633,13 +637,13 @@ def _validated_url(url: str) -> tuple[str, tuple[str, ...]]:
 
     try:
         infos = socket.getaddrinfo(hostname, _port_for(parsed), type=socket.SOCK_STREAM)
-    except socket.gaierror:
-        return normalized, ()
+    except socket.gaierror as exc:
+        raise HostResolutionError(f"Could not resolve host: {hostname}") from exc
 
     resolved_ips = tuple(dict.fromkeys(info[4][0] for info in infos))
     if not resolved_ips:
-        raise SafeHTTPError(
-            f"Blocked: could not resolve host ({hostname}): resolver returned no addresses")
+        raise HostResolutionError(
+            f"Could not resolve host ({hostname}): resolver returned no addresses")
     for ip_text in resolved_ips:
         try:
             _guard_ip(ip_text)
