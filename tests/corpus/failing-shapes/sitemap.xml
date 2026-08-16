@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GO-136 and GO-137: a sitemap that disagrees with the tree in both directions.
+     It lists a page that does not exist, so a crawler spends a request on a 404;
+     and it omits /thin.html and /Category_Page/Item_One_FINAL.html, which are
+     reachable from the entry page, so those are unoffered rather than orphaned. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>http://127.0.0.1:8000/</loc>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/catalog.html</loc>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:8000/brochure-2019.html</loc>
+  </url>
+</urlset>

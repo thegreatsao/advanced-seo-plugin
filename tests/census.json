@@ -3,6 +3,7 @@
   "items": {
     "AR-146": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -18,6 +19,7 @@
     },
     "AR-147": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -33,6 +35,7 @@
     },
     "AR-148": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -48,6 +51,7 @@
     },
     "AR-149": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -63,6 +67,7 @@
     },
     "AR-150": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -78,6 +83,7 @@
     },
     "AR-151": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -94,6 +100,7 @@
     },
     "AR-152": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -110,6 +117,7 @@
     },
     "AR-153": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -125,6 +133,7 @@
     },
     "AR-154": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -141,12 +150,14 @@
     },
     "AR-155": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
+        "FAIL",
         "PASS"
       ],
       "script": "url_quality.py",
@@ -156,6 +167,7 @@
     },
     "AR-156": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -171,6 +183,7 @@
     },
     "AR-157": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -186,6 +199,7 @@
     },
     "AR-158": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -201,6 +215,7 @@
     },
     "AR-159": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -216,6 +231,7 @@
     },
     "AR-160": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -231,6 +247,7 @@
     },
     "AR-161": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -246,6 +263,7 @@
     },
     "AR-162": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -262,6 +280,7 @@
     },
     "AR-163": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -277,6 +296,7 @@
     },
     "AR-164": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -292,6 +312,7 @@
     },
     "BL-078": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -307,6 +328,7 @@
     },
     "BL-079": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -322,6 +344,7 @@
     },
     "BL-080": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -337,6 +360,7 @@
     },
     "BL-081": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -353,6 +377,7 @@
     },
     "BL-082": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -368,6 +393,7 @@
     },
     "BL-083": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -384,6 +410,7 @@
     },
     "BL-084": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -401,6 +428,7 @@
     },
     "BL-085": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -416,6 +444,7 @@
     },
     "BL-086": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -432,6 +461,7 @@
     },
     "BL-087": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -449,6 +479,7 @@
     },
     "BL-088": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -464,6 +495,7 @@
     },
     "BL-089": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -479,6 +511,7 @@
     },
     "BL-090": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -494,6 +527,7 @@
     },
     "BL-091": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -509,6 +543,7 @@
     },
     "BL-092": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -524,6 +559,7 @@
     },
     "CI-001": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -540,6 +576,7 @@
     },
     "CI-002": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -555,6 +592,7 @@
     },
     "CI-003": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -570,6 +608,7 @@
     },
     "CI-004": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -586,6 +625,7 @@
     },
     "CI-005": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -601,6 +641,7 @@
     },
     "CI-006": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -617,6 +658,7 @@
     },
     "CI-007": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -632,6 +674,7 @@
     },
     "CI-008": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -648,6 +691,7 @@
     },
     "CI-009": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -664,6 +708,7 @@
     },
     "CI-010": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -679,6 +724,7 @@
     },
     "CI-011": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -695,6 +741,7 @@
     },
     "CI-012": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -710,12 +757,14 @@
     },
     "CI-013": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
+        "FAIL",
         "PASS"
       ],
       "script": "robots_path_tester.py",
@@ -725,6 +774,7 @@
     },
     "CI-014": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -740,6 +790,7 @@
     },
     "CI-015": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -755,6 +806,7 @@
     },
     "CI-016": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -771,6 +823,7 @@
     },
     "CI-017": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -786,6 +839,7 @@
     },
     "CI-018": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -803,6 +857,7 @@
     },
     "CI-019": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -819,6 +874,7 @@
     },
     "CN-034": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -836,6 +892,7 @@
     },
     "CN-035": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -853,6 +910,7 @@
     },
     "CN-036": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -869,6 +927,7 @@
     },
     "CN-037": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -884,6 +943,7 @@
     },
     "CN-038": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -900,6 +960,7 @@
     },
     "CN-039": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -916,6 +977,7 @@
     },
     "CN-040": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -932,6 +994,7 @@
     },
     "CN-041": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -948,6 +1011,7 @@
     },
     "CN-042": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -963,6 +1027,7 @@
     },
     "CN-043": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -978,6 +1043,7 @@
     },
     "CN-044": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -994,6 +1060,7 @@
     },
     "CN-045": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1009,6 +1076,7 @@
     },
     "CN-046": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1024,6 +1092,7 @@
     },
     "CN-047": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1039,6 +1108,7 @@
     },
     "CN-048": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1055,6 +1125,7 @@
     },
     "CN-049": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1070,6 +1141,7 @@
     },
     "CN-050": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1085,6 +1157,7 @@
     },
     "CN-051": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -1102,6 +1175,7 @@
     },
     "CN-052": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1117,6 +1191,7 @@
     },
     "CN-053": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1132,6 +1207,7 @@
     },
     "CN-054": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -1147,6 +1223,7 @@
     },
     "CN-055": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1162,6 +1239,7 @@
     },
     "CN-056": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1178,6 +1256,7 @@
     },
     "CN-057": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1194,6 +1273,7 @@
     },
     "CN-058": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1209,6 +1289,7 @@
     },
     "CN-059": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1224,6 +1305,7 @@
     },
     "CN-060": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1239,6 +1321,7 @@
     },
     "CN-061": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1254,6 +1337,7 @@
     },
     "CN-062": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1269,6 +1353,7 @@
     },
     "CN-063": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1284,6 +1369,7 @@
     },
     "CN-064": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1299,6 +1385,7 @@
     },
     "CN-065": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1315,6 +1402,7 @@
     },
     "CN-066": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1331,6 +1419,7 @@
     },
     "CN-067": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1346,6 +1435,7 @@
     },
     "CN-068": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -1361,6 +1451,7 @@
     },
     "CO-191": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1376,6 +1467,7 @@
     },
     "CO-192": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1391,6 +1483,7 @@
     },
     "CO-193": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1406,6 +1499,7 @@
     },
     "CO-194": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1421,6 +1515,7 @@
     },
     "CO-195": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1436,6 +1531,7 @@
     },
     "CONT-001": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1451,6 +1547,7 @@
     },
     "GEO-001": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1467,6 +1564,7 @@
     },
     "GEO-002": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1483,6 +1581,7 @@
     },
     "GEO-003": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1499,6 +1598,7 @@
     },
     "GEO-004": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -1514,6 +1614,7 @@
     },
     "GEO-005": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -1529,6 +1630,7 @@
     },
     "GEO-006": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -1544,6 +1646,7 @@
     },
     "GEO-007": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "NEEDS_INPUT",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "NEEDS_INPUT",
@@ -1559,6 +1662,7 @@
     },
     "GEO-008": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -1575,6 +1679,7 @@
     },
     "GO-131": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1591,6 +1696,7 @@
     },
     "GO-132": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1607,6 +1713,7 @@
     },
     "GO-133": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1622,6 +1729,7 @@
     },
     "GO-134": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1637,6 +1745,7 @@
     },
     "GO-135": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1652,6 +1761,7 @@
     },
     "GO-136": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -1668,6 +1778,7 @@
     },
     "GO-137": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -1684,6 +1795,7 @@
     },
     "GO-138": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1700,6 +1812,7 @@
     },
     "GO-139": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1715,6 +1828,7 @@
     },
     "GO-140": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1730,6 +1844,7 @@
     },
     "GO-141": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1745,6 +1860,7 @@
     },
     "GO-142": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1760,6 +1876,7 @@
     },
     "GO-143": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -1775,6 +1892,7 @@
     },
     "GO-144": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -1790,6 +1908,7 @@
     },
     "GO-145": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -1805,6 +1924,7 @@
     },
     "IN-121": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1820,6 +1940,7 @@
     },
     "IN-122": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1835,6 +1956,7 @@
     },
     "IN-123": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -1851,6 +1973,7 @@
     },
     "IN-124": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1866,6 +1989,7 @@
     },
     "IN-125": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1881,6 +2005,7 @@
     },
     "IN-126": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1896,6 +2021,7 @@
     },
     "IN-127": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1911,6 +2037,7 @@
     },
     "IN-128": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1926,6 +2053,7 @@
     },
     "IN-129": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1941,6 +2069,7 @@
     },
     "IN-130": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -1956,6 +2085,7 @@
     },
     "KW-069": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -1971,6 +2101,7 @@
     },
     "KW-070": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -1986,6 +2117,7 @@
     },
     "KW-071": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2001,6 +2133,7 @@
     },
     "KW-072": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2016,6 +2149,7 @@
     },
     "KW-073": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2031,6 +2165,7 @@
     },
     "KW-074": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2046,6 +2181,7 @@
     },
     "KW-075": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2061,6 +2197,7 @@
     },
     "KW-076": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2077,6 +2214,7 @@
     },
     "KW-077": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2092,6 +2230,7 @@
     },
     "LO-196": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2107,6 +2246,7 @@
     },
     "LO-197": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2122,6 +2262,7 @@
     },
     "LO-198": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2138,6 +2279,7 @@
     },
     "LO-199": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -2153,6 +2295,7 @@
     },
     "LO-200": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "WARN",
@@ -2168,6 +2311,7 @@
     },
     "MB-093": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2184,6 +2328,7 @@
     },
     "MB-094": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -2201,6 +2346,7 @@
     },
     "MB-095": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -2216,6 +2362,7 @@
     },
     "MB-096": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2232,6 +2379,7 @@
     },
     "MB-097": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2248,6 +2396,7 @@
     },
     "MB-098": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -2263,6 +2412,7 @@
     },
     "MB-099": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -2278,6 +2428,7 @@
     },
     "MB-100": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2294,6 +2445,7 @@
     },
     "MB-101": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2309,6 +2461,7 @@
     },
     "MB-102": {
       "answers": {
+        "failing-shapes": "N/A",
         "fixture:broken": "N/A",
         "fixture:broken_tls": "N/A",
         "fixture:good": "N/A",
@@ -2324,6 +2477,7 @@
     },
     "MB-103": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -2341,6 +2495,7 @@
     },
     "MB-104": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2357,6 +2512,7 @@
     },
     "MB-105": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "NO_DATA",
@@ -2373,6 +2529,7 @@
     },
     "MB-106": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -2388,6 +2545,7 @@
     },
     "MD-184": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -2403,6 +2561,7 @@
     },
     "MD-185": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2419,6 +2578,7 @@
     },
     "MD-186": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2435,6 +2595,7 @@
     },
     "MD-187": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2451,6 +2612,7 @@
     },
     "MD-188": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2466,6 +2628,7 @@
     },
     "MD-189": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2482,6 +2645,7 @@
     },
     "MD-190": {
       "answers": {
+        "failing-shapes": "N/A",
         "fixture:broken": "N/A",
         "fixture:broken_tls": "N/A",
         "fixture:good": "N/A",
@@ -2497,12 +2661,14 @@
     },
     "MS-020": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
+        "FAIL",
         "PASS"
       ],
       "script": "parse_html.py",
@@ -2512,6 +2678,7 @@
     },
     "MS-021": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2528,6 +2695,7 @@
     },
     "MS-022": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2544,6 +2712,7 @@
     },
     "MS-023": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2559,6 +2728,7 @@
     },
     "MS-024": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2574,6 +2744,7 @@
     },
     "MS-025": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2589,6 +2760,7 @@
     },
     "MS-026": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2605,6 +2777,7 @@
     },
     "MS-027": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2620,6 +2793,7 @@
     },
     "MS-028": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2636,6 +2810,7 @@
     },
     "MS-029": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2652,6 +2827,7 @@
     },
     "MS-030": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2668,6 +2844,7 @@
     },
     "MS-031": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2684,6 +2861,7 @@
     },
     "MS-032": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2691,7 +2869,8 @@
       },
       "distinct": [
         "FAIL",
-        "PASS"
+        "PASS",
+        "WARN"
       ],
       "script": "schema_required_props.py",
       "severity": "high",
@@ -2700,6 +2879,7 @@
     },
     "MS-033": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2716,6 +2896,7 @@
     },
     "SE-114": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2731,6 +2912,7 @@
     },
     "SE-115": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -2747,6 +2929,7 @@
     },
     "SE-116": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2762,6 +2945,7 @@
     },
     "SE-117": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "PASS",
         "fixture:good": "FAIL",
@@ -2778,6 +2962,7 @@
     },
     "SE-118": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "PASS",
         "fixture:good": "NO_DATA",
@@ -2794,6 +2979,7 @@
     },
     "SE-119": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2809,6 +2995,7 @@
     },
     "SE-120": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -2825,6 +3012,7 @@
     },
     "SP-107": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2840,6 +3028,7 @@
     },
     "SP-108": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2855,6 +3044,7 @@
     },
     "SP-109": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -2870,6 +3060,7 @@
     },
     "SP-110": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "WARN",
@@ -2886,6 +3077,7 @@
     },
     "SP-111": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2901,6 +3093,7 @@
     },
     "SP-112": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2916,6 +3109,7 @@
     },
     "SP-113": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -2931,6 +3125,7 @@
     },
     "SP-214": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -2948,6 +3143,7 @@
     },
     "SP-215": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -2965,6 +3161,7 @@
     },
     "SP-216": {
       "answers": {
+        "failing-shapes": "NEEDS_INPUT",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "NEEDS_INPUT",
         "fixture:good": "PASS",
@@ -2982,6 +3179,7 @@
     },
     "TE-165": {
       "answers": {
+        "failing-shapes": "LLM_PENDING",
         "fixture:broken": "LLM_PENDING",
         "fixture:broken_tls": "LLM_PENDING",
         "fixture:good": "LLM_PENDING",
@@ -2997,6 +3195,7 @@
     },
     "TE-166": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3013,6 +3212,7 @@
     },
     "TE-167": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -3028,6 +3228,7 @@
     },
     "TE-168": {
       "answers": {
+        "failing-shapes": "WARN",
         "fixture:broken": "WARN",
         "fixture:broken_tls": "WARN",
         "fixture:good": "PASS",
@@ -3044,6 +3245,7 @@
     },
     "TE-169": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3060,6 +3262,7 @@
     },
     "TE-170": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3076,6 +3279,7 @@
     },
     "TE-171": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -3091,6 +3295,7 @@
     },
     "TE-172": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3107,6 +3312,7 @@
     },
     "TE-173": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -3122,6 +3328,7 @@
     },
     "TE-174": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3138,6 +3345,7 @@
     },
     "TE-175": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "FAIL",
@@ -3154,6 +3362,7 @@
     },
     "TE-176": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3170,6 +3379,7 @@
     },
     "TE-177": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3186,6 +3396,7 @@
     },
     "TE-178": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -3201,6 +3412,7 @@
     },
     "TE-179": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -3216,6 +3428,7 @@
     },
     "TE-180": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -3232,6 +3445,7 @@
     },
     "TE-181": {
       "answers": {
+        "failing-shapes": "NO_DATA",
         "fixture:broken": "NO_DATA",
         "fixture:broken_tls": "NO_DATA",
         "fixture:good": "NO_DATA",
@@ -3247,6 +3461,7 @@
     },
     "TE-182": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -3262,6 +3477,7 @@
     },
     "TE-183": {
       "answers": {
+        "failing-shapes": "MANUAL",
         "fixture:broken": "MANUAL",
         "fixture:broken_tls": "MANUAL",
         "fixture:good": "MANUAL",
@@ -3277,12 +3493,14 @@
     },
     "TECH-001": {
       "answers": {
+        "failing-shapes": "FAIL",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
+        "FAIL",
         "PASS"
       ],
       "script": "rich_results_guard.py",
@@ -3292,6 +3510,7 @@
     },
     "TECH-002": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -3307,6 +3526,7 @@
     },
     "TECH-003": {
       "answers": {
+        "failing-shapes": "PASS",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
@@ -3326,6 +3546,7 @@
     "fixture:good",
     "fixture:broken",
     "fixture:good_tls",
-    "fixture:broken_tls"
+    "fixture:broken_tls",
+    "failing-shapes"
   ]
 }

@@ -38,6 +38,37 @@ opposite — `len_lte: 60` fails happily on an over-long title, and neither fixt
 has one. The first is a defect in the registry; the second is a gap in the corpus, and
 the corpus is what the census exists to justify building.
 
+**`tests/corpus/failing-shapes/` is the second half of that instrument**, and it settles
+the distinction by construction rather than by argument: a tree built to fail as many
+items as a static server can express. Whatever starts failing was a corpus gap; whatever
+does not is a candidate for the `MD-184` class. Its first reading moved four items —
+`MS-020`, `AR-155`, `CI-013` and `TECH-001` — out of the never-failing column and left
+seventeen it was aimed at still standing. **Each of those seventeen is now a specific
+question rather than a suspicion**, which is the return on the exercise.
+
+Two are already answered, and both are worth reading before the rest:
+
+- **`TECH-002` cannot fail on a real site, and 0.50.0's repair for it did not repair
+  it.** That release graded `@font-face` with no `font-display` as `error` precisely to
+  make this item's FAIL reachable. Measured on three pages: the declaration in an
+  **external** stylesheet produces no finding and PASS; the identical declaration
+  **inline** produces `error` and FAIL. `font_audit.py:75` reads `@font-face` only out of
+  inline `<style>` blocks — it collects `<link rel=stylesheet>` hrefs at line 62 and
+  never opens them. Every real site puts its fonts in a stylesheet. This is a third
+  instance of the trap that release's own entry names, *adding the severity silenced the
+  gate and changed nothing*, and it shipped in that release unseen.
+- **`AR-155` fails where `AR-147` and `CI-012` pass, on the same URL through the same
+  script.** `/Category_Page/Item_One_FINAL.html` raises `url_quality` flags — enough for
+  `AR-155`'s `flags len_eq 0` — while leaving `score >= 70` satisfied for the other two.
+  A score that stays passing on a URL its own flags condemn is a question about the
+  score, not about the URL.
+
+And one thing the same reading taught at the cost of a census round: **a tree of
+deliberate defects can hide its own defects from itself.** The `@font-face` first lived
+in `/assets/site.css`, which this tree's own `robots.txt` disallows for `CI-013`, so
+nothing looked at the font at all. Moving the stylesheet to the root and re-running is
+what turned a guess about `robots.txt` into a finding about the script.
+
 **Measured in 0.18.0, and the answer is uncomfortable.** `measured` is still 0 and that
 is the honest count: what `tools/audit_score_sensitivity.py` measured is not the weight
 table but the consequence of it being wrong. Re-scored across four real runs from flat

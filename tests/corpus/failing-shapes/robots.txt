@@ -1,0 +1,9 @@
+# CI-013: the stylesheet every page in this tree loads is disallowed, so Googlebot
+# renders the site without it. Blocking rendering assets is the defect that item names,
+# and it is one line in a file nobody re-reads.
+User-agent: *
+Disallow: /assets/
+
+# The entry page stays crawlable on purpose. A tree that disallows itself reports
+# NO_DATA for everything and measures nothing.
+Sitemap: http://127.0.0.1:8000/sitemap.xml

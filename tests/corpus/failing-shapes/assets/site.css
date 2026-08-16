@@ -1,0 +1,22 @@
+/* The `@font-face` that used to live here moved to /fonts.css, and the move is the
+   finding: this file is under /assets/, which this tree's own robots.txt disallows for
+   CI-013, so the font audit could not read the declaration it was meant to judge. One
+   deliberate defect hid another, and the census reported TECH-002 as unfailable when
+   the truth was that nothing had looked. A tree built to fail checks has to keep its
+   defects from masking each other. */
+
+body {
+  font-family: "CorpusSans", system-ui, sans-serif;
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: 1rem;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.4rem; }
+
+/* A fixed width wider than a phone viewport, which is what a mobile render check
+   looks for in a stylesheet it can read. */
+nav { min-width: 900px; }
+
+img { max-width: 100%; height: auto; }

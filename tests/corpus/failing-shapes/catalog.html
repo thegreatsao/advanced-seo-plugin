@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalogue</title>
+<meta name="description" content="A category page with nothing in it, which is the shape a collection-page check exists to find.">
+<link rel="canonical" href="http://127.0.0.1:8000/catalog.html">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/fonts.css">
+<!-- AR-146: a paginated series whose next page does not exist. `rel=next` pointing at
+     a 404 is worse than no pagination markup, because a crawler follows it. -->
+<link rel="next" href="/catalog.html?page=2">
+</head>
+<body>
+<header><nav><a href="/">Home</a></nav></header>
+<main>
+<h1>Catalogue</h1>
+<!-- AR-154: a collection page with no collection. No products, no facets, no sort,
+     no count, and a paragraph where the grid should be. -->
+<p>Our products will be listed here soon.</p>
+</main>
+<footer><p>Corpus Shapes.</p></footer>
+</body>
+</html>
