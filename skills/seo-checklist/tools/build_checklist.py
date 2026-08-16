@@ -1012,7 +1012,7 @@ item(159, "low", L, fix="Simplify primary navigation")
 item(160, "low", L, fix="Optimize footer navigation")
 item(161, "medium", L, fix="Clear header and mobile menus")
 item(162, "high", S, "link_profile.py", CRAWLARG,
-     {"path": "issues", "none_severity": ["critical", "high"]},
+     {"path": "issues", "none_severity": ["critical", "high", "medium"]},
      "Strengthen internal linking, remove orphans")
 # `--from-page`, not the bare URL. A crawl trap is a property of a set of URLs —
 # five parameter variants on one path, or a parameter recurring across many — so

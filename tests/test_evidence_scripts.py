@@ -2417,6 +2417,38 @@ class InternalLinks(unittest.TestCase):
 class LinkProfile(unittest.TestCase):
     """CI-008 `orphan_pages.count`, AR-162 `issues`."""
 
+    def profile_from_inventory(self, links_by_path):
+        origin = "https://example.test"
+        pages = {}
+        for path, targets in links_by_path.items():
+            url = f"{origin}{path}"
+            pages[url] = {
+                "html": True,
+                "links": [{
+                    "target": (target if target.startswith("http")
+                               else f"{origin}{target}"),
+                    "anchor": target,
+                    "internal": not target.startswith("http"),
+                } for target in targets],
+            }
+        inventory = {
+            "inventory_version": 3,
+            "site": f"{origin}/",
+            "entry": f"{origin}/",
+            "pages": pages,
+            "robots_blocked": {},
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "inventory.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(inventory, handle)
+            proc = harness.spawn(
+                [sys.executable, os.path.join(SCRIPTS, "link_profile.py"),
+                 f"{origin}/", "--inventory", path, "--json"],
+                env=script_env(), timeout=60)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
     def test_a_site_whose_pages_all_link_to_each_other_has_no_orphans(self):
         good = out("profile")
         self.assertEqual(good["orphan_pages"]["count"], 0)
@@ -2428,6 +2460,53 @@ class LinkProfile(unittest.TestCase):
         self.assertGreaterEqual(bad["orphan_pages"]["count"], 1)
         self.assertEqual(verdict("CI-008", bad), FAIL)
         self.assertEqual(verdict("AR-162", bad), FAIL)
+
+    def test_a_page_with_no_outbound_internal_links_fails_on_the_dead_end(self):
+        profile = self.profile_from_inventory({
+            "/": ["/a", "/b", "/dead", "/a"],
+            "/a": ["/", "/b", "/dead", "/b"],
+            "/b": ["/", "/a", "/dead", "/a"],
+            "/dead": ["https://outside.example/source"],
+        })
+        self.assertEqual(profile["orphan_pages"]["count"], 0)
+        self.assertGreaterEqual(profile["avg_internal_links_per_page"], 3)
+        self.assertEqual([issue["type"] for issue in profile["issues"]],
+                         ["dead_end_pages"])
+        self.assertEqual(verdict("AR-162", profile), FAIL)
+
+    def test_no_orphans_no_dead_ends_and_a_healthy_average_passes(self):
+        profile = self.profile_from_inventory({
+            "/": ["/a", "/b", "/a"],
+            "/a": ["/", "/b", "/"],
+            "/b": ["/", "/a", "/"],
+        })
+        self.assertEqual(profile["orphan_pages"]["count"], 0)
+        self.assertEqual(profile["dead_end_pages"]["count"], 0)
+        self.assertGreaterEqual(profile["avg_internal_links_per_page"], 3)
+        self.assertEqual(verdict("AR-162", profile), PASS)
+
+    def test_an_orphan_still_fails_the_internal_linking_item(self):
+        profile = self.profile_from_inventory({
+            "/": ["/a", "/b", "/a"],
+            "/a": ["/", "/b", "/"],
+            "/b": ["/", "/a", "/"],
+            "/orphan": ["/", "/a", "/b"],
+        })
+        self.assertEqual(profile["dead_end_pages"]["count"], 0)
+        self.assertEqual([issue["type"] for issue in profile["issues"]],
+                         ["orphan_pages"])
+        self.assertEqual(verdict("AR-162", profile), FAIL)
+
+    def test_ci_008_ignores_dead_ends_and_reads_only_the_orphan_count(self):
+        profile = self.profile_from_inventory({
+            "/": ["/a", "/b", "/dead", "/a"],
+            "/a": ["/", "/b", "/dead", "/b"],
+            "/b": ["/", "/a", "/dead", "/a"],
+            "/dead": [],
+        })
+        self.assertEqual(profile["dead_end_pages"]["count"], 1)
+        self.assertEqual(verdict("AR-162", profile), FAIL)
+        self.assertEqual(verdict("CI-008", profile), PASS)
 
 
 class FacetedNavigation(unittest.TestCase):

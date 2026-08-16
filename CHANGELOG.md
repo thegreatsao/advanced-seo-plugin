@@ -10,6 +10,23 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.62.0 — a dead end can fail the item about dead ends
+
+Registry version: `be2ab95ba6bf`, replacing `a129a91eb0da`.
+
+`AR-162` *Strengthen Internal Links and Remove Orphans* now refuses medium findings
+as well as critical and high ones. `link_profile.py` reports a page with no outbound
+internal links as a medium dead end, so a site with a page nothing links out of now
+fails an item it used to pass. Orphan pages and a site-wide average below three
+internal links per page remain high findings, and `CI-008` remains independent: it
+reads `orphan_pages.count`, not `issues`.
+
+The dead-end detector counts navigation and footer anchors, evaluates only fetched
+HTML pages, and counts a link even when its target is outside the crawl budget or
+blocked by robots.txt. A page that links only to external sites is therefore a real
+dead end rather than an artefact of crawl limits. The good fixture has no dead ends,
+so no fixture verdict changes. The corpus census changed only its `registry_version`.
+
 ## 0.61.0 — MB-100 lets a medium mobile defect decide
 
 Registry version: `a129a91eb0da`, replacing `98d748a44afa`.
