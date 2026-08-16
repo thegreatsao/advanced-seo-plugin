@@ -1454,6 +1454,14 @@ class EeatSignals(unittest.TestCase):
         </body></html>""")
         self.assertEqual(result["signals"]["authors"], ["A Baker", "B Baker"])
 
+    def test_the_shared_byline_helper_normalizes_underscores_without_substrings(self):
+        """This fails if `_` stops reading as `-` or substring matching returns."""
+        from seo_common import has_byline_class, parse_html
+        soup = parse_html("""<div id="layout" class="author-grid"></div>
+        <p id="credit" class="article_author">A Baker</p>""")["soup"]
+        self.assertTrue(has_byline_class(soup.find(id="credit")))
+        self.assertFalse(has_byline_class(soup.find(id="layout")))
+
     def test_an_organisation_author_is_not_also_a_publisher(self):
         """This fails if one credited organisation can satisfy both CN-057 halves."""
         result = self._check_html("""<!doctype html><html><head>
@@ -1654,12 +1662,32 @@ class AnswerBlocks(unittest.TestCase):
 class CitationReadiness(unittest.TestCase):
     """GO-145 and GEO-005, both `score`."""
 
+    @staticmethod
+    def _check_html(html):
+        import citation_readiness
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            return citation_readiness.check_citation_readiness(path)
+        finally:
+            os.unlink(path)
+
     def test_cited_claims_and_named_sources_score(self):
         self.assertEqual(verdict("GO-145", out("citation")), PASS)
         self.assertEqual(verdict("GEO-005", out("citation")), PASS)
 
     def test_a_page_with_no_sources_or_dates_does_not(self):
         self.assertEqual(verdict("GEO-005", out("citation_bad")), FAIL)
+
+    def test_layout_author_substrings_do_not_add_fifteen_points(self):
+        """This fails if the substring class match returns to citation readiness."""
+        layout = self._check_html('<div class="author-grid">A Baker</div>')
+        neutral = self._check_html('<div class="team-grid">A Baker</div>')
+        byline = self._check_html('<p class="byline">A Baker</p>')
+        self.assertEqual(layout["score"], neutral["score"])
+        self.assertGreater(byline["score"], layout["score"])
 
 
 class ArticleKeyword(unittest.TestCase):

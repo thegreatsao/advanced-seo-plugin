@@ -10,6 +10,19 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.52.0 — one byline vocabulary, in one place
+
+`citation_readiness.py` still used the loose class substring match removed from the
+E-E-A-T checker in 0.51.0. A layout wrapper named `author-grid` therefore added 15
+points to the citation-readiness score asserted by `GO-145` and `GEO-005`, while the
+otherwise identical `team-grid` page added none.
+
+Both scripts now use one exact, case-insensitive byline-class vocabulary and helper
+from `seo_common.py`, with underscores normalized to hyphens. `author-grid` no longer
+counts as authorship; `byline` and `article_author` still do. No registry rule or
+threshold changes: the registry remains `4f8321358647`, and all six fixture
+`citation_readiness` scores and the fixture oracle are unchanged.
+
 ## 0.51.0 — CN-057 stops accepting a publisher in place of an author
 
 `CN-057` *Show Author and Publisher Clearly* asserted only that `signals.authors`

@@ -8,7 +8,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import load_source, parse_html, walk_json
+from seo_common import has_byline_class, load_source, parse_html, walk_json
 
 
 CLAIM_RE = re.compile(
@@ -64,7 +64,10 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
         if re.search(r"(footnote|reference|citation|source)", " ".join(map(str, link.get("rel", []))) + " " + link.get("href", ""), re.I)
     ]
     entity_signals = _schema_entity_signals(parsed.get("schema", []))
-    author_signals = bool(entity_signals["names"]) or bool(soup.find(attrs={"class": re.compile(r"(author|byline)", re.I)}))
+    # The substring match handed a layout class fifteen points on the score GO-145
+    # and GEO-005 both assert; only vocabulary tokens name a byline.
+    author_signals = bool(entity_signals["names"]) or any(
+        has_byline_class(tag) for tag in soup.find_all(class_=True))
 
     citation_capacity = len(external_links) + len(cite_tags) + len(footnote_links)
     claim_coverage = min(1.0, citation_capacity / max(1, len(factual_claims)))

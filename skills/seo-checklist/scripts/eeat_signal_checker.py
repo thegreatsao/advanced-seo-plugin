@@ -8,7 +8,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import load_source, parse_html, walk_json
+from seo_common import has_byline_class, load_source, parse_html, walk_json
 
 
 CREDENTIAL_RE = re.compile(
@@ -22,18 +22,6 @@ FIRST_HAND_RE = re.compile(
     re.I,
 )
 
-
-# Class tokens that name a byline, compared against each whitespace-separated class
-# token exactly and case-insensitively, with `_` read as `-`. This was
-# `re.compile(r"(author|byline)")` matched anywhere inside the class string, so
-# `<div class="author-grid">` was a byline and contributed the entire grid's text as
-# one author's name. A closed vocabulary rather than a cap on how long that text may
-# be: a wrapper is not told from a byline by its length.
-BYLINE_CLASSES = frozenset({
-    "author", "authors", "byline", "by-line", "author-name", "authorname",
-    "post-author", "entry-author", "article-author", "p-author", "author-link",
-    "byline-author", "author-byline",
-})
 
 # JSON-LD types whose node names an organisation, compared case-insensitively against
 # the last path segment of each `@type` so that a full schema.org URL and a bare token
@@ -134,8 +122,7 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     class_authors = [
         tag.get_text(" ", strip=True)
         for tag in soup.find_all(class_=True)
-        if any(str(token).lower().replace("_", "-") in BYLINE_CLASSES
-               for token in tag.get("class", []))
+        if has_byline_class(tag)
         and tag.get_text(strip=True)
     ]
     schema_authors = _schema_values(parsed.get("schema", []), {"author", "reviewedBy"})

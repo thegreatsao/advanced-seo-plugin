@@ -9,14 +9,15 @@ HTTP and source resolution are ``require_requests``, ``fetch_url``, ``fetch_html
 the ``safe_get`` re-export, ``read_urls``, ``load_html``, ``load_source`` and
 ``is_url``. URL handling is ``normalize_url``, ``origin``, ``clean_url`` and
 ``same_host``. HTML and image handling is the ``BeautifulSoup`` dependency handle,
-``require_bs4``, ``html_parser``, ``parse_html``, ``favicon_href``, ``is_responsive_fill_image``,
-``srcset_urls``, ``picture_sources`` and ``likely_lcp_candidate``. Robots and
+``require_bs4``, ``html_parser``, ``parse_html``, ``favicon_href``, ``has_byline_class``,
+``is_responsive_fill_image``, ``srcset_urls``, ``picture_sources`` and
+``likely_lcp_candidate``. Robots and
 sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
 ``discover_sitemap_urls`` and ``parse_sitemap_xml``. JSON-LD uses ``walk_json`` and
 ``as_list``. Output and directive handling is ``issue``, ``extract_directives`` and
 ``print_json_or_text``. The shared policy constants are ``USER_AGENT``,
-``HTML_CTYPES``, ``XML_CTYPES``, ``THIN_CONTENT_WORDS``, ``LCP_MIN_AREA`` and
-``CONVENTIONAL_SITEMAP_PATHS``.
+``HTML_CTYPES``, ``XML_CTYPES``, ``BYLINE_CLASS_TOKENS``, ``THIN_CONTENT_WORDS``,
+``LCP_MIN_AREA`` and ``CONVENTIONAL_SITEMAP_PATHS``.
 
 Scripts launched directly use ``from seo_common import x``. A script that must also
 work when imported as ``scripts.foo`` uses the dual-path ``try/except ImportError``
@@ -57,6 +58,28 @@ except ImportError:
 USER_AGENT = AGENTIC_SEO_USER_AGENT
 HTML_CTYPES = ("text/html", "application/xhtml+xml")
 XML_CTYPES = ("xml", "text/plain", "application/octet-stream")
+
+# Class tokens that name a byline, compared against each whitespace-separated class
+# token exactly and case-insensitively, with `_` read as `-`. The substring match this
+# replaces treated `<div class="author-grid">` as a byline and handed back the
+# wrapper's whole subtree text as a person's name. A closed vocabulary rather than a
+# cap on how long that text may be: a wrapper is not told from a byline by its length.
+BYLINE_CLASS_TOKENS = frozenset({
+    "author", "authors", "byline", "by-line", "author-name", "authorname",
+    "post-author", "entry-author", "article-author", "p-author", "author-link",
+    "byline-author", "author-byline",
+})
+
+
+def has_byline_class(tag) -> bool:
+    """Whether an element's class names it a byline rather than merely mentioning one.
+
+    Compared against each class token exactly, case-insensitively, with `_` read as
+    `-`. The substring match this replaces treated `author-grid` on a layout wrapper
+    as a byline and handed back the wrapper's whole subtree text as a person's name.
+    """
+    return any(str(token).lower().replace("_", "-") in BYLINE_CLASS_TOKENS
+               for token in (tag.get("class") or []))
 
 
 def require_requests() -> None:
