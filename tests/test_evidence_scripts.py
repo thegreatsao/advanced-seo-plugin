@@ -149,9 +149,9 @@ into the dough rather than already falling back.</p>
 <tr><td>Cold (18C)</td><td>Once a day</td></tr></table>
 <ul><li>Feed by weight, not by volume.</li><li>Use unchlorinated water.</li>
 <li>Keep the jar loosely covered.</li></ul>
-<blockquote cite="https://en.wikipedia.org/wiki/Sourdough"><p>Sourdough fermentation
+<blockquote cite="PLACEHOLDER_EXTERNAL"><p>Sourdough fermentation
 is driven by lactic acid bacteria and yeasts.</p></blockquote>
-<p>Sources: <a href="https://en.wikipedia.org/wiki/Sourdough">Wikipedia on
+<p>Sources: <a href="PLACEHOLDER_EXTERNAL">Encyclopedia on
 sourdough</a>, and our own <a href="/about.html">editorial policy</a>.</p>
 <figure><picture><source type="image/webp" srcset="/i/a.webp 1x, /i/a.webp 2x"
 sizes="(max-width: 600px) 64px, 128px">
@@ -162,7 +162,8 @@ width="64" height="64" fetchpriority="high" decoding="async"></picture>
 <footer><p>Fixture Bakery, 1 Fixture Street, Vilnius, Lithuania. Telephone
 +370 600 00000. <a href="/privacy.html">Privacy policy</a> ·
 <a href="/about.html#contact">Contact</a></p></footer>
-<script src="/s.js" defer></script></body></html>"""
+<script src="/s.js" defer></script></body></html>""".replace(
+    "PLACEHOLDER_EXTERNAL", harness.PLACEHOLDER_EXTERNAL)
 
 # Deliberately failing, and failing in ways a *page* can: the origin-level defects
 # live on the second origin because robots.txt and llms.txt cannot be both there and
@@ -750,6 +751,8 @@ def setUpModule():
         # `http://http://127.0.0.1:PORT/...` behind.
         site.rewrite("PLACEHOLDER_HOST", site.base.split("//", 1)[1])
         site.rewrite(PLACEHOLDER)
+    GOOD.rewrite(harness.PLACEHOLDER_EXTERNAL, BAD.base)
+    BAD.rewrite(harness.PLACEHOLDER_EXTERNAL, GOOD.base)
     RENDER_ARTIFACTS = tempfile.TemporaryDirectory()
     served_html = GOOD.routes["/"][2]
     rendered_match = os.path.join(RENDER_ARTIFACTS.name, "match.json")
