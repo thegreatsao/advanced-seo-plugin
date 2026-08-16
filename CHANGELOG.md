@@ -34,6 +34,13 @@ with no byline, which is what its title asks about. The registry is `4f832135864
 replacing `754ea7e0b9b1`, still 215 items, and the fixture oracle is unchanged at 218
 matched, 0 disagreed, 28 indeterminate.
 
+**`audit_item_semantics.py` now reads an `eq` object's keys** as part of what an item
+asserts about, the way it already reads a `field` and a `value_map`'s vocabulary. That
+shape is how this registry expresses a title joining two conditions with "and" —
+AR-158's `{"schema": true, "ui": true}` and now CN-057's — so judging it by its path
+alone reported an item that names both halves of its title as asserting nothing its
+title mentions. No ruling in the reviewed table went inert.
+
 A visible copyright footer remains deliberately unparsed as a publisher source, and an
 organisation named by `reviewedBy` still lands in `authors`; both need their own
 measurement before changing the vocabulary again.

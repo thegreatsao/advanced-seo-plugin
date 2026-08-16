@@ -234,6 +234,15 @@ def assertion_paths(rule: object) -> list[str]:
             found.append(rule["field"])
         if isinstance(rule.get("value_map"), dict):
             found.extend(k for k in rule["value_map"] if isinstance(k, str))
+        # And an `eq` against an object literal, for the same reason. That shape is
+        # how this registry expresses a title joining two conditions with "and" —
+        # AR-158's `{"schema": true, "ui": true}`, CN-057's `{"author": true,
+        # "publisher": true}` — so the object's keys are the conditions the item
+        # asserts, and reading only the path judged the assertion by its container.
+        # CN-057 named both halves of its title in those keys and was reported as
+        # asserting nothing its title mentions.
+        if isinstance(rule.get("eq"), dict):
+            found.extend(k for k in rule["eq"] if isinstance(k, str))
         for value in rule.values():
             found.extend(assertion_paths(value))
     elif isinstance(rule, list):
