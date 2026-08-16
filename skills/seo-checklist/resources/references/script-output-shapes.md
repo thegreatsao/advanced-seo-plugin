@@ -386,6 +386,8 @@ than fetching them.
 
 `url` — str
 `score` — int
+`lang` — str | None — declared primary language subtag, or null when none is declared
+`matched_locales[]` — array — sorted vocabularies used: English plus a carried declared locale
 `signals.authors[]` — array
   - people only since 0.51.0: `meta[name=author]`, `rel=author`, an exact byline class
     token, and JSON-LD `author` / `reviewedBy`. `publisher` used to be read into this
@@ -402,12 +404,16 @@ than fetching them.
 `signals.credential_markers[]` — array
 `signals.first_hand_experience_markers[]` — array
 `signals.policy_links[]` — array
-  - editorial standards only: fact-checking, corrections, ethics. Not privacy.
+  - locale-aware editorial standards only: fact-checking, corrections, ethics. Not privacy.
 `signals.privacy_links[]` — array
-  - privacy, data protection, GDPR, cookie policy. CN-040 reads this; it used to
-    read `policy_links`, which answered a different question in both directions.
+  - locale-aware privacy, data protection, GDPR, cookie-policy terms and URL fragments.
+    CN-040 reads this; it used to read `policy_links`, which answered a different
+    question in both directions.
 `signals.trust_links[]` — array
-  - the loosest of the three: anything institutional, an "About" page included.
+  - the loosest of the three: locale-aware institutional links, an "About" page
+    included, plus language-neutral `tel:` and `mailto:` routes.
+  - all three arrays use English plus the page's declared carried locale; an
+    undeclared or uncarried language uses English alone.
   - item keys (all three arrays): href, text, rel
 `signals.external_citations` — int
 `issues[]` — array

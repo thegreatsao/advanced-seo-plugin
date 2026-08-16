@@ -10,6 +10,27 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.56.0 — E-E-A-T signals use the page's declared language
+
+The five hand-written English vocabularies in `eeat_signal_checker.py` are now a
+maintained literal-term resource. English remains active on every page, and a page's
+declared Lithuanian or Russian primary language adds its reviewed vocabulary. The
+legacy `/datenschutz` URL fragment remains in English until a complete German locale
+exists, preserving its existing behaviour. The result now reports both the detected
+`lang` and the `matched_locales` used. Literal terms are escaped before regex
+compilation; reviewed stems support inflected Lithuanian and Russian endings.
+
+On two otherwise identical pages, the Lithuanian page moved from 24 to 82, matching
+the English page's score: two credential markers, two first-hand markers, one
+editorial-policy link, three trust links, one privacy link and two outbound citations.
+On a page declaring a language the resource carries, `CN-040`, `CN-044` and `CN-068`
+can therefore pass where they used to fail; `CN-057` remains passing because its
+language-neutral JSON-LD authorship evidence was already correct. No English page
+changes.
+
+No checklist item, title, fix text or rule changed. `registry_version` is unchanged at
+`a28d3b6257ee`, and the English fixture census and oracle remain unchanged.
+
 ## 0.55.0 — snippet availability has a failing state
 
 `GEO-008` *Snippet directives leave the page usable in AI answers and result

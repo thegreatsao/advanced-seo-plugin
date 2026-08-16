@@ -1455,6 +1455,158 @@ class EeatSignals(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    @staticmethod
+    def _twin_html(lang):
+        words = {
+            "en": {
+                "credential": "Certified specialist.",
+                "experience": "We tested the oven. Our testing measured every loaf.",
+                "links": (
+                    ("/editorial-standards", "Editorial standards"),
+                    ("/about", "About us"),
+                    ("/contact", "Contact"),
+                    ("/privacy-terms", "Privacy policy and terms"),
+                ),
+            },
+            "lt": {
+                "credential": "Sertifikuotas specialistas.",
+                "experience": "Mes išbandėme orkaitę. Mūsų bandymai apėmė kiekvieną kepalą.",
+                "links": (
+                    ("/redakciniai-standartai", "Redakciniai standartai"),
+                    ("/apie", "Apie mus"),
+                    ("/kontaktai", "Kontaktai"),
+                    ("/privatumo-politika-ir-salygos", "Privatumo politika ir sąlygos"),
+                ),
+            },
+        }[lang]
+        links = "".join(f'<a href="{href}">{text}</a>' for href, text in words["links"])
+        return f'''<!doctype html><html lang="{lang}"><head>
+        <script type="application/ld+json">{{"@type":"Article","author":
+        {{"@type":"Person","name":"A Baker"}},"publisher":
+        {{"@type":"Organization","name":"Fixture Bakery"}}}}</script>
+        </head><body><span name="author">A Baker</span>
+        <p>{words["credential"]} {words["experience"]}</p>{links}
+        <a href="https://source-one.example/study">Study one</a>
+        <a href="https://source-two.example/data">Study two</a>
+        </body></html>'''
+
+    @staticmethod
+    def _locale_snapshot(result):
+        signals = result["signals"]
+        counts = tuple(len(signals[key]) for key in (
+            "credential_markers", "first_hand_experience_markers", "policy_links",
+            "trust_links", "privacy_links",
+        ))
+        verdicts = tuple(verdict(item_id, result)
+                         for item_id in ("CN-040", "CN-044", "CN-057", "CN-068"))
+        return counts, verdicts
+
+    def test_english_and_lithuanian_twins_get_the_same_signals_and_verdicts(self):
+        english = self._check_html(self._twin_html("en"))
+        lithuanian = self._check_html(self._twin_html("lt"))
+        expected = ((2, 2, 1, 3, 1), (PASS, PASS, PASS, PASS))
+        self.assertEqual((self._locale_snapshot(english), self._locale_snapshot(lithuanian)),
+                         (expected, expected))
+
+    def test_lithuanian_and_russian_privacy_labels_are_recognised(self):
+        pages = {
+            "lt": '<a href="/legal">Privatumo politika</a>',
+            "ru": '<a href="/legal">Политика конфиденциальности</a>',
+        }
+        for lang, link in pages.items():
+            with self.subTest(lang=lang):
+                result = self._check_html(f'<html lang="{lang}"><body>{link}</body></html>')
+                self.assertEqual(len(result["signals"]["privacy_links"]), 1)
+
+    def test_a_page_gets_no_cross_language_privacy_credit(self):
+        result = self._check_html('''<html lang="en"><body>
+        <a href="/legal">Privatumo politika</a></body></html>''')
+        self.assertEqual(result["signals"]["privacy_links"], [])
+
+    def test_an_undeclared_lithuanian_page_falls_back_to_the_old_english_score(self):
+        html = self._twin_html("lt").replace(' lang="lt"', "", 1)
+        result = self._check_html(html)
+        self.assertEqual(result["score"], 24)
+
+    def test_declared_language_precedence_and_meta_fallbacks(self):
+        pages = (
+            ('<html lang="lt"><head><meta http-equiv="content-language" content="ru">'
+             '<meta property="og:locale" content="en_US"></head>', "lt"),
+            ('<html><head><meta http-equiv="content-language" content="lt-LT">'
+             '<meta property="og:locale" content="ru_RU"></head>', "lt"),
+            ('<html><head><meta property="og:locale" content="ru_RU"></head>', "ru"),
+        )
+        for head, expected in pages:
+            with self.subTest(expected=expected):
+                result = self._check_html(
+                    f'{head}<body><a href="/legal">Privatumo politika</a></body></html>')
+                self.assertEqual(result["lang"], expected)
+
+    def test_the_english_literal_expansions_keep_exact_marker_counts(self):
+        twin = self._check_html(self._twin_html("en"))
+        self.assertEqual((len(twin["signals"]["credential_markers"]),
+                          len(twin["signals"]["first_hand_experience_markers"])),
+                         (2, 2))
+
+        credentials = (
+            "phd", "md", "m.d", "doctor", "professor", "certified", "licensed",
+            "editor", "reviewed by", "fact-checked", "fact checked",
+            "year of experience", "years of experience", "award-winning",
+            "award winning", "expert", "specialist",
+        )
+        first_hand = (
+            "we tested", "our testing", "hands-on", "hands on", "first-hand",
+            "first hand", "case study", "in our experience", "we measured",
+            "we reviewed", "original research", "surveyed",
+        )
+        institutional = (
+            "editorial", "review policy", "fact-check", "fact check", "correction",
+            "corrections", "ethics", "about", "contact", "privacy", "terms", "team",
+            "author", "authors", "data protection", "gdpr", "cookie policy",
+            "cookie notice",
+        )
+        exhaustive = self._check_html(
+            '<html lang="en"><body><p>'
+            + ". ".join(credentials + first_hand + institutional)
+            + ".</p></body></html>")
+        self.assertEqual(
+            (len(exhaustive["signals"]["credential_markers"]),
+             len(exhaustive["signals"]["first_hand_experience_markers"])),
+            (17, 12))
+
+    def test_inflected_lithuanian_and_russian_credential_stems_match(self):
+        pages = {
+            "lt": "Parengta sertifikuoto kepėjo",
+            "ru": "Написано сертифицированным врачом",
+        }
+        for lang, prose in pages.items():
+            with self.subTest(lang=lang):
+                result = self._check_html(
+                    f'<html lang="{lang}"><body><p>{prose}</p></body></html>')
+                self.assertEqual(len(result["signals"]["credential_markers"]), 1)
+
+    def test_russian_whole_word_does_not_behave_like_a_stem(self):
+        result = self._check_html('''<html lang="ru"><body>
+        <a href="/article">Как правильно выбрать</a></body></html>''')
+        self.assertEqual(result["signals"]["trust_links"], [])
+
+    def test_href_anchoring_is_carried_by_each_literal_fragment(self):
+        result = self._check_html('''<html lang="en"><body>
+        <a href="/blog/all-about-bread">Bread notes</a>
+        <a href="/our-privacy-thoughts">Legal thoughts</a>
+        <a href="/datenschutz">Legal notice</a>
+        <a href="/blog/editorial-thoughts">Standards</a>
+        </body></html>''')
+        self.assertEqual(result["signals"]["trust_links"], [])
+        self.assertEqual([link["href"] for link in result["signals"]["privacy_links"]],
+                         ["/datenschutz"])
+        self.assertEqual([link["href"] for link in result["signals"]["policy_links"]],
+                         ["/blog/editorial-thoughts"])
+
+    def test_an_lt_page_reports_both_vocabularies_it_used(self):
+        result = self._check_html(self._twin_html("lt"))
+        self.assertEqual(result["matched_locales"], ["en", "lt"])
+
     def test_the_three_signal_families_are_found_separately(self):
         """Separately is the point. CN-040 is about a *privacy* policy and used to read
         `policy_links`, which this script fills with editorial policy — fact-checking,

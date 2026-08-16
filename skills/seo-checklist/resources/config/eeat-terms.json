@@ -1,0 +1,283 @@
+{
+  "version": 1,
+  "_comment": "English is the existing vocabulary and the lingua franca of institutional labels; Lithuanian and Russian are included because they are the languages this plugin's operator audits and reports in. Those three vocabularies have been reviewed by a person. The /datenschutz href fragment is an inherited ad-hoc entry, kept in en because removing it would change behaviour; it should move when German is added properly. Credential and first_hand terms match body prose, so a page that merely quotes an expert can receive the same credit that English expert has always given; the non-English lists mirror that weakness, and fixing it requires grading where a credential appears as separate work. Adding another language is data rather than code, but its terms must be reviewed before inclusion.",
+  "languages": {
+    "en": {
+      "credential": {
+        "text": [
+          "phd",
+          "md",
+          "m.d",
+          "doctor",
+          "professor",
+          "certified",
+          "licensed",
+          "editor",
+          "reviewed by",
+          "fact-checked",
+          "fact checked",
+          "year of experience",
+          "years of experience",
+          "award-winning",
+          "award winning",
+          "expert",
+          "specialist"
+        ]
+      },
+      "first_hand": {
+        "text": [
+          "we tested",
+          "our testing",
+          "hands-on",
+          "hands on",
+          "first-hand",
+          "first hand",
+          "case study",
+          "in our experience",
+          "we measured",
+          "we reviewed",
+          "original research",
+          "surveyed"
+        ]
+      },
+      "policy": {
+        "text": [
+          "editorial",
+          "review policy",
+          "fact-check",
+          "fact check",
+          "correction",
+          "corrections",
+          "ethics"
+        ],
+        "href": [
+          "editorial",
+          "review-policy",
+          "fact-check",
+          "corrections",
+          "ethics"
+        ]
+      },
+      "trust": {
+        "text": [
+          "about",
+          "contact",
+          "privacy",
+          "terms",
+          "team",
+          "author",
+          "authors"
+        ],
+        "href": [
+          "/about",
+          "/contact",
+          "/privacy",
+          "/terms",
+          "/team",
+          "/author"
+        ]
+      },
+      "privacy": {
+        "text": [
+          "privacy",
+          "data protection",
+          "gdpr",
+          "cookie policy",
+          "cookie notice"
+        ],
+        "href": [
+          "/privacy",
+          "/datenschutz",
+          "/gdpr",
+          "/cookie-policy"
+        ]
+      }
+    },
+    "lt": {
+      "credential": {
+        "stem": [
+          "sertifikuot",
+          "licencijuot",
+          "gydytoj",
+          "profesor",
+          "ekspert",
+          "specialist",
+          "redaktor",
+          "metų patirt",
+          "apdovanot",
+          "daktar",
+          "docent",
+          "recenzav"
+        ],
+        "text": [
+          "dr",
+          "faktai patikrinti"
+        ]
+      },
+      "first_hand": {
+        "stem": [
+          "išbandė",
+          "išmatav",
+          "mūsų bandym",
+          "mūsų patirt",
+          "savo patirt"
+        ],
+        "text": [
+          "iš pirmų lūpų",
+          "atvejo analizė",
+          "originalus tyrimas"
+        ]
+      },
+      "policy": {
+        "stem": [
+          "redakcin",
+          "faktų tikrinim",
+          "klaidų taisym"
+        ],
+        "text": [
+          "etikos kodeksas"
+        ],
+        "href": [
+          "/redakcin",
+          "/etikos"
+        ]
+      },
+      "trust": {
+        "stem": [
+          "kontakt",
+          "komand",
+          "autori",
+          "taisykl",
+          "sąlyg",
+          "rekvizit"
+        ],
+        "text": [
+          "apie",
+          "apie mus"
+        ],
+        "href": [
+          "/apie",
+          "/kontakt",
+          "/komanda",
+          "/autor",
+          "/taisykl",
+          "/salygos",
+          "/rekvizit"
+        ]
+      },
+      "privacy": {
+        "stem": [
+          "privatum",
+          "duomenų apsaug",
+          "slapukų politik"
+        ],
+        "text": [
+          "bdar"
+        ],
+        "href": [
+          "/privatum",
+          "/duomenu-apsauga",
+          "/bdar",
+          "/slapuku-politika"
+        ]
+      }
+    },
+    "ru": {
+      "credential": {
+        "stem": [
+          "сертифицирован",
+          "лицензирован",
+          "профессор",
+          "эксперт",
+          "специалист",
+          "редактор",
+          "награжд"
+        ],
+        "text": [
+          "врач",
+          "доктор наук",
+          "кандидат наук",
+          "к.м.н.",
+          "стаж",
+          "опыт работы",
+          "год опыта",
+          "года опыта",
+          "лет опыта",
+          "лауреат",
+          "проверка фактов"
+        ]
+      },
+      "first_hand": {
+        "stem": [
+          "мы протестирова",
+          "мы тестирова",
+          "мы измерил"
+        ],
+        "text": [
+          "наше тестирование",
+          "из первых рук",
+          "на нашем опыте",
+          "собственное исследование",
+          "практический опыт"
+        ]
+      },
+      "policy": {
+        "stem": [
+          "редакцион",
+          "исправлени"
+        ],
+        "text": [
+          "проверка фактов",
+          "этический кодекс"
+        ],
+        "href": [
+          "/redakcion",
+          "/proverka-faktov",
+          "/etika"
+        ]
+      },
+      "trust": {
+        "stem": [
+          "контакт",
+          "команд",
+          "реквизит"
+        ],
+        "text": [
+          "о нас",
+          "о компании",
+          "автор",
+          "авторы",
+          "условия",
+          "правила",
+          "пользовательское соглашение"
+        ],
+        "href": [
+          "/o-nas",
+          "/kontakt",
+          "/komanda",
+          "/avtor",
+          "/usloviya",
+          "/pravila",
+          "/rekvizity"
+        ]
+      },
+      "privacy": {
+        "stem": [
+          "конфиденциальност",
+          "персональных данных"
+        ],
+        "text": [
+          "политика конфиденциальности",
+          "защита данных",
+          "политика cookie"
+        ],
+        "href": [
+          "/konfidencial",
+          "/personalnyh-dannyh",
+          "/cookie-policy",
+          "/politika-cookie"
+        ]
+      }
+    }
+  }
+}

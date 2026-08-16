@@ -628,18 +628,34 @@ name. A column called `url` would be read as "fix this page".
   stripping `/fr/` produces `/`, not `/about`. An unreadable path under another
   locale's prefix also remains `mixed`; the unreadable path itself is never stripped.
 
-- **Contact routes are now language-neutral; the institutional-link vocabulary is
-  still English-only.** CN-044 accepts `tel:` and `mailto:` links in any language, so
-  a clearly exposed phone number or email address is no longer missed because its
-  label says *Kontaktai* or *Контакты*. The remaining `about`, `privacy` and `terms`
-  vocabulary in `eeat_signal_checker.py` is English-only. On a non-English site that
-  makes CN-040's and CN-068's link signals weaker than their verdicts suggest, even
-  when equivalent institutional pages exist.
+- **Narrowed in 0.56.0; declared Lithuanian and Russian now use reviewed E-E-A-T
+  vocabularies, while undeclared and other languages remain open.** Measured on two
+  structurally identical pages — the same byline, author and publisher JSON-LD,
+  credentials, first-person evidence, four institutional links and two citations —
+  English scored 82 and passed CN-040, CN-044, CN-057 and CN-068; Lithuanian scored
+  24 and failed CN-040, CN-044 and CN-068. Its two credential markers, two first-hand
+  markers, three trust links, one privacy link and one editorial-policy link had all
+  been invisible. With `lang="lt"`, the Lithuanian twin now finds the same five signal
+  counts, scores 82 and returns the same four verdicts. `tel:` and `mailto:` remain
+  language-neutral contact routes.
 
-  A proper repair needs locale-aware concepts rather than another hand-written list:
-  language detection, maintained per-locale terms and URL patterns, and multilingual
-  fixtures that prove both recognition and false-positive resistance. Fitting three
-  Lithuanian or Russian words to one audited site would only move the blind spot.
+  The maintained term resource carries fully reviewed English, Lithuanian and Russian:
+  English preserves the existing vocabulary and remains useful for institutional labels
+  left untranslated, while Lithuanian and Russian are the languages this plugin's
+  operator audits and reports in. The inherited `/datenschutz` URL fragment stays in
+  English to preserve behaviour, but there is no German locale until a full vocabulary
+  is reviewed. This is not statistical language detection: a page declaring no language
+  is still graded on English alone, and every language beyond those three full
+  vocabularies remains where Lithuanian was before this repair. The reader should not
+  conclude that translated labels are recognised unless the page declares a reviewed
+  language the resource actually carries.
+
+  Credential and first-hand signals still match body prose rather than the place and
+  role in which a phrase appears. A page that merely quotes an `expert` therefore gets
+  credential credit in English, as it did before 0.56.0; equivalent Lithuanian and
+  Russian terms deliberately mirror that weakness rather than inventing a stricter
+  cross-language distinction. Fixing it requires grading credentials by where they
+  appear, and remains separate work.
 
 - **Narrowed in 0.34.0; inspecting a set of important URLs remains open.** CI-002
   got the right evidence in 0.26.0 — Google's URL Inspection answer — but for eight

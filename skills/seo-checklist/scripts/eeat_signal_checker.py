@@ -6,21 +6,124 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlparse
 
 from seo_common import has_byline_class, load_source, parse_html, walk_json
 
 
-CREDENTIAL_RE = re.compile(
-    r"\b(phd|m\.?d\.?|doctor|professor|certified|licensed|editor|reviewed by|fact[- ]checked|"
-    r"years? of experience|award[- ]winning|expert|specialist)\b",
-    re.I,
-)
-FIRST_HAND_RE = re.compile(
-    r"\b(we tested|our testing|hands[- ]on|first[- ]hand|case study|in our experience|"
-    r"we measured|we reviewed|original research|surveyed)\b",
-    re.I,
-)
+_TERMS_PATH = (Path(__file__).resolve().parent.parent / "resources" / "config" /
+               "eeat-terms.json")
+
+
+def _load_terms() -> dict:
+    """Load and validate the maintained vocabulary once, failing loudly on drift."""
+    try:
+        with _TERMS_PATH.open(encoding="utf-8") as stream:
+            data = json.load(stream)
+        if not isinstance(data, dict):
+            raise ValueError("top level must be an object")
+        if data.get("version") != 1:
+            raise ValueError("version must be 1")
+        languages = data.get("languages")
+        if not isinstance(languages, dict) or "en" not in languages:
+            raise ValueError("languages must be an object containing en")
+        for locale, concepts in languages.items():
+            if not isinstance(locale, str) or not isinstance(concepts, dict):
+                raise ValueError("each language must map to an object")
+            for concept, fields in concepts.items():
+                if concept not in {"credential", "first_hand", "policy", "trust", "privacy"}:
+                    raise ValueError(f"unknown concept {concept!r} in {locale}")
+                if not isinstance(fields, dict) or not fields:
+                    raise ValueError(f"{locale}.{concept} must be a non-empty object")
+                for field, terms in fields.items():
+                    if field not in {"text", "stem", "href"}:
+                        raise ValueError(f"unknown field {field!r} in {locale}.{concept}")
+                    if (not isinstance(terms, list) or not terms
+                            or not all(isinstance(term, str) and term for term in terms)):
+                        raise ValueError(f"{locale}.{concept}.{field} must be non-empty strings")
+        for concept in ("credential", "first_hand", "policy", "trust", "privacy"):
+            if not languages["en"].get(concept, {}).get("text"):
+                raise ValueError(f"en.{concept}.text is required")
+        for concept in ("policy", "trust", "privacy"):
+            if not languages["en"][concept].get("href"):
+                raise ValueError(f"en.{concept}.href is required")
+        return data
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise RuntimeError(f"Cannot load E-E-A-T term resource {_TERMS_PATH}: {exc}") from exc
+
+
+_TERMS = _load_terms()
+
+
+def _literal_pattern(terms: list[str], *, boundary: str) -> re.Pattern:
+    if boundary == "both":
+        alternatives = []
+        for term in terms:
+            # Put the final word boundary before terminal punctuation. This keeps
+            # e.g. Russian `к.м.н.` literal while still treating it as a whole word.
+            match = re.fullmatch(r"(.*\w)(\W*)", term)
+            if not match:
+                raise ValueError(f"whole-word term has no word characters: {term!r}")
+            word_part, punctuation = match.groups()
+            alternatives.append(
+                rf"\b{re.escape(word_part)}\b{re.escape(punctuation)}")
+        pattern = rf"(?:{'|'.join(alternatives)})"
+    elif boundary == "start":
+        pattern = rf"\b(?:{'|'.join(re.escape(term) for term in terms)})"
+    elif boundary == "none":
+        pattern = rf"(?:{'|'.join(re.escape(term) for term in terms)})"
+    else:  # Internal API: make an accidental fourth matching mode fail loudly.
+        raise ValueError(f"unknown boundary mode {boundary!r}")
+    return re.compile(pattern, re.I)
+
+
+@lru_cache(maxsize=None)
+def _patterns_for(locales: frozenset[str]) -> dict[str, dict[str, re.Pattern]]:
+    """Compile the five signal families once for each site language set."""
+    patterns = {}
+    languages = _TERMS["languages"]
+    for concept in ("credential", "first_hand", "policy", "trust", "privacy"):
+        terms_by_field = {"text": [], "stem": [], "href": []}
+        for locale in sorted(locales):
+            fields = languages[locale].get(concept, {})
+            for field in terms_by_field:
+                terms_by_field[field].extend(fields.get(field, []))
+        concept_patterns = {}
+        for field, boundary in (("text", "both"), ("stem", "start"),
+                                ("href", "none")):
+            if terms_by_field[field]:
+                concept_patterns[field] = _literal_pattern(
+                    terms_by_field[field], boundary=boundary)
+        patterns[concept] = concept_patterns
+    return patterns
+
+
+def _text_matches(patterns: dict[str, re.Pattern], value: str) -> bool:
+    """Match either a whole-word literal or a deliberately reviewed prefix stem."""
+    return any(patterns[field].search(value) for field in ("text", "stem")
+               if field in patterns)
+
+
+def _text_hits(patterns: dict[str, re.Pattern], value: str) -> list[str]:
+    return sorted({match.group(0) for field in ("text", "stem")
+                   if field in patterns for match in patterns[field].finditer(value)})
+
+
+def _primary_language(parsed: dict, soup) -> str | None:
+    """Read the declared page language in the documented precedence order."""
+    raw = parsed.get("lang")
+    if not raw:
+        raw = next((tag.get("content") for tag in soup.find_all("meta")
+                    if str(tag.get("http-equiv") or "").strip().lower()
+                    == "content-language" and tag.get("content")), None)
+    if not raw:
+        raw = next((tag.get("content") for tag in soup.find_all("meta")
+                    if str(tag.get("property") or "").strip().lower() == "og:locale"
+                    and tag.get("content")), None)
+    primary = re.split(r"[-_]", str(raw).strip(), maxsplit=1)[0].lower() if raw else ""
+    return primary or None
 
 
 # JSON-LD types whose node names an organisation, compared case-insensitively against
@@ -113,6 +216,9 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     parsed = parse_html(html, url)
     soup = parsed["soup"]
     body = parsed.get("body_text", "")
+    lang = _primary_language(parsed, soup)
+    locales = frozenset({"en", lang} if lang in _TERMS["languages"] else {"en"})
+    patterns = _patterns_for(locales)
 
     author_meta = [
         tag.get("content") or tag.get_text(" ", strip=True)
@@ -129,13 +235,13 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     authors = sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
     publishers = sorted({v.strip() for v in _publisher_names(parsed, soup) if v and v.strip()})
 
-    credential_hits = sorted({match.group(0) for match in CREDENTIAL_RE.finditer(body)})
-    experience_hits = sorted({match.group(0) for match in FIRST_HAND_RE.finditer(body)})
+    credential_hits = _text_hits(patterns["credential"], body)
+    experience_hits = _text_hits(patterns["first_hand"], body)
     links = parsed.get("links", [])
     policy_links = [
         link for link in links
-        if re.search(r"\b(editorial|review policy|fact[- ]check|corrections?|ethics)\b", link.get("text", ""), re.I)
-        or re.search(r"(editorial|review-policy|fact-check|corrections|ethics)", link.get("href", ""), re.I)
+        if _text_matches(patterns["policy"], link.get("text", ""))
+        or patterns["policy"]["href"].search(link.get("href", ""))
     ]
     contact_routes = [
         {"href": tag.get("href", "").strip(),
@@ -146,8 +252,8 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     ]
     trust_links = [
         link for link in links
-        if re.search(r"\b(about|contact|privacy|terms|team|authors?)\b", link.get("text", ""), re.I)
-        or re.search(r"/(about|contact|privacy|terms|team|author)", link.get("href", ""), re.I)
+        if _text_matches(patterns["trust"], link.get("text", ""))
+        or patterns["trust"]["href"].search(link.get("href", ""))
     ] + contact_routes
     # Privacy specifically, kept apart from both of the above. `policy_links` means
     # editorial standards — fact-checking, corrections, ethics — while `trust_links`
@@ -158,10 +264,8 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     # standards, and a site with an ethics page and no privacy policy passed.
     privacy_links = [
         link for link in links
-        if re.search(r"\b(privacy|data protection|gdpr|cookie policy|cookie notice)\b",
-                     link.get("text", ""), re.I)
-        or re.search(r"/(privacy|datenschutz|gdpr|cookie-policy)",
-                     link.get("href", ""), re.I)
+        if _text_matches(patterns["privacy"], link.get("text", ""))
+        or patterns["privacy"]["href"].search(link.get("href", ""))
     ]
     page_host = urlparse(url).netloc if url else ""
     external_citations = [
@@ -194,6 +298,8 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     return {
         "url": url or source,
         "score": min(100, score),
+        "lang": lang,
+        "matched_locales": sorted(locales),
         "signals": {
             "authors": authors[:20],
             "publishers": publishers[:20],
