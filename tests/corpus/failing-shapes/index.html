@@ -12,11 +12,16 @@
 <!-- GEO-008: snippet directives that leave the page unusable in AI answers and
      result snippets, which is the defect that item exists to find. -->
 <meta name="robots" content="index, follow, nosnippet, max-image-preview:none, max-snippet:0">
-<!-- SP-109: third-party scripts, each from a different origin, which is what a
-     speed trap looks like before anybody measures it. -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-CORPUS01"></script>
-<script async src="https://connect.facebook.net/en_US/fbevents.js"></script>
-<script async src="https://static.hotjar.com/c/hotjar-000000.js"></script>
+<!-- SP-109 asserts `blocking_third_party_count == 0` and warns at `<= 2`, so what it
+     counts is a third-party script carrying neither `async` nor `defer`. The first
+     version of this block had five third-party tags and marked every one `async` —
+     the shape of a site that has already been tuned — so the count was 0 and the item
+     passed. Three of the five block now, one more than the warn band tolerates.
+     The lesson outlives the fix: a tree built to fail checks has to carry the defect
+     the rule counts, not the defect its title evokes. -->
+<script src="https://www.googletagmanager.com/gtag/js?id=G-CORPUS01"></script>
+<script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+<script src="https://static.hotjar.com/c/hotjar-000000.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/some-widget@1/dist/widget.min.js"></script>
 <script async src="https://widget.intercom.io/widget/abcdefgh"></script>
 <!-- TECH-001: HowTo is a retired rich-result type, and this registry has an item

@@ -3044,13 +3044,14 @@
     },
     "SP-109": {
       "answers": {
-        "failing-shapes": "PASS",
+        "failing-shapes": "FAIL",
         "fixture:broken": "PASS",
         "fixture:broken_tls": "PASS",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
+        "FAIL",
         "PASS"
       ],
       "script": "third_party_script_audit.py",
@@ -3060,7 +3061,7 @@
     },
     "SP-110": {
       "answers": {
-        "failing-shapes": "WARN",
+        "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "WARN",

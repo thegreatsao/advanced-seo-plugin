@@ -31,6 +31,14 @@ No registry rule or threshold changes; the registry remains `5c6290bca280`. In t
 corpus census, only `TECH-002` on `failing-shapes` moved, from PASS to FAIL, and the
 count that could not be seen failing dropped from 29 to 28.
 
+**A test-tree repair rides along and changes nothing a run produces.** `SP-109` asserts
+`blocking_third_party_count == 0` and warns at `<= 2`, so what it counts is a
+third-party script carrying neither `async` nor `defer` — and the corpus tree marked all
+five of its third-party tags `async`, which is the shape of a site that has already been
+tuned. The tree carried the defect the title evokes instead of the one the rule counts,
+and the item passed. Three of the five block now, the item reaches FAIL, and the census
+moved again: 28 to 27.
+
 ## 0.53.0 — the audit stops starting a browser
 
 `javascript_render_audit.py` no longer launches Chromium. A browser started inside
