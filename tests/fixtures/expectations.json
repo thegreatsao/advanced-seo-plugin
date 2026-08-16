@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "4f8321358647",
+  "registry_version": "5c6290bca280",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -370,7 +370,7 @@
       },
       "MB-105": {
         "expect": "INDETERMINATE",
-        "why": "deliberately undeclared as a verdict: the raw-versus-rendered comparison exists only where a browser does, and Playwright is installed on the machine this fixture was declared on and on no CI runner. A settled declaration here would be a claim about the laptop \u2014 see HANDOFF-3 \u00a74 and HANDOFF-5 \u00a74"
+        "why": "the fixture artifact carries no html, so there is no rendered document to compare. A settled declaration is deliberately not being written yet because the item's own title says Match Desktop while the script compares served against rendered for one URL with one user agent. That question remains open and is not settled here"
       },
       "MD-184": {
         "expect": "PASS",
@@ -382,7 +382,7 @@
       },
       "TE-169": {
         "expect": "PASS",
-        "why": "every sampled page carries internal links in the served HTML, so the no-JavaScript crawl path is not empty on any of them"
+        "why": "every sampled page carries internal links in the served HTML"
       },
       "TE-177": {
         "expect": "PASS",
@@ -836,7 +836,7 @@
       },
       "MB-105": {
         "expect": "INDETERMINATE",
-        "why": "deliberately undeclared as a verdict, for the same reason as the good origin: the comparison exists only where a browser does"
+        "why": "the fixture artifact carries no html, so there is no rendered document to compare. A settled declaration is deliberately not being written yet because the item's own title says Match Desktop while the script compares served against rendered for one URL with one user agent. That question remains open and is not settled here"
       },
       "MD-184": {
         "expect": "PASS",

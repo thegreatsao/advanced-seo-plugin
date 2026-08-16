@@ -173,8 +173,13 @@ REVIEWED: dict[str, str] = {
     "TE-175": "OK on subject. The threshold is another matter — 'at most 3 missing "
               "headers' is a number nobody measured, which is KNOWN-ISSUES §2 and not "
               "this tool's question.",
-    "TE-177": "OK. `raw` is the pre-JavaScript document, so a title in it is the page "
-              "being readable without JavaScript.",
+    "TE-177": "SUPERSEDED (0.53). The 0.22 ruling above read `raw.title` as 'the page "
+              "is readable without JavaScript', and that is more than a non-empty "
+              "title element proves — a page can carry a title and build every word "
+              "of its content in script. The item is now titled for what it asserts, "
+              "a title element in the served HTML, and the comparison the old title "
+              "implied is MB-105's. Kept rather than deleted because the ruling that "
+              "went inert is the one that let the mismatch stand.",
     "TE-180": "OK. a11y_seo_checker's score is WCAG basics, scored.",
     "MD-185": "OK. Image issues at medium and above is 'optimize images'.",
     "GEO-007": "OK. key_valid is IndexNow configured; there is nothing else to be.",

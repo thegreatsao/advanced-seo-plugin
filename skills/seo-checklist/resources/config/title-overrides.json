@@ -7,5 +7,13 @@
   "TE-181": {
     "title": "Validate the Rendered DOM (W3C)",
     "why": "TE-181 now sends the browser-built DOM to the Nu checker, while CI-017 keeps validating the HTML served at the URL. Keeping the inherited title on both would give two report rows the same name even when the two documents produce different verdicts."
+  },
+  "TE-169": {
+    "title": "Provide Internal Links in the Served HTML",
+    "why": "The inherited title — Optimize JavaScript Rendering & Crawlability — promises a comparison between the served document and the rendered one. That comparison is MB-105, and scoring it three times is what the duplicate gate exists to stop. This item asserts something real and cheap about the served document, and its independently written fixture declaration already says so: every sampled page carries internal links in the served HTML. The title is brought into line with what both the assertion and the declaration mean."
+  },
+  "TE-177": {
+    "title": "Provide a Title Element in the Served HTML",
+    "why": "The inherited title — Ensure No-JS Access & Crawlability — promises a comparison between the served document and the rendered one. That comparison is MB-105, and scoring it three times is what the duplicate gate exists to stop. This item asserts something real and cheap about the served document, and its independently written fixture declaration already says so: every sampled page carries a title element in the served HTML. The title is brought into line with what both the assertion and the declaration mean."
   }
 }

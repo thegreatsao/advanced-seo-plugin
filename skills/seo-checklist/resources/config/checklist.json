@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "4f8321358647",
+  "registry_version": "5c6290bca280",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -2122,7 +2122,9 @@
       "check": {
         "script": "javascript_render_audit.py",
         "args": [
-          "{url}"
+          "{url}",
+          "--rendered-json",
+          "{rendered_json}"
         ],
         "requires": "fetch",
         "assert": {
@@ -3498,7 +3500,7 @@
       "plerdy_ref": 169,
       "category": "technical",
       "category_label": "Technical SEO Checks",
-      "title": "Optimize JavaScript Rendering & Crawlability",
+      "title": "Provide Internal Links in the Served HTML",
       "severity": "high",
       "source": "script",
       "check": {
@@ -3513,7 +3515,7 @@
         }
       },
       "effort": "low",
-      "fix": "Ensure crawlability under JavaScript rendering"
+      "fix": "Put internal links in the served HTML so a crawler has somewhere to go before JavaScript runs"
     },
     {
       "id": "TE-170",
@@ -3675,7 +3677,7 @@
       "plerdy_ref": 177,
       "category": "technical",
       "category_label": "Technical SEO Checks",
-      "title": "Ensure No-JS Access & Crawlability",
+      "title": "Provide a Title Element in the Served HTML",
       "severity": "medium",
       "source": "script",
       "check": {
@@ -3690,7 +3692,7 @@
         }
       },
       "effort": "low",
-      "fix": "Content must be reachable without executing JavaScript"
+      "fix": "Put the page title in the served HTML, not only in what JavaScript builds"
     },
     {
       "id": "TE-178",

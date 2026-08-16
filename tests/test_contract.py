@@ -245,14 +245,10 @@ SAME_ON_BOTH = {
     "CI-014": "http.server cannot be made to serve a redirect loop",
     "AR-150": "http.server issues no redirects, so the hop count is 0 on both",
     "AR-149": "no internal redirects to find without a server that redirects",
-    # Phrased to hold whether or not a browser is installed, because this reason has
-    # now been wrong in both directions: it first said the fixtures were static (they
-    # were never rendered at all), then that no renderer existed (CI began installing
-    # one). What is true either way is that the two sides agree.
-    "MB-105": "with a renderer, both fixtures are static HTML whose rendered document "
-              "matches what was served; without one, neither is compared at all",
-    "TE-169": "both fixtures serve their links in the HTML, so the raw link count is "
-              "non-zero on both — the check only fails a JS-rendered site",
+    "MB-105": "both fixture artifacts omit html, so neither entry page has a rendered "
+              "document to compare with what was served",
+    "TE-169": "both entry pages serve internal links in the HTML, so the raw link "
+              "count is non-zero on both",
 
     # --- One site cannot hold a defect and its opposite ---------------------
     "GO-131": "the broken site needs two GA4 tags for GO-132, so it necessarily has "

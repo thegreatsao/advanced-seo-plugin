@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -26,26 +27,30 @@ DIFFERENT_HTML = """<!doctype html><html><head><title>Rendered title</title></he
 <body><h1>Rendered heading</h1></body></html>"""
 
 
-def audit_with(rendered_html, render_error=None):
+def audit_with(rendered_html=None, *, artifact=True):
     fetched = {"error": None}
-    with mock.patch.object(render_audit, "load_html",
-                           return_value=(RAW_HTML, URL, fetched)), \
-         mock.patch.object(render_audit, "render_with_playwright",
-                           return_value=(rendered_html, render_error)):
-        return render_audit.audit(URL)
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered_json = None
+        if artifact:
+            rendered_json = os.path.join(tmp, "rendered.json")
+            with open(rendered_json, "w", encoding="utf-8") as handle:
+                json.dump({"html": rendered_html}, handle)
+        with mock.patch.object(render_audit, "load_html",
+                               return_value=(RAW_HTML, URL, fetched)):
+            return render_audit.audit(URL, rendered_json=rendered_json)
 
 
 class JavascriptRenderParity(unittest.TestCase):
-    def test_unavailable_renderer_omits_diffs(self):
-        result = audit_with(None, "playwright not installed")
+    def test_no_artifact_omits_diffs(self):
+        result = audit_with(artifact=False)
 
         self.assertNotIn("diffs", result)
         self.assertIsNone(result["rendered"])
-        self.assertEqual(result["render_error"], "playwright not installed")
+        self.assertEqual(result["render_error"], "no rendered artifact provided")
         self.assertIn("raw", result)
 
     def test_mb_105_reports_no_data_without_a_rendered_document(self):
-        result = audit_with(None, "browser launch failed")
+        result = audit_with(artifact=False)
 
         passed, evidence = evaluate(MB_105_ASSERTION, result)
         self.assertIsNone(passed)

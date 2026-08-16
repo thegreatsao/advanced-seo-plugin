@@ -123,6 +123,11 @@ def RATING_WARN(metric):
 
 
 PAGE = ["{url}"]
+# A rendered artifact is a statement about one URL, so an item that reads it
+# cannot be sampled across pages; items that read only the served document must
+# use PAGE so the runner can sample them. html_validator.py is the precedent:
+# CI-017 uses PAGE while TE-181 receives the rendered artifact.
+JSRENDER = ["{url}", "--rendered-json", "{rendered_json}"]
 HTMLARG = ["{html}", "--url", "{url}"]
 # The site-wide checks read one crawl instead of running six of their own.
 # `{inventory_json}` is produced by the runner before the plan is built (see
@@ -747,7 +752,7 @@ item(103, "medium", S, "rendered_audit.py", RENDERED,
 item(104, "low", S, "favicon_check.py", PAGE,
      {"path": "favicon.displays_at_48px", "truthy": True},
      "Serve a favicon that resolves and is at least 48x48 - a declared icon returning 404 shows nothing in a mobile result")
-item(105, "high", S, "javascript_render_audit.py", PAGE,
+item(105, "high", S, "javascript_render_audit.py", JSRENDER,
      {"path": "diffs", "len_eq": 0},
      "Content, meta and directives must match between mobile and desktop")
 item(106, "medium", M, fix="Test on real devices before and after release")
@@ -1043,7 +1048,7 @@ item(168, "high", S, "broken_links.py", CRAWLARG,
      {"path": "summary.broken", "lte": 3})
 item(169, "high", S, "javascript_render_audit.py", PAGE,
      {"path": "raw.internal_link_count", "gte": 1},
-     "Ensure crawlability under JavaScript rendering")
+     "Put internal links in the served HTML so a crawler has somewhere to go before JavaScript runs")
 item(170, "medium", S, "cache_compression_checker.py", PAGE,
      ISSUES_ANY(),
      "Configure server rewrites and cache/compression headers", warn=NOTHING_SERIOUS())
@@ -1070,7 +1075,7 @@ item(176, "high", S, "canonical_checker.py", PAGE,
      "Fix canonicalization issues")
 item(177, "medium", S, "javascript_render_audit.py", PAGE,
      {"path": "raw.title", "truthy": True},
-     "Content must be reachable without executing JavaScript")
+     "Put the page title in the served HTML, not only in what JavaScript builds")
 item(178, "low", S, "domain_safety_check.py", PAGE,
      {"path": "neighbors.suspicious", "len_eq": 0},
      "Audit neighboring sites on the same server IP")

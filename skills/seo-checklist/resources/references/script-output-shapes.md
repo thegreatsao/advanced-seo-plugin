@@ -918,11 +918,16 @@ below are examples rather than a schema.
 `raw.internal_link_count` — int
 `raw.schema_count` — int
 `raw.word_count` — int
-`rendered` — NoneType
-`diffs[]` — array — **absent** when `rendered` is `None`. MB-105 asserts `len_eq: 0`
-  on it, and an absent key is NO_DATA: an empty array would claim parity for documents
-  that were never compared.
-`render_error` — str
+`rendered` — object or null — null unless the supplied rendered-page artifact carried
+  a non-empty `html` string; otherwise it has the same fields as `raw`
+`diffs[]` — array — **absent** unless a rendered document existed. MB-105 asserts
+  `len_eq: 0` on it, and an absent key is NO_DATA: an empty array would claim parity
+  for documents that were never compared.
+`render_error` — str or null — exactly one of `no rendered artifact provided`,
+  `rendered artifact could not be read: <OSError>`, `rendered artifact is not JSON:
+  <JSONDecodeError>`, `rendered artifact is not an object`, or `rendered artifact
+  carries no \`html\`; the trace recorded measurements but not the document`; null
+  when the artifact supplied a rendered document
 `fetch_error` — NoneType
 
 ### lcp_subparts.py

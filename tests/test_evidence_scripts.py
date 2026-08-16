@@ -563,7 +563,7 @@ BAD_ROUTES = {
 # Running them
 # ---------------------------------------------------------------------------
 
-GOOD = BAD = None
+GOOD = BAD = RENDER_ARTIFACTS = None
 OUT: dict = {}
 
 # (key, script, argv template). `{good}` and `{bad}` are the two origins' roots.
@@ -629,6 +629,10 @@ RUNS = [
     ("crawl_bad", "site_crawl.py", ["{bad}"]),
     ("jsrender", "javascript_render_audit.py", ["{good}"]),
     ("jsrender_bad", "javascript_render_audit.py", ["{bad}"]),
+    ("jsrender_match", "javascript_render_audit.py",
+     ["{good}", "--rendered-json", "{rendered_match}"]),
+    ("jsrender_diff", "javascript_render_audit.py",
+     ["{good}", "--rendered-json", "{rendered_diff}"]),
     ("lcp", "lcp_subparts.py", ["{good}"]),
     ("profile", "link_profile.py", ["{good}"]),
     ("profile_bad", "link_profile.py", ["{bad}"]),
@@ -692,7 +696,7 @@ def script_env() -> dict:
 
 
 def setUpModule():
-    global GOOD, BAD
+    global GOOD, BAD, RENDER_ARTIFACTS
     GOOD, BAD = served(GOOD_ROUTES), served(BAD_ROUTES)
     for site in (GOOD, BAD):
         # `PLACEHOLDER_HOST` first: it is a substring of nothing, but the full
@@ -700,6 +704,16 @@ def setUpModule():
         # `http://http://127.0.0.1:PORT/...` behind.
         site.rewrite("PLACEHOLDER_HOST", site.base.split("//", 1)[1])
         site.rewrite(PLACEHOLDER)
+    RENDER_ARTIFACTS = tempfile.TemporaryDirectory()
+    served_html = GOOD.routes["/"][2]
+    rendered_match = os.path.join(RENDER_ARTIFACTS.name, "match.json")
+    rendered_diff = os.path.join(RENDER_ARTIFACTS.name, "diff.json")
+    with open(rendered_match, "w", encoding="utf-8") as handle:
+        json.dump({"html": served_html}, handle)
+    with open(rendered_diff, "w", encoding="utf-8") as handle:
+        json.dump({"html": served_html.replace(
+            "<title>Sourdough starter care: feeding, reviving and storing</title>",
+            "<title>A rendered-only title</title>")}, handle)
     env = script_env()
 
     def run(spec):
@@ -709,6 +723,8 @@ def setUpModule():
         argv = [a.replace("{good}", GOOD.url).replace("{bad}", BAD.url)
                 .replace("{logs}", os.path.join(fixtures, "logs") + os.sep)
                 .replace("{artifacts}", os.path.join(fixtures, "artifacts") + os.sep)
+                .replace("{rendered_match}", rendered_match)
+                .replace("{rendered_diff}", rendered_diff)
                 for a in template]
         # `cwd` is deliberately not passed: it would put the child back on CPython's
         # `fork` path, which macOS kills outright once Network.framework has been
@@ -738,6 +754,8 @@ def tearDownModule():
     for site in (GOOD, BAD):
         if site:
             site.stop()
+    if RENDER_ARTIFACTS:
+        RENDER_ARTIFACTS.cleanup()
 
 
 def out(key: str) -> dict:
@@ -2433,6 +2451,47 @@ class JavascriptRender(unittest.TestCase):
     measured against the crawl rather than one page.
     """
 
+    def test_no_artifact_is_no_measurement_not_parity(self):
+        """Removing the omission would turn missing evidence into an MB-105 PASS."""
+        result = out("jsrender")
+        self.assertNotIn("diffs", result)
+        self.assertIsNone(result["rendered"])
+        self.assertEqual(result["render_error"], "no rendered artifact provided")
+        self.assertEqual(verdict("MB-105", result), NO_DATA)
+
+    def test_a_rendered_field_difference_fails_mb_105(self):
+        """Losing artifact parsing would hide a measured served/rendered mismatch."""
+        result = out("jsrender_diff")
+        self.assertEqual(result["diffs"], [
+            {
+                "field": "title",
+                "raw": "Sourdough starter care: feeding, reviving and storing",
+                "rendered": "A rendered-only title",
+            },
+            {
+                "field": "word_count",
+                "raw": 324,
+                "rendered": 320,
+            },
+        ])
+        self.assertEqual(verdict("MB-105", result), FAIL)
+
+    def test_a_matching_rendered_document_passes_mb_105(self):
+        """Dropping an empty measured diff would make proven parity NO_DATA."""
+        result = out("jsrender_match")
+        self.assertEqual(result["diffs"], [])
+        self.assertEqual(verdict("MB-105", result), PASS)
+
+    def test_served_html_items_ignore_the_optional_artifact(self):
+        """Pointing TE-169 or TE-177 at rendered data would make them input-dependent."""
+        without = out("jsrender")
+        for label in ("jsrender_match", "jsrender_diff"):
+            with self.subTest(label):
+                with_artifact = out(label)
+                for item_id in ("TE-169", "TE-177"):
+                    self.assertEqual(verdict(item_id, with_artifact),
+                                     verdict(item_id, without), item_id)
+
     def test_the_raw_html_carries_the_content(self):
         good = out("jsrender")
         self.assertGreaterEqual(good["raw"]["word_count"], 300)
@@ -2456,26 +2515,16 @@ class JavascriptRender(unittest.TestCase):
         crawl. Asserting them keeps the run in use: an unasserted run is a script
         nobody checked, hiding behind a green suite.
 
-        MB-105 is deliberately not asserted here — its verdict depends on whether a
-        browser is installed, and `test_parity_is_reported_exactly_when_it_was_measured`
-        pins the rule that holds either way.
+        MB-105 is deliberately not asserted here: no rendered artifact was supplied,
+        so there is no rendered document to compare.
         """
         bad = out("jsrender_bad")
         self.assertLess(bad["raw"]["word_count"], 300)
         for item_id in ("TE-169", "TE-177"):
             self.assertEqual(verdict(item_id, bad), PASS, item_id)
 
-    def test_parity_is_reported_exactly_when_it_was_measured(self):
-        """The contract, stated so it holds with or without a browser present.
-
-        This test used to assert `rendered is None` and `render_error == "playwright
-        not installed"` — true only because the environment happened to have no
-        browser. It passed for a reason that was about the machine rather than the
-        code, and it broke the moment CI began installing Chromium. What matters is
-        not which branch runs but that the two agree: `diffs` exists precisely when a
-        render produced something to compare, and MB-105 is NO_DATA precisely when it
-        did not.
-        """
+    def test_parity_is_absent_exactly_when_no_artifact_was_supplied(self):
+        """Both unassisted CLI runs must carry the same explicit absence contract."""
         for label in ("jsrender", "jsrender_bad"):
             with self.subTest(label):
                 result = out(label)

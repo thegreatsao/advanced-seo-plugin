@@ -10,6 +10,43 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.53.0 — the audit stops starting a browser
+
+`javascript_render_audit.py` no longer launches Chromium. A browser started inside
+an audit fetches the page and its subresources again behind the shared response cache,
+violating the CI request-discipline doctrine: **one audited page, one fetch**. On the
+fixture site that path raised one audit from 22 requests to 31 and requested the entry
+URL three times. The rendered DOM already belongs in the operator's rendered-page
+artifact, so the script now reads that artifact through the same reader as
+`html_validator.py`.
+
+The old browser path also made `MB-105` a verdict about the machine running the audit.
+Against `https://greenvalleymoletai.lt`, this laptop saw a word-count difference of
+795 served versus 953 rendered and reported **FAIL**; every CI runner, without
+Playwright, reported `NO_DATA`. Now `MB-105` reports `NO_DATA` for every operator who
+supplies no rendered artifact — plainly, that used to be **FAIL here** — and reports
+PASS or FAIL only when an artifact carries `html`. `diffs` remains absent when no
+rendered document exists, so missing evidence cannot masquerade as parity.
+
+`TE-169` is retitled *Provide Internal Links in the Served HTML* and `TE-177` is
+retitled *Provide a Title Element in the Served HTML*. Their assertions and verdicts
+still read the served document; the new titles say that directly. The comparison the
+inherited JavaScript/crawlability titles implied belongs to `MB-105`, rather than being
+scored three times. Only `MB-105` takes the rendered artifact; `TE-169` and `TE-177`
+must not take it because they read the served document and must remain eligible for
+the per-page sample. The registry is `5c6290bca280`, replacing `4f8321358647`.
+
+**Three things are deliberately left open.** The fixture artifacts gain no `html` and
+`MB-105` stays INDETERMINATE in the oracle, because the item is titled *Ensure Parity:
+Content, Meta & Directives Match **Desktop*** while the script compares served against
+rendered for one URL, one user agent and one viewport — there is no desktop side and no
+mobile side anywhere in it. A declaration is written from an item's title, and this
+title cannot be trusted yet. The semantics gate held a human ruling reading `raw.title`
+as "the page is readable without JavaScript"; it is now marked superseded rather than
+deleted, because the ruling that went inert is the one that let the `TE-177` mismatch
+stand. And `mobile_render_checker.py` still carries a Playwright branch no audit can
+reach — it needs `--render`, and nothing in this repository passes it.
+
 ## 0.52.0 — one byline vocabulary, in one place
 
 `citation_readiness.py` still used the loose class substring match removed from the

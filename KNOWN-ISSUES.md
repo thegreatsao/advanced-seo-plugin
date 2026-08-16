@@ -467,28 +467,25 @@ name. A column called `url` would be read as "fix this page".
   audit of sitewide usage — it is a check that images exist somewhere in the sample.
   That is a registry question, and it changes what a live audit reports.
 
-- **Four items assert a thinner thing than their titles promise, and one family of them
-  shares a script.** Collected rather than filed separately, because the shape is the
+- **Two items assert a thinner thing than their titles promise.** Collected rather
+  than filed separately, because the shape is the
   point: the assertion is satisfied by markup that does not deliver what the title says.
 
   | item | title promises | assertion actually requires |
   |---|---|---|
-  | `TE-169` | *Optimize JavaScript Rendering & Crawlability* (`high`) | one internal
-  link in the served HTML |
-  | `TE-177` | *Ensure No-JS Access & Crawlability* | a non-empty `<title>` in the
-  served HTML |
   | `AR-152` | *Block Crawl Strategically with robots.txt* | that `robots.txt` has any
   user-agent group at all |
   | `CN-056` | *Show Publication **and** Updated Dates* | one date of any kind |
 
-  The first three were found on the live audit of 2026-08-14 and are written up in
-  `FINDINGS-REVIEW.md`; the last was found by reading the eight declarations that
-  the fixture repair touched. `TE-169` and `TE-177` share `javascript_render_audit.py`
-  with `MB-105`, and `MB-105` is the only one of the three that reads the raw-versus-
-  rendered comparison the script exists to produce.
+  `AR-152` was found on the live audit of 2026-08-14 and is written up in
+  `FINDINGS-REVIEW.md`; `CN-056` was found by reading the eight declarations that
+  the fixture repair touched. `TE-169` and `TE-177` used to be in this table, but
+  0.53.0 brought their titles to their served-HTML assertions, not the assertions to
+  the old titles. The served-versus-rendered comparison those titles implied is
+  `MB-105`; scoring that comparison three times would duplicate it.
 
-  None is acted on here: each changes what a live audit reports, and three change the
-  registry. They are collected so that the next person deciding what a registry version
+  Neither is acted on here: each changes what a live audit reports and the registry.
+  They are collected so that the next person deciding what a registry version
   is worth spending can see them together.
 
 - **FAIL is unreachable for five items, because their warn band names severities their

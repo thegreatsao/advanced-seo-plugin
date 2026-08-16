@@ -1095,9 +1095,11 @@ class BrowserArtifacts(unittest.TestCase):
         found = {i["id"] for i in registry if reads_artifact(i)}
         # TE-181 joined in 0.45.0: it validates the rendered DOM out of the same
         # rendered-page artifact rather than starting a browser inside the audit.
+        # MB-105 joined in 0.53.0: unlike TE-169 and TE-177, it compares the served
+        # document with the rendered artifact for this one URL.
         self.assertEqual(found, {"SP-214", "SP-215", "SP-216", "CN-034", "CN-035",
                                  "CN-051", "MB-094", "MB-103", "BL-084", "BL-086",
-                                 "BL-087", "CI-018", "TE-181"})
+                                 "BL-087", "CI-018", "MB-105", "TE-181"})
         # What actually has to hold: an item reading an artifact measured at one URL
         # must never be run against a second page, or it would judge that page on
         # numbers taken somewhere else.
