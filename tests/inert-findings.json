@@ -1,0 +1,377 @@
+{
+  "inert_item_count": 11,
+  "items": {
+    "AR-146": {
+      "inert_findings": [],
+      "path": "pagination.issues",
+      "refuses": [
+        "critical",
+        "high"
+      ],
+      "script": "parse_html.py",
+      "script_severities": [
+        "high"
+      ],
+      "title": "Check Pagination"
+    },
+    "AR-154": {
+      "inert_findings": [
+        {
+          "message": "Few crawlable product links detected",
+          "severity": "low"
+        },
+        {
+          "message": "Filter links use nofollow; confirm crawl strategy",
+          "severity": "low"
+        },
+        {
+          "message": "Paginated URL has no visible next/prev links",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "collection_page_checker.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Optimize E-commerce Category Pages"
+    },
+    "AR-162": {
+      "inert_findings": [],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "link_profile.py",
+      "script_severities": [
+        "high",
+        "medium"
+      ],
+      "title": "Strengthen Internal Links and Remove Orphans"
+    },
+    "AR-163": {
+      "inert_findings": [
+        {
+          "message": "Frequent URL parameters detected",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "faceted_nav_audit.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Control Faceted Navigation (E-commerce)"
+    },
+    "CI-018": {
+      "inert_findings": [
+        {
+          "message": "crawlers requested {unoffered} URL(s) the crawl found neither linked nor in the sitemap — old URLs, external links, or pages reachable only from outside the site",
+          "severity": "low"
+        },
+        {
+          "message": "no line carried a timestamp this script could read, so the window is unknown and rates per day are not reported",
+          "severity": "low"
+        },
+        {
+          "message": "some lines carry no User-Agent field; those requests are counted in the totals but attributed to no crawler",
+          "severity": "low"
+        },
+        {
+          "message": "the log covers {days or 'an unknown number of'} day(s); coverage findings need at least {MIN_DAYS_FOR_COVERAGE} days, because below that 'never crawled' and 'not crawled yet' are the same thing",
+          "severity": "low"
+        },
+        {
+          "message": "{facts['error']}; the log was read on its own, so never-crawled and unoffered-URL findings are absent",
+          "severity": "low"
+        },
+        {
+          "message": "{total} search-bot request(s) is too few to express as percentages, so shares are omitted; the counts stand",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "server_log_audit.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Analyze Logs & Manage Crawl Budget"
+    },
+    "CN-048": {
+      "inert_findings": [],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "parse_html.py",
+      "script_severities": [
+        "high"
+      ],
+      "title": "Use Hierarchical Headings and Semantic HTML"
+    },
+    "GO-134": {
+      "inert_findings": [],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "gsc_checker.py",
+      "script_severities": [
+        "high",
+        "medium"
+      ],
+      "title": "Resolve Search Console Issues"
+    },
+    "GO-135": {
+      "inert_findings": [],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high"
+      ],
+      "script": "gsc_url_inspection.py",
+      "script_severities": [
+        "critical",
+        "high"
+      ],
+      "title": "Use URL Inspection & Rendered HTML"
+    },
+    "GO-136": {
+      "inert_findings": [
+        {
+          "message": "Sitemap URL missing lastmod",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "sitemap_checker.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Provide Clean XML Sitemaps"
+    },
+    "MB-100": {
+      "inert_findings": [
+        {
+          "message": "Found {sticky_hits} fixed/sticky positioning declaration(s).",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "mobile_render_checker.py",
+      "script_severities": [
+        "critical",
+        "low",
+        "medium"
+      ],
+      "title": "Fix Mobile UX Issues (see UX)"
+    },
+    "MB-102": {
+      "inert_findings": [
+        {
+          "message": "VideoObject is missing transcript/caption signal",
+          "severity": "low"
+        },
+        {
+          "message": "potentialAction exists but no SeekToAction found",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "video_schema_checker.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Optimize Video for Mobile"
+    },
+    "MD-185": {
+      "inert_findings": [
+        {
+          "message": "Consider AVIF/WebP for raster image",
+          "severity": "low"
+        },
+        {
+          "message": "Image has no srcset",
+          "severity": "low"
+        },
+        {
+          "message": "Likely LCP image lacks fetchpriority=high",
+          "severity": "low"
+        },
+        {
+          "message": "Responsive image has srcset but no sizes",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "image_weight_audit.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Optimize Images"
+    },
+    "MD-190": {
+      "inert_findings": [
+        {
+          "message": "VideoObject is missing transcript/caption signal",
+          "severity": "low"
+        },
+        {
+          "message": "potentialAction exists but no SeekToAction found",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "video_schema_checker.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Implement Video SEO Essentials"
+    },
+    "SP-110": {
+      "inert_findings": [
+        {
+          "message": "Cross-origin critical resource lacks preconnect",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "critical_request_chain.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Run a Comprehensive Speed Audit"
+    },
+    "TE-170": {
+      "inert_findings": [
+        {
+          "message": "Could not fetch headers",
+          "severity": "low"
+        },
+        {
+          "message": "Header checks require HTTP(S); local HTML was parsed for asset discovery only.",
+          "severity": "low"
+        },
+        {
+          "message": "Long-lived static asset can use immutable",
+          "severity": "low"
+        },
+        {
+          "message": "No validator header (ETag or Last-Modified)",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "cache_compression_checker.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Configure Server Rewrites & Headers"
+    },
+    "TECH-002": {
+      "inert_findings": [
+        {
+          "message": "Font is not WOFF2",
+          "severity": "low"
+        },
+        {
+          "message": "Third-party stylesheet without preconnect",
+          "severity": "low"
+        },
+        {
+          "message": "font-display may delay text rendering",
+          "severity": "low"
+        }
+      ],
+      "path": "issues",
+      "refuses": [
+        "critical",
+        "high",
+        "medium"
+      ],
+      "script": "font_audit.py",
+      "script_severities": [
+        "high",
+        "low",
+        "medium"
+      ],
+      "title": "Font loading does not block render"
+    }
+  },
+  "none_severity_item_count": 16,
+  "registry_version": "be2ab95ba6bf"
+}

@@ -10,6 +10,22 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.63.0 — record which findings no rule can act on
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`tests/inert_findings.py` records the findings a script can emit at severities its
+item's `none_severity` assertion does not refuse. The JSON record includes the
+finding text, not only the count, so a reader can inspect what has never been able
+to change a verdict. On this tree, eleven items carry such findings.
+
+This is an instrument, deliberately not a gate. It cannot tell low-severity advice
+that should remain advice from a detector making a claim its item must keep, and it
+does not prescribe a verdict or carry an exemption list. `tests/test_inert_findings.py`
+checks only that the record describes this registry, accounts for every
+`none_severity` item, and is not empty. No registry item, script output or verdict
+changes in this release.
+
 ## 0.62.0 — a dead end can fail the item about dead ends
 
 Registry version: `be2ab95ba6bf`, replacing `a129a91eb0da`.
