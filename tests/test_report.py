@@ -574,6 +574,28 @@ class TheFixListIsMachineReadable(unittest.TestCase):
         self.assertEqual(from_csv, from_json)
         self.assertEqual(from_csv, [r["id"] for r in fix_rows(data)])
 
+    def test_csv_guards_formula_cells_but_json_preserves_them(self):
+        import csv as _csv
+        import tempfile
+        evidence = ["=SUM(1,1)", "+cmd", "-ordinary-dash", "@function", "ordinary"]
+        data = results(*(item(f"A-{index}", FAIL, evidence=value)
+                         for index, value in enumerate(evidence)))
+        with tempfile.TemporaryDirectory() as d:
+            csv_path = write_fixes(os.path.join(d, "f.csv"), data)
+            json_path = write_fixes(os.path.join(d, "f.json"), data)
+            with open(csv_path, encoding="utf-8-sig", newline="") as f:
+                csv_rows = {row["id"]: row for row in _csv.DictReader(f)}
+            with open(json_path, encoding="utf-8") as f:
+                json_rows = {row["id"]: row for row in json.load(f)}
+        expected = {f"A-{index}": value for index, value in enumerate(evidence)}
+        for item_id, value in expected.items():
+            guarded = "'" + value if value[0] in "=+-@" else value
+            self.assertEqual(csv_rows[item_id]["evidence"], guarded)
+            self.assertEqual(json_rows[item_id]["evidence"], value)
+            self.assertEqual(csv_rows[item_id]["priority"],
+                             str(json_rows[item_id]["priority"]))
+            self.assertFalse(csv_rows[item_id]["priority"].startswith("'"))
+
     def test_the_csv_opens_in_a_spreadsheet_without_mojibake(self):
         """Excel reads a plain UTF-8 CSV as Latin-1, so a BOM is the difference
         between an item title and a row of garbage. The destination for this file is

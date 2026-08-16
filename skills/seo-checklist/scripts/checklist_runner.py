@@ -1385,6 +1385,7 @@ def score(graded: list[dict]) -> dict:
 # as an argument lands in it verbatim. Paths are not secrets and stay readable;
 # the key material does not.
 SECRET_CTX_KEYS = ("indexnow_key", "pagespeed_key")
+SAFE_BROWSING_ENV_KEYS = ("GOOGLE_SAFE_BROWSING_KEY", "SAFE_BROWSING_API_KEY")
 REDACTED = "<redacted>"
 
 
@@ -1406,6 +1407,13 @@ def redact(value, secrets: tuple[str, ...]):
     if isinstance(value, list):
         return [redact(v, secrets) for v in value]
     return value
+
+
+def artifact_secrets(ctx: dict) -> tuple[str, ...]:
+    """Secrets removed from shared results, including subprocess-only env keys."""
+    return (tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k))
+            + tuple(value for key in SAFE_BROWSING_ENV_KEYS
+                    if (value := os.environ.get(key))))
 
 
 # What an unreachable entry page makes undecidable. `gsc` is deliberately absent:
@@ -2943,8 +2951,8 @@ def main() -> int:
                          if s.get("truncated") else ""), file=sys.stderr)
 
     opt_in = opt_in_flags(mode, a.verify_bots)
-    has_safe_browsing = bool(os.environ.get("GOOGLE_SAFE_BROWSING_KEY") or
-                             os.environ.get("SAFE_BROWSING_API_KEY"))
+    secrets = artifact_secrets(ctx)
+    has_safe_browsing = any(os.environ.get(key) for key in SAFE_BROWSING_ENV_KEYS)
     prof_args = {k: list(v) for k, v in (profile.get("script_args") or {}).items()}
     plan, skipped = build_plan(items, ctx, caps, mode, preskip, bool(gsc_path),
                                rejected, opt_in, prof_args,
@@ -3126,11 +3134,11 @@ def main() -> int:
         "items": graded,
     }
 
-    payload = redact(payload, tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k)))
+    payload = redact(payload, secrets)
 
     if a.evidence_json:
         write_evidence(a.evidence_json, evidence_artifact(results, page_evidence),
-                       tuple(ctx[k] for k in SECRET_CTX_KEYS if ctx.get(k)))
+                       secrets)
 
     hist = ""
     if not a.no_history:

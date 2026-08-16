@@ -2779,6 +2779,55 @@ class EvidenceArtifact(unittest.TestCase):
         with open(path, encoding="utf-8") as stream:
             self.assertEqual(json.load(stream), {"x": {"credential": "<redacted>"}})
 
+    def test_a_safe_browsing_env_key_never_reaches_written_artifacts(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory, True)
+        results_path = os.path.join(directory, "results.json")
+        evidence_path = os.path.join(directory, "evidence.json")
+        secret = "safe-browsing-secret-value"
+        old_google = os.environ.get("GOOGLE_SAFE_BROWSING_KEY")
+        old_alias = os.environ.pop("SAFE_BROWSING_API_KEY", None)
+        os.environ["GOOGLE_SAFE_BROWSING_KEY"] = secret
+        self.addCleanup(self._restore_env, "GOOGLE_SAFE_BROWSING_KEY", old_google)
+        self.addCleanup(self._restore_env, "SAFE_BROWSING_API_KEY", old_alias)
+        results = {
+            ("domain_safety_check.py",
+             ("domain_safety_check.py", "https://example.com")): {
+                 "error": f"request failed for ?key={secret}", "__elapsed__": 0.1}}
+        secrets = runner.artifact_secrets({})
+        payload = runner.redact({"runs": runner.summarize_runs(results)}, secrets)
+        with open(results_path, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream)
+        runner.write_evidence(
+            evidence_path, runner.evidence_artifact(results), secrets)
+        for path in (results_path, evidence_path):
+            with open(path, encoding="utf-8") as stream:
+                self.assertNotIn(secret, stream.read(), path)
+
+    @staticmethod
+    def _restore_env(name, value):
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+    def test_safe_browsing_request_errors_replace_the_key(self):
+        import domain_safety_check as safety
+        secret = "safe-browsing-secret-value"
+        saved = safety.requests.post
+
+        def fail(*_args, **_kwargs):
+            raise safety.requests.RequestException(
+                f"connection failed for {safety.SB_ENDPOINT}?key={secret}")
+
+        safety.requests.post = fail
+        try:
+            out = safety.check_safe_browsing("https://example.com", secret, 10)
+        finally:
+            safety.requests.post = saved
+        self.assertNotIn(secret, out["error"])
+        self.assertIn("?key=<redacted>", out["error"])
+
     def test_sampled_pages_are_nested_without_changing_site_level_runs(self):
         site_results = {
             ("site.py", ("site.py", "https://example.com")):

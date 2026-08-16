@@ -53,6 +53,7 @@ SLOW_RESPONSE_MS = 3000
 YOUNG_DOMAIN_DAYS = 90
 
 SB_ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+REDACTED = "<redacted>"
 SB_THREAT_TYPES = ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE",
                    "POTENTIALLY_HARMFUL_APPLICATION"]
 RE_CREATED = re.compile(
@@ -94,7 +95,10 @@ def check_safe_browsing(url: str, api_key: str, timeout: int) -> dict:
                              headers=default_headers({"Content-Type": "application/json"}),
                              timeout=timeout)
     except requests.RequestException as exc:
-        return {"checked": False, "error": f"Safe Browsing unreachable: {exc}"[:200]}
+        # requests includes the complete request URL in connection errors, including
+        # its key query parameter. Nothing returned by this function may carry it.
+        error = f"Safe Browsing unreachable: {exc}".replace(api_key, REDACTED)
+        return {"checked": False, "error": error[:200]}
 
     if resp.status_code != 200:
         return {"checked": False,

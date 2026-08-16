@@ -10,6 +10,20 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.58.0 — shared artifacts and fix lists stop carrying executable secrets and text
+
+Registry version: `98d748a44afa` (unchanged).
+
+When Safe Browsing was unreachable, an operator's results and evidence artifacts could
+contain the API key from the failed request URL. The evidence script now scrubs that
+key at the source, and the runner removes either supported Safe Browsing environment
+key from every shared results or evidence path as a second boundary.
+
+An audited page's title, anchor, meta value or evidence excerpt could previously become
+an executable formula when the CSV fix list was opened in a spreadsheet. Every string
+cell beginning with `=`, `+`, `-`, `@`, a tab or a carriage return now has a leading
+apostrophe in CSV, while numeric priorities and the lossless JSON fix list stay intact.
+
 ## 0.57.0 — LO-200 grades complete LocalBusiness NAP
 
 Registry version: `98d748a44afa`.

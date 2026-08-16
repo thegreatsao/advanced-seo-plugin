@@ -513,13 +513,21 @@ def write_fixes(path: str, data: dict) -> str:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=2)
         return path
+    # JSON has no spreadsheet formula semantics, so its branch preserves strings.
+    # CSV needs a guard; the accepted cost is that a legitimate leading dash gains an
+    # apostrophe in tools that display it.
     # `utf-8-sig` and CRLF, because the overwhelmingly likely destination is
     # somebody's spreadsheet: Excel reads a plain UTF-8 CSV as Latin-1 and turns
     # every non-ASCII character in an item title into mojibake.
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIX_COLUMNS, dialect="excel")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: "'" + value
+                          if isinstance(value, str)
+                          and value.startswith(("=", "+", "-", "@", "\t", "\r"))
+                          else value
+                          for key, value in row.items()}
+                         for row in rows)
     return path
 
 
