@@ -8,6 +8,36 @@ This file exists because the audit's one promise — that "we could not check th
 never reads as a verdict — applies to the plugin's own description of itself. A
 defect known and unwritten is the same failure one level up.
 
+**Measured on 2026-08-16, and it is the reason the list above stopped growing one
+entry at a time.** Three releases that day each removed a verdict that lied on a real
+site, and not one of the four defects was caught by the 935-test suite: `CN-057`'s
+false PASS needed `Article` markup neither fixture tree carries, the `author-grid`
+false byline needed a class no fixture uses, `MB-105`'s machine dependence showed only
+on a live site, and `MD-184`'s unreachable FAIL came out of a hand-run over six pages.
+All four were found outside the oracle, because the oracle is two trees written to make
+these checks fire, and a check written for a fixture and a fixture written for a check
+confirm each other and say nothing about the rest of the web.
+
+`tests/verdict_census.py` answers the cheap half of that. It serves every tree this
+repository can serve — the four fixture origins, with every operator artifact staged as
+the oracle stages them — and records what all 215 items answered, into
+`tests/census.json`. It is a measurement, not an oracle: it cannot say which answer was
+right, only which answers were ever given. The first reading, over the fixtures alone:
+
+| | count | what it means |
+|---|---|---|
+| answered somewhere, never FAIL | 33 | a rule that cannot fail, or a case the fixtures do not have |
+| answered somewhere, never PASS | 9 | the mirror of the same question |
+| never answered anywhere | 30 | mostly honest — Search Console, PageSpeed and Safe Browsing cannot answer offline |
+
+**Telling the two halves of the first row apart is the work, and it is now a closed
+list rather than an open hunt.** Two examples from that first reading, both settled by
+hand: `MD-184` is a rule that cannot fail — `image_inventory.py` omits `count` on a page
+with no images, so the item is PASS or NO_DATA and never anything else. `MS-020` is the
+opposite — `len_lte: 60` fails happily on an over-long title, and neither fixture tree
+has one. The first is a defect in the registry; the second is a gap in the corpus, and
+the corpus is what the census exists to justify building.
+
 **Measured in 0.18.0, and the answer is uncomfortable.** `measured` is still 0 and that
 is the honest count: what `tools/audit_score_sensitivity.py` measured is not the weight
 table but the consequence of it being wrong. Re-scored across four real runs from flat

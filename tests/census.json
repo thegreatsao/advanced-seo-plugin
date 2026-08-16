@@ -1,0 +1,3331 @@
+{
+  "item_count": 215,
+  "items": {
+    "AR-146": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Check Pagination"
+    },
+    "AR-147": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "url_quality.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use Short, Descriptive URLs"
+    },
+    "AR-148": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Visualize Site Architecture"
+    },
+    "AR-149": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "internal_links.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Eliminate Internal Redirects"
+    },
+    "AR-150": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "redirect_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Remove Redirect Chains and Loops"
+    },
+    "AR-151": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "robots_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Provide a Correct robots.txt"
+    },
+    "AR-152": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "robots_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Block Crawl Strategically with robots.txt"
+    },
+    "AR-153": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "topical_cluster_mapper.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Design Clear Topic Hubs (Silos)"
+    },
+    "AR-154": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "collection_page_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Optimize E-commerce Category Pages"
+    },
+    "AR-155": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "url_quality.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Use Consistent, Descriptive URL Slugs"
+    },
+    "AR-156": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Provide Helpful 404 Pages"
+    },
+    "AR-157": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Use Tag Pages Strategically"
+    },
+    "AR-158": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "parse_html.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Implement Breadcrumbs (UI + Schema)"
+    },
+    "AR-159": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Simplify Primary Navigation"
+    },
+    "AR-160": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Optimize Footer Navigation"
+    },
+    "AR-161": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Design Clear Menus (Header & Mobile)"
+    },
+    "AR-162": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "link_profile.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Strengthen Internal Links and Remove Orphans"
+    },
+    "AR-163": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "faceted_nav_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Control Faceted Navigation (E-commerce)"
+    },
+    "AR-164": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Handle Out-of-Stock/Discontinued Products (301/410 + UX)"
+    },
+    "BL-078": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Assess Backlink Health & Authority"
+    },
+    "BL-079": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Identify Spammy Referring Domains"
+    },
+    "BL-080": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Use a Disavow File Only When Necessary"
+    },
+    "BL-081": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "anchor_text_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Keep Anchor Text Natural and Varied"
+    },
+    "BL-082": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Monitor and Reclaim Lost Backlinks"
+    },
+    "BL-083": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "external_link_quality.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Fix Broken Backlinks (Redirect or Update Link)"
+    },
+    "BL-084": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "gsc_links_csv.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Check for Unnatural Link Concentration from Single Domains"
+    },
+    "BL-085": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Do Not Optimize for Domain Age"
+    },
+    "BL-086": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "gsc_links_csv.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Track Total Backlinks (Quality Over Quantity)"
+    },
+    "BL-087": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "gsc_links_csv.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Track Total Linking Root Domains"
+    },
+    "BL-088": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Earn Topically Relevant Backlinks to the URL"
+    },
+    "BL-089": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Ensure the Disavow File Doesn’t Include Valuable Links"
+    },
+    "BL-090": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Create and Optimize Social Profiles Where Your Audience Is"
+    },
+    "BL-091": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Publish on LinkedIn Articles (and Company Page)"
+    },
+    "BL-092": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Pitch and Appear on Relevant Podcasts"
+    },
+    "CI-001": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "indexability_matrix.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Ensure URL Is Indexed"
+    },
+    "CI-002": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_url_inspection.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Confirm Google Has Indexed the Audited URL"
+    },
+    "CI-003": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "indexability_matrix.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Page Returns 200 (OK) Status Code"
+    },
+    "CI-004": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Allow Indexing via Meta Robots"
+    },
+    "CI-005": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "indexability_matrix.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Do Not Block the URL in robots.txt"
+    },
+    "CI-006": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "robots_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Declare Sitemap Location in robots.txt"
+    },
+    "CI-007": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Submit Sitemap to Search Engines"
+    },
+    "CI-008": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "link_profile.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Make the URL Discoverable via Internal Links/Navigation"
+    },
+    "CI-009": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "canonical_checker.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Serve Content at a Single Canonical URL"
+    },
+    "CI-010": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_url_inspection.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Align Google-Selected and Declared Canonical"
+    },
+    "CI-011": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "canonical_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Avoid Canonical/Indexing Mixed Signals"
+    },
+    "CI-012": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "url_quality.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use a Friendly URL Structure"
+    },
+    "CI-013": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "robots_path_tester.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Do Not Block Critical CSS/JS/Images in robots.txt"
+    },
+    "CI-014": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "redirect_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Use Correct Redirect Codes (No Chains/Loops)"
+    },
+    "CI-015": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "indexability_matrix.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Eliminate 5xx Server Errors"
+    },
+    "CI-016": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_inventory.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Provide Meaningful Image Alt Text"
+    },
+    "CI-017": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "html_validator.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Validate HTML (W3C)"
+    },
+    "CI-018": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "server_log_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Analyze Logs & Manage Crawl Budget"
+    },
+    "CI-019": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "robots_path_tester.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Noindex System & Search Pages (/search, /cart, /checkout, /login)"
+    },
+    "CN-034": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "rendered_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Ensure Readable Font Sizes"
+    },
+    "CN-035": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "rendered_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Make Hyperlinks Clear and Distinct"
+    },
+    "CN-036": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "a11y_seo_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Ensure Sufficient Text Contrast"
+    },
+    "CN-037": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Differentiate Primary vs. Supplementary Content"
+    },
+    "CN-038": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "freshness_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Balance Evergreen and Fresh Content"
+    },
+    "CN-039": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "duplicate_content.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Eliminate Low-Value/Thin Pages"
+    },
+    "CN-040": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "eeat_signal_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Publish an Up-to-Date Privacy Policy"
+    },
+    "CN-041": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "duplicate_content.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Eliminate Internal Duplicate Content"
+    },
+    "CN-042": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Address External Duplicates/Syndication"
+    },
+    "CN-043": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Avoid Scraped/Plagiarized Content"
+    },
+    "CN-044": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "eeat_signal_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Provide a Clear, Easy-to-Find Contact Page"
+    },
+    "CN-045": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Run Content Gap Analysis"
+    },
+    "CN-046": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Review Copy Quality and Content Classification"
+    },
+    "CN-047": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Check Grammar and Spelling"
+    },
+    "CN-048": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Use Hierarchical Headings and Semantic HTML"
+    },
+    "CN-049": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Target Topics and Queries (Not Just Keywords)"
+    },
+    "CN-050": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Follow Google Search Essentials (Quality/Spam Policies)"
+    },
+    "CN-051": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "rendered_audit.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Avoid Intrusive Interstitials (Especially on Mobile)"
+    },
+    "CN-052": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Limit Heavy Above-the-Fold Ads"
+    },
+    "CN-053": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Avoid Critical Content in iFrames"
+    },
+    "CN-054": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "image_inventory.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Ensure Lazy-Loaded Content Is Discoverable"
+    },
+    "CN-055": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Make Infinite Scroll Crawlable (Paginated URLs)"
+    },
+    "CN-056": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "freshness_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Show Publication and Updated Dates"
+    },
+    "CN-057": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "eeat_signal_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Show Author and Publisher Clearly"
+    },
+    "CN-058": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Avoid Content Flagged by SafeSearch"
+    },
+    "CN-059": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Avoid Hidden Text Meant to Manipulate"
+    },
+    "CN-060": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "critical",
+      "source": "llm",
+      "title": "Do Not Cloak"
+    },
+    "CN-061": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Avoid Doorway Pages"
+    },
+    "CN-062": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Avoid Excessive Ad Density"
+    },
+    "CN-063": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Do Not Overuse Pop-Ups"
+    },
+    "CN-064": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Use Clear Calls to Action"
+    },
+    "CN-065": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Use a Clear H1 Per Page"
+    },
+    "CN-066": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use H2 Subheadings for Structure"
+    },
+    "CN-067": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Publish People-First Content (AI-Assisted Is Fine)"
+    },
+    "CN-068": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "eeat_signal_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Strengthen Authorship & E-E-A-T Signals"
+    },
+    "CO-191": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Identify Top 3–5 Competitors"
+    },
+    "CO-192": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Benchmark Competitors"
+    },
+    "CO-193": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Document Each Competitor’s Top 10 Keywords"
+    },
+    "CO-194": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Track Competitors’ Average Positions"
+    },
+    "CO-195": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "List Top-Ranking Keywords (All Players)"
+    },
+    "CONT-001": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "No content decay on key pages"
+    },
+    "GEO-001": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "llms_txt_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "llms.txt present and well-formed"
+    },
+    "GEO-002": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "llms_txt_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "llms.txt quality score"
+    },
+    "GEO-003": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "ai_crawler_policy_matrix.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "AI crawler policy is explicit"
+    },
+    "GEO-004": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "answer_block_scanner.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Answer blocks present for AEO"
+    },
+    "GEO-005": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "citation_readiness.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Content is citation-ready for AI search"
+    },
+    "GEO-006": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "entity_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Entity is resolvable (Wikidata / KG)"
+    },
+    "GEO-007": {
+      "answers": {
+        "fixture:broken": "NEEDS_INPUT",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "NEEDS_INPUT",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "NEEDS_INPUT"
+      ],
+      "script": "indexnow_checker.py",
+      "severity": "low",
+      "source": "script",
+      "title": "IndexNow configured"
+    },
+    "GEO-008": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "indexability_matrix.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Snippet directives leave the page usable in AI answers and result snippets"
+    },
+    "GO-131": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "ga4_tag_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Install & Configure Google Analytics 4"
+    },
+    "GO-132": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "ga4_tag_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Prevent GA4 Tag Duplication"
+    },
+    "GO-133": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Set Up Google Search Console (Domain Property)"
+    },
+    "GO-134": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Resolve Search Console Issues"
+    },
+    "GO-135": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_url_inspection.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use URL Inspection & Rendered HTML"
+    },
+    "GO-136": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "sitemap_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Provide Clean XML Sitemaps"
+    },
+    "GO-137": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "orphan_pages_from_sitemap.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Reconcile Indexed Pages vs. Sitemaps"
+    },
+    "GO-138": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "sitemap_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Remove Invalid URLs from Sitemaps"
+    },
+    "GO-139": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_cannibalization.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Monitor & Improve Brand SERPs"
+    },
+    "GO-140": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Provide a Google News Sitemap (If Eligible)"
+    },
+    "GO-141": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "critical",
+      "source": "gsc",
+      "title": "Check for Manual Actions"
+    },
+    "GO-142": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "gsc",
+      "title": "Fix Crawl & Indexing Issues"
+    },
+    "GO-143": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "schema_required_props.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Optimize for Sitelinks & Sitelinks Search Box"
+    },
+    "GO-144": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "answer_block_scanner.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Optimize for Featured Snippets"
+    },
+    "GO-145": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "FAIL"
+      },
+      "distinct": [
+        "FAIL"
+      ],
+      "script": "citation_readiness.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Optimize for AI Overviews & Zero-Click SERPs"
+    },
+    "IN-121": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "hreflang_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Configure Geo-Targeting Signals"
+    },
+    "IN-122": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "hreflang_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Implement Valid hreflang (With Return Tags)"
+    },
+    "IN-123": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Make Page Language Obvious"
+    },
+    "IN-124": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Avoid Forced Geo/Language Redirects"
+    },
+    "IN-125": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Define International Audiences and Markets"
+    },
+    "IN-126": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Provide High-Quality, Human-Reviewed Translations"
+    },
+    "IN-127": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "hreflang_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use a Clear International URL Structure"
+    },
+    "IN-128": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "hreflang_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Serve the Correct Localized Page"
+    },
+    "IN-129": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Earn Local Backlinks in Target Markets"
+    },
+    "IN-130": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Clarify Site Type: Multilingual, Multiregional, or Both"
+    },
+    "KW-069": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Do Keyword Research and Set Benchmarks"
+    },
+    "KW-070": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_cannibalization.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Own Your Branded Query (Homepage Ranks #1)"
+    },
+    "KW-071": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_cannibalization.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Is there evidence of keyword duplication or overuse?"
+    },
+    "KW-072": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Use the Primary Topic in the Title"
+    },
+    "KW-073": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Include the Primary Keyword in the H1"
+    },
+    "KW-074": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Include the Primary Keyword (or Close Variant) in an H2"
+    },
+    "KW-075": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Include the Primary Keyword in the Meta Description (for CTR)"
+    },
+    "KW-076": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "article_seo.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Include the Primary Keyword in Body Copy"
+    },
+    "KW-077": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Include the Primary Keyword in the Opening Paragraph"
+    },
+    "LO-196": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Confirm Local Traffic Need"
+    },
+    "LO-197": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Use Localized Title Tags"
+    },
+    "LO-198": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "local_seo_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Implement Local Business Structured Data"
+    },
+    "LO-199": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Set Up & Optimize Google Business Profile"
+    },
+    "LO-200": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "WARN",
+        "fixture:good_tls": "WARN"
+      },
+      "distinct": [
+        "WARN"
+      ],
+      "script": "local_seo_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Apply Local SEO Fundamentals (NAP, GBP, Reviews)"
+    },
+    "MB-093": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Ensure Responsive Layout (Mobile-First)"
+    },
+    "MB-094": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "rendered_audit.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Avoid Intrusive Interstitials on Mobile"
+    },
+    "MB-095": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Keep Mobile Page Weight Light"
+    },
+    "MB-096": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use Responsive Images"
+    },
+    "MB-097": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Optimize Image Formats & Compression"
+    },
+    "MB-098": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Serve Properly Sized Images"
+    },
+    "MB-099": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "gsc",
+      "title": "Check Google Search Console (Mobile Signals)"
+    },
+    "MB-100": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "mobile_render_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Fix Mobile UX Issues (see UX)"
+    },
+    "MB-101": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Make Mobile Navigation Thumb-Friendly"
+    },
+    "MB-102": {
+      "answers": {
+        "fixture:broken": "N/A",
+        "fixture:broken_tls": "N/A",
+        "fixture:good": "N/A",
+        "fixture:good_tls": "N/A"
+      },
+      "distinct": [
+        "N/A"
+      ],
+      "script": "video_schema_checker.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Optimize Video for Mobile"
+    },
+    "MB-103": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "rendered_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Make Tap Targets Easy to Click"
+    },
+    "MB-104": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "favicon_check.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Ensure Favicon Displays in Mobile SERPs"
+    },
+    "MB-105": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "NEEDS_INPUT",
+        "NO_DATA"
+      ],
+      "script": "javascript_render_audit.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Ensure Parity: Content, Meta & Directives Match Desktop"
+    },
+    "MB-106": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Test on Real Devices (Pre-/Post-Release)"
+    },
+    "MD-184": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "image_inventory.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Audit Sitewide Image Usage"
+    },
+    "MD-185": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Optimize Images"
+    },
+    "MD-186": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_inventory.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Provide Meaningful Alt Text"
+    },
+    "MD-187": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Fix Broken Images"
+    },
+    "MD-188": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Use Original, Contextual Images (Limit Stock)"
+    },
+    "MD-189": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "image_weight_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Use Modern Formats & Responsive Images"
+    },
+    "MD-190": {
+      "answers": {
+        "fixture:broken": "N/A",
+        "fixture:broken_tls": "N/A",
+        "fixture:good": "N/A",
+        "fixture:good_tls": "N/A"
+      },
+      "distinct": [
+        "N/A"
+      ],
+      "script": "video_schema_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Implement Video SEO Essentials"
+    },
+    "MS-020": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Keep Page Titles Concise (Avoid SERP Truncation)"
+    },
+    "MS-021": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Avoid Overly Short Titles (<30 Characters)"
+    },
+    "MS-022": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "duplicate_content.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Remove Duplicate Page Titles (Handle Canonical/Pagination Correctly)"
+    },
+    "MS-023": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "gsc_cannibalization.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Detect & Resolve Keyword Cannibalization"
+    },
+    "MS-024": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Place Primary Keyword Early in the Title"
+    },
+    "MS-025": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "llm",
+      "title": "Make Titles Accurately Describe the Content"
+    },
+    "MS-026": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Ensure Every Page Has a Title"
+    },
+    "MS-027": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "llm",
+      "title": "Write Unique, Compelling Meta Descriptions"
+    },
+    "MS-028": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Fill Missing Meta Descriptions (High-Value Pages First)"
+    },
+    "MS-029": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "duplicate_content.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Eliminate Duplicate Meta Descriptions"
+    },
+    "MS-030": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Keep Meta Descriptions ~150–160 Characters (Clear & Relevant)"
+    },
+    "MS-031": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Do Not Use Meta Keywords"
+    },
+    "MS-032": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "schema_required_props.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Implement & Validate Structured Data (Where Relevant)"
+    },
+    "MS-033": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "social_meta.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Add Social Preview Tags (Open Graph & Twitter Cards)"
+    },
+    "SE-114": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "domain_safety_check.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Run Malware & Security Checks"
+    },
+    "SE-115": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "security_headers.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Enable HSTS (HTTP Strict Transport Security)"
+    },
+    "SE-116": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "domain_safety_check.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Ensure No Hacked Content or Malware"
+    },
+    "SE-117": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "security_headers.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Force HTTPS Across the Site (Single Canonical Protocol)"
+    },
+    "SE-118": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "NO_DATA",
+        "PASS"
+      ],
+      "script": "tls_certificate.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Maintain a Valid TLS Certificate (HTTPS)"
+    },
+    "SE-119": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "pagespeed.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Make Cookie Banners Lightweight (No CLS)"
+    },
+    "SE-120": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "security_headers.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Harden Security Headers (CSP, Permissions-Policy, Referrer-Policy)"
+    },
+    "SP-107": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "pagespeed.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Load Content Fast (Prioritize Above-the-Fold)"
+    },
+    "SP-108": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "pagespeed.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Pass Core Web Vitals (Field Data)"
+    },
+    "SP-109": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "third_party_script_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Fix Common Speed Traps"
+    },
+    "SP-110": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "WARN",
+        "fixture:good_tls": "WARN"
+      },
+      "distinct": [
+        "FAIL",
+        "WARN"
+      ],
+      "script": "critical_request_chain.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Run a Comprehensive Speed Audit"
+    },
+    "SP-111": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "pagespeed.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Check Core Web Vitals (Desktop) in Search Console"
+    },
+    "SP-112": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "pagespeed.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Check Core Web Vitals (Mobile) in Search Console"
+    },
+    "SP-113": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "pagespeed.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Meet Core Web Vitals Thresholds"
+    },
+    "SP-214": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "cwv_metrics.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "LCP within budget in a local trace (lab)"
+    },
+    "SP-215": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "cwv_metrics.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "CLS within budget in a local trace (lab)"
+    },
+    "SP-216": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "NEEDS_INPUT",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "NEEDS_INPUT"
+      },
+      "distinct": [
+        "FAIL",
+        "NEEDS_INPUT",
+        "PASS"
+      ],
+      "script": "cwv_metrics.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Main thread not blocked in a local trace (TBT, lab proxy for INP)"
+    },
+    "TE-165": {
+      "answers": {
+        "fixture:broken": "LLM_PENDING",
+        "fixture:broken_tls": "LLM_PENDING",
+        "fixture:good": "LLM_PENDING",
+        "fixture:good_tls": "LLM_PENDING"
+      },
+      "distinct": [
+        "LLM_PENDING"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "llm",
+      "title": "Choose Subdomains or Subdirectories"
+    },
+    "TE-166": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "parse_html.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Add a Favicon"
+    },
+    "TE-167": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "domain_safety_check.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Monitor Site Uptime"
+    },
+    "TE-168": {
+      "answers": {
+        "fixture:broken": "WARN",
+        "fixture:broken_tls": "WARN",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS",
+        "WARN"
+      ],
+      "script": "broken_links.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Fix Broken & Redirected Links"
+    },
+    "TE-169": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "javascript_render_audit.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Provide Internal Links in the Served HTML"
+    },
+    "TE-170": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "cache_compression_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Configure Server Rewrites & Headers"
+    },
+    "TE-171": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "domain_safety_check.py",
+      "severity": "critical",
+      "source": "script",
+      "title": "Run Blocklist & Safe-Browsing Checks"
+    },
+    "TE-172": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "rich_results_guard.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Implement Structured Data Correctly"
+    },
+    "TE-173": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "medium",
+      "source": "manual",
+      "title": "Fix Console Errors"
+    },
+    "TE-174": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "css_minify_check.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Minify & Optimize CSS"
+    },
+    "TE-175": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "FAIL",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "security_headers.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Secure Pages & Eliminate Errors"
+    },
+    "TE-176": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "canonical_checker.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Fix Canonicalization Issues"
+    },
+    "TE-177": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "javascript_render_audit.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Provide a Title Element in the Served HTML"
+    },
+    "TE-178": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "domain_safety_check.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Audit Neighboring Sites on the Server"
+    },
+    "TE-179": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "domain_safety_check.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Review Domain History & Reputation"
+    },
+    "TE-180": {
+      "answers": {
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "FAIL",
+        "PASS"
+      ],
+      "script": "a11y_seo_checker.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Meet Accessibility (WCAG) Basics"
+    },
+    "TE-181": {
+      "answers": {
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "NO_DATA",
+        "fixture:good_tls": "NO_DATA"
+      },
+      "distinct": [
+        "NO_DATA"
+      ],
+      "script": "html_validator.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "Validate the Rendered DOM (W3C)"
+    },
+    "TE-182": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "low",
+      "source": "manual",
+      "title": "Show a Compliant Cookie Banner"
+    },
+    "TE-183": {
+      "answers": {
+        "fixture:broken": "MANUAL",
+        "fixture:broken_tls": "MANUAL",
+        "fixture:good": "MANUAL",
+        "fixture:good_tls": "MANUAL"
+      },
+      "distinct": [
+        "MANUAL"
+      ],
+      "script": null,
+      "severity": "high",
+      "source": "manual",
+      "title": "Handle Migrations, Parameters & Status Codes"
+    },
+    "TECH-001": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "rich_results_guard.py",
+      "severity": "high",
+      "source": "script",
+      "title": "Modern schema types only (no HowTo/FAQ misuse)"
+    },
+    "TECH-002": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "font_audit.py",
+      "severity": "low",
+      "source": "script",
+      "title": "Font loading does not block render"
+    },
+    "TECH-003": {
+      "answers": {
+        "fixture:broken": "PASS",
+        "fixture:broken_tls": "PASS",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
+      },
+      "distinct": [
+        "PASS"
+      ],
+      "script": "lcp_subparts.py",
+      "severity": "medium",
+      "source": "script",
+      "title": "LCP subparts within budget"
+    }
+  },
+  "registry_version": "5c6290bca280",
+  "sites": [
+    "fixture:good",
+    "fixture:broken",
+    "fixture:good_tls",
+    "fixture:broken_tls"
+  ]
+}
