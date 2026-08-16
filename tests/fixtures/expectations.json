@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "754ea7e0b9b1",
+  "registry_version": "4f8321358647",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -466,7 +466,7 @@
       },
       "CN-057": {
         "expect": "PASS",
-        "why": "every sampled page carries a rel=author link naming the same person, and the page it points at describes who that is"
+        "why": "every sampled page carries a rel=author link naming the same person, and the page it points at describes who that is; every sampled page also carries og:site_name, which is the site naming its publisher"
       }
     },
     "broken": {

@@ -10,6 +10,34 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.51.0 — CN-057 stops accepting a publisher in place of an author
+
+`CN-057` *Show Author and Publisher Clearly* asserted only that `signals.authors`
+contained one name, while `eeat_signal_checker.py` put JSON-LD `publisher` values in
+that same list. A publisher-only page therefore passed a high-severity item about
+naming both parties. The loose class match made the same mistake from another
+direction: a wrapper such as `author-grid` was treated as a byline and its whole text
+became an author's name.
+
+The checker now keeps authors and publishers separate. Author classes are exact tokens
+from a closed vocabulary; publisher evidence comes from JSON-LD `publisher`,
+organisation-typed nodes not credited as author or reviewer, `og:site_name`,
+`article:publisher`, and `meta[name=copyright]`. `CN-057` reads a single
+`signals.authorship` object and requires both booleans to be true. Its title and fix
+text were already right and do not change.
+
+A live audit will now report FAIL when a page names only its publisher, and a
+publisher-only page's E-E-A-T score drops from 20 to 0 because the score remains about
+authorship and expertise. Re-probed against the same WordPress page the shapes
+reference uses, the item reports `author: False, publisher: True` — a checklist article
+with no byline, which is what its title asks about. The registry is `4f8321358647`
+replacing `754ea7e0b9b1`, still 215 items, and the fixture oracle is unchanged at 218
+matched, 0 disagreed, 28 indeterminate.
+
+A visible copyright footer remains deliberately unparsed as a publisher source, and an
+organisation named by `reviewedBy` still lands in `authors`; both need their own
+measurement before changing the vocabulary again.
+
 ## 0.50.0 — five items that could not fail, and the vocabulary that stopped them
 
 A `none_severity` assertion fails when an issue carries one of the severities it

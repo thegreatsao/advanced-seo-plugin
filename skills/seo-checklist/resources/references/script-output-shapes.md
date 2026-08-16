@@ -387,6 +387,18 @@ than fetching them.
 `url` — str
 `score` — int
 `signals.authors[]` — array
+  - people only since 0.51.0: `meta[name=author]`, `rel=author`, an exact byline class
+    token, and JSON-LD `author` / `reviewedBy`. `publisher` used to be read into this
+    same list, so a page naming no human passed CN-057.
+`signals.publishers[]` — array
+  - JSON-LD `publisher`, organisation-typed nodes not credited as author or reviewer,
+    `og:site_name`, `article:publisher`, `meta[name=copyright]`.
+`signals.authorship` — object — read by CN-057
+  - `author` / `publisher` — bool — the two halves of *Show Author and Publisher
+    Clearly*. Re-probed 2026-08-15 against the same WordPress page as the rest of this
+    file: `authors []`, `publishers ['Plerdy', …2]`, `authorship {author: False,
+    publisher: True}` — a checklist article with no byline, which is the verdict the
+    item's title asks for.
 `signals.credential_markers[]` — array
 `signals.first_hand_experience_markers[]` — array
 `signals.policy_links[]` — array

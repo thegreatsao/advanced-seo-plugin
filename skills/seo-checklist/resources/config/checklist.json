@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "754ea7e0b9b1",
+  "registry_version": "4f8321358647",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -1281,8 +1281,11 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "signals.authors",
-          "len_gte": 1
+          "path": "signals.authorship",
+          "eq": {
+            "author": true,
+            "publisher": true
+          }
         }
       },
       "effort": "high",

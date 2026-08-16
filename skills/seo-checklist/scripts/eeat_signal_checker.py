@@ -23,6 +23,88 @@ FIRST_HAND_RE = re.compile(
 )
 
 
+# Class tokens that name a byline, compared against each whitespace-separated class
+# token exactly and case-insensitively, with `_` read as `-`. This was
+# `re.compile(r"(author|byline)")` matched anywhere inside the class string, so
+# `<div class="author-grid">` was a byline and contributed the entire grid's text as
+# one author's name. A closed vocabulary rather than a cap on how long that text may
+# be: a wrapper is not told from a byline by its length.
+BYLINE_CLASSES = frozenset({
+    "author", "authors", "byline", "by-line", "author-name", "authorname",
+    "post-author", "entry-author", "article-author", "p-author", "author-link",
+    "byline-author", "author-byline",
+})
+
+# JSON-LD types whose node names an organisation, compared case-insensitively against
+# the last path segment of each `@type` so that a full schema.org URL and a bare token
+# read the same. Anything ending in `organization` is included, which covers
+# NewsMediaOrganization, EducationalOrganization and GovernmentOrganization without
+# copying the type tree into this file.
+ORG_TYPES = frozenset({"organization", "localbusiness", "corporation", "ngo",
+                       "onlinebusiness"})
+
+
+def _is_org_type(raw) -> bool:
+    for value in (raw if isinstance(raw, list) else [raw]):
+        token = str(value or "").rsplit("/", 1)[-1].lower()
+        if token in ORG_TYPES or token.endswith("organization"):
+            return True
+    return False
+
+
+def _credited_nodes(schema_items: list) -> set[int]:
+    """Every dict that is, or sits under, an `author` or `reviewedBy` value.
+
+    An organisation credited as the author is an author. Counting it a second time as
+    evidence of a publisher would let one entity satisfy both halves of an item whose
+    title asks for two — the collapse this change exists to undo, re-entering through
+    the type test instead of through the key set.
+    """
+    credited: set[int] = set()
+    for item in schema_items:
+        for node in walk_json(item):
+            for key in ("author", "reviewedBy"):
+                if key in node:
+                    for inner in walk_json(node[key]):
+                        credited.add(id(inner))
+    return credited
+
+
+def _publisher_names(parsed: dict, soup) -> list[str]:
+    """Who the page says published it.
+
+    Four sources, and the order is evidential rather than functional: a JSON-LD
+    `publisher` key is the site saying the word, an organisation node is the site
+    naming itself, and the two meta tags are what a site without structured data
+    still declares. `og:site_name` is the weakest of them — a site name is not
+    always a publisher name — and it is in the vocabulary because it is the only
+    machine-readable site identity most pages carry, not because the fixture has it.
+
+    A visible `© 2026 Acme Ltd` footer line is deliberately **not** a source. It is
+    the most human-visible publisher statement on the web, and reading it needs a
+    second name-extraction parser over unbounded prose: a loose pattern matches
+    paragraphs *about* copyright, and a tight one needs a length cap with no measured
+    basis. Excluded until something can measure it; the consequence is that a page
+    whose only publisher signal is that line reports FAIL.
+    """
+    schema = parsed.get("schema", [])
+    credited = _credited_nodes(schema)
+    names = list(_schema_values(schema, {"publisher"}))
+    for item in schema:
+        for node in walk_json(item):
+            if id(node) in credited:
+                continue
+            if _is_org_type(node.get("@type")) and node.get("name"):
+                names.append(str(node["name"]))
+    for tag in soup.find_all("meta"):
+        prop = str(tag.get("property") or "").lower()
+        name = str(tag.get("name") or "").lower()
+        if prop in {"og:site_name", "article:publisher"} or name == "copyright":
+            if tag.get("content"):
+                names.append(str(tag["content"]))
+    return names
+
+
 def _schema_values(schema_items: list, keys: set[str]) -> list[str]:
     values = []
     for item in schema_items:
@@ -51,11 +133,14 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     ]
     class_authors = [
         tag.get_text(" ", strip=True)
-        for tag in soup.find_all(attrs={"class": re.compile(r"(author|byline)", re.I)})
-        if tag.get_text(strip=True)
+        for tag in soup.find_all(class_=True)
+        if any(str(token).lower().replace("_", "-") in BYLINE_CLASSES
+               for token in tag.get("class", []))
+        and tag.get_text(strip=True)
     ]
-    schema_authors = _schema_values(parsed.get("schema", []), {"author", "reviewedBy", "publisher"})
+    schema_authors = _schema_values(parsed.get("schema", []), {"author", "reviewedBy"})
     authors = sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
+    publishers = sorted({v.strip() for v in _publisher_names(parsed, soup) if v and v.strip()})
 
     credential_hits = sorted({match.group(0) for match in CREDENTIAL_RE.finditer(body)})
     experience_hits = sorted({match.group(0) for match in FIRST_HAND_RE.finditer(body)})
@@ -98,7 +183,7 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     ]
 
     score = 0
-    score += 20 if authors else 0
+    score += 20 if authors else 0  # CN-068 is about authorship/expertise, not publishers.
     score += min(20, len(credential_hits) * 7)
     score += min(20, len(experience_hits) * 7)
     score += 15 if policy_links else 0
@@ -107,7 +192,9 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
 
     issues = []
     if not authors:
-        issues.append({"severity": "warning", "message": "No clear author, byline, reviewer, or publisher signal found."})
+        issues.append({"severity": "warning", "message": "No clear author, byline or reviewer signal found."})
+    if not publishers:
+        issues.append({"severity": "warning", "message": "No publisher or site-identity signal found."})
     if not credential_hits:
         issues.append({"severity": "info", "message": "No visible credential or review language found."})
     if not policy_links:
@@ -122,6 +209,12 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
         "score": min(100, score),
         "signals": {
             "authors": authors[:20],
+            "publishers": publishers[:20],
+            # CN-057's title joins two conditions with "and", and one registry rule
+            # reads one path, so the pair is emitted as an object the rule can compare
+            # whole — the shape AR-158 uses for "breadcrumbs in the UI *and* as
+            # BreadcrumbList markup".
+            "authorship": {"author": bool(authors), "publisher": bool(publishers)},
             "credential_markers": credential_hits[:20],
             "first_hand_experience_markers": experience_hits[:20],
             "policy_links": policy_links[:20],

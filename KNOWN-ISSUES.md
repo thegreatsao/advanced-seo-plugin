@@ -467,7 +467,7 @@ name. A column called `url` would be read as "fix this page".
   audit of sitewide usage — it is a check that images exist somewhere in the sample.
   That is a registry question, and it changes what a live audit reports.
 
-- **Five items assert a thinner thing than their titles promise, and one family of them
+- **Four items assert a thinner thing than their titles promise, and one family of them
   shares a script.** Collected rather than filed separately, because the shape is the
   point: the assertion is satisfied by markup that does not deliver what the title says.
 
@@ -480,11 +480,9 @@ name. A column called `url` would be read as "fix this page".
   | `AR-152` | *Block Crawl Strategically with robots.txt* | that `robots.txt` has any
   user-agent group at all |
   | `CN-056` | *Show Publication **and** Updated Dates* | one date of any kind |
-  | `CN-057` | *Show Author **and** Publisher Clearly* | one author; the publisher is
-  never looked at |
 
   The first three were found on the live audit of 2026-08-14 and are written up in
-  `FINDINGS-REVIEW.md`; the last two were found by reading the eight declarations that
+  `FINDINGS-REVIEW.md`; the last was found by reading the eight declarations that
   the fixture repair touched. `TE-169` and `TE-177` share `javascript_render_audit.py`
   with `MB-105`, and `MB-105` is the only one of the three that reads the raw-versus-
   rendered comparison the script exists to produce.

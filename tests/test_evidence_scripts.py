@@ -1392,7 +1392,19 @@ class DuplicateAndThinContent(unittest.TestCase):
 
 class EeatSignals(unittest.TestCase):
     """CN-040 `signals.privacy_links`, CN-044 `signals.trust_links`,
-    CN-057 `signals.authors`, CN-068 `score`."""
+    CN-057 `signals.authorship`, CN-068 `score`."""
+
+    @staticmethod
+    def _check_html(html):
+        import eeat_signal_checker
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            return eeat_signal_checker.check_eeat(path)
+        finally:
+            os.unlink(path)
 
     def test_the_three_signal_families_are_found_separately(self):
         """Separately is the point. CN-040 is about a *privacy* policy and used to read
@@ -1405,6 +1417,9 @@ class EeatSignals(unittest.TestCase):
         self.assertTrue(good["signals"]["privacy_links"])
         self.assertTrue(good["signals"]["trust_links"])
         self.assertTrue(good["signals"]["authors"])
+        self.assertEqual(good["signals"]["publishers"], ["Fixture Bakery"])
+        self.assertEqual(good["signals"]["authorship"],
+                         {"author": True, "publisher": True})
         self.assertIsNot(good["signals"]["privacy_links"],
                          good["signals"].get("policy_links"))
         for item_id in ("CN-040", "CN-044", "CN-057"):
@@ -1421,6 +1436,34 @@ class EeatSignals(unittest.TestCase):
         without things a fixture has no business inventing — an author page with a
         real byline history, an organisation with verifiable sameAs targets."""
         self.assertGreater(out("eeat")["score"], out("eeat_bad")["score"] + 30)
+
+    def test_a_publisher_only_page_fails_cn_057(self):
+        """This fails if a publisher re-enters authors or CN-057 reads only one half."""
+        result = self._check_html("""<!doctype html><html><head>
+        <script type="application/ld+json">{"@type":"Article","publisher":
+        {"@type":"Organization","name":"Acme"}}</script></head><body></body></html>""")
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(result["signals"]["publishers"], ["Acme"])
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_only_exact_byline_class_tokens_name_authors(self):
+        """This fails if substring matching returns or `_` stops reading as `-`."""
+        result = self._check_html("""<!doctype html><html><body>
+        <div class="author-grid"><span>Bread</span><span>Cake</span></div>
+        <p class="byline">A Baker</p><p class="article_author">B Baker</p>
+        </body></html>""")
+        self.assertEqual(result["signals"]["authors"], ["A Baker", "B Baker"])
+
+    def test_an_organisation_author_is_not_also_a_publisher(self):
+        """This fails if one credited organisation can satisfy both CN-057 halves."""
+        result = self._check_html("""<!doctype html><html><head>
+        <script type="application/ld+json">{"@type":"Article","author":
+        {"@type":"Organization","name":"Acme"}}</script></head><body></body></html>""")
+        self.assertEqual(result["signals"]["authors"], ["Acme"])
+        self.assertEqual(result["signals"]["publishers"], [])
+        self.assertEqual(result["signals"]["authorship"],
+                         {"author": True, "publisher": False})
+        self.assertEqual(verdict("CN-057", result), FAIL)
 
     def test_phone_and_email_links_are_language_neutral_contact_routes(self):
         import tempfile

@@ -596,8 +596,12 @@ item(55, "medium", L,
 item(56, "medium", S, "freshness_checker.py", PAGE,
      {"path": "dates", "len_gte": 1},
      "Show publication and updated dates")
+# This asserted `signals.authors len_gte 1`, so the "and Publisher" half of the title
+# was never required — and `eeat_signal_checker.py` made that weaker rule worse by
+# putting publisher names in the author list. Read the pair whole so neither half can
+# stand in for the other.
 item(57, "high", S, "eeat_signal_checker.py", PAGE,
-     {"path": "signals.authors", "len_gte": 1},
+     {"path": "signals.authorship", "eq": {"author": True, "publisher": True}},
      "Show author and publisher clearly")
 item(58, "low", L, fix="Check whether the content risks being flagged by SafeSearch")
 item(59, "high", L, fix="Remove hidden text added to manipulate rankings")
