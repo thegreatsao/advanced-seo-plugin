@@ -1224,14 +1224,17 @@ EXTRA = [
     # Stated as the desired state, like every other title in this registry: the item
     # reads PASS as "the title is true of this page". Phrased as the failure instead —
     # "this page is restricted…" — a PASS would assert the opposite of what it found.
+    # Full availability passes, a limited snippet warns, and total suppression fails.
     ("GEO-008", "geo_ai",
      "Snippet directives leave the page usable in AI answers and result snippets",
      "medium", S, "indexability_matrix.py", PAGE,
-     {"path": "rows.0.snippet_controls.restricted", "falsy": True},
+     {"path": "rows.0.snippet_controls.snippet_availability",
+      "value_map": {"full": "pass", "limited": "fail", "suppressed": "fail"}},
      "Review the reported nosnippet, max-snippet or data-nosnippet source. The same "
      "directive restricts Google's AI answers and ordinary result snippets; there is "
      "no setting that separates them",
-     {"path": "rows.0.snippet_controls.restricted", "truthy": True}),
+     {"path": "rows.0.snippet_controls.snippet_availability",
+      "value_map": {"full": "pass", "limited": "pass", "suppressed": "fail"}}),
     ("TECH-001", "technical", "Modern schema types only (no HowTo/FAQ misuse)", "high", S,
      "rich_results_guard.py", PAGE, {"path": "summary.warnings", "eq": 0},
      "Remove HowTo (deprecated) and FAQPage outside gov/health sites"),

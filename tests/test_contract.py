@@ -305,6 +305,11 @@ BAND_UNSEEN = {
     "CI-018": "the band needs a log whose worst finding is medium; the broken "
               "fixture's log has 43.8% of bot requests returning nothing indexable, "
               "which is graded above that, so the item fails before the band",
+    "GEO-008": "the band needs a limited snippet on rows.0, but each fixture has "
+               "one entry: the good entry is full and the broken entry carries "
+               "nosnippet and is suppressed. Replacing either declaration would "
+               "lose that side; test_evidence.SnippetControls exercises WARN with "
+               "max-snippet:120 and data-nosnippet pages against a real server",
     "MS-032": "the band is errors above zero with at most three warnings. Measured "
               "on the fixtures: good is 0 errors and 2 warnings, broken is 3 errors "
               "and 5 warnings, so one passes and the other overshoots",
@@ -574,7 +579,7 @@ class TheBrokenSiteFailsWhatItWasBuiltToFail(unittest.TestCase):
     def test_noindex_is_reported_as_not_indexable(self):
         for item_id in ("CI-001", "CI-004"):
             self.assertMoved(item_id, PASS, (FAIL,))
-        self.assertMoved("GEO-008", PASS, (WARN,))
+        self.assertMoved("GEO-008", PASS, (FAIL,))
 
     def test_a_canonical_pointing_at_another_domain_fails(self):
         self.assertMoved("CI-009", PASS, (FAIL,))

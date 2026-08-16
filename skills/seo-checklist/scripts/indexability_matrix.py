@@ -7,7 +7,7 @@ import argparse
 import json
 import re
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 from seo_common import (
     discover_sitemap_urls,
@@ -30,6 +30,7 @@ def snippet_controls(html_text: str, x_robots_tag: str | None) -> dict:
     """Snippet restrictions Google reads from this response, with their sources."""
     directives = []
     data_nosnippet_count = 0
+    visible_text_outside_data_nosnippet = False
     if html_text:
         soup = BeautifulSoup(html_text, html_parser())
         for tag in soup.find_all("meta"):
@@ -37,6 +38,13 @@ def snippet_controls(html_text: str, x_robots_tag: str | None) -> dict:
             if name in ("robots", "googlebot"):
                 directives.append((f"meta {name}", str(tag.get("content") or "")))
         data_nosnippet_count = len(soup.find_all(attrs={"data-nosnippet": True}))
+        visible_text_outside_data_nosnippet = any(
+            type(text) is NavigableString
+            and bool(text.strip())
+            and text.find_parent(["script", "style", "template", "head"]) is None
+            and text.find_parent(attrs={"data-nosnippet": True}) is None
+            for text in soup.find_all(string=True)
+        )
     if x_robots_tag:
         directives.append(("x-robots-tag", str(x_robots_tag)))
 
@@ -57,7 +65,7 @@ def snippet_controls(html_text: str, x_robots_tag: str | None) -> dict:
     else:
         effective_max = max_snippets[0]["value"] if max_snippets else None
 
-    return {
+    controls = {
         "restricted": bool(nosnippet_sources or limited or data_nosnippet_count),
         "nosnippet": bool(nosnippet_sources),
         "nosnippet_sources": nosnippet_sources,
@@ -67,6 +75,16 @@ def snippet_controls(html_text: str, x_robots_tag: str | None) -> dict:
         "data_nosnippet_sources": (["html data-nosnippet attribute"]
                                     if data_nosnippet_count else []),
     }
+    if html_text or x_robots_tag is not None:
+        if (nosnippet_sources or effective_max == 0
+                or (data_nosnippet_count
+                    and not visible_text_outside_data_nosnippet)):
+            controls["snippet_availability"] = "suppressed"
+        elif limited or data_nosnippet_count:
+            controls["snippet_availability"] = "limited"
+        else:
+            controls["snippet_availability"] = "full"
+    return controls
 
 
 def urls_from_sitemaps(site: str, timeout: int) -> set[str]:

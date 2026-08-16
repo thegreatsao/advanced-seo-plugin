@@ -148,6 +148,23 @@ class TheDetectorsFindTheShapesTheyExistFor(unittest.TestCase):
                     "def main():\n    return {'value': measure()}\n")
         self.assertEqual(tree.proved()["ZZ-001"]["mechanism"], "warn_complement")
 
+    def test_a_flag_band_that_is_the_assertion_s_complement(self):
+        pairs = (("falsy", "truthy"), ("truthy", "falsy"))
+        for assertion, band in pairs:
+            with self.subTest(assertion=assertion, band=band):
+                tree = Tree(a_registry({"path": "value", assertion: True},
+                                       warn={"path": "value", band: True}),
+                            "def main():\n    return {'value': measure()}\n")
+                self.assertEqual(tree.proved()["ZZ-001"]["mechanism"],
+                                 "warn_complement")
+
+    def test_value_maps_that_pass_every_assertion_failure_are_complements(self):
+        rule = {"path": "value", "value_map": {"good": "pass", "fair": "fail"}}
+        warn = {"path": "value", "value_map": {"good": "pass", "fair": "pass"}}
+        tree = Tree(a_registry(rule, warn=warn),
+                    "def main():\n    return {'value': measure()}\n")
+        self.assertEqual(tree.proved()["ZZ-001"]["mechanism"], "warn_complement")
+
     def test_a_field_no_code_writes(self):
         tree = Tree(a_registry({"path": "absent", "len_eq": 0}),
                     "def main():\n    return {'value': 1}\n")
@@ -304,6 +321,42 @@ class AWarnBandNothingCanReach(unittest.TestCase):
         warns."""
         self.assertEqual(self.bands({"path": "n", "lte": 50}, {"path": "n", "lte": 65},
                                     "def main():\n    return {'n': count()}\n"), [])
+
+    def test_an_unmapped_assertion_failure_reaches_fail_and_leaves_warn_dead(self):
+        rule = {"path": "value", "value_map": {"a": "pass", "b": "fail"}}
+        warn = {"path": "value", "value_map": {"a": "pass"}}
+        tree = Tree(a_registry(rule, warn=warn),
+                    "def main():\n    return {'value': measure()}\n")
+        self.assertEqual(tree.proved(), {})
+        dead = R.dead_warn_bands(tree.registry, tree.scripts)
+        self.assertEqual([d["id"] for d in dead], ["ZZ-001"])
+
+    def test_partially_overlapping_value_maps_are_claimed_by_neither_audit(self):
+        rule = {"path": "value", "value_map": {"a": "pass", "b": "fail",
+                                                 "c": "fail"}}
+        warn = {"path": "value", "value_map": {"a": "pass", "b": "pass",
+                                                 "c": "fail"}}
+        tree = Tree(a_registry(rule, warn=warn),
+                    "def main():\n    return {'value': measure()}\n")
+        self.assertEqual(tree.proved(), {})
+        self.assertEqual(R.dead_warn_bands(tree.registry, tree.scripts), [])
+
+    def test_value_maps_over_different_fields_are_claimed_by_neither_audit(self):
+        rule = {"path": "value", "field": "status",
+                "value_map": {"good": "pass", "poor": "fail"}}
+        warn = {"path": "value", "field": "category",
+                "value_map": {"good": "pass", "poor": "pass"}}
+        tree = Tree(a_registry(rule, warn=warn),
+                    "def main():\n    return {'value': measure()}\n")
+        self.assertEqual(tree.proved(), {})
+        self.assertEqual(R.dead_warn_bands(tree.registry, tree.scripts), [])
+
+    def test_an_assertion_value_map_with_no_fail_is_not_a_warn_complement(self):
+        rule = {"path": "value", "value_map": {"a": "pass"}}
+        warn = {"path": "value", "value_map": {"a": "pass"}}
+        tree = Tree(a_registry(rule, warn=warn),
+                    "def main():\n    return {'value': measure()}\n")
+        self.assertEqual(tree.proved(), {})
 
     def test_a_complement_band_is_live_and_is_the_other_tool_s_business(self):
         """TE-179: `gte 90` with `warn lt 90`. The band catches everything below the

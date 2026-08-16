@@ -498,20 +498,22 @@ class SnippetControls(unittest.TestCase):
         finally:
             ix.urls_from_sitemaps = saved
 
-    def test_meta_delivered_nosnippet_warns_and_reads_googlebot(self):
+    def test_meta_delivered_nosnippet_fails_and_reads_googlebot(self):
         html = PAGE.replace(
             "</head>", '<meta name="googlebot" content="nosnippet"></head>')
         out = self.check(html)
         controls = out["rows"][0]["snippet_controls"]
         self.assertIs(controls["nosnippet"], True)
         self.assertEqual(controls["nosnippet_sources"], ["meta googlebot"])
-        self.assertEqual(verdict("GEO-008", out), WARN)
+        self.assertEqual(controls["snippet_availability"], "suppressed")
+        self.assertEqual(verdict("GEO-008", out), FAIL)
 
-    def test_header_delivered_nosnippet_warns(self):
+    def test_header_delivered_nosnippet_fails(self):
         out = self.check((200, {"X-Robots-Tag": "nosnippet"}, PAGE))
         controls = out["rows"][0]["snippet_controls"]
         self.assertEqual(controls["nosnippet_sources"], ["x-robots-tag"])
-        self.assertEqual(verdict("GEO-008", out), WARN)
+        self.assertEqual(controls["snippet_availability"], "suppressed")
+        self.assertEqual(verdict("GEO-008", out), FAIL)
 
     def test_max_snippet_minus_one_is_unlimited_and_passes(self):
         html = PAGE.replace(
@@ -520,13 +522,24 @@ class SnippetControls(unittest.TestCase):
         controls = out["rows"][0]["snippet_controls"]
         self.assertEqual(controls["max_snippet"], -1)
         self.assertIs(controls["restricted"], False)
+        self.assertEqual(controls["snippet_availability"], "full")
         self.assertEqual(verdict("GEO-008", out), PASS)
 
-    def test_max_snippet_zero_suppresses_snippets_and_warns(self):
+    def test_max_snippet_zero_suppresses_snippets_and_fails(self):
         out = self.check((200, {"X-Robots-Tag": "max-snippet: 0"}, PAGE))
         controls = out["rows"][0]["snippet_controls"]
         self.assertEqual(controls["max_snippet"], 0)
         self.assertIs(controls["restricted"], True)
+        self.assertEqual(controls["snippet_availability"], "suppressed")
+        self.assertEqual(verdict("GEO-008", out), FAIL)
+
+    def test_a_positive_max_snippet_is_limited_and_warns(self):
+        html = PAGE.replace(
+            "</head>", '<meta name="robots" content="max-snippet:120"></head>')
+        out = self.check(html)
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["max_snippet"], 120)
+        self.assertEqual(controls["snippet_availability"], "limited")
         self.assertEqual(verdict("GEO-008", out), WARN)
 
     def test_data_nosnippet_is_detected_and_counted(self):
@@ -538,30 +551,67 @@ class SnippetControls(unittest.TestCase):
         self.assertEqual(controls["data_nosnippet_count"], 2)
         self.assertEqual(controls["data_nosnippet_sources"],
                          ["html data-nosnippet attribute"])
+        self.assertEqual(controls["snippet_availability"], "limited")
         self.assertEqual(verdict("GEO-008", out), WARN)
+
+    def test_data_nosnippet_on_the_whole_body_suppresses_and_fails(self):
+        out = self.check(PAGE.replace("<body>", "<body data-nosnippet>"))
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["data_nosnippet_count"], 1)
+        self.assertEqual(controls["snippet_availability"], "suppressed")
+        self.assertEqual(verdict("GEO-008", out), FAIL)
+
+    def test_only_whitespace_outside_data_nosnippet_suppresses_and_fails(self):
+        html = ("<html><head><title>Excluded head text</title></head><body> \n"
+                "<div data-nosnippet>Hidden prose.</div> \t</body></html>")
+        out = self.check(html)
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertEqual(controls["snippet_availability"], "suppressed")
+        self.assertEqual(verdict("GEO-008", out), FAIL)
 
     def test_a_clean_page_passes(self):
         out = self.check(PAGE)
         controls = out["rows"][0]["snippet_controls"]
         self.assertIs(controls["restricted"], False)
+        self.assertEqual(controls["snippet_availability"], "full")
         self.assertEqual(verdict("GEO-008", out), PASS)
 
-    def test_the_item_never_returns_fail(self):
+    def test_no_document_or_header_leaves_availability_absent(self):
+        out = self.check("")
+        controls = out["rows"][0]["snippet_controls"]
+        self.assertIs(controls["restricted"], False)
+        self.assertNotIn("snippet_availability", controls)
+        self.assertEqual(verdict("GEO-008", out), NO_DATA)
+
+    def test_the_three_availability_states_produce_the_required_verdicts(self):
         cases = [
-            PAGE,
-            PAGE.replace("</head>",
-                         '<meta name="robots" content="nosnippet"></head>'),
-            (200, {"X-Robots-Tag": "nosnippet"}, PAGE),
-            PAGE.replace("</head>",
-                         '<meta name="robots" content="max-snippet:-1"></head>'),
-            PAGE.replace("</head>",
-                         '<meta name="robots" content="max-snippet:0"></head>'),
-            PAGE.replace("<p>Some prose.</p>",
-                         "<p data-nosnippet>Hidden prose.</p>"),
+            (PAGE, "full", PASS),
+            (PAGE.replace("</head>",
+                          '<meta name="robots" content="max-snippet:-1"></head>'),
+             "full", PASS),
+            (PAGE.replace("</head>",
+                          '<meta name="robots" content="max-snippet:120"></head>'),
+             "limited", WARN),
+            (PAGE.replace("<p>Some prose.</p>",
+                          "<p data-nosnippet>Hidden prose.</p>"), "limited", WARN),
+            (PAGE.replace("</head>",
+                          '<meta name="robots" content="nosnippet"></head>'),
+             "suppressed", FAIL),
+            (PAGE.replace("</head>",
+                          '<meta name="googlebot" content="nosnippet"></head>'),
+             "suppressed", FAIL),
+            ((200, {"X-Robots-Tag": "nosnippet"}, PAGE), "suppressed", FAIL),
+            ((200, {"X-Robots-Tag": "max-snippet: 0"}, PAGE), "suppressed", FAIL),
+            (PAGE.replace("</head>", '<meta name="robots" '
+                          'content="max-snippet:-1, max-snippet:0"></head>'),
+             "suppressed", FAIL),
         ]
-        for response in cases:
+        for response, availability, expected in cases:
             with self.subTest(response=str(response)[:80]):
-                self.assertNotEqual(verdict("GEO-008", self.check(response)), FAIL)
+                out = self.check(response)
+                self.assertEqual(out["rows"][0]["snippet_controls"]
+                                 ["snippet_availability"], availability)
+                self.assertEqual(verdict("GEO-008", out), expected)
 
 
 class CanonicalChecker(unittest.TestCase):

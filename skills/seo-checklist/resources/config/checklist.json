@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "5c6290bca280",
+  "registry_version": "a28d3b6257ee",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -4318,12 +4318,20 @@
         ],
         "requires": "crawl",
         "assert": {
-          "path": "rows.0.snippet_controls.restricted",
-          "falsy": true
+          "path": "rows.0.snippet_controls.snippet_availability",
+          "value_map": {
+            "full": "pass",
+            "limited": "fail",
+            "suppressed": "fail"
+          }
         },
         "warn": {
-          "path": "rows.0.snippet_controls.restricted",
-          "truthy": true
+          "path": "rows.0.snippet_controls.snippet_availability",
+          "value_map": {
+            "full": "pass",
+            "limited": "pass",
+            "suppressed": "fail"
+          }
         }
       },
       "effort": "medium",

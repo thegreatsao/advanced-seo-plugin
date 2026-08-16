@@ -1,4 +1,4 @@
-<!-- Updated: 2026-08-08 -->
+<!-- Updated: 2026-08-16 -->
 # Script output shapes
 
 All 57 scripts the registry runs are documented here, plus `site_crawl.py`, which
@@ -847,7 +847,12 @@ fact about the page rather than a claim about its images. Same rule, same reason
   - item keys: url, final_url, status, robots_allowed, robots_rule, meta_robots, x_robots_tag, snippet_controls, canonical, in_sitemap, redirects, verdict, blockers, error
 `rows[].snippet_controls` — object
   - keys: restricted, nosnippet, nosnippet_sources, max_snippet,
-    max_snippet_sources, data_nosnippet_count, data_nosnippet_sources
+    max_snippet_sources, data_nosnippet_count, data_nosnippet_sources,
+    snippet_availability
+  - `snippet_availability` is `full`, `limited` for a positive cap or one or more
+    `data-nosnippet` elements, or `suppressed` for `nosnippet`, a zero cap, or a page
+    with no visible text left outside its `data-nosnippet` elements; the key is absent
+    when neither a document nor an `X-Robots-Tag` was read
   - `max_snippet` is the effective integer: -1 is unlimited, 0 suppresses the
     snippet, and the smallest non-negative value wins when sources disagree
 

@@ -1662,15 +1662,15 @@
     },
     "GEO-008": {
       "answers": {
-        "failing-shapes": "WARN",
-        "fixture:broken": "WARN",
-        "fixture:broken_tls": "WARN",
+        "failing-shapes": "FAIL",
+        "fixture:broken": "FAIL",
+        "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
         "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "PASS",
-        "WARN"
+        "FAIL",
+        "PASS"
       ],
       "script": "indexability_matrix.py",
       "severity": "medium",
@@ -3543,7 +3543,7 @@
       "title": "LCP subparts within budget"
     }
   },
-  "registry_version": "5c6290bca280",
+  "registry_version": "a28d3b6257ee",
   "sites": [
     "fixture:good",
     "fixture:broken",

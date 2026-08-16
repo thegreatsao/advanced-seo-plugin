@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "5c6290bca280",
+  "registry_version": "a28d3b6257ee",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -755,8 +755,8 @@
         "why": "no page on this origin carries an author, a byline, credentials, a policy page or a date, so there is nothing for 'Strengthen Authorship & E-E-A-T Signals' to find"
       },
       "GEO-008": {
-        "expect": "WARN",
-        "why": "the entry page carries meta robots nosnippet, which is exactly the directive that makes a page unusable in an AI answer; the item's warn rule is the complement of its assertion, so a restricted page can only come back WARN"
+        "expect": "FAIL",
+        "why": "the entry page carries noindex, nofollow, nosnippet, so Google shows no snippet for it and the page cannot be used in an AI answer or a result snippet, which is what the title denies"
       },
       "GO-131": {
         "expect": "FAIL",

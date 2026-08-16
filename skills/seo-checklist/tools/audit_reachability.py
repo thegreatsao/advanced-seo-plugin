@@ -12,12 +12,15 @@ reported PASS or NO_DATA on every site ever audited, for years, and no gate saw 
 `audit_assertions.py` audits patterns, severities and unseen paths, none of which this
 is. A rule that cannot fail is a rule that cannot find the defect its title names.
 
-Some rules cannot fail **on purpose**. `TE-179` grades domain age with a warn band that
-is the assertion's exact complement, so an established domain passes, a younger one
-warns, and there is no third value. `TE-178` asserts a field its script deliberately
-never fabricates. Both are decisions, and the difference between them and `KW-076` is
-not in the code: in all three the field is absent, or safe, exactly when the answer
-would have been bad. **The code cannot tell you which were meant.**
+Some rules cannot fail **on purpose**. `TE-179` grades domain age with a numeric warn
+band that is the assertion's exact complement, so an established domain passes, a
+younger one warns, and there is no third value. The same proof applies to complementary
+`truthy`/`falsy` flags and to `value_map` pairs where every value that fails the
+assertion passes the band.
+`TE-178` asserts a field its script deliberately never fabricates. Both are decisions,
+and the difference between them and `KW-076` is not in the code: in all three the field
+is absent, or safe, exactly when the answer would have been bad. **The code cannot tell
+you which were meant.**
 
 So intent is declared, in the registry, beside the rule — `check.cannot_fail`, from the
 `CANNOT_FAIL` table in `build_checklist.py`. This tool holds no item ids at all. What it
@@ -235,23 +238,46 @@ def changed_outside_the_scan(script: str, key: str,
 def prove_warn_complement(item: dict) -> dict | None:
     """The warn band is the assertion's exact complement, so nothing is left to fail.
 
-    Both rules must be a single comparison. A two-sided assertion is not
+    Both rules must be a single condition. A two-sided assertion is not
     complemented by a one-sided band: `gte 90` with `lte 100`, warned by `lt 90`,
     leaves 101 and up failing both, and reading only the `gte`/`lt` pair would call
     a live rule unfailable — the worst mistake here, because the repair for one is
     a written declaration that the other must never receive.
+
+    A `value_map` pair must also read the same field, and the assertion must map at
+    least one value to `fail`. For a failable pair, this proof fires when the set of
+    assertion-fail values is a subset of the band's pass values; `dead_warn_bands`
+    fires when those sets are disjoint. At most one can fire, and neither fires when
+    the sets partially overlap.
     """
     check = item["check"]
     rule, warn = check["assert"], check.get("warn")
-    if not isinstance(warn, dict) or rule.get("path") != warn.get("path"):
+    if (not isinstance(warn, dict) or rule.get("path") != warn.get("path")
+            or rule.get("field") != warn.get("field")):
         return None
-    if len(set(rule) - {"path"}) != 1 or len(set(warn) - {"path"}) != 1:
+    if (len(set(rule) - {"field", "path"}) != 1
+            or len(set(warn) - {"field", "path"}) != 1):
         return None
     for left, right in COMPLEMENTS:
         if left in rule and right in warn and rule[left] == warn[right]:
             return {"mechanism": "warn_complement",
                     "evidence": f"assert {left} {rule[left]} / warn {right} "
                                 f"{warn[right]} on {rule['path']}"}
+    for left, right in (("falsy", "truthy"), ("truthy", "falsy")):
+        if rule.get(left) is True and warn.get(right) is True:
+            return {"mechanism": "warn_complement",
+                    "evidence": f"assert {left} true / warn {right} true "
+                                f"on {rule['path']}"}
+    if isinstance(rule.get("value_map"), dict) and isinstance(
+            warn.get("value_map"), dict):
+        assertion_fails = {value for value, verdict in rule["value_map"].items()
+                           if verdict == "fail"}
+        warn_passes = {value for value, verdict in warn["value_map"].items()
+                       if verdict == "pass"}
+        if assertion_fails and assertion_fails <= warn_passes:
+            return {"mechanism": "warn_complement",
+                    "evidence": "every value mapped fail by the assertion is mapped "
+                                f"pass by the warn value_map on {rule['path']}"}
     return None
 
 
@@ -397,9 +423,10 @@ def dead_warn_bands(registry_path: str = REGISTRY,
 
     A band fires only when the assertion has already failed and the warn rule then
     holds, so a pair that leaves no room between them promises a middle verdict the
-    item can never reach. Two shapes are decidable without knowing anything about
-    the site: a numeric band on the wrong side of its own assertion, and a severity
-    window over a script whose vocabulary has nothing to put in it.
+    item can never reach. Three shapes are decidable without knowing anything about
+    the site: a numeric band on the wrong side of its own assertion, a `value_map`
+    pair with no assertion-fail/band-pass value, and a severity window over a script
+    whose vocabulary has nothing to put in it.
 
     Bands over a *different* path than the assertion — `has_loop` failing while
     `total_hops` warns — are two measurements, and whether they can disagree is a
@@ -421,6 +448,18 @@ def dead_warn_bands(registry_path: str = REGISTRY,
                              "detail": f"assert {left} {rule[left]} leaves "
                                        f"{right} {warn[right]} nothing to warn about "
                                        f"on {rule['path']}"})
+        if (rule.get("field") == warn.get("field")
+                and isinstance(rule.get("value_map"), dict)
+                and isinstance(warn.get("value_map"), dict)):
+            assertion_fails = {value for value, verdict in rule["value_map"].items()
+                               if verdict == "fail"}
+            warn_passes = {value for value, verdict in warn["value_map"].items()
+                           if verdict == "pass"}
+            if not (assertion_fails & warn_passes):
+                dead.append({"id": item["id"], "script": check.get("script"),
+                             "detail": "assert/warn value_map share no value that "
+                                       "fails the assertion and passes the band on "
+                                       f"{rule['path']}"})
         if "none_severity" in rule and "none_severity" in warn:
             def norm(names):
                 return {SEVERITY_ALIAS.get(n.lower(), n.lower()) for n in names}

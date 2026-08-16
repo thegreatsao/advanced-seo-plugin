@@ -10,6 +10,34 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.55.0 — snippet availability has a failing state
+
+`GEO-008` *Snippet directives leave the page usable in AI answers and result
+snippets* read one boolean through complementary assertion and warn rules. That
+made FAIL unreachable and also treated a positive `max-snippet` cap or one
+`data-nosnippet` element exactly like total suppression. A page carrying
+`nosnippet` therefore used to report WARN and now reports FAIL — a breaking change
+for consumers of the old verdict. A page whose snippet is only capped now warns
+instead of being graded the same as a suppressed one; an unrestricted page still
+passes, and a response with neither a document nor an `X-Robots-Tag` is NO_DATA.
+
+One more page changes verdict, and counting elements could never have caught it: a
+page whose every visible word sits inside a `data-nosnippet` element leaves Google
+nothing to quote and is now `suppressed` rather than `limited`. The boundary is "no
+text remains outside", not a fraction of the page, so it rests on no threshold.
+
+`indexability_matrix.py` now emits `full`, `limited` or `suppressed` snippet
+availability and the registry grades those states directly. The registry is
+`a28d3b6257ee`, replacing `5c6290bca280`. In the corpus census only `GEO-008`
+moved, from PASS/WARN to PASS/FAIL: `fixture:broken` and `failing-shapes` now expose
+their planted `nosnippet` as FAIL, and the count answered somewhere but never seen
+failing drops from 27 to 26.
+
+The reachability gate now proves the flag and `value_map` forms of a complementary
+warn band, and its dead-band mirror now checks whether a `value_map` pair leaves any
+value for WARN. The live `SP-107`, `SE-119` and repaired `GEO-008` bands retain both
+their WARN and FAIL states.
+
 ## 0.54.0 — font_audit reads the stylesheets it links
 
 `TECH-002` *Font loading does not block render* asserts the issues from
