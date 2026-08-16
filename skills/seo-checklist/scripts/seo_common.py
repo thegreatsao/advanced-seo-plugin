@@ -8,15 +8,15 @@ enforces that rule for the helpers that have already escaped into copies.
 HTTP and source resolution are ``require_requests``, ``fetch_url``,
 ``fetch_error_kind``, ``fetch_html``, the ``safe_get`` re-export, ``read_urls``,
 ``load_html``, ``load_source`` and ``is_url``. URL handling is ``normalize_url``,
-``origin``, ``clean_url`` and
-``same_host``. HTML and image handling is the ``BeautifulSoup`` dependency handle,
-``require_bs4``, ``html_parser``, ``parse_html``, ``favicon_href``, ``has_byline_class``,
+``origin`` and ``same_host``. HTML and image handling is the ``BeautifulSoup``
+dependency handle, ``require_bs4``, ``html_parser``, ``parse_html``,
+``primary_language``, ``favicon_href``, ``has_byline_class``,
 ``is_responsive_fill_image``, ``srcset_urls``, ``picture_sources`` and
 ``likely_lcp_candidate``. Robots and
 sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
 ``discover_sitemap_urls`` and ``parse_sitemap_xml``. JSON-LD uses ``walk_json`` and
-``as_list``. Output and directive handling is ``issue``, ``extract_directives`` and
-``print_json_or_text``. The shared policy constants are ``USER_AGENT``,
+``as_list``. Output handling is ``issue`` and ``print_json_or_text``. The shared
+policy constants are ``USER_AGENT``,
 ``HTML_CTYPES``, ``XML_CTYPES``, ``FETCH_ERROR_KINDS``,
 ``DEAD_FETCH_ERROR_KINDS``, ``BYLINE_CLASS_TOKENS``, ``THIN_CONTENT_WORDS``,
 ``LCP_MIN_AREA`` and ``CONVENTIONAL_SITEMAP_PATHS``.
@@ -276,11 +276,6 @@ def likely_lcp_candidate(img: dict, index: int) -> bool:
 def origin(url: str) -> str:
     parsed = urlparse(normalize_url(url))
     return f"{parsed.scheme}://{parsed.netloc}"
-
-
-def clean_url(url: str) -> str:
-    parsed = urlparse(normalize_url(url))
-    return urlunparse(parsed._replace(fragment=""))
 
 
 def same_host(a: str, b: str, include_www_variant: bool = True) -> bool:
@@ -654,6 +649,30 @@ def parse_html(html: str, base_url: str = "") -> dict:
     }
 
 
+def primary_language(parsed: dict, soup=None) -> str | None:
+    """Return the primary declared language subtag, without guessing.
+
+    Read ``<html lang>`` from ``parsed["lang"]`` first, then a
+    ``content-language`` meta declaration, then ``og:locale``. The two meta
+    fallbacks exist for pages that omit ``<html lang>``; callers that intentionally
+    read only their existing ``lang`` field omit ``soup`` so their input scope does
+    not broaden.
+    """
+    raw = parsed.get("lang")
+    if not raw and soup is not None:
+        raw = next((tag.get("content") for tag in soup.find_all("meta")
+                    if str(tag.get("http-equiv") or "").strip().lower()
+                    == "content-language" and tag.get("content")), None)
+    if not raw and soup is not None:
+        raw = next((tag.get("content") for tag in soup.find_all("meta")
+                    if str(tag.get("property") or "").strip().lower() == "og:locale"
+                    and tag.get("content")), None)
+    if not raw:
+        return None
+    primary = re.split(r"[-_]", str(raw).strip(), maxsplit=1)[0].lower()
+    return primary or None
+
+
 def issue(severity: str, message: str, url: str | None = None, evidence: str | None = None) -> dict:
     return {"severity": severity, "message": message, "url": url, "evidence": evidence}
 
@@ -798,13 +817,6 @@ def parse_sitemap_xml(xml_text: str, sitemap_url: str = "") -> dict:
         return {"type": "urlset", "urls": urls, "sitemaps": [], "error": None}
 
     return {"type": "unknown", "urls": [], "sitemaps": [], "error": f"Unknown root element: {root.tag}"}
-
-
-def extract_directives(value: str | None) -> set[str]:
-    if not value:
-        return set()
-    cleaned = value.lower().replace(";", ",")
-    return {part.strip() for part in cleaned.split(",") if part.strip()}
 
 
 def print_json_or_text(result: dict, as_json: bool, text_lines: Iterable[str]) -> None:

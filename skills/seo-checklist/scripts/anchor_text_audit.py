@@ -11,7 +11,7 @@ import argparse
 from collections import Counter, defaultdict
 
 import site_crawl
-from seo_common import normalize_url, print_json_or_text
+from seo_common import normalize_url, primary_language, print_json_or_text
 
 
 # basis: convention — four pages. Below it "this anchor appears on most pages" is a
@@ -153,8 +153,7 @@ def _lang_key(row: dict) -> str:
     writes one of each is not two sections. A page declaring nothing gets `""`, which
     is a real group — on a monolingual site every page lands in it.
     """
-    lang = (row.get("lang") or "").strip().lower()
-    return lang.split("-")[0] if lang else ""
+    return primary_language(row) or ""
 
 
 def audit_anchor_text(start_url: str, inventory: dict | None = None, depth: int = 1,

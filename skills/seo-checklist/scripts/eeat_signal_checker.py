@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import has_byline_class, load_source, parse_html, walk_json
+from seo_common import has_byline_class, load_source, parse_html, primary_language, walk_json
 
 
 _TERMS_PATH = (Path(__file__).resolve().parent.parent / "resources" / "config" /
@@ -111,21 +111,6 @@ def _text_hits(patterns: dict[str, re.Pattern], value: str) -> list[str]:
                    if field in patterns for match in patterns[field].finditer(value)})
 
 
-def _primary_language(parsed: dict, soup) -> str | None:
-    """Read the declared page language in the documented precedence order."""
-    raw = parsed.get("lang")
-    if not raw:
-        raw = next((tag.get("content") for tag in soup.find_all("meta")
-                    if str(tag.get("http-equiv") or "").strip().lower()
-                    == "content-language" and tag.get("content")), None)
-    if not raw:
-        raw = next((tag.get("content") for tag in soup.find_all("meta")
-                    if str(tag.get("property") or "").strip().lower() == "og:locale"
-                    and tag.get("content")), None)
-    primary = re.split(r"[-_]", str(raw).strip(), maxsplit=1)[0].lower() if raw else ""
-    return primary or None
-
-
 # JSON-LD types whose node names an organisation, compared case-insensitively against
 # the last path segment of each `@type` so that a full schema.org URL and a bare token
 # read the same. Anything ending in `organization` is included, which covers
@@ -216,7 +201,7 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     parsed = parse_html(html, url)
     soup = parsed["soup"]
     body = parsed.get("body_text", "")
-    lang = _primary_language(parsed, soup)
+    lang = primary_language(parsed, soup)
     locales = frozenset({"en", lang} if lang in _TERMS["languages"] else {"en"})
     patterns = _patterns_for(locales)
 

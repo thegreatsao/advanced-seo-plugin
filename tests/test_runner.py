@@ -3133,7 +3133,7 @@ class OneFetchPerUrl(unittest.TestCase):
             # target is fetched exactly this way, by design.
             self.assertEqual(self.sh.safe_get(site.base + "/open").status_code, 200)
             with self.assertRaises(self.sh.RobotsDisallowed):
-                self.sh.crawl_get(site.base + "/open")
+                self.sh.safe_get(site.base + "/open", respect_robots=True)
 
     def test_robots_txt_is_fetched_once_however_many_ask(self):
         """It does not go through the response cache — `_fetch_robots` cannot, or it
@@ -3145,8 +3145,9 @@ class OneFetchPerUrl(unittest.TestCase):
                              "/robots.txt": (200, {"Content-Type": "text/plain"},
                                              "User-agent: *\nAllow: /\n")}) as site:
             code = ("import sys; sys.path.insert(0, %r);"
-                    "from lib.safe_http import crawl_get;"
-                    "print(crawl_get(%r).status_code)" % (SCRIPTS, site.base + "/a"))
+                    "from lib.safe_http import safe_get;"
+                    "print(safe_get(%r, respect_robots=True).status_code)"
+                    % (SCRIPTS, site.base + "/a"))
             env = harness.offline_env(**{self.sh.CACHE_DIR_VAR: self.dir})
             # Its cache is keyed on the origin and lives in the shared rate-limit
             # directory rather than the run's, so this test has to be told about a

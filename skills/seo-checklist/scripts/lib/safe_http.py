@@ -1343,15 +1343,5 @@ def safe_head(url: str, **kwargs):
     return safe_request("HEAD", url, **kwargs)
 
 
-def crawl_get(url: str, **kwargs):
-    """`safe_get` for a URL we discovered ourselves — robots.txt applies.
-
-    Named separately so a call site reads as what it is. Every crawl loop should
-    use this; a fetch of the operator's own target should not.
-    """
-    kwargs.setdefault("respect_robots", True)
-    return safe_request("GET", url, **kwargs)
-
-
 def safe_post(url: str, **kwargs):
     return safe_request("POST", url, **kwargs)

@@ -4,9 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.63.0 — see [CHANGELOG.md](CHANGELOG.md). Several checks are stricter than
-in earlier versions in ways that *lower* the reported numbers, which is the point:
-the entries say which verdicts used to be fabricated.
+Version 0.64.0 — see [CHANGELOG.md](CHANGELOG.md). Operator-visible behaviour and
+the registry are unchanged; this release removes unreachable code and consolidates
+three copies of the primary-language helper.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

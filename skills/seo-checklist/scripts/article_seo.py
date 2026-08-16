@@ -33,10 +33,10 @@ except ImportError:
 
 try:
     from lib.safe_http import safe_get
-    from seo_common import THIN_CONTENT_WORDS, fetch_html
+    from seo_common import THIN_CONTENT_WORDS, fetch_html, primary_language
 except ImportError:
     from scripts.lib.safe_http import safe_get
-    from scripts.seo_common import THIN_CONTENT_WORDS, fetch_html
+    from scripts.seo_common import THIN_CONTENT_WORDS, fetch_html, primary_language
 
 
 # ---------------------------------------------------------------------------
@@ -466,8 +466,7 @@ def compute_readability(text: str) -> dict:
 def page_language(soup: BeautifulSoup) -> str:
     """Return the primary declared language, without guessing from the URL/text."""
     html = soup.find("html")
-    raw = str(html.get("lang") or "").strip().lower() if html else ""
-    return re.split(r"[-_]", raw, maxsplit=1)[0]
+    return primary_language({"lang": html.get("lang") if html else None}) or ""
 
 
 def extract_keywords_frequency(text: str, top_n: int = 12, lang: str = "") -> list:

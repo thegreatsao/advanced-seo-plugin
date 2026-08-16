@@ -248,6 +248,27 @@ class LoadHtml(unittest.TestCase):
         self.assertEqual(calls, [("example.test", {"timeout": 7})])
 
 
+class PrimaryLanguage(unittest.TestCase):
+    def test_the_three_declared_sources_are_read_in_order_and_none_stays_none(self):
+        import seo_common
+
+        pages = (
+            ('<html lang="lt-LT"><head>'
+             '<meta http-equiv="content-language" content="ru">'
+             '<meta property="og:locale" content="en_US"></head></html>', "lt"),
+            ('<html><head><meta http-equiv="content-language" content="lt-LT">'
+             '<meta property="og:locale" content="ru_RU"></head></html>', "lt"),
+            ('<html><head><meta property="og:locale" content="ru_RU">'
+             '</head></html>', "ru"),
+            ('<html><head></head></html>', None),
+        )
+        for html, expected in pages:
+            with self.subTest(expected=expected):
+                parsed = seo_common.parse_html(html)
+                self.assertEqual(
+                    seo_common.primary_language(parsed, parsed["soup"]), expected)
+
+
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>A page with everything the critical items ask for</title>

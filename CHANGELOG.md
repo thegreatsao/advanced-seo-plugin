@@ -10,6 +10,14 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.64.0 — remove what nothing calls, consolidate what three files repeat
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+Nothing an operator sees changes. This release removes code no invocation reached
+and merges three copies of the primary-language helper into `seo_common.py`, while
+each caller continues to read exactly the language declarations it read before.
+
 ## 0.63.0 — record which findings no rule can act on
 
 Registry version: `be2ab95ba6bf`, unchanged.
