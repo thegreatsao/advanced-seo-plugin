@@ -29,7 +29,9 @@ except ImportError:  # pragma: no cover - POSIX
 
 try:
     import requests
+    from requests.adapters import HTTPAdapter
     from requests.structures import CaseInsensitiveDict
+    from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
     _REQUESTS_ERROR = ""
 except ImportError:  # pragma: no cover - environment guard
     # Deferred, not fatal. This module is imported transitively by the checklist
@@ -37,6 +39,8 @@ except ImportError:  # pragma: no cover - environment guard
     # calls at all and has no business needing an HTTP library installed. The
     # failure now happens when something actually tries to make a request.
     requests = None
+    HTTPAdapter = object
+    HTTPConnectionPool = HTTPSConnectionPool = None
     CaseInsensitiveDict = dict
     _REQUESTS_ERROR = ("requests library required for network access. "
                        "Install with: pip install requests")
@@ -610,12 +614,13 @@ def is_private_host(url: str) -> bool:
     return any(_is_allowed_private(info[4][0]) for info in infos)
 
 
-def assert_safe_url(url: str) -> str:
+def _validated_url(url: str) -> tuple[str, tuple[str, ...]]:
     """Validate URL scheme and reject hosts resolving to private/internal IPs.
 
     `SEO_ALLOW_PRIVATE=1` — the runner's `--allow-private` — permits the narrow
     set in `PRIVATE_ALLOWED_NETWORKS` and nothing else. See the comment there for
-    what stays blocked with the allowance on, and why.
+    what stays blocked with the allowance on, and why. The address tuple preserves
+    resolver order so the transport tries only answers validated by this call.
     """
     normalized = normalize_url(url)
     parsed = urlparse(normalized)
@@ -629,15 +634,24 @@ def assert_safe_url(url: str) -> str:
     try:
         infos = socket.getaddrinfo(hostname, _port_for(parsed), type=socket.SOCK_STREAM)
     except socket.gaierror:
-        return normalized
+        return normalized, ()
 
-    resolved_ips = sorted({info[4][0] for info in infos})
+    resolved_ips = tuple(dict.fromkeys(info[4][0] for info in infos))
+    if not resolved_ips:
+        raise SafeHTTPError(
+            f"Blocked: could not resolve host ({hostname}): resolver returned no addresses")
     for ip_text in resolved_ips:
         try:
             _guard_ip(ip_text)
         except ValueError as exc:
             raise SafeHTTPError(f"Blocked: could not validate resolved IP ({ip_text})") from exc
 
+    return normalized, resolved_ips
+
+
+def assert_safe_url(url: str) -> str:
+    """Compatibility wrapper for validation-only callers."""
+    normalized, _resolved_ips = _validated_url(url)
     return normalized
 
 
@@ -1051,6 +1065,67 @@ def _cache_slot(method: str, url: str, headers: dict, kwargs: dict, *,
     return _CacheSlot(directory, key, time.monotonic() + max(patience, 1.0), asked)
 
 
+class _PinnedAdapter(HTTPAdapter):
+    """A Requests adapter whose pool connects to one validated address."""
+
+    def __init__(self, url: str, address: str):
+        super().__init__()
+        parsed = urlparse(url)
+        port = _port_for(parsed)
+        self.pool_key = (parsed.scheme, address, port)
+        pool_kwargs = {
+            "port": port,
+            "maxsize": self._pool_maxsize,
+            "block": self._pool_block,
+            "retries": self.max_retries,
+        }
+        if parsed.scheme == "https":
+            # The pool host is the validated IP, but SNI and certificate matching
+            # both use the URL's original hostname. TLS is never checked against
+            # the IP and verification remains enabled by safe_request below.
+            pool_kwargs.update(
+                assert_hostname=parsed.hostname,
+                server_hostname=parsed.hostname,
+            )
+            self.pool = HTTPSConnectionPool(address, **pool_kwargs)
+        else:
+            self.pool = HTTPConnectionPool(address, **pool_kwargs)
+
+    def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
+        """Requests >=2.32 adapter hook; the pool is already pinned."""
+        return self.pool
+
+    def get_connection(self, url, proxies=None):
+        """Requests 2.31 adapter hook; retained for the declared dependency floor."""
+        return self.pool
+
+    def close(self):
+        self.pool.close()
+        super().close()
+
+
+def _owned_session(template=None):
+    """Return a request session whose adapters this module alone may mutate."""
+    owned = requests.Session()
+    if template is None:
+        return owned
+
+    # Preserve caller policy and state without borrowing the object itself: mounting
+    # a pin on a shared session would race the crawler's other worker threads.
+    owned.headers.update(template.headers)
+    owned.cookies.update(template.cookies)
+    owned.auth = template.auth
+    owned.proxies.update(template.proxies)
+    owned.hooks = {event: list(callbacks) for event, callbacks in template.hooks.items()}
+    owned.params.update(template.params)
+    owned.stream = template.stream
+    owned.verify = template.verify
+    owned.cert = template.cert
+    owned.max_redirects = template.max_redirects
+    owned.trust_env = template.trust_env
+    return owned
+
+
 def safe_request(
     method: str,
     url: str,
@@ -1092,9 +1167,9 @@ def safe_request(
     robots.txt on the way out, so caching cannot become a way around either.
     """
     _require_requests()
-    current = assert_safe_url(url)
+    current, pinned_addresses = _validated_url(url)
     request_headers = default_headers(headers)
-    requester = session or requests.Session()
+    requester = _owned_session(session)
     history = []
     method = method.upper()
     kwargs["verify"] = True
@@ -1117,7 +1192,7 @@ def safe_request(
 
         for _ in range(max_redirects + 1):
             response = _paced_request(requester, method, current, request_headers,
-                                      timeout, kwargs, robots_delay)
+                                      timeout, kwargs, pinned_addresses, robots_delay)
 
             if not (allow_redirects and response.is_redirect):
                 response.history = history
@@ -1134,7 +1209,7 @@ def safe_request(
                 raise requests.exceptions.TooManyRedirects(
                     f"Too many redirects (max {max_redirects})")
 
-            next_url = assert_safe_url(urljoin(current, location))
+            next_url, next_addresses = _validated_url(urljoin(current, location))
             if respect_robots:
                 # A redirect can land on a path robots.txt forbids, and following it
                 # because the first hop was allowed would make the rule trivially
@@ -1148,6 +1223,7 @@ def safe_request(
                 kwargs.pop("data", None)
                 kwargs.pop("json", None)
             current = next_url
+            pinned_addresses = next_addresses
 
         raise requests.exceptions.TooManyRedirects(f"Too many redirects (max {max_redirects})")
     finally:
@@ -1202,8 +1278,13 @@ def _rate_for(crawl_delay: float) -> float | None:
     return min(asked, configured)
 
 
+def _host_header(url: str) -> str:
+    """The authority Requests would send when connecting by hostname."""
+    return urlparse(url).netloc.rsplit("@", 1)[-1]
+
+
 def _paced_request(requester, method, url, headers, timeout, kwargs,
-                   crawl_delay: float = 0.0):
+                   pinned_addresses: tuple[str, ...], crawl_delay: float = 0.0):
     """One request, paced before it goes out and retried once if asked to back off.
 
     The retry is deliberately single and bounded. A server that answers 429 has
@@ -1213,14 +1294,39 @@ def _paced_request(requester, method, url, headers, timeout, kwargs,
     """
     rate = _rate_for(crawl_delay)
     pace(urlparse(url).hostname or "", rate)
-    response = requester.request(method, url, headers=headers, timeout=timeout,
-                                 allow_redirects=False, stream=True, **kwargs)
+    request_headers = CaseInsensitiveDict(headers)
+    request_headers.setdefault("Host", _host_header(url))
+    if not pinned_addresses:
+        # The guard cannot validate an address its resolver cannot find, so this
+        # temporarily retains the legacy Requests lookup and carries no pin.
+        # Closing the hole waits for 0.60.0's machine-readable fetch-error kind;
+        # changing only the error prose here moved BL-083's declared verdict.
+        response = requester.request(
+            method, url, headers=request_headers, timeout=timeout,
+            allow_redirects=False, stream=True, **kwargs)
+    else:
+        response = None
+        last_error = None
+        prefix = f"{urlparse(url).scheme}://"
+        for address in pinned_addresses:
+            adapter = _PinnedAdapter(url, address)
+            requester.mount(prefix, adapter)
+            try:
+                response = requester.request(
+                    method, url, headers=request_headers, timeout=timeout,
+                    allow_redirects=False, stream=True, **kwargs)
+                break
+            except requests.exceptions.ConnectionError as exc:
+                last_error = exc
+                adapter.close()
+        if response is None:
+            raise last_error
     wait = retry_after_seconds(response)
     if 0 < wait <= MAX_RETRY_AFTER_WAIT:
         response.close()
         time.sleep(wait)
         pace(urlparse(url).hostname or "", rate)
-        response = requester.request(method, url, headers=headers, timeout=timeout,
+        response = requester.request(method, url, headers=request_headers, timeout=timeout,
                                      allow_redirects=False, stream=True, **kwargs)
     return response
 

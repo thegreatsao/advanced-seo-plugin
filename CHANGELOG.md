@@ -10,6 +10,23 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.59.0 — the SSRF guard connects to the address it validated
+
+Registry version: `98d748a44afa` (unchanged).
+
+The shared HTTP guard previously checked every address from one DNS lookup, discarded
+those answers, and let Requests resolve the hostname again while opening the socket. A
+host with attacker-controlled DNS could answer publicly for validation and rebind to
+loopback, a private network or cloud instance metadata for the connection. Requests now
+use a module-owned, address-pinned pool for each hop: the URL and `Host` header keep the
+original hostname, TLS sends and verifies that hostname, and connection failures fall
+through the validated addresses in resolver order.
+
+When the guard's lookup itself fails, it still has no address to validate or pin and
+Requests performs its own unpinned lookup as before. This known gap remains temporarily
+because refusing it changed an existing verdict through library-dependent error prose;
+0.60.0 will close it together with a machine-readable fetch-error contract.
+
 ## 0.58.0 — shared artifacts and fix lists stop carrying executable secrets and text
 
 Registry version: `98d748a44afa` (unchanged).
