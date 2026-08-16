@@ -731,7 +731,7 @@ item(98, "medium", S, "image_weight_audit.py", PAGE,
      "Serve properly sized images")
 item(99, "medium", G, fix="Review mobile signals in Google Search Console")
 item(100, "medium", S, "mobile_render_checker.py", PAGE,
-     {"path": "issues", "none_severity": ["critical", "high"]},
+     {"path": "issues", "none_severity": ["critical", "high", "medium"]},
      "Fix mobile UX issues")
 item(101, "low", L, fix="Keep mobile navigation within thumb reach")
 item(102, "low", S, "video_schema_checker.py", PAGE,

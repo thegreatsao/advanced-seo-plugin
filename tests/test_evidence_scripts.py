@@ -28,6 +28,7 @@ the rest of the suite put together.
 """
 import http.client
 import http.server
+import inspect
 import json
 import os
 import socket
@@ -411,6 +412,16 @@ FONT_UNFETCHABLE = """<!doctype html><html lang="en"><head><meta charset="utf-8"
 <title>Unreadable font stylesheet</title><link rel="stylesheet" href="/missing-fonts.css">
 </head><body><h1>Unreadable font stylesheet</h1></body></html>"""
 
+MOBILE_WIDE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>.container { width: 1200px; }</style>
+</head><body><main class="container">A layout wider than a phone.</main></body></html>"""
+
+MOBILE_STICKY = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>nav { position: sticky; top: 0; }</style>
+</head><body><nav>Navigation</nav><main>A responsive layout.</main></body></html>"""
+
 CSS_MIN = "body{color:#222}h1{font-size:2rem}a{color:#06c}"
 CSS_FAT = "\n".join(f"  .rule-{n} {{ color : #222222 ;  margin : 0 auto ; }} "
                     f"/* rule number {n}, with a comment nobody needed */"
@@ -539,6 +550,8 @@ GOOD_ROUTES = {
     "/font-external-swap.html": FONT_EXTERNAL_SWAP,
     "/font-inline-blocking.html": FONT_INLINE_BLOCKING,
     "/font-unfetchable.html": FONT_UNFETCHABLE,
+    "/mobile-wide.html": MOBILE_WIDE,
+    "/mobile-sticky.html": MOBILE_STICKY,
     "/shop.html": ABOUT_PAGE,
     "/robots.txt": (200, TEXT, "User-agent: *\nAllow: /\nDisallow: /private/\n"
                                "User-agent: GPTBot\nAllow: /\n"
@@ -672,6 +685,8 @@ RUNS = [
     ("llms", "llms_txt_checker.py", ["{good}"]),
     ("llms_bad", "llms_txt_checker.py", ["{bad}"]),
     ("mobile", "mobile_render_checker.py", ["{good}"]),
+    ("mobile_wide", "mobile_render_checker.py", ["{good}mobile-wide.html"]),
+    ("mobile_sticky", "mobile_render_checker.py", ["{good}mobile-sticky.html"]),
     ("mobile_bad", "mobile_render_checker.py", ["{bad}"]),
     ("redirect", "redirect_checker.py", ["{good}"]),
     ("redirect_hops", "redirect_checker.py", ["{good}hop1"]),
@@ -2695,13 +2710,81 @@ class LcpSubparts(unittest.TestCase):
 class MobileRender(unittest.TestCase):
     """MB-100 `issues`."""
 
-    def test_a_page_with_a_viewport_raises_nothing_serious(self):
+    @staticmethod
+    def _check_html(fragment):
+        import mobile_render_checker
+
+        html = ("<!doctype html><html><head>"
+                '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                f"</head><body>{fragment}</body></html>")
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            return mobile_render_checker.check_mobile_render(path)
+        finally:
+            os.unlink(path)
+
+    def test_a_responsive_page_with_a_viewport_passes(self):
         self.assertEqual(verdict("MB-100", out("mobile")), PASS)
+
+    def test_a_fixed_width_wider_than_a_phone_decides_failure(self):
+        wide = out("mobile_wide")
+        self.assertEqual(
+            [(issue["severity"], issue["finding"]) for issue in wide["issues"]],
+            [("warning", "Found 1 fixed-width CSS declarations wider than common "
+                         "mobile viewports.")])
+        self.assertEqual(verdict("MB-100", wide), FAIL)
+
+    def test_fixed_width_detection_excludes_responsive_max_widths(self):
+        cases = [
+            ('sizes="(max-width: 600px) 100vw, 600px"', []),
+            ("max-width: 600px", []),
+            ("max-width:600px", []),
+            ("@media (max-width: 900px)", []),
+            ("width: 1200px", [1200]),
+            ("width:1200px", [1200]),
+            ("min-width: 900px", [900]),
+            ("  WIDTH : 1024px", [1024]),
+            ("grid-template-columns: 300px", []),
+        ]
+        for fragment, expected in cases:
+            with self.subTest(fragment=fragment):
+                self.assertEqual(
+                    self._check_html(fragment)["fixed_width_values"], expected)
+
+    def test_sticky_positioning_alone_stays_unable_to_decide(self):
+        sticky = out("mobile_sticky")
+        self.assertEqual([issue["severity"] for issue in sticky["issues"]], ["info"])
+        self.assertEqual(verdict("MB-100", sticky), PASS)
 
     def test_a_missing_viewport_is_critical(self):
         bad = out("mobile_bad")
         self.assertIn("critical", [i["severity"] for i in bad["issues"]])
         self.assertEqual(verdict("MB-100", bad), FAIL)
+
+    def test_render_is_no_longer_a_python_api_argument(self):
+        import mobile_render_checker
+
+        parameters = inspect.signature(
+            mobile_render_checker.check_mobile_render).parameters
+        self.assertNotIn("render", parameters)
+        with self.assertRaises(TypeError):
+            mobile_render_checker.check_mobile_render(GOOD.url, render=True)
+
+    def test_render_is_no_longer_a_cli_option(self):
+        script = os.path.join(SCRIPTS, "mobile_render_checker.py")
+        help_result = harness.spawn(
+            [sys.executable, script, "--help"], env=script_env(), timeout=30)
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertNotIn("--render", help_result.stdout)
+
+        rejected = harness.spawn(
+            [sys.executable, script, GOOD.url, "--render", "--json"],
+            env=script_env(), timeout=30)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("unrecognized arguments: --render", rejected.stderr)
 
 
 class Accessibility(unittest.TestCase):

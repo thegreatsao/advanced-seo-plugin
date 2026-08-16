@@ -1088,7 +1088,6 @@ remain present, and the site path additionally emits `scope`, `pages_checked`, a
 `viewport_meta` — str
 `fixed_width_values[]` — array
 `sticky_position_count` — int
-`rendered` — NoneType
 `issues[]` — array
   - item keys: severity, finding, fix
 `summary.issues` — int

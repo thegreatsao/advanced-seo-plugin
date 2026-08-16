@@ -420,6 +420,23 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **Two rendered mobile-layout measures are owed after deleting a branch no product
+  invocation ever ran.** `mobile_render_checker.py` carried an optional Playwright
+  branch for horizontal scroll at 390px, tap targets below 44px, and clipped or
+  overflowing text. `MB-100` invoked the script with only the URL, no test supplied
+  `--render`, Playwright was not installed, and rendered measurement moved in 0.53.0
+  to an operator-supplied artifact. Deleting that branch in 0.61.0 therefore cost the
+  product nothing: it had never measured or reported any of those three findings in
+  a production run.
+
+  Tap targets are already covered better by `MB-103`, which reads
+  `tap_targets_below_48px` from `rendered_audit.py` and follows the current 48px
+  guidance. The two genuinely unique measures remain owed: **horizontal scroll at a
+  phone width**, and **text that is clipped or overflows**. They belong in the rendered
+  artifact contract beside its existing mobile measures, for 0.62.0; restoring a
+  browser-launching flag to one evidence script would recreate the split measurement
+  model that 0.53.0 removed.
+
 - **The good fixture is exemplary on its entry page and not under sampling.** The two
   suites that run it audit differently: `test_contract.py` runs one page, and
   `test_fixture_oracle.py` runs `--sample 3`, where the worst sampled page decides the

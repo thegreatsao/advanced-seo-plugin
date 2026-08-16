@@ -10,6 +10,39 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.61.0 — MB-100 lets a medium mobile defect decide
+
+Registry version: `a129a91eb0da`, replacing `98d748a44afa`.
+
+`MB-100` *Pass Google's Mobile-Friendly Test* read `issues` from
+`mobile_render_checker.py`, but refused only `critical` and `high` severities. The
+script grades a fixed CSS width wider than 390px as `warning`, which maps to medium,
+so the finding could never affect the verdict: a page with the wide fixed layout
+passed. Medium findings now decide the item. A fixed width over the phone boundary
+therefore fails, an informational fixed or sticky position alone still passes, and a
+missing viewport remains a critical failure.
+
+Giving that inert finding a verdict exposed a defect it had hidden. The fixed-width
+detector used `(?:width|min-width)` without a boundary, so the `width` suffix inside
+`max-width` matched too. A responsive page could therefore be reported as having a
+wide fixed layout; every `@media (max-width: ...)` query and responsive image `sizes`
+condition over 390px looked like evidence of the opposite layout. The report had
+never made the false positive visible because the medium finding could not decide
+anything. The detector now refuses a preceding hyphen or word character while still
+matching `width` and `min-width`, so both halves are fixed in the same release: the
+finding is accurate, and it can decide.
+
+The script's optional Playwright branch is also gone. No registry invocation passed
+`--render`, no test exercised it, and Playwright was not installed, so production
+runs never measured its horizontal-scroll, 44px tap-target, or clipped-text signals.
+Tap-target measurement already belongs to `MB-103` through the shared rendered
+artifact. Horizontal scroll at a phone width and clipped or overflowing text remain
+owed in that same artifact contract rather than in a second browser-launching path.
+
+No fixture verdict moved. The oracle remains **121 items declared, 246 declarations,
+219 matched, 0 disagreed, 27 indeterminate, 106 settled on both sides and 77 opposed**,
+with `differences: none`. The corpus census changed only its `registry_version`.
+
 ## 0.60.0 — a fetch failure says what kind it is, and the guard closes
 
 Registry version: `98d748a44afa` (unchanged).
