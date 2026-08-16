@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "a28d3b6257ee",
+  "registry_version": "98d748a44afa",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -49,8 +49,8 @@
         "why": "the title says 'Invalid URLs'; the listed private URL exists and returns 200, while a robots Disallow conflict does not make the URL invalid"
       },
       "LO-200": {
-        "expect": "INDETERMINATE",
-        "why": "on-page NAP and LocalBusiness data exist, but the fixture provides no GBP or review evidence"
+        "expect": "PASS",
+        "why": "the entry-page Bakery node publishes a non-empty name, PostalAddress and telephone, so its LocalBusiness NAP is complete"
       },
       "MB-096": {
         "expect": "PASS",
@@ -516,7 +516,7 @@
       },
       "LO-200": {
         "expect": "INDETERMINATE",
-        "why": "the fixture needs a parseable LocalBusiness node missing name, address, or telephone to exercise the rule's error band and reach FAIL"
+        "why": "Publish Complete NAP in LocalBusiness Data has no subject in this fixture because the tree carries no LocalBusiness node of any subtype"
       },
       "MB-096": {
         "expect": "FAIL",

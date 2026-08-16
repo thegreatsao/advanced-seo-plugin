@@ -2235,6 +2235,79 @@ class BrokenLinks(unittest.TestCase):
         self.assertTrue(all(row["is_internal"] for row in result["redirected"]))
 
 
+class LocalSeoNap(unittest.TestCase):
+    """LO-200 `nap_complete`."""
+
+    def check_nodes(self, *nodes):
+        import local_seo_checker
+        scripts = "".join(
+            '<script type="application/ld+json">'
+            + json.dumps(node)
+            + "</script>"
+            for node in nodes
+        )
+        page = f"<html><head>{scripts}</head><body>Fixture page</body></html>"
+        with harness.allow_loopback(), served({"/": page}) as site:
+            return local_seo_checker.check_local_seo(site.url)
+
+    @staticmethod
+    def complete_node():
+        return {
+            "@context": "https://schema.org",
+            "@type": "Bakery",
+            "name": "Fixture Bakery",
+            "address": {
+                "@type": "PostalAddress",
+                "streetAddress": "1 Fixture Street",
+            },
+            "telephone": "+370 5 000 0000",
+        }
+
+    def test_complete_name_address_and_telephone_pass(self):
+        result = self.check_nodes(self.complete_node())
+        self.assertTrue(result["nap_complete"])
+        self.assertEqual(verdict("LO-200", result), PASS)
+
+    def test_missing_telephone_fails(self):
+        node = self.complete_node()
+        del node["telephone"]
+        result = self.check_nodes(node)
+        self.assertFalse(result["nap_complete"])
+        self.assertEqual(verdict("LO-200", result), FAIL)
+
+    def test_missing_name_fails(self):
+        node = self.complete_node()
+        del node["name"]
+        result = self.check_nodes(node)
+        self.assertFalse(result["nap_complete"])
+        self.assertEqual(verdict("LO-200", result), FAIL)
+
+    def test_missing_address_fails(self):
+        node = self.complete_node()
+        del node["address"]
+        result = self.check_nodes(node)
+        self.assertFalse(result["nap_complete"])
+        self.assertEqual(verdict("LO-200", result), FAIL)
+
+    def test_one_incomplete_node_makes_two_nodes_incomplete(self):
+        incomplete = self.complete_node()
+        incomplete["@type"] = "Restaurant"
+        del incomplete["telephone"]
+        result = self.check_nodes(self.complete_node(), incomplete)
+        self.assertFalse(result["nap_complete"])
+        self.assertEqual(verdict("LO-200", result), FAIL)
+
+    def test_a_page_without_local_business_data_has_no_nap_verdict(self):
+        result = self.check_nodes()
+        self.assertNotIn("nap_complete", result)
+        self.assertEqual(verdict("LO-200", result), NO_DATA)
+
+    def test_a_page_without_local_business_data_has_only_info_findings(self):
+        result = self.check_nodes()
+        self.assertTrue(result["issues"])
+        self.assertEqual({row["severity"] for row in result["issues"]}, {"info"})
+
+
 class LocalBusinessInventory(unittest.TestCase):
     def test_lo_198_finds_a_contact_page_node_when_the_entry_has_none(self):
         import local_seo_checker

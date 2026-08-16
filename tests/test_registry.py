@@ -900,7 +900,8 @@ class ChecklistProvenance(unittest.TestCase):
         sys.path.insert(0, os.path.join(SKILL, "tools"))
         import build_checklist
         overrides = build_checklist.load_title_overrides()
-        self.assertEqual(set(overrides), {"CI-002", "TE-169", "TE-177", "TE-181"})
+        self.assertEqual(set(overrides),
+                         {"CI-002", "LO-200", "TE-169", "TE-177", "TE-181"})
         self.assertNotIn("_comment", overrides)
 
     def test_every_numbered_title_is_referenced_by_exactly_one_item(self):

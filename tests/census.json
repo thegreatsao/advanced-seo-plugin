@@ -2262,7 +2262,7 @@
     },
     "LO-198": {
       "answers": {
-        "failing-shapes": "FAIL",
+        "failing-shapes": "PASS",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
         "fixture:good": "PASS",
@@ -2295,19 +2295,21 @@
     },
     "LO-200": {
       "answers": {
-        "failing-shapes": "WARN",
-        "fixture:broken": "WARN",
-        "fixture:broken_tls": "WARN",
-        "fixture:good": "WARN",
-        "fixture:good_tls": "WARN"
+        "failing-shapes": "FAIL",
+        "fixture:broken": "NO_DATA",
+        "fixture:broken_tls": "NO_DATA",
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "WARN"
+        "FAIL",
+        "NO_DATA",
+        "PASS"
       ],
       "script": "local_seo_checker.py",
       "severity": "high",
       "source": "script",
-      "title": "Apply Local SEO Fundamentals (NAP, GBP, Reviews)"
+      "title": "Publish Complete NAP in LocalBusiness Data"
     },
     "MB-093": {
       "answers": {
@@ -3543,7 +3545,7 @@
       "title": "LCP subparts within budget"
     }
   },
-  "registry_version": "a28d3b6257ee",
+  "registry_version": "98d748a44afa",
   "sites": [
     "fixture:good",
     "fixture:broken",

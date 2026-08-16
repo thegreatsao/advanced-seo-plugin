@@ -12,6 +12,10 @@
     "title": "Provide Internal Links in the Served HTML",
     "why": "The inherited title — Optimize JavaScript Rendering & Crawlability — promises a comparison between the served document and the rendered one. That comparison is MB-105, and scoring it three times is what the duplicate gate exists to stop. This item asserts something real and cheap about the served document, and its independently written fixture declaration already says so: every sampled page carries internal links in the served HTML. The title is brought into line with what both the assertion and the declaration mean."
   },
+  "LO-200": {
+    "title": "Publish Complete NAP in LocalBusiness Data",
+    "why": "The inherited title promises two off-site facts that a fetched page cannot establish: a business can have a complete Google Business Profile without linking it from the page, and visible on-page reviews are not evidence of its off-site review presence. LO-198 already asks whether LocalBusiness data exists anywhere on the site; this item grades the page-level fact the fetched data can prove: every LocalBusiness node present has a non-empty name, address and telephone."
+  },
   "TE-177": {
     "title": "Provide a Title Element in the Served HTML",
     "why": "The inherited title — Ensure No-JS Access & Crawlability — promises a comparison between the served document and the rendered one. That comparison is MB-105, and scoring it three times is what the duplicate gate exists to stop. This item asserts something real and cheap about the served document, and its independently written fixture declaration already says so: every sampled page carries a title element in the served HTML. The title is brought into line with what both the assertion and the declaration mean."

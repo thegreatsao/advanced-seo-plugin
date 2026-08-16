@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "a28d3b6257ee",
+  "registry_version": "98d748a44afa",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -4112,7 +4112,7 @@
       "plerdy_ref": 200,
       "category": "local",
       "category_label": "Local SEO",
-      "title": "Apply Local SEO Fundamentals (NAP, GBP, Reviews)",
+      "title": "Publish Complete NAP in LocalBusiness Data",
       "severity": "high",
       "source": "script",
       "check": {
@@ -4122,23 +4122,12 @@
         ],
         "requires": "fetch",
         "assert": {
-          "path": "issues",
-          "none_severity": [
-            "critical",
-            "high",
-            "medium"
-          ]
-        },
-        "warn": {
-          "path": "issues",
-          "none_severity": [
-            "critical",
-            "high"
-          ]
+          "path": "nap_complete",
+          "truthy": true
         }
       },
       "effort": "high",
-      "fix": "Local SEO fundamentals: NAP, GBP, reviews"
+      "fix": "Complete name, address and telephone on every LocalBusiness structured-data node"
     },
     {
       "id": "GEO-001",

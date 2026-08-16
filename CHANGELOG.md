@@ -10,6 +10,17 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.57.0 — LO-200 grades complete LocalBusiness NAP
+
+Registry version: `98d748a44afa`.
+
+`LO-200` now asks whether every `LocalBusiness` node present on a fetched page has a
+non-empty `name`, `address` and `telephone`. Pages without `LocalBusiness` markup stop
+warning because `LO-198` already answers whether that markup exists anywhere on the
+site; when a node is present but any of those three NAP fields is missing, the page now
+fails. The item no longer claims to check Google Business Profile or reviews because a
+page fetch cannot establish either off-site fact.
+
 ## 0.56.0 — E-E-A-T signals use the page's declared language
 
 The five hand-written English vocabularies in `eeat_signal_checker.py` are now a

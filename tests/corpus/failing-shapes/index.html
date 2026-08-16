@@ -36,6 +36,13 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Organization","name":"Corpus Shapes"}
 </script>
+<!-- LO-200: the business publishes its name and address but omits telephone, so its
+     LocalBusiness NAP is incomplete. -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Bakery","name":"Shape Street Bakery",
+ "address":{"@type":"PostalAddress","streetAddress":"17 Shape Street",
+            "addressLocality":"Teston","postalCode":"10017"}}
+</script>
 </head>
 <body>
 <header><nav>

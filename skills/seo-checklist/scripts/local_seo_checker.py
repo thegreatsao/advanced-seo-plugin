@@ -63,7 +63,10 @@ def check_local_seo(source: str, timeout: int = 15) -> dict[str, Any]:
     phones = sorted(set(match.group(1).strip() for match in PHONE_RE.finditer(body_text)))
     issues = []
     if not local_nodes:
-        issues.append(issue("warning", "No LocalBusiness JSON-LD found (nor any of "
+        # LO-198 asks whether the crawl found LocalBusiness data anywhere. On one
+        # page its absence is useful context, but there is no NAP here for LO-200
+        # to grade and therefore no page-level verdict to raise.
+        issues.append(issue("info", "No LocalBusiness JSON-LD found (nor any of "
                             "its subtypes)", final_url or source))
     for row in local_nodes:
         node = row["node"]
@@ -81,7 +84,7 @@ def check_local_seo(source: str, timeout: int = 15) -> dict[str, Any]:
         issues.append(issue("info", "No Google Business Profile/review link found", final_url or source))
     if "review" not in body_text.lower() and not any(row["node"].get("aggregateRating") for row in local_nodes):
         issues.append(issue("info", "No visible reviews or aggregateRating signal found", final_url or source))
-    return {
+    result = {
         "source": source,
         "final_url": final_url or source,
         "status": fetch.get("status"),
@@ -96,6 +99,12 @@ def check_local_seo(source: str, timeout: int = 15) -> dict[str, Any]:
         "map_embeds": map_embeds,
         "issues": issues,
     }
+    if local_nodes:
+        result["nap_complete"] = all(
+            all(row["node"].get(prop) for prop in ("name", "address", "telephone"))
+            for row in local_nodes
+        )
+    return result
 
 
 def main() -> None:

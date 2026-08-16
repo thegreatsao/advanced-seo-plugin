@@ -1180,8 +1180,8 @@ item(198, "high", S, "local_seo_checker.py", CRAWLARG,
      "Implement LocalBusiness structured data")
 item(199, "high", M, fix="Create and optimize the Google Business Profile — follow resources/playbooks/local-seo.md")
 item(200, "high", S, "local_seo_checker.py", PAGE,
-     ISSUES_ANY(),
-     "Local SEO fundamentals: NAP, GBP, reviews", warn=NOTHING_SERIOUS())
+     {"path": "nap_complete", "truthy": True},
+     "Complete name, address and telephone on every LocalBusiness structured-data node")
 
 # --------------------------------------------------------------------------
 # Beyond Plerdy — what the toolkit checks that the 200-point list does not.
