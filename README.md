@@ -4,9 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.70.0 — see [CHANGELOG.md](CHANGELOG.md). The registry is unchanged; HTML
-`<time>` dates now share JSON-LD's foreign-credit boundary, so a commenter's date or a
-reviewed work's date no longer dates the page.
+Version 0.71.0 — see [CHANGELOG.md](CHANGELOG.md). The registry is unchanged; the
+threshold inventory now treats a written basis as authoritative over its deliberately
+shallow name scan and states which numeric constants remain outside it.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

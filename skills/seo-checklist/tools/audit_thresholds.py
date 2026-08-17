@@ -47,6 +47,19 @@ distinction between them is the whole point:
               verdict. **The line is that the verdict is already computed** when one
               of these is read; anything that could still change it is a threshold.
 
+**The scan reads names and is deliberately shallow, and a written basis is
+authoritative over it.** When a reader finds a number the name-based scan misses,
+write the basis rather than filing a bug against the scan. 0.68.0 found one — a
+constant used inside `timedelta(days=…)` and therefore invisible — wrote its basis,
+recorded in the changelog that the inventory could not see it, and named fixing this
+tool as the next step; 0.71.0 is that step, and it recovered seven such declarations.
+
+That authority has a cost which must not be hidden: a basis line is a claim, not a
+proof. Writing one on a buffer size or retry count puts it into "numbers a verdict
+depends on" and the gate will not object. The count is only as honest as the lines;
+review catches a wrong one, not this tool — the same is already true of a
+`convention` basis that says nothing useful.
+
 **Every number is named now.** The unnamed count was 77 at 0.14.0 and is a ceiling in
 CI; a comparison against a bare literal cannot carry a basis, because it has no name
 to hang one on, so the first step for those was a constant rather than a comment.
@@ -239,19 +252,39 @@ def basis_issues(path: str) -> list[dict]:
     return out
 
 
+def _constant_lines(tree: ast.Module) -> dict[str, int]:
+    """Names and lines of module-level uppercase numeric constants."""
+    out = {}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id.isupper() and _numeric(node.value)):
+            out[node.targets[0].id] = node.lineno
+    return out
+
+
+def numeric_constants(path: str) -> list[dict]:
+    """Every module-level uppercase numeric constant in `path`."""
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    lines = src.splitlines()
+    tree = ast.parse(src)
+    out = []
+    for name, lineno in sorted(_constant_lines(tree).items(), key=lambda kv: kv[1]):
+        kind, why = _basis_for(lines, lineno)
+        out.append({"file": _report_path(path), "name": name, "line": lineno,
+                    "kind": kind, "why": why})
+    return out
+
+
 def named_thresholds(path: str) -> list[dict]:
-    """Module-level numeric constants that a verdict comparison or estimate reads."""
+    """Module-level numeric constants a scan sees or an author declares."""
     with open(path, encoding="utf-8") as fh:
         src = fh.read()
     lines = src.splitlines()
     tree = ast.parse(src)
 
-    consts: dict[str, int] = {}
-    for node in tree.body:
-        if (isinstance(node, ast.Assign) and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and node.targets[0].id.isupper() and _numeric(node.value)):
-            consts[node.targets[0].id] = node.lineno
+    consts = _constant_lines(tree)
 
     # Ordering comparisons only. A constant that is only ever tested for equality is
     # an **identity, not a threshold**: `inventory_version != INVENTORY_VERSION` asks
@@ -289,12 +322,48 @@ def named_thresholds(path: str) -> list[dict]:
 
     out = []
     for name, lineno in sorted(consts.items(), key=lambda kv: kv[1]):
-        if name not in compared:
-            continue
         kind, why = _basis_for(lines, lineno)
+        if name not in compared and not kind:
+            continue
         out.append({"file": _report_path(path), "name": name,
                     "line": lineno, "kind": kind, "why": why})
     return out
+
+
+def uncounted_constants(path: str, counted: list[dict] | None = None) -> list[dict]:
+    """Module-level numeric constants neither seen nor declared with a basis."""
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    rows = counted if counted is not None else named_thresholds(path)
+    counted_names = {row["name"] for row in rows}
+    return [{"file": _report_path(path), "name": name, "line": lineno}
+            for name, lineno in sorted(_constant_lines(tree).items(), key=lambda kv: kv[1])
+            if name not in counted_names]
+
+
+def non_numeric_basis_lines(path: str) -> list[dict]:
+    """Basis markers not attached to a module-level numeric constant."""
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    lines = src.splitlines()
+    tree = ast.parse(src)
+    attached = set()
+    for lineno in _constant_lines(tree).values():
+        if BASIS_MARKER.search(lines[lineno - 1]):
+            attached.add(lineno)
+            continue
+        i = lineno - 2
+        while i >= 0:
+            line = lines[i].strip()
+            if not line or not line.startswith("#"):
+                break
+            if BASIS_MARKER.search(line):
+                attached.add(i + 1)
+                break
+            i -= 1
+    return [{"file": _report_path(path), "line": lineno}
+            for lineno, line in enumerate(lines, 1)
+            if BASIS_MARKER.search(line) and lineno not in attached]
 
 
 def unnamed_thresholds(path: str) -> list[dict]:
@@ -343,12 +412,30 @@ def _script_paths() -> list[str]:
     return paths
 
 
-def scan(paths: list[str] | None = None) -> tuple[list[dict], list[dict]]:
-    named, unnamed = [], []
+def _scan_all(paths: list[str] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+    named, unnamed, uncounted = [], [], []
     for path in paths if paths is not None else _script_paths():
-        named += named_thresholds(path)
+        path_named = named_thresholds(path)
+        named += path_named
         unnamed += unnamed_thresholds(path)
+        uncounted += uncounted_constants(path, path_named)
+    return named, unnamed, uncounted
+
+
+def scan(paths: list[str] | None = None) -> tuple[list[dict], list[dict]]:
+    named, unnamed, _ = _scan_all(paths)
     return named, unnamed
+
+
+def scan_uncounted(paths: list[str] | None = None) -> list[dict]:
+    return _scan_all(paths)[2]
+
+
+def scan_non_numeric_basis(paths: list[str] | None = None) -> list[dict]:
+    out = []
+    for path in paths if paths is not None else _script_paths():
+        out += non_numeric_basis_lines(path)
+    return out
 
 
 def scan_basis_issues(paths: list[str] | None = None) -> list[dict]:
@@ -363,15 +450,18 @@ def main(argv: list[str] | None = None, paths: list[str] | None = None) -> int:
         description="Inventory every number a verdict depends on",
         epilog=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true",
-                    help="exit non-zero if a threshold basis is absent or malformed")
+                    help="exit non-zero if a counted threshold basis is absent, or any is malformed")
     ap.add_argument("--unnamed", action="store_true",
                     help="list the comparisons against a bare number")
+    ap.add_argument("--uncounted", action="store_true",
+                    help="list module-level numeric constants outside the inventory")
     ap.add_argument("--kind", default="", choices=("", *KINDS),
                     help="list only thresholds of this kind")
     a = ap.parse_args(argv)
 
     source_paths = paths if paths is not None else _script_paths()
-    named, unnamed = scan(source_paths)
+    named, unnamed, uncounted = _scan_all(source_paths)
+    non_numeric_basis = scan_non_numeric_basis(source_paths)
     issues = scan_basis_issues(source_paths)
     bare = [t for t in named if not t["kind"]]
     by_kind = {k: [t for t in named if t["kind"] == k] for k in KINDS}
@@ -390,6 +480,14 @@ def main(argv: list[str] | None = None, paths: list[str] | None = None) -> int:
         print(f"\n{len(unnamed)} comparison(s) against a bare number")
         return 0
 
+    if a.uncounted:
+        for t in sorted(uncounted, key=lambda row: (row["file"], row["line"], row["name"])):
+            print(f"  {t['file']}:{t['line']}  {t['name']}")
+        print(f"\n{len(uncounted)} module-level numeric constant(s) not in the inventory")
+        if not a.check:
+            return 0
+        print()
+
     verdict = sum(len(by_kind[k]) for k in VERDICT_KINDS)
     print(f"{verdict} number(s) a verdict depends on:")
     for kind in VERDICT_KINDS:
@@ -399,6 +497,14 @@ def main(argv: list[str] | None = None, paths: list[str] | None = None) -> int:
           f"(presentation), and are not counted above")
     print(f"{len(unnamed)} threshold(s) still unnamed — a comparison against a bare "
           f"number cannot carry a basis, so the first step for those is a constant")
+    print(f"{len(uncounted)} module-level numeric constant(s) are not in this inventory: "
+          "no `# basis:` line, and\n   no comparison this name-based scan can see. "
+          "Listed with --uncounted.")
+    locations = ", ".join(
+        f"{os.path.basename(row['file'])}:{row['line']}" for row in non_numeric_basis)
+    print(f"{len(non_numeric_basis)} basis line(s) name something that is not a "
+          "module-level numeric constant, so nothing\n   here counts them: "
+          f"{locations or 'none'}.")
 
     failed = False
     if measured_issues:

@@ -224,6 +224,175 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
                 status = at.main(["--check"], paths=[path])
         return status, stdout.getvalue(), stderr.getvalue()
 
+    def test_a_written_basis_is_counted_even_if_the_scan_cannot_see_it(self):
+        at = self._tool()
+        named, _ = at.scan()
+        expected = {
+            ("checklist_runner.py", "HISTORY_RUNS"): "convention",
+            ("freshness_checker.py", "FUTURE_DATE_TOLERANCE_DAYS"): "standard",
+            ("gsc_cannibalization.py", "SHORT_NEAR_BRAND_EDITS"): "convention",
+            ("gsc_cannibalization.py", "LONG_NEAR_BRAND_EDITS"): "convention",
+            ("seo_common.py", "THIN_CONTENT_WORDS"): "inherited",
+            ("server_log_audit.py", "MAX_VERIFIED_ADDRESSES"): "convention",
+            ("tls_certificate.py", "DEFAULT_TIMEOUT"): "inherited",
+        }
+        for (filename, name), kind in expected.items():
+            with self.subTest(file=filename, name=name):
+                rows = [row for row in named
+                        if os.path.basename(row["file"]) == filename
+                        and row["name"] == name]
+                self.assertEqual(len(rows), 1, rows)
+                self.assertEqual(rows[0]["kind"], kind)
+
+    def test_the_inventory_totals_close(self):
+        at = self._tool()
+        constants = [row for path in at._script_paths()
+                     for row in at.numeric_constants(path)]
+        named, _ = at.scan()
+        uncounted = at.scan_uncounted()
+        with_basis = sum(bool(row["kind"]) for row in constants)
+        self.assertEqual(len(named), with_basis)
+        self.assertEqual(len(named) + len(uncounted), len(constants))
+
+    def test_the_verdict_totals_are_the_recorded_ones(self):
+        """Writing a new basis moves this ledger, deliberately and visibly."""
+        at = self._tool()
+        named, _ = at.scan()
+        uncounted = at.scan_uncounted()
+        by_kind = {kind: sum(row["kind"] == kind for row in named)
+                   for kind in at.KINDS}
+        self.assertEqual(by_kind, {
+            "standard": 11,
+            "measured": 11,
+            "convention": 47,
+            "inherited": 61,
+            "presentation": 13,
+        })
+        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 130)
+        self.assertEqual(len(named), 143)
+        self.assertEqual(len(uncounted), 24)
+        self.assertEqual(sum(len(at.numeric_constants(path))
+                             for path in at._script_paths()), 167)
+
+    def test_a_basis_the_scan_cannot_see_is_counted_whatever_the_constant_is(self):
+        at = self._tool()
+        source = """\
+from datetime import timedelta
+# basis: convention — a chosen round number, for this test only
+WINDOW_DAYS = 3
+CUTOFF = today + timedelta(days=WINDOW_DAYS)
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thresholds.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(source)
+            named, _ = at.scan([path])
+        rows = [row for row in named if row["name"] == "WINDOW_DAYS"]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0]["kind"], "convention")
+
+    def test_a_constant_with_no_basis_and_no_comparison_is_listed_not_counted(self):
+        at = self._tool()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thresholds.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("SOMETHING = 7\n")
+            named, _ = at.scan([path])
+            uncounted = at.scan_uncounted([path])
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                status = at.main(["--check"], paths=[path])
+        self.assertNotIn("SOMETHING", {row["name"] for row in named})
+        self.assertIn("SOMETHING", {row["name"] for row in uncounted})
+        self.assertEqual(status, 0, stdout.getvalue() + stderr.getvalue())
+
+    def test_a_presentation_basis_the_scan_cannot_see_is_counted_apart(self):
+        at = self._tool()
+        source = """\
+# basis: presentation — a short display window, for this test only
+DISPLAY_ROWS = 7
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thresholds.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(source)
+            named, _ = at.scan([path])
+        self.assertEqual([(row["name"], row["kind"]) for row in named],
+                         [("DISPLAY_ROWS", "presentation")])
+        verdict = [row for row in named if row["kind"] in at.VERDICT_KINDS]
+        self.assertEqual(verdict, [])
+
+    def test_a_basis_cut_off_by_a_blank_line_is_listed_not_counted(self):
+        at = self._tool()
+        source = """\
+# basis: convention — deliberately separated from the constant
+
+WINDOW = 7
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thresholds.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(source)
+            named, _ = at.scan([path])
+            uncounted = at.scan_uncounted([path])
+        self.assertNotIn("WINDOW", {row["name"] for row in named})
+        self.assertIn("WINDOW", {row["name"] for row in uncounted})
+
+    def test_the_uncounted_listing_is_exactly_the_uncounted(self):
+        at = self._tool()
+        named, _ = at.scan()
+        uncounted = at.scan_uncounted()
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status = at.main(["--uncounted"])
+        output = stdout.getvalue()
+        self.assertEqual(status, 0, output)
+        self.assertRegex(output, r"(?m)^  .*site_crawl\.py:\d+  MINHASH_FUNCTIONS$")
+        self.assertIn("\n24 module-level numeric constant(s) not in the inventory\n",
+                      output)
+        listed = {line.strip() for line in output.splitlines() if line.startswith("  ")}
+        for row in named:
+            self.assertNotIn(f"{row['file']}:{row['line']}  {row['name']}", listed)
+        self.assertEqual(len(listed), len(uncounted))
+
+    def test_the_summary_says_what_it_did_not_count(self):
+        at = self._tool()
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status = at.main([])
+        output = stdout.getvalue()
+        self.assertEqual(status, 0, output)
+        self.assertIn("24 module-level numeric constant(s) are not in this inventory",
+                      output)
+        self.assertIn("1 basis line(s) name something that is not a module-level "
+                      "numeric constant", output)
+
+    def test_a_basis_on_something_that_is_not_a_number_is_reported(self):
+        at = self._tool()
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status = at.main(["--check"])
+        self.assertEqual(status, 0, stdout.getvalue())
+        self.assertIn("robots_path_tester.py:31", stdout.getvalue())
+
+    def test_the_flags_compose(self):
+        at = self._tool()
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            status = at.main(["--uncounted", "--check"])
+        self.assertEqual(status, 0, stdout.getvalue() + stderr.getvalue())
+        self.assertIn("MINHASH_FUNCTIONS", stdout.getvalue())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thresholds.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("# basis: conventions — invalid kind\nSOMETHING = 7\n")
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                status = at.main(["--uncounted", "--check"], paths=[path])
+        self.assertNotEqual(status, 0)
+        self.assertIn("outside the documented five-kind vocabulary", stdout.getvalue())
+
     def test_report_path_is_relative_or_falls_back_to_absolute(self):
         at = self._tool()
         inside = os.path.join(at.SKILL, "scripts", "checklist_runner.py")

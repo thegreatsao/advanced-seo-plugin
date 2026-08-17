@@ -10,6 +10,43 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.71.0 — the instrument throws away seven declarations it asked for
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`audit_thresholds.py` now counts a module-level numeric constant when the existing
+name-based scan sees it **or** an author has written a valid `# basis:` declaration.
+Seven declarations were being discarded: one `standard`, four `convention`, and two
+`inherited`. Most plainly, `FUTURE_DATE_TOLERANCE_DAYS` has carried a written
+`standard` basis since 0.68.0, citing the UTC+14 to UTC−12 span, but the inventory
+never read it because the constant is passed to `timedelta` rather than compared by
+name. The rule and every site verdict are unchanged; this release repairs the CI
+instrument that reports what those verdicts rest on.
+
+0.68.0's own entry recorded that blind spot and named fixing this tool as the next
+thing to do, so this is a debt that release opened deliberately. What it did not know
+is that six further declarations were already being discarded the same way, by four
+routes rather than one: a value bound to a name that is compared, a value passed as an
+argument, a default argument value, and a constant compared in a different file from
+the one that defines it.
+
+The inventory now reports 130 verdict-affecting numbers — 11 `standard`, 11
+`measured`, 47 `convention`, and 61 `inherited` — plus 13 `presentation` constants
+counted apart. Those 143 are exactly the module-level numeric constants carrying a
+resolvable basis. The remaining 24 are listed by the new `--uncounted` flag and do not
+make `--check` fail. Default output also names the one basis marker attached to a
+non-numeric declaration, `robots_path_tester.py:31`; it remains informational.
+
+Eleven tests pin the seven recovered declarations, the general rule that defeats a
+hardcoded list, both closing identities and their recorded ledger, presentation and
+blank-line boundaries, the exact uncounted listing, non-numeric basis reporting, and
+composition with `--check`. The suite moves from 1061 to 1072 tests.
+
+The fixture corpus is unaffected, so the oracle remains 246 declarations / 219
+matched / 0 disagreed / 27 indeterminate, coverage 121 / 106 / 77, with no
+differences; the verdict census remains 25 / 8 / 30 and the inert-findings ledger
+16 / 11.
+
 ## 0.70.0 — the boundary JSON-LD dates have, HTML dates do not
 
 Registry version: `be2ab95ba6bf`, unchanged.

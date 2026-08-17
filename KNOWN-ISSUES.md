@@ -420,6 +420,30 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
+- **The threshold inventory now says what it leaves outside, but those declarations
+  are not yet judged.** Twenty-four module-level numeric constants carry no basis and
+  are beyond the name-based scan. At least four shapes look like thresholds rather
+  than budgets: `site_crawl.py`'s `MINHASH_FUNCTIONS` and `SHINGLE_WORDS` decide
+  near-duplicate similarity, `safe_http.py`'s `DEFAULT_MAX_REDIRECTS` bounds a chain a
+  rule reports on, and `detect_profile.py`'s three weight tables score a platform
+  guess. Each needs somebody to decide whether it decides a verdict and write a basis;
+  0.71.0 lists them instead of guessing.
+
+  One declaration points the other way. `robots_path_tester.py:31` puts
+  `# basis: standard` above `_META_ROBOTS`, a regular expression rather than a numeric
+  constant. Either describe that justification without the reserved marker, as the
+  tool's own error text prescribes, or deliberately widen the convention to cover
+  vocabularies. This release changes neither the line nor the vocabulary.
+
+  The scan remains shallow in the three measured ways whose wider simulation was
+  rejected: it does not follow an unbased value through an assignment, an argument or
+  another file, because doing so caught four based thresholds by dragging eight
+  budgets, timeouts and presentation choices into the gate. It also reads `ast.Assign`
+  and not `ast.AnnAssign`; there are zero annotated module-level numeric constants
+  today, so that hole is waiting rather than leaking. Finally, a blank line ends the
+  basis block by design. A separated basis therefore leaves its constant in the
+  uncounted listing, visible but not silently claimed.
+
 - **Two rendered mobile-layout measures are owed after deleting a branch no product
   invocation ever ran.** `mobile_render_checker.py` carried an optional Playwright
   branch for horizontal scroll at 390px, tap targets below 44px, and clipped or
