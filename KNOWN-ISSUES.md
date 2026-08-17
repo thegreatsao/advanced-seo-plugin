@@ -1312,6 +1312,31 @@ name. A column called `url` would be read as "fix this page".
   the report is fully Russian, and that counting — added in 0.7.0 — is the only reason
   either gap was ever visible.
 
+- **Freshness has a boundary for foreign microdata dates, not a general answer to
+  which dates are about the page.** Measured on 2026-08-17, a page whose only date is
+  a `<time>` inside `<div class="comment">` still reports that date at `age_days: 2725`;
+  the equivalent `h-cite` and `p-comment` spellings have the same unpriced shape. A
+  second top-level `itemscope` with no `itemprop` is also still read, because choosing
+  which top-level item is the page needs a primary-item rule this synthetic corpus
+  cannot price. Most widely, `body_text` is still the whole page: a newer written date
+  in a comment, sidebar card or event prose can win through `DATE_RE` even when markup
+  correctly puts it outside the page's item.
+
+  Fixing those three holes needs a measured container vocabulary, a defensible
+  primary-item rule, and a body region tied to that item. None can be calibrated here
+  without a representative network corpus, so 0.70.0 filters only the exact
+  `FOREIGN_CREDIT_KEYS` boundary already shared with JSON-LD. That rule has a known
+  cost rather than another detectable hole: a template that nests the page's own
+  `dateModified` inside `itemprop="isBasedOn"` loses it, because the markup says the
+  date belongs to the source work and no `itemprop` reader can infer the opposite.
+
+  A declared-role vocabulary is not the repair. The measured counterexample was a
+  fresh bare page date of 2026-08-01 beside an archive card's declared
+  `datePublished` of 2018-05-10: promoting the declared role changed the score from
+  100 to 55 and failed CN-038. A later repair must establish what a date is about,
+  not merely what role it declares; 0.70.0 therefore only removes provably foreign
+  dates and never promotes one.
+
 ---
 
 ## Fixed in 0.9.0

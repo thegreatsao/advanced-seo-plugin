@@ -543,8 +543,9 @@ than fetching them.
     carries every parsed date, including future dates
 `dates[]` — array
   - item keys: source, raw, date
-  - schema dates come from the page's own nodes; contributions and subjects are excluded
-    whether nested under their key or hoisted into `@graph`
+  - schema and `<time>` dates come from the page's own nodes; contributions and subjects
+    are excluded whether nested under their key or, for schema dates, hoisted into
+    `@graph`
 `old_years[]` — array
 `stale_stat_sentences` — int
 `schema_date_mismatch` — bool

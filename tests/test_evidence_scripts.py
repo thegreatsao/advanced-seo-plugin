@@ -1970,11 +1970,28 @@ class EeatSignals(unittest.TestCase):
 class Freshness(unittest.TestCase):
     """CN-038 `score`, CN-056 `dates`."""
 
+    PUBLISHED_2020 = '<meta property="article:published_time" content="2020-01-01">'
+
     @staticmethod
     def _check_document(document, *, body="", today=None):
         import freshness_checker
         html = ('<!doctype html><html><head><script type="application/ld+json">' +
                 json.dumps(document) + '</script></head><body>' + body + '</body></html>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            return freshness_checker.check_freshness(path, today=today)
+        finally:
+            os.unlink(path)
+
+    @staticmethod
+    def _check_html(markup, *, head="", today):
+        import freshness_checker
+        html = ('<!doctype html><html><head>' + head + '</head><body>'
+                '<p>Bread rises when the yeast is warm.</p>' + markup +
+                '</body></html>')
         with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
                                          encoding="utf-8") as fh:
             fh.write(html)
@@ -2140,6 +2157,184 @@ class Freshness(unittest.TestCase):
             {"@type": "Article", "datePublished": "2020-01-01"}, today=today)
         self.assertEqual(result["score"], 55)
         self.assertEqual(result["age_days"], 2420)
+
+    def test_a_microdata_comments_date_is_not_the_pages(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<article itemscope itemtype="https://schema.org/Article">'
+            '<div itemprop="comment" itemscope itemtype="https://schema.org/Comment">'
+            '<p>Great post.</p>'
+            '<time itemprop="datePublished" datetime="2026-08-01">fresh</time>'
+            '</div></article>', head=self.PUBLISHED_2020, today=today)
+        self.assertEqual(result["latest_date"], "2020-01-01")
+        self.assertEqual(result["age_days"], 2420)
+        self.assertEqual(result["score"], 55)
+        self.assertEqual(verdict("CN-038", result), FAIL)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2020-01-01"})
+
+    def test_a_microdata_reviewed_works_date_is_not_the_pages(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<div itemprop="itemReviewed" itemscope '
+            'itemtype="https://schema.org/Book">'
+            '<time itemprop="datePublished" datetime="1851-10-18">old</time>'
+            '</div>', head=self.PUBLISHED_2020, today=today)
+        self.assertEqual(result["latest_date"], "2020-01-01")
+        self.assertEqual(result["age_days"], 2420)
+        self.assertEqual(result["score"], 55)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2020-01-01"})
+
+    def test_a_review_page_keeps_its_own_date(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<article itemscope itemtype="https://schema.org/Review">'
+            '<time itemprop="datePublished" datetime="2026-08-01">fresh</time>'
+            '</article>', today=today)
+        self.assertEqual(result["latest_date"], "2026-08-01")
+        self.assertEqual(result["age_days"], 16)
+        self.assertEqual(result["score"], 100)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2026-08-01"})
+
+    def test_a_sidebar_card_does_not_date_the_page(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<main><time datetime="2026-08-01">fresh</time></main>'
+            '<aside><div itemscope itemtype="https://schema.org/NewsArticle">'
+            '<time itemprop="datePublished" datetime="2018-05-10">archive</time>'
+            '</div></aside>', today=today)
+        self.assertEqual(result["latest_date"], "2026-08-01")
+        self.assertEqual(result["age_days"], 16)
+        self.assertEqual(result["score"], 100)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2018-05-10", "2026-08-01"})
+
+    def test_a_foreign_itemprop_is_matched_as_a_token(self):
+        today = date(2026, 8, 17)
+        for itemprop in ("reviewCount", "commentCount"):
+            with self.subTest(itemprop=itemprop):
+                result = self._check_html(
+                    f'<div itemprop="{itemprop}">'
+                    '<time datetime="2026-08-01">fresh</time></div>',
+                    head=self.PUBLISHED_2020, today=today)
+                self.assertEqual(result["latest_date"], "2026-08-01")
+                self.assertEqual(result["age_days"], 16)
+                self.assertEqual(result["score"], 100)
+                self.assertEqual({entry["raw"] for entry in result["dates"]},
+                                 {"2020-01-01", "2026-08-01"})
+
+    def test_the_boundary_holds_through_nested_markup(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<div itemprop="comment"><section><div><span><em><strong><small>'
+            '<time datetime="2026-08-01">fresh</time>'
+            '</small></strong></em></span></div></section></div>',
+            head=self.PUBLISHED_2020, today=today)
+        self.assertEqual(result["latest_date"], "2020-01-01")
+        self.assertEqual(result["age_days"], 2420)
+        self.assertEqual(result["score"], 55)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2020-01-01"})
+
+    def test_a_time_carrying_the_foreign_itemprop_itself_is_excluded(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<time itemprop="comment" datetime="2026-08-01">fresh</time>',
+            head=self.PUBLISHED_2020, today=today)
+        self.assertEqual(result["latest_date"], "2020-01-01")
+        self.assertEqual(result["age_days"], 2420)
+        self.assertEqual(result["score"], 55)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2020-01-01"})
+
+    def test_both_representations_of_one_page_agree(self):
+        today = date(2026, 8, 17)
+        json_ld = json.dumps({
+            "@type": "Article", "datePublished": "2020-01-01",
+            "comment": {"@type": "Comment", "datePublished": "2026-08-01"},
+        })
+        schema = self._check_html(
+            f'<script type="application/ld+json">{json_ld}</script>', today=today)
+        microdata = self._check_html(
+            '<div itemprop="comment" itemscope>'
+            '<time datetime="2026-08-01">fresh</time></div>',
+            head=self.PUBLISHED_2020, today=today)
+        for field in ("latest_date", "age_days", "score"):
+            self.assertEqual(microdata[field], schema[field], field)
+        self.assertEqual(schema["latest_date"], "2020-01-01")
+        self.assertEqual(schema["age_days"], 2420)
+        self.assertEqual(schema["score"], 55)
+        self.assertEqual({entry["raw"] for entry in microdata["dates"]},
+                         {entry["raw"] for entry in schema["dates"]})
+        self.assertEqual({entry["raw"] for entry in schema["dates"]},
+                         {"2020-01-01"})
+
+    def test_a_page_with_no_microdata_is_unchanged(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<time datetime="2020-01-01">old</time>'
+            '<time datetime="2026-08-01">fresh</time>', today=today)
+        self.assertEqual(result["latest_date"], "2026-08-01")
+        self.assertEqual(result["age_days"], 16)
+        self.assertEqual(result["score"], 100)
+        self.assertEqual({entry["raw"] for entry in result["dates"]},
+                         {"2020-01-01", "2026-08-01"})
+
+    def test_every_foreign_key_is_covered_for_microdata_dates(self):
+        from seo_common import FOREIGN_CREDIT_KEYS
+        today = date(2026, 8, 17)
+        self.assertEqual(len(FOREIGN_CREDIT_KEYS), 10)
+        for key in sorted(FOREIGN_CREDIT_KEYS):
+            with self.subTest(key=key):
+                result = self._check_html(
+                    f'<div itemprop="{key}" itemscope>'
+                    '<time datetime="2026-08-01">fresh</time></div>',
+                    head=self.PUBLISHED_2020, today=today)
+                self.assertEqual(result["latest_date"], "2020-01-01")
+                self.assertEqual(result["age_days"], 2420)
+                self.assertEqual(result["score"], 55)
+                self.assertEqual({entry["raw"] for entry in result["dates"]},
+                                 {"2020-01-01"})
+
+    def test_the_walk_reads_every_ancestor_and_every_token(self):
+        today = date(2026, 8, 17)
+        cases = {
+            "multiple tokens": (
+                '<div itemprop="comment text">'
+                '<time datetime="2026-08-01">fresh</time></div>'),
+            "intermediate property": (
+                '<div itemprop="comment"><div itemprop="text">'
+                '<time datetime="2026-08-01">fresh</time></div></div>'),
+            "six levels": (
+                '<div itemprop="comment"><section><div><span><em><strong><small>'
+                '<time datetime="2026-08-01">fresh</time>'
+                '</small></strong></em></span></div></section></div>'),
+        }
+        for label, markup in cases.items():
+            with self.subTest(label=label):
+                result = self._check_html(
+                    markup, head=self.PUBLISHED_2020, today=today)
+                self.assertEqual(result["latest_date"], "2020-01-01")
+                self.assertEqual(result["age_days"], 2420)
+                self.assertEqual(result["score"], 55)
+                self.assertEqual({entry["raw"] for entry in result["dates"]},
+                                 {"2020-01-01"})
+
+    def test_the_key_match_is_exact_like_the_json_ld_half(self):
+        today = date(2026, 8, 17)
+        for itemprop in ("itemreviewed", "schema:comment"):
+            with self.subTest(itemprop=itemprop):
+                result = self._check_html(
+                    f'<div itemprop="{itemprop}">'
+                    '<time datetime="2026-08-01">fresh</time></div>',
+                    head=self.PUBLISHED_2020, today=today)
+                self.assertEqual(result["latest_date"], "2026-08-01")
+                self.assertEqual(result["age_days"], 16)
+                self.assertEqual(result["score"], 100)
+                self.assertEqual({entry["raw"] for entry in result["dates"]},
+                                 {"2020-01-01", "2026-08-01"})
 
     def test_a_hoisted_customer_review_date_is_not_the_page_date(self):
         result = self._check_document({"@graph": [

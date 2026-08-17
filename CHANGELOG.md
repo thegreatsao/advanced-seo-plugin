@@ -10,6 +10,34 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.70.0 — the boundary JSON-LD dates have, HTML dates do not
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`freshness_checker.py` now excludes a `<time>` when it or any ancestor carries an
+`itemprop` token in `FOREIGN_CREDIT_KEYS`. The boundary is the property descended
+through, never the container's `itemtype`: an editorial `Review` page keeps its own
+`datePublished`, while dates belonging to comments, reviewed works and citations leave
+`dates[]`. Nothing is promoted or reordered. `latest_date`, `age_days` and `score`
+follow from the smaller set, and a page whose only date belongs to a commenter now
+correctly fails CN-056.
+
+The match is exact and case-sensitive, like the existing JSON-LD half. Namespaced and
+wrong-case properties remain known holes rather than making HTML and JSON-LD disagree
+in the other direction. Class-marked comments, separate top-level items, dates recovered
+from the unbounded `body_text`, and a page date misnested under `isBasedOn` remain
+documented in `KNOWN-ISSUES.md`; a declared-role preference was rejected after it chose
+an archive card's date over a fresh page's own date.
+
+Twelve tests cover the comment defect, reviewed works, editorial reviews, the rejected
+promotion shape, token matching, six-level and intermediate ancestors, the `<time>`
+element itself, representation parity, pages without microdata, all ten foreign keys,
+and the deliberately exact key match. The suite moves from 1049 to 1061 tests.
+
+The fixture corpus is unaffected, so the oracle remains 246 declarations / 219 matched
+/ 0 disagreed / 27 indeterminate, coverage 121 / 106 / 77, with no differences; the
+verdict census remains 25 / 8 / 30 and the inert-findings ledger 16 / 11.
+
 ## 0.69.0 — an author signal is an author, not any name on the page
 
 Registry version: `be2ab95ba6bf`, unchanged.

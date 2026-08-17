@@ -64,6 +64,33 @@ def _schema_dates(schema_items: list) -> dict[str, list[str]]:
     return dates
 
 
+def _time_dates(soup) -> list[str]:
+    """The page's own `<time>` values.
+
+    A `<time>` under an `itemprop` naming a foreign credit belongs to whatever that
+    property points at: a commenter, a reviewed book, a cited paper. Line 60 has read
+    JSON-LD dates through `page_nodes` since 0.67.0 for exactly this reason, and until
+    0.70.0 the HTML half of the same function had no boundary, so a schema.org-marked
+    comment dated the page.
+
+    By the property descended through, never by the container's `itemtype`: an editorial
+    review page is itself a `Review` and its own `datePublished` is its own.
+    """
+    dates = []
+    for tag in soup.find_all("time"):
+        foreign = False
+        for ancestor in (tag, *tag.parents):
+            itemprop = ancestor.get("itemprop")
+            values = [itemprop] if isinstance(itemprop, str) else itemprop or []
+            if any(token in FOREIGN_CREDIT_KEYS
+                   for value in values for token in value.split()):
+                foreign = True
+                break
+        if not foreign:
+            dates.append(tag.get("datetime") or tag.get_text(" ", strip=True))
+    return dates
+
+
 def check_freshness(source: str, timeout: int = 15, today: date | None = None) -> dict:
     today = today or date.today()
     cutoff = today + timedelta(days=FUTURE_DATE_TOLERANCE_DAYS)
@@ -77,7 +104,7 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
         key = (tag.get("property") or tag.get("name") or "").lower()
         if key in {"article:published_time", "article:modified_time", "date", "last-modified", "dc.date"}:
             meta_dates[key] = tag.get("content")
-    time_dates = [tag.get("datetime") or tag.get_text(" ", strip=True) for tag in soup.find_all("time")]
+    time_dates = _time_dates(soup)
     schema_dates = _schema_dates(parsed.get("schema", []))
 
     parsed_dates = []
