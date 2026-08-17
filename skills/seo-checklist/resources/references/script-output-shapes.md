@@ -537,6 +537,8 @@ than fetching them.
 `score` — int
 `latest_date` — str
 `age_days` — int
+  - both are computed from dates that are not in the future, while `dates[]` still
+    carries every parsed date, including future dates
 `dates[]` — array
   - item keys: source, raw, date
   - schema dates come from the page's own nodes; contributions and subjects are excluded

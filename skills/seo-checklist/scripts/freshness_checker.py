@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from seo_common import FOREIGN_CREDIT_KEYS, load_source, page_nodes, parse_html
 
@@ -15,6 +15,17 @@ from seo_common import FOREIGN_CREDIT_KEYS, load_source, page_nodes, parse_html
 #  visible date is reported as old; it is a round number and nothing here measured what
 #  staleness costs a given kind of page.
 STALE_CONTENT_DAYS = 730
+
+# basis: standard — civil time spans UTC+14 to UTC-12 in the IANA time zone database,
+#  twenty-six hours, so a page legitimately published "now" can carry a date two
+#  calendar days ahead of the date this checker computes. Three days would admit a
+#  scheduled post, which is a date for something not published yet.
+#
+#  This said `measured` with a corpus, a date and a method until the gate that reads it
+#  demanded those three fields and they had to be invented to satisfy it. Nothing here
+#  was measured: the number comes from a published standard, and saying so is the whole
+#  point of the field.
+FUTURE_DATE_TOLERANCE_DAYS = 2
 
 DATE_RE = re.compile(
     r"\b(?:20\d{2}|19\d{2})[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12]\d|3[01])\b|"
@@ -55,6 +66,7 @@ def _schema_dates(schema_items: list) -> dict[str, list[str]]:
 
 def check_freshness(source: str, timeout: int = 15, today: date | None = None) -> dict:
     today = today or date.today()
+    cutoff = today + timedelta(days=FUTURE_DATE_TOLERANCE_DAYS)
     html, url, fetched = load_source(source, timeout)
     parsed = parse_html(html, url)
     soup = parsed["soup"]
@@ -81,11 +93,14 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
             if parsed_date:
                 parsed_dates.append({"source": source_name, "raw": raw, "date": parsed_date.isoformat()})
 
+    future = [item for item in parsed_dates if _parse_date(item["date"]) > cutoff]
+    non_future = [_parse_date(item["date"]) for item in parsed_dates
+                  if _parse_date(item["date"]) <= cutoff]
     modified_dates = [_parse_date(value) for value in schema_dates["dateModified"] + [meta_dates.get("article:modified_time")]]
-    modified_dates = [value for value in modified_dates if value]
+    modified_dates = [value for value in modified_dates if value and value <= cutoff]
     published_dates = [_parse_date(value) for value in schema_dates["datePublished"] + [meta_dates.get("article:published_time")]]
-    published_dates = [value for value in published_dates if value]
-    latest = max([_parse_date(item["date"]) for item in parsed_dates if _parse_date(item["date"])] or modified_dates or published_dates or [], default=None)
+    published_dates = [value for value in published_dates if value and value <= cutoff]
+    latest = max(non_future or modified_dates or published_dates or [], default=None)
 
     old_years = sorted({int(year) for year in YEAR_RE.findall(body) if int(year) <= today.year - 3})
     stale_stat_count = 0
@@ -115,6 +130,14 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
         issues.append({"severity": "warning", "message": f"{stale_stat_count} statistic sentence(s) reference old years."})
     if mismatch:
         issues.append({"severity": "warning", "message": "dateModified appears older than datePublished."})
+    if future:
+        sample = [str(item["raw"]) for item in future[:3]]
+        issues.append({
+            "severity": "info",
+            "message": f"{len(future)} date(s) on this page are more than "
+                       f"{FUTURE_DATE_TOLERANCE_DAYS} days in the future and were read as "
+                       f"content rather than as publication dates: {', '.join(sample)}",
+        })
 
     return {
         "url": url or source,

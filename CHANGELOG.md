@@ -10,6 +10,46 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.68.0 — a date in the future is not freshness
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`freshness_checker.py` no longer lets a date more than two days ahead of the check
+date become the page's freshness date. Future dates remain in `dates[]`, with their
+original source and text, and one informational finding names up to the first three;
+they are excluded only from `latest_date` and from the published-versus-modified
+comparison. If every parsed date is in the future, the existing no-date penalty and
+finding apply because the page has not shown when it was published.
+
+The two-day boundary admits the full UTC+14 to UTC-12 civil-time span, twenty-six hours
+in the IANA time zone database, while excluding a scheduled post three calendar days out.
+
+**Two things about that constant are worth recording, because both are about the
+instruments rather than the rule.** Its basis was first written as `measured`, and
+`audit_thresholds --check` rightly demanded the `corpus`, `date` and `method` that class
+requires — none of which exists, because nothing here was measured: the number comes from
+a published standard, which is what `standard` is for. Inventing three fields to satisfy
+a gate would have been the exact failure the basis field exists to prevent.
+
+And that gate objected only to the *form* of the comment. `FUTURE_DATE_TOLERANCE_DAYS`
+does not appear in the threshold inventory at all — `audit_thresholds` lists
+`STALE_CONTENT_DAYS` from this same file and not this one — although it decides
+`latest_date`, and so `age_days`, and so `score`, and so `CN-038`'s verdict. It is
+invisible because it is used inside `timedelta(days=…)` rather than in a comparison. A
+number a verdict depends on that the inventory cannot see is the same shape of defect as
+the three this series has been closing, one level up, and it is the next thing to fix in
+that tool.
+
+Nine tests pin ordinary prose,
+declared publication dates, the inclusive boundary, use of the named constant, both
+sides of the previously untested mismatch comparison, the all-future fallback, and an
+unchanged stale page. The suite moves from 1029 to 1038 tests.
+
+The fixture corpus is unaffected, so the oracle remains 246 declarations / 219
+matched / 0 disagreed / 27 indeterminate, coverage 121 / 106 / 77, with no
+differences; the verdict census remains 25 / 8 / 30 and the inert-findings ledger
+16 / 11.
+
 ## 0.67.0 — a contributor's credit is not the page's signal
 
 Registry version: `be2ab95ba6bf`, unchanged.

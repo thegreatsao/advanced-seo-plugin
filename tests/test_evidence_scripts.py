@@ -39,6 +39,8 @@ import threading
 import unittest
 import zlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
+from unittest import mock
 from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1968,16 +1970,16 @@ class Freshness(unittest.TestCase):
     """CN-038 `score`, CN-056 `dates`."""
 
     @staticmethod
-    def _check_document(document):
+    def _check_document(document, *, body="", today=None):
         import freshness_checker
         html = ('<!doctype html><html><head><script type="application/ld+json">' +
-                json.dumps(document) + '</script></head><body></body></html>')
+                json.dumps(document) + '</script></head><body>' + body + '</body></html>')
         with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
                                          encoding="utf-8") as fh:
             fh.write(html)
             path = fh.name
         try:
-            return freshness_checker.check_freshness(path)
+            return freshness_checker.check_freshness(path, today=today)
         finally:
             os.unlink(path)
 
@@ -2040,6 +2042,103 @@ class Freshness(unittest.TestCase):
                 result = self._check_document(document)
                 self.assertEqual({entry["raw"] for entry in result["dates"]},
                                  {published, modified})
+
+    def test_a_future_prose_date_is_not_freshness(self):
+        today = date(2026, 8, 17)
+        document = {"@type": "Article", "datePublished": "2020-01-01"}
+        stale = self._check_document(document, today=today)
+        with_future = self._check_document(
+            document, body="The event is on March 14, 2027.", today=today)
+        self.assertEqual(stale["latest_date"], "2020-01-01")
+        self.assertEqual(with_future["latest_date"], "2020-01-01")
+        self.assertEqual(with_future["score"], stale["score"])
+        self.assertEqual(verdict("CN-038", stale), FAIL)
+        self.assertEqual(verdict("CN-038", with_future), FAIL)
+
+    def test_a_future_date_is_still_reported(self):
+        today = date(2026, 8, 17)
+        result = self._check_document(
+            {"@type": "Article", "datePublished": "2020-01-01"},
+            body="The event is on March 14, 2027.", today=today)
+        future = [entry for entry in result["dates"]
+                  if entry["date"] == "2027-03-14"]
+        self.assertEqual(len(future), 1)
+        self.assertEqual(future[0]["source"], "body")
+        info = [issue for issue in result["issues"] if issue["severity"] == "info"]
+        self.assertEqual(info, [{
+            "severity": "info",
+            "message": "1 date(s) on this page are more than 2 days in the future "
+                       "and were read as content rather than as publication dates: "
+                       "March 14, 2027",
+        }])
+
+    def test_a_future_roled_date_stays_in_dates_but_not_in_latest(self):
+        today = date(2026, 8, 17)
+        result = self._check_document(
+            {"@type": "Article", "datePublished": "2027-03-14"}, today=today)
+        self.assertEqual(len(result["dates"]), 1)
+        self.assertEqual(result["dates"][0]["source"], "schema_published")
+        self.assertEqual(verdict("CN-056", result), PASS)
+        self.assertIsNone(result["latest_date"])
+        self.assertEqual(result["score"], 65)
+
+    def test_the_tolerance_boundary(self):
+        today = date(2026, 8, 17)
+        for days_ahead in range(4):
+            candidate = today + timedelta(days=days_ahead)
+            with self.subTest(days_ahead=days_ahead):
+                result = self._check_document(
+                    {"@type": "Article", "datePublished": candidate.isoformat()},
+                    today=today)
+                expected = candidate.isoformat() if days_ahead <= 2 else None
+                self.assertEqual(result["latest_date"], expected)
+
+    def test_the_tolerance_constant_is_the_one_in_use(self):
+        import freshness_checker
+        today = date(2026, 8, 17)
+        tomorrow = (today + timedelta(days=1)).isoformat()
+        with mock.patch.object(freshness_checker, "FUTURE_DATE_TOLERANCE_DAYS", 0):
+            result = self._check_document(
+                {"@type": "Article", "datePublished": tomorrow}, today=today)
+        self.assertIsNone(result["latest_date"])
+
+    def test_a_future_modified_date_does_not_report_a_mismatch(self):
+        today = date(2026, 8, 17)
+        result = self._check_document({
+            "@type": "Article",
+            "datePublished": "2026-08-01",
+            "dateModified": "2027-03-14",
+        }, today=today)
+        self.assertIs(result["schema_date_mismatch"], False)
+        self.assertEqual(result["latest_date"], "2026-08-01")
+
+    def test_a_real_mismatch_is_still_reported(self):
+        today = date(2026, 8, 17)
+        result = self._check_document({
+            "@type": "Article",
+            "datePublished": "2026-08-01",
+            "dateModified": "2026-07-01",
+        }, today=today)
+        self.assertIs(result["schema_date_mismatch"], True)
+        self.assertEqual(result["score"], 85)
+
+    def test_a_page_dated_only_in_the_future_reports_no_date(self):
+        today = date(2026, 8, 17)
+        result = self._check_document(
+            {"@type": "Article", "datePublished": "2027-03-14"},
+            body="The event is on March 14, 2027.", today=today)
+        self.assertIsNone(result["latest_date"])
+        self.assertEqual(result["score"], 65)
+        messages = [issue["message"] for issue in result["issues"]]
+        self.assertIn("No parseable published or modified date found.", messages)
+        self.assertTrue(any("March 14, 2027" in message for message in messages))
+
+    def test_an_ordinary_stale_page_is_unchanged(self):
+        today = date(2026, 8, 17)
+        result = self._check_document(
+            {"@type": "Article", "datePublished": "2020-01-01"}, today=today)
+        self.assertEqual(result["score"], 55)
+        self.assertEqual(result["age_days"], 2420)
 
     def test_a_hoisted_customer_review_date_is_not_the_page_date(self):
         result = self._check_document({"@graph": [

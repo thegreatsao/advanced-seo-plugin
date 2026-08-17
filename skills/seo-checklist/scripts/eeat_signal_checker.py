@@ -280,11 +280,9 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
 
     score = 0
     # CN-068 is about authorship/expertise, not publishers — and, since 0.66.0, not
-    # reviewers either. A named reviewer is a real E-E-A-T signal and giving it points
-    # would make a `high` item the census records as never having passed easier to
-    # reach; that is a pricing decision, and it belongs to whoever makes it rather than
-    # to the release that separated the two fields. `signals.reviewers` is the
-    # measurement it would start from.
+    # reviewers either. A named reviewer earns no score: the visible sentence
+    # "Medically reviewed by ..." already scores through the credential vocabulary,
+    # measured at +7, so paying the markup as well would bill one fact twice.
     score += 20 if authors else 0
     score += min(20, len(credential_hits) * 7)
     score += min(20, len(experience_hits) * 7)
