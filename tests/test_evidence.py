@@ -78,7 +78,8 @@ class SharedHelpersStayShared(unittest.TestCase):
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name in (
                         "fetch_html", "walk_json", "_walk_json", "is_url",
-                        "_is_url", "as_list", "favicon_href", "_rel_contains"):
+                        "_is_url", "as_list", "favicon_href", "_rel_contains",
+                        "page_nodes", "_page_nodes"):
                     offenders.append(f"{name}:{node.lineno} defines {node.name}")
         self.assertEqual(offenders, [], "import it from seo_common instead: "
                                         + "; ".join(offenders))

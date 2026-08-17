@@ -530,6 +530,93 @@ def walk_json(value):
             yield from walk_json(child)
 
 
+# Keys whose subtree is somebody else's contribution *to* this page.
+CONTRIBUTION_KEYS = frozenset({
+    "review", "reviews", "comment", "comments",
+    "acceptedAnswer", "suggestedAnswer", "userComments",
+})
+# Keys whose subtree is what the page is *about*. Its credits belong to the subject
+# rather than to the page — but unlike a contribution, a subject is routinely the
+# page's own main entity, hoisted into `@graph` and pointed at by `@id`.
+SUBJECT_KEYS = frozenset({"itemReviewed", "citation", "isBasedOn"})
+FOREIGN_CREDIT_KEYS = CONTRIBUTION_KEYS | SUBJECT_KEYS
+
+
+def _contributed_ids(value, inside=False, found=None):
+    """Every `@id` mentioned anywhere under a `CONTRIBUTION_KEYS` key."""
+    if found is None:
+        found = set()
+    if isinstance(value, dict):
+        if inside and isinstance(value.get("@id"), str):
+            found.add(value["@id"])
+        for key, child in value.items():
+            _contributed_ids(child, inside or key in CONTRIBUTION_KEYS, found)
+    elif isinstance(value, list):
+        for child in value:
+            _contributed_ids(child, inside, found)
+    return found
+
+
+def page_nodes(value):
+    """Every dict in a JSON-LD tree except the ones whose credits are not the page's.
+
+    `walk_json` yields the whole graph. That is right for asking what a document
+    declares and wrong for asking who wrote it. Measured 2026-08-17:
+    `Product -> review -> author` named a shopper as the author of a product page and
+    CN-057 — *Show Author and Publisher Clearly* — passed on it; a review of Moby Dick
+    reported Herman Melville among its authors.
+
+    Two rules, because two things go wrong:
+
+    * descent stops at any `FOREIGN_CREDIT_KEYS` key. Exclusion is by the key descended
+      through, never by the node's `@type`: a page whose own top-level node is a
+      `Review` — an editorial product review — still credits its author, because
+      nothing descended into it through `review`;
+    * a node is skipped when its `@id` is referenced from under a `CONTRIBUTION_KEYS`
+      key anywhere in the document. Flattening a page into `@graph` hoists the customer
+      review to the top level and leaves `"review": {"@id": "#r1"}` behind, which
+      pruning by key alone never reaches. `SUBJECT_KEYS` deliberately do **not** trigger
+      this second rule: `{"@graph": [Product #p, Review{itemReviewed: #p}]}` is an
+      ordinary review page, and pruning `#p` would lose the brand that is its publisher
+      evidence.
+
+    What this deliberately costs, both measured: a specialist publication's own review
+    nested as `Product -> review -> author` loses that author, and an `FAQPage` whose
+    accepted answer carries a staff editor loses that editor. Neither is distinguishable
+    in structure from the customer-contributed case — schema.org gives both the same key
+    — and a page's own author belongs on the page's own node. Hoisting the editorial
+    review to the top level, which is what a review site usually emits, keeps the credit.
+
+    `freshness_checker._schema_dates` and `citation_readiness._schema_entity_signals`
+    make the same whole-graph sweep and are deliberately not converted here; that is
+    **0.67.0**, and each is measured rather than suspected. A `Product` page carrying no
+    date of its own and one customer review dated `2019-04-02` reports that date and
+    passes `CN-056`. The citation reader takes a shopper's `name` and `sameAs` into
+    `entity_signals` as the page's entity; that changes no verdict today because no
+    registry rule reads the field, which is the reason to look at it rather than the
+    reason to leave it.
+
+    Known and not handled: a namespaced key such as `"schema:review"` bypasses both
+    sets. `walk_json` has always had that hole, JSON-LD needs a context mapping to
+    produce it, and closing it needs context expansion this repository does not do.
+    """
+    contributed = _contributed_ids(value)
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("@id") in contributed:
+                return
+            yield node
+            for key, child in node.items():
+                if key not in FOREIGN_CREDIT_KEYS:
+                    yield from walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                yield from walk(child)
+
+    yield from walk(value)
+
+
 def as_list(value: Any) -> list[Any]:
     """A JSON-LD value as a list, whether it arrived as one, as a scalar, or not at all.
 

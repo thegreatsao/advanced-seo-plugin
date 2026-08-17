@@ -10,6 +10,60 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.66.0 — the author set is the page's own credits
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`eeat_signal_checker.py` read author credits with `walk_json`, which yields every dict
+in the JSON-LD graph. A credit written on any node anywhere was therefore read as a
+credit of the page, and four shapes passed `CN-057` — *Show Author and Publisher
+Clearly*, a `high` item — while naming no author at all: an `Article` with a `publisher`
+and a `reviewedBy` organisation; a `Product` with one customer review; an `Article` with
+one comment; an `FAQPage` whose accepted answer carried an author. The fourth is any
+e-commerce product page with a review on it, and the same page passes again after a CMS
+flattens its structured data into `@graph` and leaves `"review": {"@id": "#r1"}` behind.
+This is the collapse 0.51.0 was written to undo — one entity satisfying both halves of a
+title that asks for two — re-entering through three keys nobody had closed.
+
+The quieter half is the evidence rather than the verdict. A page that does name its
+author also reported the shopper as a second one, and a review of *Moby Dick* reported
+Herman Melville among its authors.
+
+**`seo_common.page_nodes()`** is the repair: every dict in a JSON-LD tree except the
+ones whose credits are not the page's. Descent stops at a contribution key — `review`,
+`reviews`, `comment`, `comments`, `acceptedAnswer`, `suggestedAnswer`, `userComments` —
+or a subject key — `itemReviewed`, `citation`, `isBasedOn`; and a node is skipped when
+its `@id` is referenced from under a contribution key, which is what closes the
+flattened-`@graph` shape. Exclusion is by the key descended through, never by the node's
+`@type`: a specialist publication's own review, sitting at the top level, still credits
+its author. The `@id` rule covers contributions only, because a *subject* is routinely
+the page's own main entity hoisted into `@graph`, and pruning it would lose the brand
+that is the page's publisher evidence.
+
+Two costs, both measured and both accepted: an editorial review nested as
+`Product -> review -> author` loses that author, and an `FAQPage` whose accepted answer
+carries a staff editor loses that editor. Schema.org gives the contributed and the
+editorial case the same key, so nothing in the structure separates them, and a page's
+own author belongs on the page's own node.
+
+**`reviewedBy` leaves `signals.authors` for a new `signals.reviewers`.** No registry
+rule reads the new field. A named reviewer is a real E-E-A-T signal, and pricing one
+into `score` would make `CN-068` — `high`, and never observed passing — easier to reach;
+that decision is not this release's, and `signals.reviewers` is the measurement it would
+start from. `_credited_nodes` keeps `reviewedBy`, so a third-party review board is still
+not reported as the site's own identity.
+
+`freshness_checker._schema_dates` and `citation_readiness._schema_entity_signals` carry
+the same whole-graph sweep and are **0.67.0**, named in `page_nodes`'s docstring with
+what each was measured doing: a product page with no date of its own reports the date of
+a customer review from 2019 and passes `CN-056`; the citation reader takes a shopper's
+`name` and `sameAs` as the page's entity, which changes no verdict today only because no
+rule reads that field.
+
+Seventeen tests, 999 to 1016. The fixture corpus uses thirty distinct JSON-LD keys and
+none of them is affected, so the oracle holds at 246 declarations / 219 matched / 0
+disagreed / 27 indeterminate and the verdict census at 25 / 8 / 30.
+
 ## 0.65.0 — the offline suite stops reaching Wikipedia
 
 Registry version: `be2ab95ba6bf`, unchanged.

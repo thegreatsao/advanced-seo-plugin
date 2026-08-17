@@ -10,7 +10,14 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import has_byline_class, load_source, parse_html, primary_language, walk_json
+from seo_common import (
+    has_byline_class,
+    load_source,
+    page_nodes,
+    parse_html,
+    primary_language,
+    walk_json,
+)
 
 
 _TERMS_PATH = (Path(__file__).resolve().parent.parent / "resources" / "config" /
@@ -131,14 +138,20 @@ def _is_org_type(raw) -> bool:
 def _credited_nodes(schema_items: list) -> set[int]:
     """Every dict that is, or sits under, an `author` or `reviewedBy` value.
 
-    An organisation credited as the author is an author. Counting it a second time as
-    evidence of a publisher would let one entity satisfy both halves of an item whose
-    title asks for two — the collapse this change exists to undo, re-entering through
-    the type test instead of through the key set.
+    An organisation the page credits — as its author or as its reviewer — is already
+    named as one of those. Counting it a second time as evidence of a publisher would
+    let one entity satisfy both halves of an item whose title asks for two: the
+    collapse 0.51.0 exists to undo, re-entering through the type test instead of
+    through the key set. `reviewedBy` stays here after 0.66.0 took it out of the author
+    set, because a third-party review board is still not the site's own identity.
+
+    The outer sweep is `page_nodes`, so a credit written inside somebody else's
+    contribution is not treated as a credit at all. The inner one stays `walk_json`: a
+    credit that is being read must be read whole.
     """
     credited: set[int] = set()
     for item in schema_items:
-        for node in walk_json(item):
+        for node in page_nodes(item):
             for key in ("author", "reviewedBy"):
                 if key in node:
                     for inner in walk_json(node[key]):
@@ -167,7 +180,7 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
     credited = _credited_nodes(schema)
     names = list(_schema_values(schema, {"publisher"}))
     for item in schema:
-        for node in walk_json(item):
+        for node in page_nodes(item):
             if id(node) in credited:
                 continue
             if _is_org_type(node.get("@type")) and node.get("name"):
@@ -184,7 +197,7 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
 def _schema_values(schema_items: list, keys: set[str]) -> list[str]:
     values = []
     for item in schema_items:
-        for node in walk_json(item):
+        for node in page_nodes(item):
             for key in keys:
                 value = node.get(key)
                 if isinstance(value, str):
@@ -216,8 +229,15 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
         if has_byline_class(tag)
         and tag.get_text(strip=True)
     ]
-    schema_authors = _schema_values(parsed.get("schema", []), {"author", "reviewedBy"})
+    schema_authors = _schema_values(parsed.get("schema", []), {"author"})
     authors = sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
+    # `reviewedBy` sat in the line above until 0.66.0. A page whose only credit was a
+    # review board reported an author, and a page naming a publisher and a reviewer but
+    # no author passed CN-057 — an item whose title asks for two parties.
+    reviewers = sorted({value.strip()
+                        for value in _schema_values(parsed.get("schema", []),
+                                                    {"reviewedBy"})
+                        if value and value.strip()})
     publishers = sorted({v.strip() for v in _publisher_names(parsed, soup) if v and v.strip()})
 
     credential_hits = _text_hits(patterns["credential"], body)
@@ -259,7 +279,13 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     ]
 
     score = 0
-    score += 20 if authors else 0  # CN-068 is about authorship/expertise, not publishers.
+    # CN-068 is about authorship/expertise, not publishers — and, since 0.66.0, not
+    # reviewers either. A named reviewer is a real E-E-A-T signal and giving it points
+    # would make a `high` item the census records as never having passed easier to
+    # reach; that is a pricing decision, and it belongs to whoever makes it rather than
+    # to the release that separated the two fields. `signals.reviewers` is the
+    # measurement it would start from.
+    score += 20 if authors else 0
     score += min(20, len(credential_hits) * 7)
     score += min(20, len(experience_hits) * 7)
     score += 15 if policy_links else 0
@@ -268,7 +294,12 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
 
     issues = []
     if not authors:
-        issues.append({"severity": "warning", "message": "No clear author, byline or reviewer signal found."})
+        issues.append({"severity": "warning", "message": "No clear author or byline signal found."})
+    if reviewers and not authors:
+        # Without this the split silently removes a credit the operator can see in the
+        # markup, and the warning above would read as "no reviewer either".
+        issues.append({"severity": "info",
+                       "message": "Content is credited to a reviewer but names no author."})
     if not publishers:
         issues.append({"severity": "warning", "message": "No publisher or site-identity signal found."})
     if not credential_hits:
@@ -287,6 +318,7 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
         "matched_locales": sorted(locales),
         "signals": {
             "authors": authors[:20],
+            "reviewers": reviewers[:20],
             "publishers": publishers[:20],
             # CN-057's title joins two conditions with "and", and one registry rule
             # reads one path, so the pair is emitted as an object the rule can compare

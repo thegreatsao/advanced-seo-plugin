@@ -1710,6 +1710,259 @@ class EeatSignals(unittest.TestCase):
         self.assertEqual(len(result["signals"]["trust_links"]), 2)
         self.assertEqual(verdict("CN-044", result), PASS)
 
+    # --- 0.66.0: the author set is the page's own credits -------------------
+    #
+    # `_schema_values` walked the whole JSON-LD graph, so a credit written on any node
+    # anywhere was read as a credit of the page. Four shapes passed CN-057 — *Show
+    # Author and Publisher Clearly* — with no author at all: a `reviewedBy`
+    # organisation, a customer review, a comment, and an answer. Every test below names
+    # the input that isolates it, because the whole family fails to the same repair and
+    # a test that shares an input with its neighbour cannot say which half broke.
+
+    @staticmethod
+    def _person(name="A Baker"):
+        return {"@type": "Person", "name": name}
+
+    @staticmethod
+    def _org(name="Fixture Bakery"):
+        return {"@type": "Organization", "name": name}
+
+    def _ld(self, document, body="<p>Bread.</p>"):
+        return self._check_html(
+            '<!doctype html><html lang="en"><head>'
+            '<script type="application/ld+json">' + json.dumps(document) +
+            '</script></head><body>' + body + '</body></html>')
+
+    def test_a_reviewer_is_not_an_author(self):
+        """A review board is not the author, and this page names nobody else."""
+        result = self._ld({"@type": "Article",
+                           "reviewedBy": self._person("Dr Rye")})
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(result["signals"]["reviewers"], ["Dr Rye"])
+        self.assertEqual(result["signals"]["authorship"],
+                         {"author": False, "publisher": False})
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_a_publisher_and_a_reviewer_do_not_add_up_to_an_author(self):
+        """The collapse this release closes. 0.51.0 stopped a publisher standing in
+        for an author; nothing stopped a reviewer doing it, so a page naming a
+        publisher and a review board and no human passed a `high` item asking for two
+        parties."""
+        result = self._ld({"@type": "Article",
+                           "publisher": self._org(),
+                           "reviewedBy": self._org("Review Board")})
+        self.assertEqual(result["signals"]["authorship"],
+                         {"author": False, "publisher": True})
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_a_reviewer_organisation_is_not_publisher_evidence(self):
+        """This fails if `_credited_nodes` stops holding `reviewedBy` — a third-party
+        review board would then be reported as the site's own identity.
+
+        The test above cannot catch that: its publisher list is already non-empty, so
+        the extra name changes no boolean. This one has no publisher to hide behind.
+        """
+        result = self._ld({"@type": "Article",
+                           "reviewedBy": self._org("Review Board")})
+        self.assertEqual(result["signals"]["publishers"], [])
+
+    def test_an_author_and_a_reviewer_are_reported_apart(self):
+        result = self._ld({"@type": "Article",
+                           "author": self._person(),
+                           "reviewedBy": self._person("Dr Rye")})
+        self.assertEqual(result["signals"]["authors"], ["A Baker"])
+        self.assertEqual(result["signals"]["reviewers"], ["Dr Rye"])
+
+    def test_a_reviewer_is_read_as_a_string_a_node_and_a_list(self):
+        """Each form must assert both halves. Checking only `reviewers` would pass an
+        implementation that writes the name into `authors` as well, which is the
+        behaviour being removed."""
+        forms = {
+            "string": "Dr Rye",
+            "node": self._person("Dr Rye"),
+            "list": [self._person("Dr Rye")],
+        }
+        for label, value in forms.items():
+            with self.subTest(label):
+                result = self._ld({"@type": "Article", "reviewedBy": value})
+                self.assertEqual(result["signals"]["reviewers"], ["Dr Rye"])
+                self.assertEqual(result["signals"]["authors"], [])
+
+    def test_a_customer_review_does_not_author_the_product_page(self):
+        """Every e-commerce product page carrying one customer review passed CN-057
+        on the strength of the shopper's name."""
+        result = self._ld({"@type": "Product", "name": "Tin",
+                           "brand": self._org(),
+                           "review": [{"@type": "Review",
+                                       "author": self._person("Shopper Sam")}]})
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_a_comment_does_not_author_the_page(self):
+        result = self._ld({"@type": "Article", "publisher": self._org(),
+                           "comment": [{"@type": "Comment",
+                                        "author": self._person("Commenter Cal")}]})
+        self.assertEqual(result["signals"]["authors"], [])
+
+    def test_an_answer_does_not_author_the_faq_page(self):
+        result = self._ld({"@type": "FAQPage", "publisher": self._org(),
+                           "mainEntity": [{"@type": "Question", "name": "Why?",
+                                           "acceptedAnswer": {
+                                               "@type": "Answer",
+                                               "author": self._person("Answerer Ann")}}]})
+        self.assertEqual(result["signals"]["authors"], [])
+
+    def test_a_page_with_an_author_keeps_only_its_own(self):
+        """The verdict here was already right; the evidence was not. A page naming its
+        author also reported the shopper as a second one.
+
+        This catches an implementation that drops every nested credit rather than the
+        foreign ones. It does *not* catch pruning by node type — that removes the
+        `Review` node and leaves the author, so this test still passes — which is what
+        `test_an_editorial_review_page_credits_its_own_author` is for.
+        """
+        result = self._ld({"@type": "Article", "author": self._person(),
+                           "publisher": self._org(),
+                           "review": [{"@type": "Review",
+                                       "author": self._person("Shopper Sam")}]})
+        self.assertEqual(result["signals"]["authors"], ["A Baker"])
+
+    def test_the_nestings_a_cms_really_uses_still_credit(self):
+        """The boundary this change must not cross. Every one of these puts the
+        article somewhere other than the document root, and all of them are ordinary
+        CMS output."""
+        documents = {
+            "@graph": {"@context": "https://schema.org",
+                       "@graph": [{"@type": "WebSite", "name": "Fixture Bakery"},
+                                  {"@type": "Article", "author": self._person(),
+                                   "publisher": self._org()}]},
+            "mainEntity": {"@type": "WebPage",
+                           "mainEntity": {"@type": "Article",
+                                          "author": self._person(),
+                                          "publisher": self._org()}},
+            "mainEntityOfPage": {"@type": "Article", "author": self._person(),
+                                 "publisher": self._org(),
+                                 "mainEntityOfPage": {"@type": "WebPage",
+                                                      "@id": "https://x.example/"}},
+            "blogPost": {"@type": "Blog",
+                         "blogPost": [{"@type": "BlogPosting",
+                                       "author": self._person(),
+                                       "publisher": self._org()}]},
+        }
+        for label, document in documents.items():
+            with self.subTest(label):
+                result = self._ld(document)
+                self.assertEqual(result["signals"]["authors"], ["A Baker"])
+                self.assertEqual(result["signals"]["publishers"], ["Fixture Bakery"])
+
+        both = self._ld({"@type": "Article", "publisher": self._org(),
+                         "author": [self._person(), self._person("B Baker")]})
+        self.assertEqual(both["signals"]["authors"], ["A Baker", "B Baker"])
+
+    def test_an_editorial_review_page_credits_its_own_author(self):
+        """A specialist publication's review *is* the page. Nothing descended into it
+        through `review`, so its author is the page's author.
+
+        This is the test that fails the moment exclusion is written against the
+        `Review` type instead of the key that reached it.
+        """
+        result = self._ld({"@type": "Review", "author": self._person(),
+                           "publisher": self._org(),
+                           "itemReviewed": {"@type": "Product", "name": "Tin"}})
+        self.assertEqual(result["signals"]["authors"], ["A Baker"])
+
+    def test_a_reviewed_but_unauthored_page_says_so(self):
+        """No registry rule reads this script's findings, so this text is checked by
+        nobody unless it is checked here. The second half is the control: without it
+        an implementation that drops the `if reviewers` guard passes."""
+        reviewed = self._ld({"@type": "Article",
+                             "reviewedBy": self._person("Dr Rye")})
+        self.assertEqual(
+            [issue["message"] for issue in reviewed["issues"]],
+            ["No clear author or byline signal found.",
+             "Content is credited to a reviewer but names no author.",
+             "No publisher or site-identity signal found.",
+             "No visible credential or review language found.",
+             "No editorial, review, corrections, or fact-check policy link detected.",
+             "No obvious about/contact/privacy/team trust links detected.",
+             "No privacy policy link detected."])
+
+        neither = self._ld({"@type": "Article", "publisher": self._org()})
+        self.assertNotIn("Content is credited to a reviewer but names no author.",
+                         [issue["message"] for issue in neither["issues"]])
+
+    def test_a_reviewer_adds_nothing_to_an_authored_page_score(self):
+        """Asserting `score == 0` on a reviewer-only page would prove nothing: with
+        `authors == []` already established, zero is arithmetic. Two pages differing
+        only by a `reviewedBy` key is the comparison that has content."""
+        authored = self._ld({"@type": "Article", "author": self._person(),
+                             "publisher": self._org()})
+        also_reviewed = self._ld({"@type": "Article", "author": self._person(),
+                                  "publisher": self._org(),
+                                  "reviewedBy": self._person("Dr Rye")})
+        self.assertEqual(authored["score"], also_reviewed["score"])
+        self.assertEqual(also_reviewed["signals"]["reviewers"], ["Dr Rye"])
+
+    def test_a_hoisted_customer_review_still_does_not_author_the_page(self):
+        """Flattening a page into `@graph` lifts the customer review to the top level
+        and leaves `"review": {"@id": "#r1"}` behind. Pruning by key alone never
+        reaches it, and the shopper is credited again."""
+        shopper = self._person("Shopper Sam")
+        documents = {
+            "product first": {"@context": "https://schema.org", "@graph": [
+                {"@type": "Product", "name": "Tin", "brand": self._org(),
+                 "review": {"@id": "#r1"}},
+                {"@type": "Review", "@id": "#r1", "author": shopper}]},
+            "review first": {"@context": "https://schema.org", "@graph": [
+                {"@type": "Review", "@id": "#r1", "author": shopper},
+                {"@type": "Product", "name": "Tin", "brand": self._org(),
+                 "review": {"@id": "#r1"}}]},
+        }
+        for label, document in documents.items():
+            with self.subTest(label):
+                result = self._ld(document)
+                self.assertEqual(result["signals"]["authors"], [])
+                self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_a_hoisted_subject_keeps_the_page_node(self):
+        """The other direction, and the reason the `@id` rule covers contributions
+        only. A review site hoists the product and points at it with `itemReviewed`;
+        treating that reference the way a `review` reference is treated would prune the
+        page's own product node and lose the brand that is its publisher evidence."""
+        result = self._ld({"@context": "https://schema.org", "@graph": [
+            {"@type": "Product", "@id": "#p", "name": "Tin", "brand": self._org()},
+            {"@type": "Review", "itemReviewed": {"@id": "#p"},
+             "author": self._person("Staff Journalist")}]})
+        self.assertEqual(result["signals"]["authors"], ["Staff Journalist"])
+        self.assertEqual(result["signals"]["publishers"], ["Fixture Bakery"])
+
+    def test_the_reviewed_work_and_the_cited_work_are_not_the_page(self):
+        """A review of Moby Dick reported Herman Melville among its authors."""
+        reviewed = self._ld({"@type": "Review", "author": self._person("Reviewer A"),
+                             "publisher": self._org("Book Review Weekly"),
+                             "itemReviewed": {
+                                 "@type": "Book", "name": "Moby Dick",
+                                 "author": self._person("Herman Melville")}})
+        self.assertEqual(reviewed["signals"]["authors"], ["Reviewer A"])
+
+        cited = self._ld({"@type": "Article", "author": self._person(),
+                          "publisher": self._org(),
+                          "citation": {"@type": "ScholarlyArticle",
+                                       "author": self._person("Smith")}})
+        self.assertEqual(cited["signals"]["authors"], ["A Baker"])
+
+    def test_every_contribution_key_is_covered(self):
+        """Without this, an implementation naming three of the seven keys passes every
+        other test here — the three that happen to have a test of their own."""
+        from seo_common import CONTRIBUTION_KEYS
+        self.assertTrue(CONTRIBUTION_KEYS, "the key set is empty")
+        for key in sorted(CONTRIBUTION_KEYS):
+            with self.subTest(key):
+                result = self._ld({"@type": "Article", "publisher": self._org(),
+                                   key: [{"@type": "Review",
+                                          "author": self._person("Shopper Sam")}]})
+                self.assertEqual(result["signals"]["authors"], [])
+
 
 class Freshness(unittest.TestCase):
     """CN-038 `score`, CN-056 `dates`."""

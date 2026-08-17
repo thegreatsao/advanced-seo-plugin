@@ -396,11 +396,25 @@ than fetching them.
 `matched_locales[]` — array — sorted vocabularies used: English plus a carried declared locale
 `signals.authors[]` — array
   - people only since 0.51.0: `meta[name=author]`, `rel=author`, an exact byline class
-    token, and JSON-LD `author` / `reviewedBy`. `publisher` used to be read into this
-    same list, so a page naming no human passed CN-057.
+    token, and JSON-LD `author`. `publisher` used to be read into this same list, so a
+    page naming no human passed CN-057.
+  - the page's **own** credits since 0.66.0. An `author` reached through a contribution
+    key (`review`, `reviews`, `comment`, `comments`, `acceptedAnswer`,
+    `suggestedAnswer`, `userComments`) or a subject key (`itemReviewed`, `citation`,
+    `isBasedOn`) belongs to whoever contributed it, not to the page, and so does a node
+    whose `@id` is referenced from under a contribution key. A product page carrying one
+    customer review used to report the shopper as its author and pass CN-057.
+`signals.reviewers[]` — array
+  - JSON-LD `reviewedBy` only, separate from `authors` since 0.66.0. A page whose only
+    credit was a review board reported an author, and a page naming a publisher and a
+    reviewer but no author passed CN-057. No registry rule reads this field; it is
+    evidence for the operator, and the measurement anyone repricing a reviewer signal
+    into the score would start from.
 `signals.publishers[]` — array
   - JSON-LD `publisher`, organisation-typed nodes not credited as author or reviewer,
-    `og:site_name`, `article:publisher`, `meta[name=copyright]`.
+    `og:site_name`, `article:publisher`, `meta[name=copyright]`. Read over the same
+    page-own sweep as `authors`, so an organisation named inside a customer review is
+    not the site's identity either.
 `signals.authorship` — object — read by CN-057
   - `author` / `publisher` — bool — the two halves of *Show Author and Publisher
     Clearly*. Re-probed 2026-08-15 against the same WordPress page as the rest of this
