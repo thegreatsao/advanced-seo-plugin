@@ -11,6 +11,7 @@ HTTP and source resolution are ``require_requests``, ``fetch_url``,
 ``origin`` and ``same_host``. HTML and image handling is the ``BeautifulSoup``
 dependency handle, ``require_bs4``, ``html_parser``, ``parse_html``,
 ``primary_language``, ``favicon_href``, ``has_byline_class``,
+``page_author_names``, ``page_nodes``,
 ``is_responsive_fill_image``, ``srcset_urls``, ``picture_sources`` and
 ``likely_lcp_candidate``. Robots and
 sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
@@ -612,6 +613,50 @@ def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS):
                 yield from walk(child)
 
     yield from walk(value)
+
+
+def schema_values(schema_items: list, keys: set[str]) -> list[str]:
+    values = []
+    for item in schema_items:
+        for node in page_nodes(item):
+            for key in keys:
+                value = node.get(key)
+                if isinstance(value, str):
+                    values.append(value)
+                elif isinstance(value, dict) and value.get("name"):
+                    values.append(str(value["name"]))
+                elif isinstance(value, list):
+                    values.extend(str(v.get("name") if isinstance(v, dict) else v) for v in value)
+    return [value for value in values if value and value != "None"]
+
+
+def page_author_names(parsed: dict) -> list[str]:
+    """Who the page says wrote it: `meta[name=author]` and `rel=author`, an exact
+    byline class token with text, and JSON-LD `author` over the page's own nodes.
+
+    One definition because two scripts needed the same answer and gave different ones.
+    Until 0.69.0 `citation_readiness` asked whether the page carried *any* JSON-LD
+    `name`, so a product's name and a reviewed book's title were author signals worth
+    fifteen points while `meta[name=author]` was not read at all. `eeat_signal_checker`
+    answered all six measured cases correctly, and this is that code.
+
+    Not the same question as `signals.authorship.author`, which is a verdict about a
+    page; this is the list that verdict is taken from.
+    """
+    soup = parsed["soup"]
+    author_meta = [
+        tag.get("content") or tag.get_text(" ", strip=True)
+        for tag in soup.find_all(["meta", "span", "a"], attrs={"name": "author"})
+        + soup.find_all(["a", "span"], rel=lambda value: value and "author" in value)
+    ]
+    class_authors = [
+        tag.get_text(" ", strip=True)
+        for tag in soup.find_all(class_=True)
+        if has_byline_class(tag)
+        and tag.get_text(strip=True)
+    ]
+    schema_authors = schema_values(parsed.get("schema", []), {"author"})
+    return sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
 
 
 def as_list(value: Any) -> list[Any]:

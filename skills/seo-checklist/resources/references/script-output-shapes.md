@@ -262,6 +262,8 @@ counted in neither direction)
 `citation_signals.footnote_links` — int
 `entity_signals.types[]` — array
 `entity_signals.names[]` — array
+  - names from the page's own entities, not the author signal read by
+    `seo_common.page_author_names`
 `entity_signals.sameAs[]` — array
   - signals from the page's own entities: contributor subtrees and hoisted contributor
     nodes are excluded, while the subject the page reviews, cites, or is based on stays

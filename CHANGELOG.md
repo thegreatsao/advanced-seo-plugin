@@ -10,6 +10,34 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.69.0 — an author signal is an author, not any name on the page
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`citation_readiness.py` now awards its fifteen author points for the same author
+sources as `eeat_signal_checker.py`: `meta[name=author]`, the existing substring
+match for `rel=author`, an exact byline class token carrying text, and JSON-LD
+`author` over the page's own nodes. A product name, publisher name or reviewed work's
+title remains an entity signal but is not an author; an empty byline names nobody.
+The citation finding now says `No clear author or byline signal detected.`
+
+The shared answer is `seo_common.page_author_names(parsed)`. Its JSON-LD flattener
+also moved from the E-E-A-T script to `seo_common.schema_values`, leaving publisher
+and reviewer behaviour unchanged. The helper preserves the prior author list exactly:
+values are stripped, de-duplicated, sorted, and empty values are discarded.
+
+Twelve new or rewritten citation tests cover the false positive and false negative,
+all author sources, contribution boundaries, empty bylines, the existing substring
+`rel` match, both consumers' agreement, the shared import seam, and the helper's exact
+list. The suite moves from 1038 to 1049 tests.
+
+Three fixture scores move and no fixture verdict does: `broken/index.html` falls from
+48 to 33, while `good/about.html` and `good/privacy.html` rise from 10 to 25.
+`good/index.html` remains 60 and PASS. The oracle remains 246 declarations / 219
+matched / 0 disagreed / 27 indeterminate, coverage 121 / 106 / 77, with no
+differences; the verdict census remains 25 / 8 / 30 and the inert-findings ledger
+16 / 11.
+
 ## 0.68.0 — a date in the future is not freshness
 
 Registry version: `be2ab95ba6bf`, unchanged.

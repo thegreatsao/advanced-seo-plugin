@@ -8,7 +8,13 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import CONTRIBUTION_KEYS, has_byline_class, load_source, page_nodes, parse_html
+from seo_common import (
+    CONTRIBUTION_KEYS,
+    load_source,
+    page_author_names,
+    page_nodes,
+    parse_html,
+)
 
 
 CLAIM_RE = re.compile(
@@ -66,14 +72,12 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
     ]
     entity_signals = _schema_entity_signals(parsed.get("schema", []))
     # The substring match handed a layout class fifteen points on the score GO-145
-    # and GEO-005 both assert; only vocabulary tokens name a byline.
+    # and GEO-005 both assert; page_author_names uses only vocabulary tokens to name
+    # a byline.
     #
-    # Known and measured for 0.69.0: a Review with no author whose itemReviewed is a
-    # named Book scores 15 here and suppresses the "No clear author" finding. A bare
-    # Product named Tin does the same. `entity_signals["names"]` correctly reports the
-    # page's entities; this consumer must eventually read author credits instead.
-    author_signals = bool(entity_signals["names"]) or any(
-        has_byline_class(tag) for tag in soup.find_all(class_=True))
+    # Author credits now come from the shared source used by eeat_signal_checker. No
+    # fallback `or` belongs here: page_author_names already reads byline classes.
+    author_signals = bool(page_author_names(parsed))
 
     citation_capacity = len(external_links) + len(cite_tags) + len(footnote_links)
     claim_coverage = min(1.0, citation_capacity / max(1, len(factual_claims)))
@@ -90,7 +94,7 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
     if not trusted_links:
         issues.append({"severity": "info", "message": "No high-trust external source domains detected."})
     if not author_signals:
-        issues.append({"severity": "warning", "message": "No clear author or entity name signal detected."})
+        issues.append({"severity": "warning", "message": "No clear author or byline signal detected."})
     if not entity_signals["sameAs"]:
         issues.append({"severity": "info", "message": "No sameAs entity links found in JSON-LD."})
 

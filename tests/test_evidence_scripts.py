@@ -26,6 +26,7 @@ Every run happens once, in `setUpModule`, in parallel, and is cached: 40 scripts
 ~80 process launches, and doing them per test method would make this file slower than
 the rest of the suite put together.
 """
+import ast
 import http.client
 import http.server
 import inspect
@@ -2320,6 +2321,8 @@ class AnswerBlocks(unittest.TestCase):
 class CitationReadiness(unittest.TestCase):
     """GO-145 and GEO-005, both `score`."""
 
+    AUTHOR_FINDING = "No clear author or byline signal detected."
+
     @staticmethod
     def _check_html(html):
         import citation_readiness
@@ -2352,6 +2355,173 @@ class CitationReadiness(unittest.TestCase):
             '<!doctype html><html><head><script type="application/ld+json">' +
             json.dumps(document) + '</script></head><body></body></html>')
 
+    @staticmethod
+    def _messages(result):
+        return [issue["message"] for issue in result["issues"]]
+
+    def test_a_product_name_is_not_an_author(self):
+        result = self._ld({"@type": "Product", "name": "Tin"})
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+        self.assertEqual(result["entity_signals"]["names"], ["Tin"])
+
+    def test_a_meta_author_is_an_author(self):
+        result = self._check_html(
+            '<!doctype html><html><head><meta name="author" content="A Baker">'
+            '</head><body></body></html>')
+        self.assertEqual(result["score"], 15)
+        self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_rel_author_link_is_an_author(self):
+        result = self._check_html('<a rel="author">A Baker</a>')
+        self.assertEqual(result["score"], 15)
+        self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_byline_class_is_still_an_author(self):
+        result = self._check_html('<span class="byline">A Baker</span>')
+        self.assertEqual(result["score"], 15)
+        self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_customer_reviews_author_is_still_not_the_pages(self):
+        result = self._ld({
+            "@type": "Product",
+            "review": {
+                "@type": "Review",
+                "author": {"@type": "Person", "name": "Shopper Sam"},
+            },
+        })
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_bare_string_author_is_an_author(self):
+        result = self._ld({"@type": "Article", "author": "A Baker"})
+        self.assertEqual(result["score"], 15)
+        self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_both_scripts_now_answer_the_same_question(self):
+        import eeat_signal_checker
+
+        documents = {
+            "R1 product name": self._ld_html(
+                {"@type": "Product", "name": "Tin"}),
+            "R2 reviewed book": self._ld_html({
+                "@type": "Review",
+                "itemReviewed": {
+                    "@type": "Book",
+                    "name": "Moby Dick",
+                    "sameAs": "https://www.wikidata.org/wiki/Q14924",
+                },
+            }),
+            "R3 review author": self._ld_html({
+                "@type": "Review",
+                "author": {"@type": "Person", "name": "A Baker"},
+                "itemReviewed": {"@type": "Book", "name": "Moby Dick"},
+            }),
+            "R4 byline class": '<span class="byline">A Baker</span>',
+            "R5 meta author": '<meta name="author" content="A Baker">',
+            "R6 nothing": '<div>Nothing.</div>',
+            "R7 customer review": self._ld_html({
+                "@type": "Product",
+                "review": {
+                    "@type": "Review",
+                    "author": {"@type": "Person", "name": "Shopper Sam"},
+                },
+            }),
+        }
+        for label, html in documents.items():
+            with self.subTest(label):
+                citation = self._check_html(html)
+                with tempfile.NamedTemporaryFile(
+                        "w", suffix=".html", delete=False, encoding="utf-8") as fh:
+                    fh.write(html)
+                    path = fh.name
+                try:
+                    eeat = eeat_signal_checker.check_eeat(path)
+                finally:
+                    os.unlink(path)
+                self.assertEqual(
+                    self.AUTHOR_FINDING not in self._messages(citation),
+                    bool(eeat["signals"]["authors"]),
+                )
+
+    def test_an_empty_byline_class_names_nobody(self):
+        for html in ('<span class="byline"></span>',
+                     '<span class="byline">   </span>'):
+            with self.subTest(html=html):
+                result = self._check_html(html)
+                self.assertEqual(result["score"], 0)
+                self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_co_author_rel_still_counts(self):
+        result = self._check_html('<a rel="co-author">John Doe</a>')
+        self.assertEqual(result["score"], 15)
+        self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_page_author_names_is_shared(self):
+        import seo_common
+
+        self.assertTrue(callable(seo_common.page_author_names))
+        self.assertTrue(callable(seo_common.schema_values))
+
+        evidence_path = os.path.join(ROOT, "tests", "test_evidence.py")
+        with open(evidence_path, encoding="utf-8") as stream:
+            evidence_tree = ast.parse(stream.read(), filename=evidence_path)
+        shared_class = next(
+            node for node in evidence_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "SharedHelpersStayShared"
+        )
+        guarded_names = {
+            node.value for node in ast.walk(shared_class)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+        self.assertTrue(
+            {"page_author_names", "_page_author_names",
+             "schema_values", "_schema_values"}.issubset(guarded_names))
+
+        for filename in ("citation_readiness.py", "eeat_signal_checker.py"):
+            path = os.path.join(SCRIPTS, filename)
+            with open(path, encoding="utf-8") as stream:
+                tree = ast.parse(stream.read(), filename=path)
+            imported = {
+                alias.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) and node.module == "seo_common"
+                for alias in node.names
+            }
+            with self.subTest(filename=filename):
+                self.assertIn("page_author_names", imported)
+
+    def test_page_author_names_returns_the_names_not_a_verdict(self):
+        from seo_common import page_author_names, parse_html
+
+        rows = [
+            ('<meta name="author" content="A Baker">', ["A Baker"]),
+            ('<meta name="author" content="">', []),
+            ('<meta name="author">', []),
+            ('<meta name="author" content="  A Baker  ">', ["A Baker"]),
+            ('<span class="byline">   </span>', []),
+            (self._ld_html({"author": [{"name": "B"}, {"name": "A"}]}),
+             ["A", "B"]),
+            (self._ld_html({"author": "A Baker"}), ["A Baker"]),
+            (self._ld_html({"author": {"@type": "Person"}}), []),
+            ('<meta name="author" content="A Baker">' + self._ld_html(
+                {"author": {"name": "A Baker"}}), ["A Baker"]),
+            ('<meta name="author" content="A Baker">'
+             '<span class="byline">C Dough</span>' + self._ld_html(
+                 {"author": {"name": "B Cook"}}),
+             ["A Baker", "B Cook", "C Dough"]),
+        ]
+        for html, expected in rows:
+            with self.subTest(html=html, expected=expected):
+                parsed = parse_html(html, "")
+                self.assertEqual(page_author_names(parsed), expected)
+
+    @staticmethod
+    def _ld_html(document):
+        return ('<!doctype html><html><head><script type="application/ld+json">' +
+                json.dumps(document) + '</script></head><body></body></html>')
+
     def test_a_contributors_identity_is_not_the_pages_entity(self):
         profiles = [f"https://social.example/shopper/{index}" for index in range(4)]
         bare = self._ld({"@type": "Product", "name": "Tin"})
@@ -2376,7 +2546,7 @@ class CitationReadiness(unittest.TestCase):
         })
         self.assertEqual(result["entity_signals"]["sameAs"],
                          ["https://www.wikidata.org/wiki/Q14924"])
-        self.assertEqual(result["score"], 20)
+        self.assertEqual(result["score"], 5)
 
     def test_a_hoisted_contributor_is_not_the_pages_entity(self):
         profiles = [f"https://social.example/commenter/{index}" for index in range(4)]
@@ -2447,15 +2617,14 @@ class CitationReadiness(unittest.TestCase):
             self.assertEqual(names(custom), {"Page", "Custom child"})
             self.assertEqual(names(custom, exclude={"custom"}), {"Page"})
 
-    def test_a_subject_name_still_reaches_author_signals(self):
+    def test_a_reviewed_works_title_is_not_an_author(self):
         result = self._ld({
             "@type": "Review",
             "itemReviewed": {"@type": "Book", "name": "Moby Dick"},
         })
         self.assertEqual(result["entity_signals"]["names"], ["Moby Dick"])
-        self.assertEqual(result["score"], 15)
-        messages = [issue["message"] for issue in result["issues"]]
-        self.assertNotIn("No clear author or entity name signal detected.", messages)
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
 
 
 class ArticleKeyword(unittest.TestCase):

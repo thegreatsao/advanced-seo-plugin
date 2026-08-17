@@ -11,11 +11,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from seo_common import (
-    has_byline_class,
     load_source,
+    page_author_names,
     page_nodes,
     parse_html,
     primary_language,
+    schema_values,
     walk_json,
 )
 
@@ -178,7 +179,7 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
     """
     schema = parsed.get("schema", [])
     credited = _credited_nodes(schema)
-    names = list(_schema_values(schema, {"publisher"}))
+    names = list(schema_values(schema, {"publisher"}))
     for item in schema:
         for node in page_nodes(item):
             if id(node) in credited:
@@ -194,21 +195,6 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
     return names
 
 
-def _schema_values(schema_items: list, keys: set[str]) -> list[str]:
-    values = []
-    for item in schema_items:
-        for node in page_nodes(item):
-            for key in keys:
-                value = node.get(key)
-                if isinstance(value, str):
-                    values.append(value)
-                elif isinstance(value, dict) and value.get("name"):
-                    values.append(str(value["name"]))
-                elif isinstance(value, list):
-                    values.extend(str(v.get("name") if isinstance(v, dict) else v) for v in value)
-    return [value for value in values if value and value != "None"]
-
-
 def check_eeat(source: str, timeout: int = 15) -> dict:
     html, url, fetched = load_source(source, timeout)
     parsed = parse_html(html, url)
@@ -218,25 +204,13 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     locales = frozenset({"en", lang} if lang in _TERMS["languages"] else {"en"})
     patterns = _patterns_for(locales)
 
-    author_meta = [
-        tag.get("content") or tag.get_text(" ", strip=True)
-        for tag in soup.find_all(["meta", "span", "a"], attrs={"name": "author"})
-        + soup.find_all(["a", "span"], rel=lambda value: value and "author" in value)
-    ]
-    class_authors = [
-        tag.get_text(" ", strip=True)
-        for tag in soup.find_all(class_=True)
-        if has_byline_class(tag)
-        and tag.get_text(strip=True)
-    ]
-    schema_authors = _schema_values(parsed.get("schema", []), {"author"})
-    authors = sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
+    authors = page_author_names(parsed)
     # `reviewedBy` sat in the line above until 0.66.0. A page whose only credit was a
     # review board reported an author, and a page naming a publisher and a reviewer but
     # no author passed CN-057 — an item whose title asks for two parties.
     reviewers = sorted({value.strip()
-                        for value in _schema_values(parsed.get("schema", []),
-                                                    {"reviewedBy"})
+                        for value in schema_values(parsed.get("schema", []),
+                                                   {"reviewedBy"})
                         if value and value.strip()})
     publishers = sorted({v.strip() for v in _publisher_names(parsed, soup) if v and v.strip()})
 
