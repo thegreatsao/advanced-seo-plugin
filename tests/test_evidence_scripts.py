@@ -1967,6 +1967,20 @@ class EeatSignals(unittest.TestCase):
 class Freshness(unittest.TestCase):
     """CN-038 `score`, CN-056 `dates`."""
 
+    @staticmethod
+    def _check_document(document):
+        import freshness_checker
+        html = ('<!doctype html><html><head><script type="application/ld+json">' +
+                json.dumps(document) + '</script></head><body></body></html>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            return freshness_checker.check_freshness(path)
+        finally:
+            os.unlink(path)
+
     def test_a_dated_article_is_fresh_and_its_dates_are_found(self):
         good = out("fresh")
         self.assertTrue(good["dates"])
@@ -1978,6 +1992,79 @@ class Freshness(unittest.TestCase):
         self.assertEqual(bad["dates"], [])
         self.assertEqual(verdict("CN-056", bad), FAIL)
         self.assertEqual(verdict("CN-038", bad), FAIL)
+
+    def test_a_customer_review_date_is_not_the_page_date(self):
+        result = self._check_document({
+            "@type": "Product", "name": "Tin",
+            "review": {"@type": "Review", "datePublished": "2019-04-02"},
+        })
+        self.assertEqual(result["dates"], [])
+        self.assertEqual(verdict("CN-056", result), FAIL)
+
+    def test_a_reviewed_works_date_is_not_the_page_date(self):
+        result = self._check_document({
+            "@type": "Review", "datePublished": "2026-07-01",
+            "itemReviewed": {
+                "@type": "Book", "datePublished": "1851-10-18",
+            },
+        })
+        self.assertEqual(result["latest_date"], "2026-07-01")
+        self.assertFalse(any("1851" in entry["raw"] for entry in result["dates"]))
+
+    def test_a_cited_papers_date_is_not_the_page_date(self):
+        result = self._check_document({
+            "@type": "Article", "datePublished": "2026-07-02",
+            "citation": {
+                "@type": "ScholarlyArticle", "datePublished": "2020-01-01",
+            },
+        })
+        self.assertEqual(result["latest_date"], "2026-07-02")
+        self.assertFalse(any("2020" in entry["raw"] for entry in result["dates"]))
+
+    def test_the_pages_own_dates_still_count(self):
+        published = "2026-07-01"
+        modified = "2026-07-20"
+        dated = {"datePublished": published, "dateModified": modified}
+        documents = {
+            "@graph": {"@graph": [{"@type": "Article", **dated}]},
+            "mainEntity": {"@graph": [
+                {"@type": "WebPage", "mainEntity": {"@id": "#article"}},
+                {"@type": "Article", "@id": "#article", **dated},
+            ]},
+            "blogPost": {"@type": "Blog", "blogPost": {
+                "@type": "BlogPosting", **dated,
+            }},
+        }
+        for label, document in documents.items():
+            with self.subTest(label):
+                result = self._check_document(document)
+                self.assertEqual({entry["raw"] for entry in result["dates"]},
+                                 {published, modified})
+
+    def test_a_hoisted_customer_review_date_is_not_the_page_date(self):
+        result = self._check_document({"@graph": [
+            {"@type": "Product", "name": "Tin", "review": {"@id": "#r1"}},
+            {"@type": "Review", "@id": "#r1", "datePublished": "2019-04-02"},
+        ]})
+        self.assertEqual(result["dates"], [])
+
+    def test_a_hoisted_subjects_date_is_not_the_page_date(self):
+        result = self._check_document({"@graph": [
+            {"@type": "Review", "itemReviewed": {"@id": "#b"}},
+            {"@type": "Book", "@id": "#b", "datePublished": "1851-10-18"},
+        ]})
+        self.assertEqual(result["dates"], [])
+
+    def test_every_foreign_key_is_covered_for_dates(self):
+        from seo_common import FOREIGN_CREDIT_KEYS
+        self.assertTrue(FOREIGN_CREDIT_KEYS, "the key set is empty")
+        for key in sorted(FOREIGN_CREDIT_KEYS):
+            with self.subTest(key):
+                result = self._check_document({
+                    "@type": "Thing",
+                    key: {"@type": "Thing", "datePublished": "2019-04-02"},
+                })
+                self.assertEqual(result["dates"], [])
 
 
 class FaviconDisplay(unittest.TestCase):
@@ -2160,6 +2247,116 @@ class CitationReadiness(unittest.TestCase):
         byline = self._check_html('<p class="byline">A Baker</p>')
         self.assertEqual(layout["score"], neutral["score"])
         self.assertGreater(byline["score"], layout["score"])
+
+    def _ld(self, document):
+        return self._check_html(
+            '<!doctype html><html><head><script type="application/ld+json">' +
+            json.dumps(document) + '</script></head><body></body></html>')
+
+    def test_a_contributors_identity_is_not_the_pages_entity(self):
+        profiles = [f"https://social.example/shopper/{index}" for index in range(4)]
+        bare = self._ld({"@type": "Product", "name": "Tin"})
+        reviewed = self._ld({
+            "@type": "Product", "name": "Tin",
+            "review": {"@type": "Review", "author": {
+                "@type": "Person", "name": "Shopper Sam", "sameAs": profiles,
+            }},
+        })
+        self.assertEqual(bare["entity_signals"],
+                         {"types": ["Product"], "names": ["Tin"], "sameAs": []})
+        self.assertEqual(reviewed["entity_signals"], bare["entity_signals"])
+        self.assertEqual(reviewed["score"], bare["score"])
+
+    def test_the_reviewed_subject_is_still_the_pages_entity(self):
+        result = self._ld({
+            "@type": "Review",
+            "itemReviewed": {
+                "@type": "Book", "name": "Moby Dick",
+                "sameAs": "https://www.wikidata.org/wiki/Q14924",
+            },
+        })
+        self.assertEqual(result["entity_signals"]["sameAs"],
+                         ["https://www.wikidata.org/wiki/Q14924"])
+        self.assertEqual(result["score"], 20)
+
+    def test_a_hoisted_contributor_is_not_the_pages_entity(self):
+        profiles = [f"https://social.example/commenter/{index}" for index in range(4)]
+        result = self._ld({"@graph": [
+            {"@type": "Article", "comment": {"@id": "#c1"}},
+            {"@type": "Person", "@id": "#c1", "name": "Commenter Cal",
+             "sameAs": profiles},
+        ]})
+        self.assertEqual(result["entity_signals"]["sameAs"], [])
+        self.assertNotIn("Commenter Cal", result["entity_signals"]["names"])
+
+    def test_the_two_callers_ask_for_different_keys(self):
+        import freshness_checker
+        contributor = "https://social.example/shopper"
+        subject = "https://www.wikidata.org/wiki/Q14924"
+        document = {
+            "@type": "Review",
+            "review": {
+                "@type": "Review", "datePublished": "2019-04-02",
+                "author": {"@type": "Person", "name": "Shopper Sam",
+                           "sameAs": contributor},
+            },
+            "itemReviewed": {
+                "@type": "Book", "name": "Moby Dick", "sameAs": subject,
+                "datePublished": "1851-10-18",
+            },
+        }
+        html = ('<!doctype html><html><head><script type="application/ld+json">' +
+                json.dumps(document) + '</script></head><body></body></html>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = fh.name
+        try:
+            citation = self._check_html(html)
+            freshness = freshness_checker.check_freshness(path)
+        finally:
+            os.unlink(path)
+        self.assertEqual(freshness["dates"], [])
+        self.assertIn(subject, citation["entity_signals"]["sameAs"])
+        self.assertNotIn(contributor, citation["entity_signals"]["sameAs"])
+
+    def test_page_nodes_parameters_are_independent(self):
+        from seo_common import CONTRIBUTION_KEYS, FOREIGN_CREDIT_KEYS, page_nodes
+
+        def names(document, **kwargs):
+            return {node["name"] for node in page_nodes(document, **kwargs)
+                    if "name" in node}
+
+        document = {"@graph": [
+            {"@type": "Thing", "name": "Page", "review": {"@id": "#c"},
+             "itemReviewed": {"name": "Nested subject"},
+             "citation": {"@id": "#s"}},
+            {"@id": "#c", "name": "Hoisted contributor"},
+            {"@id": "#s", "name": "Hoisted subject"},
+        ]}
+        with self.subTest("defaults reproduce 0.66.0"):
+            self.assertEqual(names(document), {"Page", "Hoisted subject"})
+        with self.subTest("hoisted accepts subject keys"):
+            self.assertEqual(names(document, hoisted=FOREIGN_CREDIT_KEYS), {"Page"})
+        with self.subTest("exclude can keep nested subjects"):
+            nested = {"name": "Page", "review": {"name": "Contributor"},
+                      "itemReviewed": {"name": "Nested subject"}}
+            self.assertEqual(names(nested, exclude=CONTRIBUTION_KEYS),
+                             {"Page", "Nested subject"})
+        with self.subTest("a custom exclude changes traversal"):
+            custom = {"name": "Page", "custom": {"name": "Custom child"}}
+            self.assertEqual(names(custom), {"Page", "Custom child"})
+            self.assertEqual(names(custom, exclude={"custom"}), {"Page"})
+
+    def test_a_subject_name_still_reaches_author_signals(self):
+        result = self._ld({
+            "@type": "Review",
+            "itemReviewed": {"@type": "Book", "name": "Moby Dick"},
+        })
+        self.assertEqual(result["entity_signals"]["names"], ["Moby Dick"])
+        self.assertEqual(result["score"], 15)
+        messages = [issue["message"] for issue in result["issues"]]
+        self.assertNotIn("No clear author or entity name signal detected.", messages)
 
 
 class ArticleKeyword(unittest.TestCase):

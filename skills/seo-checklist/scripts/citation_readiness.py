@@ -8,7 +8,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import has_byline_class, load_source, parse_html, walk_json
+from seo_common import CONTRIBUTION_KEYS, has_byline_class, load_source, page_nodes, parse_html
 
 
 CLAIM_RE = re.compile(
@@ -27,7 +27,8 @@ def _schema_entity_signals(schema_items: list) -> dict:
     same_as = set()
     types = set()
     for item in schema_items:
-        for node in walk_json(item):
+        for node in page_nodes(
+                item, exclude=CONTRIBUTION_KEYS, hoisted=CONTRIBUTION_KEYS):
             if node.get("@type"):
                 types.add(str(node["@type"]))
             if node.get("name"):
@@ -66,6 +67,11 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
     entity_signals = _schema_entity_signals(parsed.get("schema", []))
     # The substring match handed a layout class fifteen points on the score GO-145
     # and GEO-005 both assert; only vocabulary tokens name a byline.
+    #
+    # Known and measured for 0.69.0: a Review with no author whose itemReviewed is a
+    # named Book scores 15 here and suppresses the "No clear author" finding. A bare
+    # Product named Tin does the same. `entity_signals["names"]` correctly reports the
+    # page's entities; this consumer must eventually read author credits instead.
     author_signals = bool(entity_signals["names"]) or any(
         has_byline_class(tag) for tag in soup.find_all(class_=True))
 

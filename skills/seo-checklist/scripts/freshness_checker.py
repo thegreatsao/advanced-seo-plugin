@@ -8,7 +8,7 @@ import json
 import re
 from datetime import date, datetime
 
-from seo_common import load_source, parse_html, walk_json
+from seo_common import FOREIGN_CREDIT_KEYS, load_source, page_nodes, parse_html
 
 
 # basis: inherited — 730 days, present at import. Two years is the point at which a
@@ -46,7 +46,7 @@ def _parse_date(value: str | None) -> date | None:
 def _schema_dates(schema_items: list) -> dict[str, list[str]]:
     dates = {"datePublished": [], "dateModified": []}
     for item in schema_items:
-        for node in walk_json(item):
+        for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS):
             for key in dates:
                 if isinstance(node.get(key), str):
                     dates[key].append(node[key])

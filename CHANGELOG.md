@@ -10,6 +10,46 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.67.0 — a contributor's credit is not the page's signal
+
+Registry version: `be2ab95ba6bf`, unchanged.
+
+`freshness_checker.py` and `citation_readiness.py` no longer sweep every node in a
+page's JSON-LD graph. A customer review's `datePublished` is not the product page's
+publication date, and a contributor's `name` and `sameAs` profiles are not the page's
+entity signals. Both readers now use `seo_common.page_nodes()` with boundaries suited
+to the field they read.
+
+Those boundaries deliberately differ. Dates exclude both contributions and subjects:
+the publication date of a reviewed book or cited paper is not the page's date. Entity
+signals exclude contributions but retain subjects: the reviewed book is what a review
+page is about, and its Wikidata `sameAs` is valid evidence that the subject resolves.
+Both rules also cover nodes hoisted into `@graph` and referenced by `@id`.
+
+`page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS)` now exposes
+its two independent mechanisms. `exclude` stops descent beneath a key; `hoisted`
+selects which keyed `@id` references disqualify their top-level targets. The defaults
+are byte-for-behaviour compatible with 0.66.0, so all three E-E-A-T callers retain their
+meaning, including the deliberate choice to keep a hoisted subject as publisher
+evidence. `site_crawl.py` correctly keeps `walk_json`, because it asks what types the
+document declares rather than whose credit a field represents.
+
+**Correction to 0.66.0:** its entry said `entity_signals` changed no verdict because no
+registry rule reads the field. No rule reads the field directly, but the `score` that
+`GEO-005` and `GO-145` — both `high` — assert is computed from it. A contributor's name
+supplied 15 points and four `sameAs` profiles supplied another 20: up to 35 of 100.
+This release removes those contributor-earned points. A subject or top-level product
+name still reaches `author_signals`; that measured scoring defect belongs to 0.69.0,
+where the consumer can be repaired without making `entity_signals.names` lie about the
+entities the page names.
+
+Thirteen tests pin the nested and hoisted boundaries, all ten foreign keys, independent
+helper parameters, the two callers' intentional asymmetry, and the deliberate 0.69.0
+residual. The suite moves from 1016 to 1029 tests. The fixture corpus is unaffected, so
+the oracle remains 246 declarations / 219 matched / 0 disagreed / 27 indeterminate,
+coverage 121 / 106 / 77, with no differences; the verdict census remains 25 / 8 / 30
+and the inert-findings ledger 16 / 11.
+
 ## 0.66.0 — the author set is the page's own credits
 
 Registry version: `be2ab95ba6bf`, unchanged.

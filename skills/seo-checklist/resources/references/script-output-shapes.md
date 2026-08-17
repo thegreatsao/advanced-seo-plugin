@@ -263,6 +263,8 @@ counted in neither direction)
 `entity_signals.types[]` — array
 `entity_signals.names[]` — array
 `entity_signals.sameAs[]` — array
+  - signals from the page's own entities: contributor subtrees and hoisted contributor
+    nodes are excluded, while the subject the page reviews, cites, or is based on stays
 `issues[]` — array
   - item keys: severity, message
 `fetch_error` — NoneType
@@ -537,6 +539,8 @@ than fetching them.
 `age_days` — int
 `dates[]` — array
   - item keys: source, raw, date
+  - schema dates come from the page's own nodes; contributions and subjects are excluded
+    whether nested under their key or hoisted into `@graph`
 `old_years[]` — array
 `stale_stat_sentences` — int
 `schema_date_mismatch` — bool

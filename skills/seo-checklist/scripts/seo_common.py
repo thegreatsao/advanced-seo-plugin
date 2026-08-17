@@ -542,22 +542,22 @@ SUBJECT_KEYS = frozenset({"itemReviewed", "citation", "isBasedOn"})
 FOREIGN_CREDIT_KEYS = CONTRIBUTION_KEYS | SUBJECT_KEYS
 
 
-def _contributed_ids(value, inside=False, found=None):
-    """Every `@id` mentioned anywhere under a `CONTRIBUTION_KEYS` key."""
+def _referenced_ids(value, keys, inside=False, found=None):
+    """Every `@id` mentioned anywhere under one of `keys`."""
     if found is None:
         found = set()
     if isinstance(value, dict):
         if inside and isinstance(value.get("@id"), str):
             found.add(value["@id"])
         for key, child in value.items():
-            _contributed_ids(child, inside or key in CONTRIBUTION_KEYS, found)
+            _referenced_ids(child, keys, inside or key in keys, found)
     elif isinstance(value, list):
         for child in value:
-            _contributed_ids(child, inside, found)
+            _referenced_ids(child, keys, inside, found)
     return found
 
 
-def page_nodes(value):
+def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS):
     """Every dict in a JSON-LD tree except the ones whose credits are not the page's.
 
     `walk_json` yields the whole graph. That is right for asking what a document
@@ -568,17 +568,17 @@ def page_nodes(value):
 
     Two rules, because two things go wrong:
 
-    * descent stops at any `FOREIGN_CREDIT_KEYS` key. Exclusion is by the key descended
+    * descent stops at any `exclude` key. Exclusion is by the key descended
       through, never by the node's `@type`: a page whose own top-level node is a
       `Review` — an editorial product review — still credits its author, because
       nothing descended into it through `review`;
-    * a node is skipped when its `@id` is referenced from under a `CONTRIBUTION_KEYS`
+    * a node is skipped when its `@id` is referenced from under a `hoisted`
       key anywhere in the document. Flattening a page into `@graph` hoists the customer
       review to the top level and leaves `"review": {"@id": "#r1"}` behind, which
-      pruning by key alone never reaches. `SUBJECT_KEYS` deliberately do **not** trigger
-      this second rule: `{"@graph": [Product #p, Review{itemReviewed: #p}]}` is an
-      ordinary review page, and pruning `#p` would lose the brand that is its publisher
-      evidence.
+      pruning by key alone never reaches. The defaults deliberately keep
+      `SUBJECT_KEYS` out of this second rule: `{"@graph": [Product #p,
+      Review{itemReviewed: #p}]}` is an ordinary review page, and pruning `#p` would
+      lose the brand that is its publisher evidence.
 
     What this deliberately costs, both measured: a specialist publication's own review
     nested as `Product -> review -> author` loses that author, and an `FAQPage` whose
@@ -587,28 +587,25 @@ def page_nodes(value):
     — and a page's own author belongs on the page's own node. Hoisting the editorial
     review to the top level, which is what a review site usually emits, keeps the credit.
 
-    `freshness_checker._schema_dates` and `citation_readiness._schema_entity_signals`
-    make the same whole-graph sweep and are deliberately not converted here; that is
-    **0.67.0**, and each is measured rather than suspected. A `Product` page carrying no
-    date of its own and one customer review dated `2019-04-02` reports that date and
-    passes `CN-056`. The citation reader takes a shopper's `name` and `sameAs` into
-    `entity_signals` as the page's entity; that changes no verdict today because no
-    registry rule reads the field, which is the reason to look at it rather than the
-    reason to leave it.
+    All three readers of author, date and entity signals now take the page's own nodes,
+    with each caller naming the boundary its fields require. `site_crawl.py` keeps
+    `walk_json` because it asks which `@type`s a document declares — a question about
+    the document, not about responsibility. That is the distinction to keep in mind
+    before adding a fourth caller.
 
     Known and not handled: a namespaced key such as `"schema:review"` bypasses both
     sets. `walk_json` has always had that hole, JSON-LD needs a context mapping to
     produce it, and closing it needs context expansion this repository does not do.
     """
-    contributed = _contributed_ids(value)
+    excluded_ids = _referenced_ids(value, hoisted)
 
     def walk(node):
         if isinstance(node, dict):
-            if node.get("@id") in contributed:
+            if node.get("@id") in excluded_ids:
                 return
             yield node
             for key, child in node.items():
-                if key not in FOREIGN_CREDIT_KEYS:
+                if key not in exclude:
                     yield from walk(child)
         elif isinstance(node, list):
             for child in node:

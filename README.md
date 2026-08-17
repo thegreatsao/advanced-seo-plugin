@@ -4,10 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.66.0 — see [CHANGELOG.md](CHANGELOG.md). The registry is unchanged; a page's
-author set is now read from the page's own credits rather than from every credit in its
-JSON-LD graph, so a product page carrying one customer review no longer reports the
-shopper as its author and no longer passes *Show Author and Publisher Clearly*.
+Version 0.67.0 — see [CHANGELOG.md](CHANGELOG.md). The registry is unchanged; page
+freshness no longer comes from a contributor or the work being discussed, and citation
+readiness no longer treats a contributor's identity as the page's entity signal.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0
