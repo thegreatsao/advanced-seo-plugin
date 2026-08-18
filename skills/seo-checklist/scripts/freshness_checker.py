@@ -10,6 +10,8 @@ from datetime import date, datetime, timedelta
 
 from seo_common import (
     FOREIGN_CREDIT_KEYS,
+    declared_publication_dates,
+    declared_publication_dates_by_source,
     load_source,
     page_nodes,
     parse_html,
@@ -61,12 +63,11 @@ def _parse_date(value: str | None) -> date | None:
 
 
 def _schema_dates(schema_items: list) -> dict[str, list[str]]:
-    dates = {"datePublished": [], "dateModified": []}
+    dates = {"dateModified": []}
     for item in schema_items:
         for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS):
-            for key in dates:
-                if isinstance(node.get(key), str):
-                    dates[key].append(node[key])
+            if isinstance(node.get("dateModified"), str):
+                dates["dateModified"].append(node["dateModified"])
     return dates
 
 
@@ -108,12 +109,13 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
             meta_dates[key] = tag.get("content")
     time_dates = _time_dates(soup)
     schema_dates = _schema_dates(parsed.get("page_schema", []))
+    publication_dates = declared_publication_dates_by_source(parsed)
 
     parsed_dates = []
     for source_name, values in {
         "meta": list(meta_dates.values()),
         "time": time_dates,
-        "schema_published": schema_dates["datePublished"],
+        "schema_published": publication_dates["schema"],
         "schema_modified": schema_dates["dateModified"],
         "body": DATE_RE.findall(body),
     }.items():
@@ -127,7 +129,7 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
                   if _parse_date(item["date"]) <= cutoff]
     modified_dates = [_parse_date(value) for value in schema_dates["dateModified"] + [meta_dates.get("article:modified_time")]]
     modified_dates = [value for value in modified_dates if value and value <= cutoff]
-    published_dates = [_parse_date(value) for value in schema_dates["datePublished"] + [meta_dates.get("article:published_time")]]
+    published_dates = [_parse_date(value) for value in declared_publication_dates(parsed)]
     published_dates = [value for value in published_dates if value and value <= cutoff]
     latest = max(non_future or modified_dates or published_dates or [], default=None)
 

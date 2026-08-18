@@ -525,6 +525,11 @@ XML = {"Content-Type": "application/xml"}
 CSS = {"Content-Type": "text/css"}
 JS = {"Content-Type": "application/javascript"}
 
+
+def _fixture_html(*parts):
+    with open(os.path.join(ROOT, "tests", "fixtures", *parts), encoding="utf-8") as fh:
+        return fh.read()
+
 GOOD_ROUTES = {
     "/": GOOD_PAGE,
     "/seo-audit.html": ("<!doctype html><html><head><title>seo audit guide</title>"
@@ -540,6 +545,10 @@ GOOD_ROUTES = {
     "/about.html": ABOUT_PAGE,
     "/guide.html": GUIDE_PAGE,
     "/privacy.html": PRIVACY_PAGE,
+    "/fixture/index.html": _fixture_html("good", "index.html"),
+    "/fixture/about.html": _fixture_html("good", "about.html"),
+    "/fixture/privacy.html": _fixture_html("good", "privacy.html"),
+    "/fixture/blog/first-post.html": _fixture_html("good", "blog", "first-post.html"),
     "/intl.html": INTL_GOOD,
     "/intl-broken.html": INTL_BROKEN,
     "/de.html": INTL_GOOD,
@@ -634,6 +643,14 @@ RUNS = [
     ("article_unfetched", "article_seo.py",
      ["http://127.0.0.1:1/unreachable", "--keyword", "sourdough starter",
       "--no-autocomplete"]),
+    ("article_fixture_index", "article_seo.py",
+     ["{good}fixture/index.html", "--no-autocomplete"]),
+    ("article_fixture_about", "article_seo.py",
+     ["{good}fixture/about.html", "--no-autocomplete"]),
+    ("article_fixture_privacy", "article_seo.py",
+     ["{good}fixture/privacy.html", "--no-autocomplete"]),
+    ("article_fixture_post", "article_seo.py",
+     ["{good}fixture/blog/first-post.html", "--no-autocomplete"]),
     ("broken", "broken_links.py", ["{good}"]),
     ("broken_bad", "broken_links.py", ["{bad}"]),
     ("cache", "cache_compression_checker.py", ["{good}"]),
@@ -2641,6 +2658,63 @@ class Freshness(unittest.TestCase):
                 })
                 self.assertEqual(result["dates"], [])
 
+    def test_declared_microdata_reaches_the_publication_mismatch_only_once(self):
+        today = date(2026, 8, 17)
+        modified = '<meta property="article:modified_time" content="2026-07-01">'
+        result = self._check_html(
+            '<time itemprop="datePublished" datetime="2026-08-01">1 August</time>',
+            head=modified, today=today)
+        self.assertIs(result["schema_date_mismatch"], True)
+        self.assertEqual(result["score"], 85)
+        self.assertIn("dateModified appears older than datePublished.",
+                      [issue["message"] for issue in result["issues"]])
+        self.assertEqual(result["dates"], [
+            {"source": "meta", "raw": "2026-07-01", "date": "2026-07-01"},
+            {"source": "time", "raw": "2026-08-01", "date": "2026-08-01"},
+        ])
+
+        control = self._check_html("", head=modified +
+            '<script type="application/ld+json">'
+            '{"@type":"Article","datePublished":"2026-08-01"}</script>',
+            today=today)
+        self.assertIs(control["schema_date_mismatch"], True)
+        self.assertEqual(control["score"], 85)
+
+    def test_every_published_time_meta_reaches_the_publication_mismatch(self):
+        today = date(2026, 10, 1)
+        modified = '<meta property="article:modified_time" content="2026-08-01">'
+        later = '<meta property="article:published_time" content="2026-09-09">'
+        earlier = '<meta property="article:published_time" content="2026-07-01">'
+        result = self._check_html("", head=modified + later + earlier, today=today)
+        self.assertIs(result["schema_date_mismatch"], True)
+        self.assertEqual(result["score"], 85)
+        self.assertIn("dateModified appears older than datePublished.",
+                      [issue["message"] for issue in result["issues"]])
+        self.assertEqual([entry["raw"] for entry in result["dates"]],
+                         ["2026-08-01", "2026-07-01"])
+
+        control = self._check_html("", head=modified + later, today=today)
+        self.assertIs(control["schema_date_mismatch"], True)
+        self.assertEqual(control["score"], 85)
+
+    def test_non_time_microdata_reaches_the_latest_fallback(self):
+        today = date(2026, 8, 17)
+        result = self._check_html(
+            '<span itemprop="datePublished" content="2026-08-01">1 August</span>',
+            today=today)
+        self.assertEqual(result["latest_date"], "2026-08-01")
+        self.assertEqual(result["score"], 100)
+        self.assertEqual(result["dates"], [])
+        self.assertNotIn("No parseable published or modified date found.",
+                         [issue["message"] for issue in result["issues"]])
+
+        control = self._check_html(
+            '<time itemprop="datePublished" datetime="2026-08-01">1 August</time>',
+            today=today)
+        self.assertEqual(control["latest_date"], "2026-08-01")
+        self.assertEqual(control["score"], 100)
+        self.assertEqual([entry["source"] for entry in control["dates"]], ["time"])
+
 
 class FaviconDisplay(unittest.TestCase):
     """MB-104 fetches the declaration and grades only dimensions it could read."""
@@ -3216,6 +3290,166 @@ class CitationReadiness(unittest.TestCase):
         self.assertEqual(result["entity_signals"]["names"], ["Moby Dick"])
         self.assertEqual(result["score"], 0)
         self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+
+class ArticleAuthorAndDate(unittest.TestCase):
+    @staticmethod
+    def _json_ld(document):
+        return ('<script type="application/ld+json">' + json.dumps(document) +
+                '</script>')
+
+    @classmethod
+    def _content(cls, markup):
+        import article_seo
+        from seo_common import parse_html
+        parsed = parse_html('<!doctype html><html><head></head><body>' + markup +
+                            '</body></html>')
+        return article_seo.extract_content(parsed, "generic")
+
+    @staticmethod
+    def _conflicts(content):
+        import article_seo
+        issues = article_seo.detect_seo_issues(content, [], {"word_count": 1000})
+        return [issue for issue in issues
+                if issue.get("area") == "Freshness"
+                and issue.get("severity") == "Warning"]
+
+    def test_a1_an_author_grid_is_not_an_author(self):
+        content = self._content(
+            '<div class="author-grid">Meet the team<span>Recipes by many hands</span></div>')
+        self.assertEqual(content["authors"], [])
+
+    def test_a2_json_ld_author_is_read(self):
+        content = self._content(self._json_ld({
+            "@type": "Article", "author": {"@type": "Person", "name": "A Fixture"},
+        }))
+        self.assertEqual(content["authors"], ["A Fixture"])
+
+    def test_a3_a_commenter_byline_is_not_the_author(self):
+        content = self._content(
+            '<div itemprop="comment"><p class="byline">D Petras</p></div>')
+        self.assertEqual(content["authors"], [])
+
+    def test_a4_author_meta_is_read(self):
+        content = self._content('<meta name="author" content="A Baker">')
+        self.assertEqual(content["authors"], ["A Baker"])
+
+    def test_a5_a_reviewed_works_author_is_not_the_author(self):
+        content = self._content(
+            '<div itemprop="itemReviewed"><span class="author">Herman Melville</span></div>')
+        self.assertEqual(content["authors"], [])
+
+    def test_a6_an_exact_byline_class_is_read(self):
+        content = self._content('<p class="byline">M Kazlauskiene</p>')
+        self.assertEqual(content["authors"], ["M Kazlauskiene"])
+
+    def test_a7_rel_author_is_read(self):
+        content = self._content('<a rel="author">A Fixture Baker</a>')
+        self.assertEqual(content["authors"], ["A Fixture Baker"])
+
+    def test_d1_a_published_widget_is_not_a_publication_date(self):
+        content = self._content(
+            '<div class="published-widget"><p>Newsletter</p><p>Sign up</p></div>')
+        self.assertEqual(content["publish_date"], "")
+
+    def test_d2_json_ld_publication_date_is_read(self):
+        content = self._content(self._json_ld({
+            "@type": "Article", "datePublished": "2026-07-01",
+        }))
+        self.assertEqual(content["publish_date"], "2026-07-01")
+
+    def test_d3_property_published_time_is_read(self):
+        content = self._content(
+            '<meta property="article:published_time" content="2026-07-01">')
+        self.assertEqual(content["publish_date"], "2026-07-01")
+
+    def test_d4_name_published_time_stays_read(self):
+        content = self._content(
+            '<meta name="article:published_time" content="2026-07-01">')
+        self.assertEqual(content["publish_date"], "2026-07-01")
+
+    def test_d5_a_commenters_publication_date_is_not_the_pages(self):
+        content = self._content(
+            '<div itemprop="comment"><time itemprop="datePublished" '
+            'datetime="2019-01-01"></time></div>')
+        self.assertEqual(content["publish_date"], "")
+
+    def test_d6_the_pages_microdata_publication_date_stays_read(self):
+        content = self._content(
+            '<time itemprop="datePublished" datetime="2026-08-01"></time>')
+        self.assertEqual(content["publish_date"], "2026-08-01")
+
+    def test_d7_a_bare_time_is_not_a_declared_publication_date(self):
+        content = self._content(
+            '<p>Published <time datetime="2026-07-18">18 July 2026</time></p>')
+        self.assertEqual(content["publish_date"], "")
+
+    def test_d8_a_nested_citation_date_is_not_the_pages(self):
+        content = self._content(self._json_ld({
+            "@type": "Article",
+            "citation": {"@type": "ScholarlyArticle", "datePublished": "1998-01-01"},
+        }))
+        self.assertEqual(content["publish_date"], "")
+
+    def test_a_published_time_meta_under_a_foreign_credit_is_not_the_pages(self):
+        content = self._content(
+            '<div itemprop="comment"><meta property="article:published_time" '
+            'content="2019-01-01"></div>')
+        self.assertEqual(content["publish_date"], "")
+
+    def test_a_hoisted_citation_date_is_not_the_pages(self):
+        content = self._content(self._json_ld({"@graph": [
+            {"@id": "#page", "@type": "Article", "citation": {"@id": "#paper"}},
+            {"@id": "#paper", "@type": "ScholarlyArticle",
+             "datePublished": "1998-01-01"},
+        ]}))
+        self.assertEqual(content["publish_date"], "")
+
+    def test_itemprop_is_an_exact_token_list(self):
+        content = self._content(
+            '<time itemprop="startDate datePublished" datetime="2026-08-01"></time>')
+        self.assertEqual(content["publish_date"], "2026-08-01")
+        content = self._content(
+            '<time itemprop="datePublishedX" datetime="2026-08-01"></time>')
+        self.assertEqual(content["publish_date"], "")
+
+    def test_conflicting_declarations_warn_but_equal_declarations_do_not(self):
+        schema = self._json_ld({
+            "@type": "Article", "datePublished": "2026-07-01",
+        })
+        content = self._content(
+            schema + '<meta property="article:published_time" content="2026-09-09">')
+        self.assertEqual(content["publish_date"], "2026-07-01")
+        conflicts = self._conflicts(content)
+        self.assertEqual(len(conflicts), 1)
+        self.assertIn("2026-07-01", conflicts[0]["finding"])
+        self.assertIn("2026-09-09", conflicts[0]["finding"])
+
+        same = self._content(
+            schema + '<meta property="article:published_time" content="2026-07-01">')
+        self.assertEqual(self._conflicts(same), [])
+
+    def test_the_json_contract_uses_an_author_list(self):
+        result = out("article")
+        self.assertIsInstance(result["authors"], list)
+        self.assertNotIn("author", result)
+
+    def test_the_exemplary_article_reports_its_declared_author_and_date(self):
+        result = out("article_fixture_post")
+        self.assertEqual(result["authors"], ["A Fixture"])
+        self.assertEqual(result["publish_date"], "2026-07-01")
+        findings = [issue["finding"] for issue in result["seo_issues"]]
+        self.assertNotIn("No author attribution detected.", findings)
+        self.assertNotIn("No publish date detected in markup.", findings)
+
+    def test_bare_time_fixture_pages_still_have_no_declared_publication_date(self):
+        for key in ("article_fixture_about", "article_fixture_index",
+                    "article_fixture_privacy"):
+            with self.subTest(key=key):
+                result = out(key)
+                self.assertEqual(result["publish_date"], "")
+                self.assertIn("No publish date detected in markup.",
+                              [issue["finding"] for issue in result["seo_issues"]])
 
 
 class ArticleKeyword(unittest.TestCase):

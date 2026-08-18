@@ -10,6 +10,32 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.77.0 — `article_seo.py` stops answering privately
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`article_seo.py` closes five measured author defects and four date defects by using the
+shared `page_author_names` and new declared-publication-date readers. Its `author` string
+becomes `authors[]`, conflicting publication declarations produce a Freshness warning,
+and the script moves from its private `html.parser` parse to the shared `parse_html`
+result. The tree now has one shared reader for declared publication dates, with source
+precedence preserved for callers that need it.
+
+`freshness_checker.py` now recognizes a publication date declared in microdata on a
+non-`<time>` element. Such a page was told *No parseable published or modified date
+found* and scored 65, while the same date on a `<time>` scored 100; both now score 100.
+
+Twenty-one assertions that failed on `2c60fac` now pass, and every regression guard
+still passes. An independent prototype produces output identical to this implementation
+on all 16 fixture and corpus pages and on ten hand-built shapes. The suite moves from
+1146 to 1171 tests and reports `OK (skipped=1)`.
+
+The fixture oracle remains 246 declarations / 219 matched / 0 disagreed / 27
+indeterminate, coverage 121 / 106 / 77, with `differences: none`. The verdict census
+remains 25 / 8 / 30 and the inert-findings ledger remains 16 / 11. The threshold audit
+remains 130 numbers / 13 presentational / 25 uncounted / 1 basis line on a non-number,
+and the i18n digest remains 215 items.
+
 ## 0.76.0 — every position the boundary was not watching
 
 Registry version: `3c6b20d512c6`, unchanged.

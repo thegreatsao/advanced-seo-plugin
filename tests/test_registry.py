@@ -728,7 +728,7 @@ def over(result):
 
         def title_fix(title):
             content = {"title": title, "meta_description": "m" * 120,
-                       "h1": ["Heading"], "images": [], "author": "Author",
+                       "h1": ["Heading"], "images": [], "authors": ["Author"],
                        "publish_date": "2026-08-10"}
             issues = article_seo.detect_seo_issues(
                 content, [], {"word_count": article_seo.BLOG_THIN_WORDS})

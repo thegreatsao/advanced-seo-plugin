@@ -166,7 +166,7 @@ Reads `--inventory` (see `site_crawl.py`); crawls one for itself without it.
 `title` — str
 `meta_description` — str
 `og_description` — str
-`author` — str
+`authors[]` — array
 `publish_date` — str
 `labels[]` — array
 `headings.h1[]` — array

@@ -33,10 +33,15 @@ except ImportError:
 
 try:
     from lib.safe_http import safe_get
-    from seo_common import THIN_CONTENT_WORDS, fetch_html, primary_language
+    from seo_common import (THIN_CONTENT_WORDS, declared_publication_dates,
+                            fetch_html, page_author_names, parse_html,
+                            primary_language)
 except ImportError:
     from scripts.lib.safe_http import safe_get
-    from scripts.seo_common import THIN_CONTENT_WORDS, fetch_html, primary_language
+    from scripts.seo_common import (THIN_CONTENT_WORDS,
+                                    declared_publication_dates, fetch_html,
+                                    page_author_names, parse_html,
+                                    primary_language)
 
 
 # ---------------------------------------------------------------------------
@@ -184,14 +189,16 @@ def detect_cms(soup: BeautifulSoup, url: str) -> str:
 # Content extraction (CMS-aware)
 # ---------------------------------------------------------------------------
 
-def extract_content(soup: BeautifulSoup, cms: str) -> dict:
+def extract_content(parsed: dict, cms: str) -> dict:
     """
     Extract structured content from the parsed page.
 
     Returns a dict with:
       title, meta_description, og_description, h1, h2s, h3s,
-      paragraphs, images, labels/categories, word_count
+      paragraphs, images, labels, publish_date, authors, publication_dates
     """
+    soup = parsed["soup"]
+    publication_dates = declared_publication_dates(parsed)
     result = {
         "title": "",
         "meta_description": "",
@@ -202,8 +209,9 @@ def extract_content(soup: BeautifulSoup, cms: str) -> dict:
         "paragraphs": [],
         "images": [],
         "labels": [],
-        "publish_date": "",
-        "author": "",
+        "publish_date": publication_dates[0] if publication_dates else "",
+        "authors": page_author_names(parsed),
+        "publication_dates": publication_dates,
     }
 
     # ── Meta tags (common for all CMSes) ──────────────────────────────────
@@ -220,28 +228,6 @@ def extract_content(soup: BeautifulSoup, cms: str) -> dict:
         og_desc = soup.find("meta", attrs={"property": "og:description"})
     if og_desc:
         result["og_description"] = og_desc.get("content", "")
-
-    # ── Author ─────────────────────────────────────────────────────────────
-    author_tag = (
-        soup.find(attrs={"class": re.compile(r"author|byline", re.I)})
-        or soup.find("span", itemprop="author")
-        or soup.find("a", rel="author")
-    )
-    if author_tag:
-        result["author"] = author_tag.get_text(strip=True)[:100]
-
-    # ── Publish date ───────────────────────────────────────────────────────
-    for sel in [
-        {"itemprop": "datePublished"},
-        {"class": re.compile(r"published|post-date|entry-date", re.I)},
-        {"name": "article:published_time"},
-    ]:
-        date_tag = soup.find(attrs=sel) if isinstance(sel, dict) else None
-        if date_tag:
-            result["publish_date"] = (
-                date_tag.get("content") or date_tag.get("datetime") or date_tag.get_text(strip=True)
-            )[:50]
-            break
 
     # ── CMS-specific body container ────────────────────────────────────────
     body_container = None
@@ -584,12 +570,20 @@ def detect_seo_issues(content: dict, structured_data: list, readability: dict) -
         issues.append({"severity": "Warning", "area": "Content", "finding": f"Content may be thin for a blog post ({word_count} words).", "fix": "Aim for 1,500+ words of substantive, unique content."})
 
     # Author attribution (E-E-A-T)
-    if not content.get("author"):
+    if not content.get("authors"):
         issues.append({"severity": "Warning", "area": "E-E-A-T", "finding": "No author attribution detected.", "fix": "Add a visible author byline with credentials. Critical post-Dec 2025 E-E-A-T update."})
 
     # Publish date
     if not content.get("publish_date"):
         issues.append({"severity": "Info", "area": "Freshness", "finding": "No publish date detected in markup.", "fix": "Add visible publish/update date and datePublished in Article schema."})
+    distinct_publication_dates = list(dict.fromkeys(content.get("publication_dates", [])))
+    if len(distinct_publication_dates) > 1:
+        issues.append({
+            "severity": "Warning",
+            "area": "Freshness",
+            "finding": f"Conflicting publication dates declared: {', '.join(distinct_publication_dates)}.",
+            "fix": "Align publication dates across JSON-LD, meta, and microdata declarations.",
+        })
 
     # Images: alt text
     missing_alt = [img for img in images if not img.get("alt")]
@@ -639,13 +633,14 @@ def main():
         print(json.dumps(out) if args.json else f"Error: Failed to fetch {args.url}")
         sys.exit(1)
 
-    soup = BeautifulSoup(html, "html.parser")
+    parsed = parse_html(html, args.url)
+    soup = parsed["soup"]
 
     # ── CMS detection ──────────────────────────────────────────────────────
     cms = detect_cms(soup, args.url)
 
     # ── Content extraction ─────────────────────────────────────────────────
-    content = extract_content(soup, cms)
+    content = extract_content(parsed, cms)
 
     # ── Structured data ────────────────────────────────────────────────────
     structured_data = extract_structured_data(soup)
@@ -700,7 +695,7 @@ def main():
         "title": content["title"],
         "meta_description": content["meta_description"],
         "og_description": content["og_description"],
-        "author": content["author"],
+        "authors": content["authors"],
         "publish_date": content["publish_date"],
         "labels": content["labels"],
         "headings": {
@@ -738,7 +733,7 @@ def main():
     print(f"CMS Detected      : {cms.capitalize()}")
     print(f"Title             : {result['title'][:80]}")
     print(f"Meta Description  : {result['meta_description'][:100]}")
-    print(f"Author            : {result['author'] or '⚠️ Not detected'}")
+    print(f"Authors           : {', '.join(result['authors']) or '⚠️ Not detected'}")
     print(f"Publish Date      : {result['publish_date'] or 'Not detected'}")
     print(f"Labels/Categories : {', '.join(result['labels']) or 'None'}")
     print(f"\nHeadings → H1: {len(content['h1'])}  H2: {len(content['h2s'])}  H3: {len(content['h3s'])}")

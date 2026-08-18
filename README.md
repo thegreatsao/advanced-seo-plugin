@@ -4,9 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.76.0 — see [CHANGELOG.md](CHANGELOG.md). Credit, freshness and citation
-measurements now exclude schema, metadata and citation tags physically nested inside
-somebody else's microdata contribution.
+Version 0.77.0 — see [CHANGELOG.md](CHANGELOG.md). `article_seo.py` now uses the
+shared author, publication-date and HTML readers, and freshness recognizes a declared
+publication date in microdata on a non-`<time>` element.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

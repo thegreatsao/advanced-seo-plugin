@@ -682,6 +682,52 @@ def page_author_names(parsed: dict) -> list[str]:
     return sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
 
 
+def declared_publication_dates_by_source(parsed) -> dict[str, list[str]]:
+    """Publication dates the page declares in schema, meta and microdata.
+
+    A bare ``<time>`` is not read because it does not declare which kind of date it
+    carries; callers must not infer publication from nearby prose.
+
+    Dates use the wider `hoisted=FOREIGN_CREDIT_KEYS` boundary. Measured on a graph
+    where `citation` references a hoisted paper dated 1998-01-01, the default
+    `CONTRIBUTION_KEYS` returns that date while `FOREIGN_CREDIT_KEYS` excludes it. A
+    nested citation is excluded either way, so only the hoisted spelling exposes the
+    difference. `page_author_names` deliberately takes the narrower default: pruning a
+    hoisted subject would cost an editorial review page its publisher.
+    """
+    dates = {"schema": [], "meta": [], "microdata": []}
+    for item in parsed.get("page_schema", []):
+        for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS):
+            value = node.get("datePublished")
+            if isinstance(value, str):
+                dates["schema"].append(value)
+
+    soup = parsed["soup"]
+    for tag in soup.find_all("meta"):
+        names = (tag.get("property"), tag.get("name"))
+        content = tag.get("content")
+        if (any(isinstance(value, str) and value.lower() == "article:published_time"
+                for value in names)
+                and not under_foreign_credit(tag)
+                and content):
+            dates["meta"].append(content)
+
+    for tag in soup.find_all(itemprop=True):
+        itemprop = tag.get("itemprop")
+        values = [itemprop] if isinstance(itemprop, str) else itemprop or []
+        if (any(token == "datePublished" for value in values for token in value.split())
+                and not under_foreign_credit(tag)):
+            value = tag.get("datetime") or tag.get("content") or tag.get_text(" ", strip=True)
+            if value:
+                dates["microdata"].append(value)
+    return dates
+
+
+def declared_publication_dates(parsed) -> list[str]:
+    """Flatten declared dates in source-precedence order without re-reading the page."""
+    return [value for values in declared_publication_dates_by_source(parsed).values() for value in values]
+
+
 def as_list(value: Any) -> list[Any]:
     """A JSON-LD value as a list, whether it arrived as one, as a scalar, or not at all.
 
