@@ -1522,6 +1522,19 @@ class EeatSignals(unittest.TestCase):
                          for item_id in ("CN-040", "CN-044", "CN-057", "CN-068"))
         return counts, verdicts
 
+    def test_a_microdata_comment_byline_is_not_the_pages_author(self):
+        result = self._check_html(
+            '<div itemprop="comment"><span class="author">D Petras</span></div>')
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(result["signals"]["authorship"],
+                         {"author": False, "publisher": False})
+
+    def test_the_pages_byline_survives_beside_a_commenters(self):
+        result = self._check_html(
+            '<p class="author">M Kazlauskiene</p>'
+            '<div itemprop="comment"><span class="author">D Petras</span></div>')
+        self.assertEqual(result["signals"]["authors"], ["M Kazlauskiene"])
+
     def test_english_and_lithuanian_twins_get_the_same_signals_and_verdicts(self):
         english = self._check_html(self._twin_html("en"))
         lithuanian = self._check_html(self._twin_html("lt"))
@@ -2159,6 +2172,7 @@ class Freshness(unittest.TestCase):
         self.assertEqual(result["age_days"], 2420)
 
     def test_a_microdata_comments_date_is_not_the_pages(self):
+        # 0.73.0 moved this DOM boundary into the shared helper used by author signals.
         today = date(2026, 8, 17)
         result = self._check_html(
             '<article itemscope itemtype="https://schema.org/Article">'
@@ -2272,6 +2286,7 @@ class Freshness(unittest.TestCase):
                          {"2020-01-01"})
 
     def test_a_page_with_no_microdata_is_unchanged(self):
+        # 0.73.0's shared traversal must still leave an unguarded `<time>` alone.
         today = date(2026, 8, 17)
         result = self._check_html(
             '<time datetime="2020-01-01">old</time>'
@@ -2652,10 +2667,37 @@ class CitationReadiness(unittest.TestCase):
         self.assertEqual(result["score"], 15)
         self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
 
+    def test_a_microdata_comment_byline_does_not_score_as_the_pages_author(self):
+        result = self._check_html(
+            '<div itemprop="comment"><span class="author">D Petras</span></div>')
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_microdata_comment_rel_author_does_not_score(self):
+        result = self._check_html(
+            '<div itemprop="comment"><a rel="author">D Petras</a></div>')
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_reviewed_items_author_does_not_score_as_the_pages(self):
+        result = self._check_html(
+            '<div itemprop="itemReviewed">'
+            '<span class="author">Herman Melville</span></div>')
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_an_editorial_review_keeps_its_own_html_author(self):
+        result = self._check_html(
+            '<article itemscope itemtype="https://schema.org/Review">'
+            '<span itemprop="author" class="author">M Kazlauskiene</span></article>')
+        self.assertEqual(result["score"], 15)
+        self.assertNotIn(self.AUTHOR_FINDING, self._messages(result))
+
     def test_page_author_names_is_shared(self):
         import seo_common
 
         self.assertTrue(callable(seo_common.page_author_names))
+        self.assertTrue(callable(seo_common.under_foreign_credit))
         self.assertTrue(callable(seo_common.schema_values))
 
         evidence_path = os.path.join(ROOT, "tests", "test_evidence.py")
@@ -2672,6 +2714,7 @@ class CitationReadiness(unittest.TestCase):
         }
         self.assertTrue(
             {"page_author_names", "_page_author_names",
+             "under_foreign_credit", "_under_foreign_credit",
              "schema_values", "_schema_values"}.issubset(guarded_names))
 
         for filename in ("citation_readiness.py", "eeat_signal_checker.py"):
@@ -2686,6 +2729,34 @@ class CitationReadiness(unittest.TestCase):
             }
             with self.subTest(filename=filename):
                 self.assertIn("page_author_names", imported)
+
+        freshness_path = os.path.join(SCRIPTS, "freshness_checker.py")
+        with open(freshness_path, encoding="utf-8") as stream:
+            freshness_tree = ast.parse(stream.read(), filename=freshness_path)
+        freshness_imports = {
+            alias.name
+            for node in ast.walk(freshness_tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "seo_common"
+            for alias in node.names
+        }
+        self.assertIn("under_foreign_credit", freshness_imports)
+
+    def test_under_foreign_credit_is_the_shared_dom_boundary(self):
+        from seo_common import parse_html, under_foreign_credit
+
+        plain = parse_html('<span class="author">A Baker</span>', "")["soup"].span
+        comment = parse_html(
+            '<div itemprop="comment"><span class="author">A Baker</span></div>',
+            "",
+        )["soup"].span
+        custom = parse_html(
+            '<div itemprop="staffCredit"><span class="author">A Baker</span></div>',
+            "",
+        )["soup"].span
+        self.assertFalse(under_foreign_credit(plain))
+        self.assertTrue(under_foreign_credit(comment))
+        self.assertFalse(under_foreign_credit(custom))
+        self.assertTrue(under_foreign_credit(custom, {"staffCredit"}))
 
     def test_page_author_names_returns_the_names_not_a_verdict(self):
         from seo_common import page_author_names, parse_html
@@ -2711,6 +2782,45 @@ class CitationReadiness(unittest.TestCase):
             with self.subTest(html=html, expected=expected):
                 parsed = parse_html(html, "")
                 self.assertEqual(page_author_names(parsed), expected)
+
+    def test_html_author_credits_stop_at_foreign_properties(self):
+        from seo_common import page_author_names, parse_html
+
+        rows = [
+            ('<div itemprop="comment"><span class="author">D Petras</span></div>', []),
+            ('<div itemprop="comment"><a rel="author">D Petras</a></div>', []),
+            ('<div itemprop="comment"><meta name="author" content="D Petras"></div>',
+             []),
+            ('<div itemprop="comment"><div><section><span class="byline">D Petras'
+             '</span></section></div></div>', []),
+            ('<article itemscope itemtype="https://schema.org/Review">'
+             '<span itemprop="author" class="author">M Kazlauskiene</span></article>',
+             ["M Kazlauskiene"]),
+            ('<div itemprop="itemReviewed"><span class="author">Herman Melville'
+             '</span></div>', []),
+            ('<div itemprop="citation"><a rel="author">R Franklin</a></div>', []),
+            ('<div itemprop="mainEntity comment"><span class="byline">D Petras'
+             '</span></div>', []),
+            ('<p class="author">M Kazlauskiene</p><div itemprop="comment">'
+             '<span class="author">D Petras</span></div>', ["M Kazlauskiene"]),
+            # Finding 1: `itemref` keeps this foreign author; current, not right.
+            ('<div itemprop="comment" itemref="c1"></div>'
+             '<span id="c1" class="author">D Petras</span>', ["D Petras"]),
+            ('<span class="author" itemprop="comment">D Petras</span>', []),
+            ('<div itemprop="commentary"><span class="author">D Petras</span></div>',
+             ["D Petras"]),
+            # Finding 5: the six-key boundary keeps this subject; current, not right.
+            ('<article itemscope itemtype="https://schema.org/Article">'
+             '<div itemprop="about" itemscope itemtype="https://schema.org/Book">'
+             '<span class="author">Herman Melville</span></div></article>',
+             ["Herman Melville"]),
+            # Finding 1: DOM nesting removes the page's real author; current, not right.
+            ('<div itemprop="comment"><span id="b1" class="author">M Kazlauskiene'
+             '</span></div><article itemscope itemref="b1"></article>', []),
+        ]
+        for html, expected in rows:
+            with self.subTest(html=html, expected=expected):
+                self.assertEqual(page_author_names(parse_html(html, "")), expected)
 
     @staticmethod
     def _ld_html(document):

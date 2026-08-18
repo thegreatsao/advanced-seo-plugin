@@ -10,6 +10,33 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.73.0 — the boundary HTML author signals do not have
+
+Registry version: `a47993443434`, unchanged.
+
+CN-057, the `high` item *Show Author and Publisher Clearly*, passed a page whose only
+byline belonged to a commenter. It passed only when the comment was written as
+microdata: the equivalent JSON-LD `comment.author` was already excluded by
+`page_nodes`, while `rel=author`, `meta[name=author]` and exact byline classes searched
+the whole HTML document.
+
+The DOM boundary that freshness has used for `<time>` since 0.70.0 is now the shared
+`under_foreign_credit` helper. Both callers remove elements on or below an `itemprop`
+naming one of the ten foreign-credit keys. The rule is by the property descended
+through, never a container's `itemtype`, and removes only; it never prefers a declared
+credit over an undeclared one. The known `itemref`, class-only container, other-link,
+private `article_seo.py` and key-set-width gaps are measured in `KNOWN-ISSUES.md`.
+
+The HTML and JSON-LD halves of `page_author_names` now answer the same question. No
+output key, type or path changes, and the fixture corpus is untouched. Eight new test
+methods plus three existing-test changes pin the shared helper, fourteen boundary
+cases, both downstream verdicts and the unchanged date traversal. The suite moves from
+1075 to 1083 tests.
+
+The fixture oracle remains 246 declarations / 219 matched / 0 disagreed / 27
+indeterminate, coverage 121 / 106 / 77, with no differences; the verdict census remains
+25 / 8 / 30 and the inert-findings ledger 16 / 11.
+
 ## 0.72.0 — MB-105 measures the served document against the rendered one, and now says so
 
 Registry version: `a47993443434`, replacing `be2ab95ba6bf`.

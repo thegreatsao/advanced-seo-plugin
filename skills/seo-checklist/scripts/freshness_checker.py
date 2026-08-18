@@ -8,7 +8,13 @@ import json
 import re
 from datetime import date, datetime, timedelta
 
-from seo_common import FOREIGN_CREDIT_KEYS, load_source, page_nodes, parse_html
+from seo_common import (
+    FOREIGN_CREDIT_KEYS,
+    load_source,
+    page_nodes,
+    parse_html,
+    under_foreign_credit,
+)
 
 
 # basis: inherited — 730 days, present at import. Two years is the point at which a
@@ -75,20 +81,14 @@ def _time_dates(soup) -> list[str]:
 
     By the property descended through, never by the container's `itemtype`: an editorial
     review page is itself a `Review` and its own `datePublished` is its own.
+
+    The traversal now lives in `seo_common` because 0.73.0 needed a second caller.
     """
-    dates = []
-    for tag in soup.find_all("time"):
-        foreign = False
-        for ancestor in (tag, *tag.parents):
-            itemprop = ancestor.get("itemprop")
-            values = [itemprop] if isinstance(itemprop, str) else itemprop or []
-            if any(token in FOREIGN_CREDIT_KEYS
-                   for value in values for token in value.split()):
-                foreign = True
-                break
-        if not foreign:
-            dates.append(tag.get("datetime") or tag.get_text(" ", strip=True))
-    return dates
+    return [
+        tag.get("datetime") or tag.get_text(" ", strip=True)
+        for tag in soup.find_all("time")
+        if not under_foreign_credit(tag)
+    ]
 
 
 def check_freshness(source: str, timeout: int = 15, today: date | None = None) -> dict:

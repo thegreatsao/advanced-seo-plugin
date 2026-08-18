@@ -11,7 +11,7 @@ HTTP and source resolution are ``require_requests``, ``fetch_url``,
 ``origin`` and ``same_host``. HTML and image handling is the ``BeautifulSoup``
 dependency handle, ``require_bs4``, ``html_parser``, ``parse_html``,
 ``primary_language``, ``favicon_href``, ``has_byline_class``,
-``page_author_names``, ``page_nodes``,
+``page_author_names``, ``page_nodes``, ``under_foreign_credit``,
 ``is_responsive_fill_image``, ``srcset_urls``, ``picture_sources`` and
 ``likely_lcp_candidate``. Robots and
 sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
@@ -615,6 +615,27 @@ def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS):
     yield from walk(value)
 
 
+def under_foreign_credit(tag, keys=FOREIGN_CREDIT_KEYS) -> bool:
+    """Whether `tag` sits under a property carrying somebody else's credit.
+
+    Exclusion is by the property descended through, never by the container's
+    `itemtype`: an editorial review page is itself a `Review`, and its own author is
+    still the page's author. This is removal only, never preference. A declaration
+    says what a thing is, not whose it is, so preferring declared credits can promote
+    a nested entity's author over the page's own undeclared byline.
+
+    Known and not handled: microdata traversal also follows `itemref`. This DOM walk
+    can therefore keep a referenced foreign credit or remove a physically nested
+    credit that another item references as its own.
+    """
+    for ancestor in (tag, *tag.parents):
+        itemprop = ancestor.get("itemprop")
+        values = [itemprop] if isinstance(itemprop, str) else itemprop or []
+        if any(token in keys for value in values for token in value.split()):
+            return True
+    return False
+
+
 def schema_values(schema_items: list, keys: set[str]) -> list[str]:
     values = []
     for item in schema_items:
@@ -648,12 +669,14 @@ def page_author_names(parsed: dict) -> list[str]:
         tag.get("content") or tag.get_text(" ", strip=True)
         for tag in soup.find_all(["meta", "span", "a"], attrs={"name": "author"})
         + soup.find_all(["a", "span"], rel=lambda value: value and "author" in value)
+        if not under_foreign_credit(tag)
     ]
     class_authors = [
         tag.get_text(" ", strip=True)
         for tag in soup.find_all(class_=True)
         if has_byline_class(tag)
         and tag.get_text(strip=True)
+        and not under_foreign_credit(tag)
     ]
     schema_authors = schema_values(parsed.get("schema", []), {"author"})
     return sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})

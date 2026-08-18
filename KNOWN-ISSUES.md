@@ -1361,6 +1361,58 @@ name. A column called `url` would be read as "fix this page".
   not merely what role it declares; 0.70.0 therefore only removes provably foreign
   dates and never promotes one.
 
+- **The HTML credit boundary follows DOM nesting, not microdata's `itemref`, and is
+  wrong in both directions.** Measured for 0.73.0: `<div itemprop="comment"
+  itemref="c1"></div><span id="c1" class="author">D Petras</span>` still returns
+  `['D Petras']`, because the referenced byline is outside the comment element. The
+  reverse markup, `<div itemprop="comment"><span id="b1" class="author">M
+  Kazlauskiene</span></div><article itemscope itemref="b1"></article>`, returned
+  `['M Kazlauskiene']` before 0.73.0 and returns `[]` after it: the page's own byline is
+  removed because it is physically nested inside the comment even though the article
+  claims it by reference. Closing both directions needs a microdata resolver; the
+  JSON-LD half already has the analogous `@graph` and `@id` hoisting rule.
+
+- **Comments named only by class remain invisible to the foreign-credit boundary.**
+  A comment container convention such as `<div class="comment">` carries no
+  `itemprop`, so its nested HTML byline is still read as the page's author. This is
+  unchanged from 0.70.0, which rejected a container-name dictionary because this
+  corpus provides **no measurable error rate** for that convention. The deliberate
+  boundary therefore removes only the six structurally declared foreign properties.
+
+- **The same page's privacy and trust links still have no foreign-credit boundary.**
+  Measured on the unauthored page used for 0.73.0, with the commenter's only links an
+  `<a href="mailto:...">` and an `<a href="/privacy">`: `signals.privacy_links` and
+  `signals.trust_links` each accept the commenter's link, so `CN-040` and `CN-044`, both
+  `medium`, **PASS**. Those readers use `parsed["links"]`, whose dicts no longer retain
+  the source tag needed by `under_foreign_credit`; repairing them is not another call
+  to the helper shipped here.
+
+- **`article_seo.py` has private, weaker author and publication-date answers beside
+  the shared ones.** Its `extract_content` uses substring class matching. Measured in
+  both directions for both fields: `<div class="author-grid"><p>Meet the
+  team</p><p>Recipes by many hands</p></div>` produces `author: 'Meet the teamRecipes by
+  many hands'` while `page_author_names` returns `[]`; `<div
+  class="published-widget"><p>Newsletter</p><p>Sign up</p></div>` produces
+  `publish_date: 'NewsletterSign up'`. Across all **12** HTML fixtures, **11** author
+  answers agree and `tests/fixtures/good/blog/first-post.html` does not: its JSON-LD
+  author is `A Fixture`, `page_author_names` returns `['A Fixture']`, and
+  `article_seo.py` returns `''` plus *No author attribution detected.* Both fixture
+  pages with real dates likewise return `publish_date: ''` there while
+  `freshness_checker.py` reports `2026-08-01` and `2026-07-01`. The author half could
+  adopt the shared definition; the date half has no shared `page_dates` equivalent, so
+  changing only one of the adjacent six lines would leave the duplication half-fixed.
+
+- **`FOREIGN_CREDIT_KEYS` is deliberately narrower than every subject relation.**
+  It contains **ten** keys, counted rather than recalled: `acceptedAnswer`, `comment`,
+  `comments`, `review`, `reviews`, `suggestedAnswer` and `userComments` from
+  `CONTRIBUTION_KEYS`, and `citation`, `isBasedOn` and `itemReviewed` from
+  `SUBJECT_KEYS`. It does not contain `about`, `mentions` or `hasPart`.
+  Measured before and after 0.73.0, an Article whose `itemprop="about"` Book contains
+  `<span class="author">Herman Melville</span>` returns `['Herman Melville']`. That is
+  not a traversal failure: the JSON-LD half has used exactly the same ten-key width
+  since 0.66.0. Widening the set changes both spellings and live JSON-LD verdicts, so it
+  needs its own release and measurement rather than a one-sided HTML exception.
+
 ---
 
 ## Fixed in 0.9.0

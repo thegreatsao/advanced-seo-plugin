@@ -4,9 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.72.0 — see [CHANGELOG.md](CHANGELOG.md). MB-105 now names the
-served-versus-rendered HTML comparison its script performs; no measurement or verdict
-changed.
+Version 0.73.0 — see [CHANGELOG.md](CHANGELOG.md). HTML author signals now stop at
+the same foreign-credit boundary as JSON-LD authors, so a commenter's byline no longer
+passes the page's authorship check.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0
