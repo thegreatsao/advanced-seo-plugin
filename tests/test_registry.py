@@ -270,9 +270,9 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
         })
         self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 130)
         self.assertEqual(len(named), 143)
-        self.assertEqual(len(uncounted), 24)
+        self.assertEqual(len(uncounted), 25)
         self.assertEqual(sum(len(at.numeric_constants(path))
-                             for path in at._script_paths()), 167)
+                             for path in at._script_paths()), 168)
 
     def test_a_basis_the_scan_cannot_see_is_counted_whatever_the_constant_is(self):
         at = self._tool()
@@ -348,7 +348,7 @@ WINDOW = 7
         output = stdout.getvalue()
         self.assertEqual(status, 0, output)
         self.assertRegex(output, r"(?m)^  .*site_crawl\.py:\d+  MINHASH_FUNCTIONS$")
-        self.assertIn("\n24 module-level numeric constant(s) not in the inventory\n",
+        self.assertIn("\n25 module-level numeric constant(s) not in the inventory\n",
                       output)
         listed = {line.strip() for line in output.splitlines() if line.startswith("  ")}
         for row in named:
@@ -362,7 +362,7 @@ WINDOW = 7
             status = at.main([])
         output = stdout.getvalue()
         self.assertEqual(status, 0, output)
-        self.assertIn("24 module-level numeric constant(s) are not in this inventory",
+        self.assertIn("25 module-level numeric constant(s) are not in this inventory",
                       output)
         self.assertIn("1 basis line(s) name something that is not a module-level "
                       "numeric constant", output)

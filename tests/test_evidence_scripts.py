@@ -3458,7 +3458,7 @@ class LinkProfile(unittest.TestCase):
                 } for target in targets],
             }
         inventory = {
-            "inventory_version": 3,
+            "inventory_version": 4,
             "site": f"{origin}/",
             "entry": f"{origin}/",
             "pages": pages,

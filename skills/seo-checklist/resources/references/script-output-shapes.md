@@ -844,13 +844,18 @@ fact about the page rather than a claim about its images. Same rule, same reason
 
 ### image_weight_audit.py
 
+With `--inventory` the scope is every distinct image URL in the shared crawl.
+Without one it audits one page's image markup and optional fetched bytes.
+
 `url` — str
 `image_count` — int
 `images_status_checked` — int — 0 unless `--fetch-images` was passed
-`broken_image_count` — int — **absent** when `images_status_checked` is 0. MD-187
-  asserts `eq: 0` on it, and an absent key is NO_DATA: reporting 0 because nothing
-  was fetched would turn "we did not look" into "nothing is broken". `None` would
-  be worse still — an equality assertion reads it as a failure.
+`unchecked_image_count` — int — fetched images whose failure did not prove absence
+`broken_image_count` — int — **absent** when no HTTP status or definitive dead-network
+  result was collected. MD-187 asserts `eq: 0` on it, and an absent key is NO_DATA:
+  reporting 0 because nothing was learned would turn "we did not look" into "nothing
+  is broken". `None` would be worse still — an equality assertion reads it as a
+  failure.
 `broken_images[]` — array of str — absent under the same condition
 `known_image_bytes` — NoneType
 `modern_format_count` — int — absent when the page has no images; otherwise, images
@@ -874,6 +879,22 @@ fact about the page rather than a claim about its images. Same rule, same reason
     picture_source_count, picture_srcset, picture_modern_formats, responsive,
     modern_format, likely_lcp_candidate, status, content_length, content_type
 `fetch_error` — NoneType
+
+Inventory mode:
+
+`url` — str
+`summary.pages_with_images` / `.pages_without_images` — int
+`summary.images` — int — the sum of each page's **distinct** references, not every
+  reference: the crawl de-duplicates per page, so four `<img>` tags pointing at one
+  URL on one page count once here
+`summary.unique_images` / `.images_checked` — int
+`summary.unchecked_images` / `.images_dropped` — int
+`broken_image_count` — int — absent when no image check produced usable evidence
+`broken_images[]` — array of str — absent under the same condition
+`broken[]` — array
+  - item keys: url, status, error_kind, pages
+`truncated` — bool — carried through from the crawl
+`fetch_error` — NoneType or str
 
 ### indexability_matrix.py
 
@@ -1452,6 +1473,7 @@ output contracts derive from it, so a change here moves them at once.
   - `internal_out`, `unique_internal_out`, `external_out`
   - `schema_nodes[]` — one object per parseable JSON-LD node; item key: `types[]`
   - `links[]` — item keys: target, anchor, rel, nofollow, internal
+  - `images[]` — array
 `reachable[]` — array of page keys
 `unchecked_internal_targets[]` — array
 `robots_blocked.<key>` — str

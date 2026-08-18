@@ -197,6 +197,7 @@ ITEM_REQUIRES = {
     # explicitly and is deliberately site-level, so its requirement cannot be the
     # script-wide default.
     "LO-198": "crawl",
+    "MD-187": "crawl",
     "SE-114": "safe_browsing",
     "SE-116": "safe_browsing",
     "TE-171": "safe_browsing",
@@ -1135,8 +1136,9 @@ item(184, "medium", S, "image_inventory.py", PAGE,
 # and it reads `content_length`, which `_local_size` returns `None` for over http —
 # so on a live site nothing medium could happen and the warn band promised a middle
 # verdict no site could reach. The item is *Optimize Images*: weight is its subject,
-# MD-187 already HEADs the same images for its own count, and measuring bytes is what
-# makes the middle verdict real rather than decorative.
+# measuring bytes is what makes the middle verdict real rather than decorative.
+# MD-185 therefore pays for its own sampled-page HEAD requests; MD-187 separately
+# pays for its bounded site-wide sweep.
 item(185, "medium", S, "image_weight_audit.py", ["{url}", "--fetch-images"],
      ISSUES_ANY(),
      "Optimize images", warn=NOTHING_SERIOUS())
@@ -1144,10 +1146,11 @@ item(186, "high", S, "image_inventory.py", PAGE,
      {"path": "missing_alt", "eq": 0},
      "Meaningful alt text on informative images")
 item(187, "high", S, "image_weight_audit.py",
-     # Broken images cannot be found without asking for each one, so this item
-     # pays for the HEAD requests. `broken_image_count` is absent when no status
-     # was collected, which the runner reads as NO_DATA rather than "none broken".
-     ["{url}", "--fetch-images"],
+     # Broken images cannot be found without asking for each distinct URL, so this
+     # item pays for the bounded site-wide HEAD sweep. `broken_image_count` is absent
+     # when no usable result was collected, which the runner reads as NO_DATA rather
+     # than "none broken".
+     CRAWLARG,
      {"path": "broken_image_count", "eq": 0},
      "Fix broken images")
 item(188, "low", L, fix="Use original contextual images, limit stock photography")

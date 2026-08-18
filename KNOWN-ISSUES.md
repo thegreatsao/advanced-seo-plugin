@@ -421,7 +421,7 @@ name. A column called `url` would be read as "fix this page".
 ## 6. Smaller, but they will bite
 
 - **The threshold inventory now says what it leaves outside, but those declarations
-  are not yet judged.** Twenty-four module-level numeric constants carry no basis and
+  are not yet judged.** Twenty-five module-level numeric constants carry no basis and
   are beyond the name-based scan. At least four shapes look like thresholds rather
   than budgets: `site_crawl.py`'s `MINHASH_FUNCTIONS` and `SHINGLE_WORDS` decide
   near-duplicate similarity, `safe_http.py`'s `DEFAULT_MAX_REDIRECTS` bounds a chain a
@@ -1412,6 +1412,20 @@ name. A column called `url` would be read as "fix this page".
   not a traversal failure: the JSON-LD half has used exactly the same ten-key width
   since 0.66.0. Widening the set changes both spellings and live JSON-LD verdicts, so it
   needs its own release and measurement rather than a one-sided HTML exception.
+
+1. **A mostly-refused run still reports a clean count.** The withholding fires only
+   when no status was collected. A site with a hundred images where ninety-nine time
+   out and one answers `200` emits `broken_image_count: 0` and `MD-187` PASSes.
+   Reporting `unchecked_image_count` beside it is what 0.74.0 does about it;
+   suppressing the count above some share of unchecked images would need a share,
+   and that number has no basis on this corpus.
+
+2. **A truncated crawl decides a whole site from part of it.** `site_crawl` caps pages
+   and `broken_links.py:184-191` caps links, both reporting `truncated`; `TE-168` —
+   `high`, site-wide — has asserted `eq 0` over a truncated crawl since it was
+   written. `MD-187` joins that convention rather than inventing a stricter one.
+   Whether a site-wide `eq 0` should be withheld when its input was truncated is one
+   question about twelve items, not twelve questions.
 
 ---
 

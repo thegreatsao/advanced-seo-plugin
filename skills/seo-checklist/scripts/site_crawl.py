@@ -43,7 +43,7 @@ import threading
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from seo_common import (
     as_list,
@@ -52,8 +52,10 @@ from seo_common import (
     normalize_url,
     parse_html,
     parse_sitemap_xml,
+    picture_sources,
     print_json_or_text,
     same_host,
+    srcset_urls,
     walk_json,
 )
 
@@ -64,7 +66,8 @@ from seo_common import (
 # "one language" would put a trilingual site's whole navigation back into the editorial
 # link set — silently, which is the failure this counter exists to stop. 3 adds compact
 # `schema_nodes`; an older inventory cannot answer a site-wide schema-presence rule.
-INVENTORY_VERSION = 3
+# 4 adds image references; an older inventory cannot answer a site-wide image rule.
+INVENTORY_VERSION = 4
 
 DEFAULT_MAX_PAGES = 100
 DEFAULT_DEPTH = 3
@@ -310,6 +313,7 @@ def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
         "unique_internal_out": 0,
         "external_out": 0,
         "links": [],
+        "images": [],
         "html": False,
         # One compact row per parseable JSON-LD node. Site-wide schema checks need
         # the types, not a second fetch of every page or the full raw payload.
@@ -347,6 +351,29 @@ def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
                      if isinstance(value, str)]
             if types:
                 row["schema_nodes"].append({"types": types})
+
+    # One requestable URL per image reference, in document order. The parser has
+    # already built the soup, and the shared helpers keep srcset and picture parsing
+    # identical to the page-level image audits.
+    seen_images = set()
+
+    def record_image(candidate: str) -> None:
+        resolved = urljoin(row["final_url"], candidate)
+        if urlparse(resolved).scheme not in ("http", "https"):
+            return
+        if resolved not in seen_images:
+            seen_images.add(resolved)
+            row["images"].append(resolved)
+
+    for img in parsed["soup"].find_all("img"):
+        # `<source>` precedes the fallback `<img>` in valid picture markup.
+        for source in picture_sources(img, row["final_url"]):
+            for candidate in source["urls"]:
+                record_image(candidate)
+        if img.get("src"):
+            record_image(img["src"])
+        for candidate in srcset_urls(img.get("srcset") or ""):
+            record_image(candidate)
 
     # Every `<a>`, with nothing deduplicated. The first version of this collapsed
     # repeats of the same (target, anchor) within a page — which is exactly the shape

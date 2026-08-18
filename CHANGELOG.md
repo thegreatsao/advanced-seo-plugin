@@ -10,6 +10,36 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.74.0 — MD-187 owns broken images and can only see three pages
+
+Registry version: `3c6b20d512c6`, replacing `a47993443434`.
+
+MD-187, the `high` item *Fix Broken Images*, now reads the shared crawl rather than
+the three-page sample. The crawl inventory records each page's requestable `img[src]`,
+`img[srcset]` and `picture > source[srcset]` URLs, and its format version moves from 3
+to 4 so an older crawl cannot read as a clean site. MD-184 and the other six items
+over `image_weight_audit.py` remain page-level and unchanged.
+
+One shared rule now calls only 404, 410 and definitive dead-network failures broken.
+A HEAD response of 401, 403 or 405 receives one ranged GET confirmation; 5xx,
+timeouts and unknown failures are reported as unchecked. A site-wide run checks each
+distinct image URL once, same-host first, with a 200-URL budget whose dropped count is
+reported. It withholds `broken_image_count` when every result is inconclusive and
+carries referring pages and crawl truncation into the report.
+
+The request cost increases deliberately. Before, MD-185 and MD-187 shared one HEAD per
+image on three sampled pages. After, MD-185 keeps that sampled-page sweep and MD-187
+adds one HEAD per distinct image URL across the crawl, bounded at 200; ambiguous HEAD
+responses may add one ranged GET confirmation.
+
+Thirty-one new test methods pin the crawl field, shared classification, confirmation,
+deduplication, request method, withholding, inventory refusal, complete counts, absent
+site-wide markup advice, budget and item-only scope. The suite moves from 1083 to 1114
+tests. The fixture oracle remains 246 declarations / 219 matched / 0 disagreed / 27
+indeterminate, coverage 121 / 106 / 77, with no differences. The verdict census remains
+25 / 8 / 30 and MD-187 remains FAIL on both broken origins and PASS on both good ones;
+the inert-findings ledger remains 16 / 11.
+
 ## 0.73.0 — the boundary HTML author signals do not have
 
 Registry version: `a47993443434`, unchanged.

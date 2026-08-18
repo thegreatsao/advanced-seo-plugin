@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit image weight, responsive image usage, and likely LCP image risk.
+"""Audit image weight, responsive image usage, and broken-image risk.
 
 An image is judged by everything the browser could choose for it, not by the
 `<img>` tag alone. The distinction is the whole of MB-096 and MB-097: the way
@@ -17,7 +17,15 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-from seo_common import fetch_url, likely_lcp_candidate, load_source, parse_html
+import site_crawl
+from seo_common import (
+    DEAD_FETCH_ERROR_KINDS,
+    fetch_url,
+    likely_lcp_candidate,
+    load_source,
+    parse_html,
+    same_host,
+)
 
 
 MODERN_FORMATS = {"avif", "webp"}
@@ -32,6 +40,11 @@ MODERN_MIME = {f"image/{fmt}" for fmt in MODERN_FORMATS}
 #  `> 250_000` in the middle of a loop, which is why no inventory of thresholds could
 #  find it. A number nothing can name is a number nobody can argue with
 LARGE_IMAGE_BYTES = 250_000
+
+# A crawl can contain one query-stringed tracking pixel per page. The site-wide
+# audit bounds distinct image requests just as broken_links.py bounds link requests,
+# and reports the part it did not check.
+DEFAULT_MAX_IMAGES = 200
 
 
 def _extension(src: str) -> str:
@@ -66,11 +79,47 @@ def _local_size(src: str, html_source: str) -> int | None:
     return None
 
 
+def _classify_image(url: str, result: dict, timeout: int) -> tuple[str, dict | None]:
+    """Return broken/fine/unchecked, confirming ambiguous HEAD responses once."""
+    error_kind = result.get("error_kind")
+    if error_kind in DEAD_FETCH_ERROR_KINDS:
+        return "broken", None
+    status = result.get("status")
+    if status in (404, 410):
+        return "broken", None
+    if status in (401, 403, 405):
+        confirmation = fetch_url(
+            url,
+            method="GET",
+            timeout=timeout,
+            extra_headers={"Range": "bytes=0-0"},
+        )
+        confirmed_kind = confirmation.get("error_kind")
+        confirmed_status = confirmation.get("status")
+        if confirmed_kind in DEAD_FETCH_ERROR_KINDS:
+            return "broken", confirmation
+        if isinstance(confirmed_status, int) and confirmed_status // 100 in (2, 3):
+            return "fine", confirmation
+        if confirmed_status in (401, 403, 404, 405, 410):
+            return "broken", confirmation
+        return "unchecked", confirmation
+    if isinstance(status, int) and status // 100 in (2, 3):
+        return "fine", None
+    return "unchecked", None
+
+
+def _check_image(url: str, timeout: int) -> tuple[str, dict, dict | None]:
+    head = fetch_url(url, method="HEAD", timeout=timeout)
+    state, confirmation = _classify_image(url, head, timeout)
+    return state, head, confirmation
+
+
 def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     html, url, fetched = load_source(source, timeout=timeout)
     parsed = parse_html(html, url)
     images = []
     issues = []
+    checks = []
     skipped_no_source = 0
 
     for index, img in enumerate(parsed["images"]):
@@ -115,7 +164,8 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         row["responsive"] = row["srcset"] or row["picture_srcset"]
         row["modern_format"] = ext in MODERN_FORMATS or bool(modern_sources)
         if fetch_images and src.startswith(("http://", "https://")):
-            head = fetch_url(src, method="HEAD", timeout=timeout)
+            state, head, confirmation = _check_image(src, timeout)
+            checks.append((row, state, head, confirmation))
             row["status"] = head.get("status")
             headers = head.get("headers", {})
             length = headers.get("content-length")
@@ -142,12 +192,15 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         images.append(row)
 
     known_bytes = sum(row["content_length"] or 0 for row in images)
-    # A structured count for "Fix Broken Images", emitted only when statuses were
-    # actually collected. Reporting 0 broken because nothing was fetched is the
-    # difference between "no broken images" and "we did not look": the key is
-    # absent instead, which the checklist runner reads as NO_DATA.
+    # A structured count for "Fix Broken Images", emitted only when a status or a
+    # definitive dead-network result was collected. Reporting 0 broken because
+    # nothing was learned is the difference between "no broken images" and "we did
+    # not look": the key is absent instead, which the runner reads as NO_DATA.
     checked = [row for row in images if isinstance(row.get("status"), int)]
-    broken = [row for row in checked if row["status"] >= 400]
+    broken = [row for row, state, _head, _confirmation in checks
+              if state == "broken"]
+    unchecked = [row for row, state, _head, _confirmation in checks
+                 if state == "unchecked"]
     out = {
         "url": url or source,
         "image_count": len(images),
@@ -156,6 +209,7 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         # scripts, and a reader who wants to know why has the count.
         "skipped_no_src": skipped_no_source,
         "images_status_checked": len(checked),
+        "unchecked_image_count": len(unchecked),
         "known_image_bytes": known_bytes if fetch_images or any(row["content_length"] for row in images) else None,
         # The same two counts restricted to the `<img>` tag, which is what these
         # used to mean. Kept because they are the honest way to say "the fallback
@@ -176,10 +230,10 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         out["modern_format_count"] = sum(1 for row in images
                                           if row["modern_format"])
         out["responsive_count"] = sum(1 for row in images if row["responsive"])
-    # Present only when statuses exist. Emitting 0 — or None, which an equality
-    # assertion reads as a failure rather than as silence — would turn "we did not
-    # look" into a verdict either way. An absent key is NO_DATA by design.
-    if checked:
+    # Present only when usable evidence exists. Emitting 0 — or None, which an
+    # equality assertion reads as a failure rather than as silence — would turn "we
+    # did not look" into a verdict either way. An absent key is NO_DATA by design.
+    if checked or broken:
         out["broken_image_count"] = len(broken)
         # `row["src"]`, not `row["url"]` — the row has no "url" key, so this raised
         # KeyError and killed the whole script. It could only fire on a page that
@@ -190,21 +244,105 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     return out
 
 
+def audit_inventory(site_url: str, inventory_path: str, timeout: int = 15,
+                    max_images: int = DEFAULT_MAX_IMAGES) -> dict:
+    """Check every distinct image URL recorded by the shared crawl once."""
+    inventory = site_crawl.inventory_for(site_url, inventory_path)
+    pages = inventory.get("pages") or {}
+    references: dict[str, list[str]] = {}
+    total_references = 0
+    pages_with_images = 0
+    for page in pages.values():
+        page_images = page.get("images") or []
+        if page_images:
+            pages_with_images += 1
+        total_references += len(page_images)
+        page_url = page.get("url") or page.get("final_url") or ""
+        for image_url in page_images:
+            referring_pages = references.setdefault(image_url, [])
+            if page_url and page_url not in referring_pages:
+                referring_pages.append(page_url)
+
+    ordered = list(references)
+    ordered.sort(key=lambda image_url: not same_host(site_url, image_url))
+    dropped = 0
+    if max_images and len(ordered) > max_images:
+        dropped = len(ordered) - max_images
+        ordered = ordered[:max_images]
+
+    broken = []
+    broken_urls = []
+    unchecked = 0
+    usable_evidence = False
+    for image_url in ordered:
+        state, head, _confirmation = _check_image(image_url, timeout)
+        if isinstance(head.get("status"), int) or state == "broken":
+            usable_evidence = True
+        if state == "unchecked":
+            unchecked += 1
+        elif state == "broken":
+            broken_urls.append(image_url)
+            broken.append({
+                "url": image_url,
+                "status": head.get("status"),
+                "error_kind": head.get("error_kind"),
+                "pages": references[image_url],
+            })
+
+    out = {
+        "url": inventory.get("site") or site_url,
+        "summary": {
+            "pages_with_images": pages_with_images,
+            "pages_without_images": len(pages) - pages_with_images,
+            "images": total_references,
+            "unique_images": len(references),
+            "images_checked": len(ordered),
+            "unchecked_images": unchecked,
+            "images_dropped": dropped,
+        },
+        "broken": broken,
+        "truncated": bool(inventory.get("summary", {}).get("truncated")),
+        "fetch_error": inventory.get("fetch_error"),
+    }
+    if usable_evidence:
+        out["broken_image_count"] = len(broken)
+        out["broken_images"] = broken_urls
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Audit image weight and responsive-image performance")
     parser.add_argument("source", help="URL or local HTML file")
+    parser.add_argument("--inventory", default="",
+                        help="crawl inventory from site_crawl.py: check images "
+                             "across the whole site")
     parser.add_argument("--fetch-images", action="store_true", help="HEAD remote images for status and byte size")
     parser.add_argument("--timeout", type=int, default=15)
+    parser.add_argument("--max-images", type=int, default=DEFAULT_MAX_IMAGES,
+                        help=f"Maximum distinct image URLs to check, same-host "
+                             f"first; 0 for no limit (default: {DEFAULT_MAX_IMAGES})")
     parser.add_argument("--json", "-j", action="store_true")
     args = parser.parse_args()
 
-    result = audit(args.source, args.fetch_images, args.timeout)
+    if args.inventory:
+        result = audit_inventory(args.source, args.inventory, args.timeout,
+                                 args.max_images)
+    else:
+        result = audit(args.source, args.fetch_images, args.timeout)
     if args.json:
         print(json.dumps(result, indent=2))
     else:
-        print(f"Images: {result['image_count']}; responsive: "
-              f"{result.get('responsive_count', 'n/a')}; "
-              f"issues: {len(result['issues'])}")
+        if args.inventory:
+            summary = result["summary"]
+            print(f"Images: {summary['images']} references, "
+                  f"{summary['unique_images']} unique; "
+                  f"broken: {result.get('broken_image_count', 'n/a')}; "
+                  f"unchecked: {summary['unchecked_images']}; "
+                  f"dropped: {summary['images_dropped']}")
+        else:
+            print(f"Images: {result['image_count']}; responsive: "
+                  f"{result.get('responsive_count', 'n/a')}; "
+                  f"issues: {len(result['issues'])}")
 
 
 if __name__ == "__main__":
