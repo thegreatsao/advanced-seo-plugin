@@ -4,9 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.75.0 — see [CHANGELOG.md](CHANGELOG.md). Privacy, contact, trust-policy
-and external-citation signals now count only the page's own links, not links inside
-somebody else's contribution.
+Version 0.76.0 — see [CHANGELOG.md](CHANGELOG.md). Credit, freshness and citation
+measurements now exclude schema, metadata and citation tags physically nested inside
+somebody else's microdata contribution.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

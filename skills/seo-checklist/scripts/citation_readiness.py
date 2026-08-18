@@ -14,6 +14,7 @@ from seo_common import (
     page_author_names,
     page_nodes,
     parse_html,
+    under_foreign_credit,
 )
 
 
@@ -65,12 +66,14 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
         if HIGH_TRUST_HOST_RE.search(host):
             trusted_links.append(link)
 
-    cite_tags = [tag.get_text(" ", strip=True) for tag in soup.find_all(["cite", "blockquote"])]
+    cite_tags = [tag.get_text(" ", strip=True)
+                 for tag in soup.find_all(["cite", "blockquote"])
+                 if not under_foreign_credit(tag)]
     footnote_links = [
         link for link in parsed.get("links", [])
         if re.search(r"(footnote|reference|citation|source)", " ".join(map(str, link.get("rel", []))) + " " + link.get("href", ""), re.I)
     ]
-    entity_signals = _schema_entity_signals(parsed.get("schema", []))
+    entity_signals = _schema_entity_signals(parsed.get("page_schema", []))
     # The substring match handed a layout class fifteen points on the score GO-145
     # and GEO-005 both assert; page_author_names uses only vocabulary tokens to name
     # a byline.

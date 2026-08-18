@@ -1477,6 +1477,89 @@ class EeatSignals(unittest.TestCase):
             os.unlink(path)
 
     @staticmethod
+    def _schema_script(document):
+        return ('<script type="application/ld+json">' + json.dumps(document) +
+                '</script>')
+
+    def test_a_commenters_json_ld_author_does_not_pass_cn_057(self):
+        publisher = self._schema_script({
+            "@type": "WebSite",
+            "publisher": {"@type": "Organization", "name": "Page Press"},
+        })
+        author = self._schema_script({
+            "@type": "Article", "author": {"@type": "Person", "name": "D Petras"},
+        })
+        result = self._check_html(
+            publisher + '<div itemprop="comment">' + author + '</div>')
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(result["signals"]["authorship"],
+                         {"author": False, "publisher": True})
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_the_pages_own_json_ld_author_still_passes_cn_057(self):
+        result = self._check_html(self._schema_script({
+            "@type": "Article",
+            "author": {"@type": "Person", "name": "M K"},
+            "publisher": {"@type": "Organization", "name": "Page Press"},
+        }))
+        self.assertEqual(result["signals"]["authors"], ["M K"])
+        self.assertEqual(result["signals"]["authorship"],
+                         {"author": True, "publisher": True})
+        self.assertEqual(verdict("CN-057", result), PASS)
+
+    def test_only_the_pages_json_ld_author_survives_beside_a_commenters(self):
+        own = self._schema_script({
+            "@type": "Article",
+            "author": {"@type": "Person", "name": "M K"},
+            "publisher": {"@type": "Organization", "name": "Page Press"},
+        })
+        foreign = self._schema_script({
+            "@type": "Article", "author": {"@type": "Person", "name": "D Petras"},
+        })
+        result = self._check_html(
+            own + '<div itemprop="comment">' + foreign + '</div>')
+        self.assertEqual(result["signals"]["authors"], ["M K"])
+
+    def test_a_commenters_json_ld_publisher_is_not_the_pages(self):
+        publisher = self._schema_script({
+            "@type": "Article",
+            "publisher": {"@type": "Organization", "name": "Commenter Blog"},
+        })
+        result = self._check_html(
+            '<div itemprop="comment">' + publisher + '</div>')
+        self.assertEqual(result["signals"]["publishers"], [])
+        self.assertFalse(result["signals"]["authorship"]["publisher"])
+
+    def test_a_commenters_publisher_meta_is_not_the_pages(self):
+        result = self._check_html(
+            '<div itemprop="comment"><meta property="og:site_name" '
+            'content="Commenter Blog"></div>')
+        self.assertEqual(result["signals"]["publishers"], [])
+        self.assertFalse(result["signals"]["authorship"]["publisher"])
+
+    def test_the_pages_own_publisher_meta_in_head_still_counts(self):
+        result = self._check_html(
+            '<html><head><meta property="og:site_name" content="Page Press">'
+            '</head><body></body></html>')
+        self.assertEqual(result["signals"]["publishers"], ["Page Press"])
+        self.assertTrue(result["signals"]["authorship"]["publisher"])
+
+    def test_json_ld_under_every_review_credit_spelling_is_excluded(self):
+        publisher = self._schema_script({
+            "@type": "WebSite",
+            "publisher": {"@type": "Organization", "name": "Page Press"},
+        })
+        author = self._schema_script({
+            "@type": "Article", "author": {"@type": "Person", "name": "D Petras"},
+        })
+        for key in ("review", "itemReviewed"):
+            with self.subTest(key=key):
+                result = self._check_html(
+                    publisher + f'<div itemprop="{key}">' + author + '</div>')
+                self.assertEqual(result["signals"]["authors"], [])
+                self.assertEqual(verdict("CN-057", result), FAIL)
+
+    @staticmethod
     def _twin_html(lang):
         words = {
             "en": {
@@ -2176,6 +2259,26 @@ class Freshness(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def test_json_ld_date_inside_a_comment_is_not_the_pages_date(self):
+        script = ('<script type="application/ld+json">' + json.dumps({
+            "@type": "Article", "datePublished": "2019-01-01",
+        }) + '</script>')
+        result = self._check_html(
+            '<div itemprop="comment">' + script + '</div>',
+            today=date(2026, 8, 18),
+        )
+        self.assertEqual(result["dates"], [])
+        self.assertIsNone(result["latest_date"])
+
+    def test_a_commenters_published_time_meta_is_not_the_pages_date(self):
+        result = self._check_html(
+            '<div itemprop="comment"><meta property="article:published_time" '
+            'content="2019-01-01"></div>',
+            today=date(2026, 8, 18),
+        )
+        self.assertEqual(result["dates"], [])
+        self.assertIsNone(result["latest_date"])
+
     def test_a_dated_article_is_fresh_and_its_dates_are_found(self):
         good = out("fresh")
         self.assertTrue(good["dates"])
@@ -2706,6 +2809,27 @@ class CitationReadiness(unittest.TestCase):
             return citation_readiness.check_citation_readiness(path)
         finally:
             os.unlink(path)
+
+    def test_a_commenters_json_ld_author_adds_no_citation_score(self):
+        publisher = ('<script type="application/ld+json">' + json.dumps({
+            "@type": "WebSite",
+            "publisher": {"@type": "Organization", "name": "Page Press"},
+        }) + '</script>')
+        author = ('<script type="application/ld+json">' + json.dumps({
+            "@type": "Article", "author": {"@type": "Person", "name": "D Petras"},
+        }) + '</script>')
+        result = self._check_html(
+            publisher + '<div itemprop="comment">' + author + '</div>')
+        self.assertEqual(result["score"], 0)
+        self.assertIn(self.AUTHOR_FINDING, self._messages(result))
+
+    def test_a_commenters_cite_and_blockquote_tags_add_no_citation_score(self):
+        result = self._check_html(
+            '<p>A 2025 study found that warm dough rises.</p>'
+            '<div itemprop="comment"><blockquote>Quoted source</blockquote>'
+            '<cite>Source one</cite><cite>Source two</cite></div>')
+        self.assertEqual(result["citation_signals"]["cite_or_blockquote_tags"], 0)
+        self.assertEqual(result["score"], 0)
 
     def test_cited_claims_and_named_sources_score(self):
         self.assertEqual(verdict("GO-145", out("citation")), PASS)
@@ -3512,6 +3636,22 @@ class LocalSeoNap(unittest.TestCase):
 
 
 class LocalBusinessInventory(unittest.TestCase):
+    def test_site_crawl_keeps_a_type_declared_only_inside_a_comment(self):
+        import site_crawl
+        page = ('<html><body><div itemprop="comment">'
+                '<script type="application/ld+json">'
+                '{"@type":"CommentOnlyType"}</script></div></body></html>')
+        routes = {
+            "/": page,
+            "/robots.txt": (200, "User-agent: *\nAllow: /\n"),
+        }
+        with harness.allow_loopback(), served(routes) as site:
+            inventory = site_crawl.crawl(site.url, use_sitemap=False, workers=1)
+        self.assertEqual(
+            inventory["pages"][site.url]["schema_nodes"],
+            [{"types": ["CommentOnlyType"]}],
+        )
+
     def test_lo_198_finds_a_contact_page_node_when_the_entry_has_none(self):
         import local_seo_checker
         import site_crawl

@@ -110,6 +110,7 @@ def extract_schema_documents(source: str, timeout: int = 15) -> tuple[list[Any],
     invalid = []
     if not documents and html_or_json:
         parsed = parse_html(html_or_json, final_url or source)
+        # Validate every type the document declares, including contributed blocks.
         for item in parsed.get("schema", []):
             if isinstance(item, dict) and item.get("error"):
                 # Dropped silently before. A block of JSON-LD that does not parse is

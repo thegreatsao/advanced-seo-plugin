@@ -178,7 +178,7 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
     basis. Excluded until something can measure it; the consequence is that a page
     whose only publisher signal is that line reports FAIL.
     """
-    schema = parsed.get("schema", [])
+    schema = parsed.get("page_schema", [])
     credited = _credited_nodes(schema)
     names = list(schema_values(schema, {"publisher"}))
     for item in schema:
@@ -190,7 +190,8 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
     for tag in soup.find_all("meta"):
         prop = str(tag.get("property") or "").lower()
         name = str(tag.get("name") or "").lower()
-        if prop in {"og:site_name", "article:publisher"} or name == "copyright":
+        if ((prop in {"og:site_name", "article:publisher"} or name == "copyright")
+                and not under_foreign_credit(tag)):
             if tag.get("content"):
                 names.append(str(tag["content"]))
     return names
@@ -210,7 +211,7 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     # review board reported an author, and a page naming a publisher and a reviewer but
     # no author passed CN-057 — an item whose title asks for two parties.
     reviewers = sorted({value.strip()
-                        for value in schema_values(parsed.get("schema", []),
+                        for value in schema_values(parsed.get("page_schema", []),
                                                    {"reviewedBy"})
                         if value and value.strip()})
     publishers = sorted({v.strip() for v in _publisher_names(parsed, soup) if v and v.strip()})

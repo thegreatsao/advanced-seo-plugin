@@ -102,10 +102,12 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
     meta_dates = {}
     for tag in soup.find_all("meta"):
         key = (tag.get("property") or tag.get("name") or "").lower()
-        if key in {"article:published_time", "article:modified_time", "date", "last-modified", "dc.date"}:
+        if (key in {"article:published_time", "article:modified_time", "date",
+                    "last-modified", "dc.date"}
+                and not under_foreign_credit(tag)):
             meta_dates[key] = tag.get("content")
     time_dates = _time_dates(soup)
-    schema_dates = _schema_dates(parsed.get("schema", []))
+    schema_dates = _schema_dates(parsed.get("page_schema", []))
 
     parsed_dates = []
     for source_name, values in {

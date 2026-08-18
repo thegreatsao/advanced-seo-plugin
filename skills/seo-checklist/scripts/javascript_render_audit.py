@@ -20,6 +20,7 @@ def summarize(html: str, url: str) -> dict:
         "internal_link_count": len([link for link in parsed["links"]
               if url and link["href"].startswith(url.split("/", 3)[0] + "//"
                                                  + url.split("/")[2])]) if url.startswith("http") else len(parsed["links"]),
+        # Compare everything the served and rendered documents declare.
         "schema_count": len(parsed["schema"]),
         "word_count": parsed["word_count"],
     }

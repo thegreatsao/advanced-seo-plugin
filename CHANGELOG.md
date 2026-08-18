@@ -10,6 +10,29 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.76.0 — every position the boundary was not watching
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`seo_common.parse_html` now publishes `page_schema` beside the unchanged, document-wide
+`schema` list. The four readers that ask who or what the page itself credits consume
+that filtered list, while `javascript_render_audit.py`, `schema_required_props.py` and
+`site_crawl.py` deliberately keep every block the document declares. Valid and invalid
+blocks follow the same rule, and entries in `page_schema` share identity with their
+counterparts in `schema`.
+
+The same existing ten-key `under_foreign_credit` boundary now covers the three remaining
+raw-soup positions: publisher and freshness metadata, plus citation and blockquote tags.
+This knowingly excludes a page's own JSON-LD when it sits below `itemprop="isBasedOn"`;
+the current cost is pinned while the key set's width remains open in `KNOWN-ISSUES.md`.
+
+Eighteen new test methods cover the split and object identity, invalid JSON, all four
+credit readers, the three raw-soup positions, the full key set and the three readers that
+must stay document-wide. The suite moves from 1128 to 1146 tests. The fixture oracle
+remains 246 declarations / 219 matched / 0 disagreed / 27 indeterminate, coverage
+121 / 106 / 77, with no differences. The verdict census remains 25 / 8 / 30 and the
+inert-findings ledger remains 16 / 11.
+
 ## 0.75.0 — the page's own privacy policy, contact route and trust links
 
 Registry version: `3c6b20d512c6`, unchanged.

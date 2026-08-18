@@ -343,6 +343,7 @@ def _read_page(fetched: dict, key: str, discovered_url: str, site_url: str,
     row["canonical"] = parsed.get("canonical")
     row["lang"] = parsed.get("lang")
     row["noindex"] = has_noindex(parsed.get("meta_robots"), fetched.get("headers"))
+    # Inventory every @type the document declares, including contributed blocks.
     for document in parsed.get("schema") or []:
         for node in walk_json(document):
             if not isinstance(node, dict):

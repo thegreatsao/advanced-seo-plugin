@@ -678,7 +678,7 @@ def page_author_names(parsed: dict) -> list[str]:
         and tag.get_text(strip=True)
         and not under_foreign_credit(tag)
     ]
-    schema_authors = schema_values(parsed.get("schema", []), {"author"})
+    schema_authors = schema_values(parsed.get("page_schema", []), {"author"})
     return sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
 
 
@@ -762,13 +762,17 @@ def parse_html(html: str, base_url: str = "") -> dict:
         })
 
     schema = []
+    page_schema = []
     for script in soup.find_all("script", type=lambda v: v and "ld+json" in v):
         raw = script.string or script.get_text() or ""
         try:
             data = json.loads(raw)
-            schema.append(data)
         except json.JSONDecodeError:
-            schema.append({"error": "invalid_json", "snippet": raw[:160]})
+            data = {"error": "invalid_json", "snippet": raw[:160]}
+        schema.append(data)
+        if not under_foreign_credit(script):
+            # Share the same object with schema; neither list is mutated by readers.
+            page_schema.append(data)
 
     for element in soup(["script", "style", "noscript", "template"]):
         element.decompose()
@@ -786,6 +790,7 @@ def parse_html(html: str, base_url: str = "") -> dict:
         "links": links,
         "images": images,
         "schema": schema,
+        "page_schema": page_schema,
         "word_count": len(words),
         "body_text": body_text,
         "forms": len(soup.find_all("form")),

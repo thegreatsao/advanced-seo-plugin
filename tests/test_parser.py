@@ -418,5 +418,66 @@ straight from frozen without waiting for a whole loaf to thaw on the counter.</p
         self.assertNotIn("find_next_sibling", executable_source(path))
 
 
+class PageSchemaBoundary(unittest.TestCase):
+    @staticmethod
+    def _script(document):
+        return ('<script type="application/ld+json">' + json.dumps(document) +
+                '</script>')
+
+    def _split_page(self):
+        own = self._script({"@type": "Article", "name": "Page article"})
+        foreign = self._script({"@type": "Person", "name": "D Petras"})
+        return seo_common.parse_html(
+            own + '<div itemprop="comment">' + foreign + '</div>',
+            "https://example.com/",
+        )
+
+    def test_document_schema_keeps_two_blocks_while_page_schema_keeps_one(self):
+        parsed = self._split_page()
+        self.assertEqual(len(parsed["schema"]), 2)
+        self.assertEqual(len(parsed["page_schema"]), 1)
+
+    def test_page_schema_shares_the_document_schema_object(self):
+        parsed = self._split_page()
+        self.assertIs(parsed["page_schema"][0], parsed["schema"][0])
+
+    def test_invalid_json_inside_a_comment_is_document_schema_only(self):
+        parsed = seo_common.parse_html(
+            '<div itemprop="comment"><script type="application/ld+json">'
+            '{broken json</script></div>',
+            "https://example.com/",
+        )
+        self.assertEqual(len(parsed["schema"]), 1)
+        self.assertEqual(parsed["schema"][0]["error"], "invalid_json")
+        self.assertIn("{broken json", parsed["schema"][0]["snippet"])
+        self.assertEqual(parsed["page_schema"], [])
+
+    def test_without_microdata_page_schema_matches_schema_entry_for_entry(self):
+        parsed = seo_common.parse_html(
+            self._script({"@type": "Article"}) +
+            self._script({"@type": "Organization"}),
+            "https://example.com/",
+        )
+        self.assertEqual(parsed["page_schema"], parsed["schema"])
+        self.assertTrue(all(page is document for page, document in
+                            zip(parsed["page_schema"], parsed["schema"], strict=True)))
+
+    def test_is_based_on_excludes_even_the_pages_own_article(self):
+        # This is the current answer, not the right one: KNOWN-ISSUES.md records the
+        # open question about the foreign-credit key set's width.
+        parsed = seo_common.parse_html(
+            '<div itemprop="isBasedOn">' + self._script({
+                "@type": "Article", "author": {"name": "M K"},
+            }) + '</div>',
+            "https://example.com/",
+        )
+        self.assertEqual(len(parsed["schema"]), 1)
+        self.assertEqual(parsed["page_schema"], [])
+
+    def test_document_schema_still_keeps_the_commenters_block(self):
+        parsed = self._split_page()
+        self.assertEqual(len(parsed["schema"]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
