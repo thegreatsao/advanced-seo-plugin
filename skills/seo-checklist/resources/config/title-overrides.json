@@ -16,6 +16,10 @@
     "title": "Publish Complete NAP in LocalBusiness Data",
     "why": "The inherited title promises two off-site facts that a fetched page cannot establish: a business can have a complete Google Business Profile without linking it from the page, and visible on-page reviews are not evidence of its off-site review presence. LO-198 already asks whether LocalBusiness data exists anywhere on the site; this item grades the page-level fact the fetched data can prove: every LocalBusiness node present has a non-empty name, address and telephone."
   },
+  "MB-105": {
+    "title": "Ensure Content, Meta & Directives Match Between Served and Rendered HTML",
+    "why": "The inherited title promises mobile-versus-desktop parity, but nothing in this plugin measures that. javascript_render_audit.py takes one URL and one operator-supplied rendered artifact; it has no concept of a user agent, viewport or second serve, and compares the served document with that artifact across title, meta description, canonical, H1 count, internal-link count, schema count and word count. Calling the rendered side Desktop sends the operator looking for user-agent switching when the finding is a JavaScript rendering gap. TE-169 and TE-177 already identify MB-105 as this served-versus-rendered comparison; this override makes MB-105 say the same from its side."
+  },
   "TE-177": {
     "title": "Provide a Title Element in the Served HTML",
     "why": "The inherited title — Ensure No-JS Access & Crawlability — promises a comparison between the served document and the rendered one. That comparison is MB-105, and scoring it three times is what the duplicate gate exists to stop. This item asserts something real and cheap about the served document, and its independently written fixture declaration already says so: every sampled page carries a title element in the served HTML. The title is brought into line with what both the assertion and the declaration mean."

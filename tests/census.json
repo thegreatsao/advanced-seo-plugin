@@ -2527,7 +2527,7 @@
       "script": "javascript_render_audit.py",
       "severity": "high",
       "source": "script",
-      "title": "Ensure Parity: Content, Meta & Directives Match Desktop"
+      "title": "Ensure Content, Meta & Directives Match Between Served and Rendered HTML"
     },
     "MB-106": {
       "answers": {
@@ -3545,7 +3545,7 @@
       "title": "LCP subparts within budget"
     }
   },
-  "registry_version": "be2ab95ba6bf",
+  "registry_version": "a47993443434",
   "sites": [
     "fixture:good",
     "fixture:broken",

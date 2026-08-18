@@ -157,7 +157,13 @@ REVIEWED: dict[str, str] = {
               "a responsive layout and nowhere near sufficient — a fixed-width page "
               "with the tag passes. The full check needs rendering at two widths.",
     "MB-098": "OK. The pattern counts size and dimension issues, which is the title.",
-    "MB-105": "OK. `diffs` is the parity between raw and rendered, which is the item.",
+    "MB-105": "SUPERSEDED (0.72). The ruling this replaces read `diffs` is the "
+              "parity between raw and rendered, which is the item — true about "
+              "the script and silent about the title, which said Match Desktop. "
+              "Saying the assertion matched the item is exactly what let that "
+              "mismatch stand, and it stood for as long as the ruling did. The item "
+              "is now titled for what it compares and needs no excuse. Kept rather "
+              "than deleted, on TE-177's precedent and for TE-177's reason.",
     "SP-107": "OK. FCP is when above-the-fold content appears; the title says so in "
               "English and the assertion says so in an acronym.",
     "SE-116": "OK. An empty safe_browsing.threats list is no hacked content or "

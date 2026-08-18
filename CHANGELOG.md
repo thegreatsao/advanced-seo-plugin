@@ -10,6 +10,41 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.72.0 — MB-105 measures the served document against the rendered one, and now says so
+
+Registry version: `a47993443434`, replacing `be2ab95ba6bf`.
+
+MB-105's inherited title promised mobile-versus-desktop parity, but its script takes one
+URL and one operator-supplied rendered artifact and compares the served and rendered
+documents across title, description, canonical, H1 count, internal-link count, schema
+count and word count. The title now names that served-versus-rendered comparison. The
+operator fix names the same seven fields and tells the operator to put them in served
+HTML rather than only in what JavaScript builds. No measurement, assertion, severity or
+verdict changed.
+
+The deliberate-title override records why the borrowed title is unsafe: this audit has
+no user-agent switch, viewport or second serve, so saying Desktop directs an operator
+toward device parity when the finding is a JavaScript rendering gap. Its reason also
+closes the loop with TE-169 and TE-177, whose existing override reasons already identify
+MB-105 as the general served-versus-rendered comparison.
+
+MB-105's recorded semantic ruling is superseded rather than deleted, on the precedent
+TE-177 set in 0.53. The old ruling said `diffs` is the parity between raw and
+rendered, which is the item — true about the script and silent about the title, and
+saying the assertion matched the item is what let the mismatch stand for as long as
+it did. `audit_item_semantics` therefore reports nine inert rulings where it reported
+eight, which is the count of mismatches this registry has stopped needing to excuse.
+
+The Russian title and fix were translated from the corrected English and re-stamped.
+The fixture oracle remains INDETERMINATE for MB-105 because both fixture artifacts omit
+rendered html; its two reasons now record that the title question was settled here. Three
+tests pin the shipped title, derive the seven fix fields from the script's summary, and
+tie the three override explanations together. The suite moves from 1072 to 1075 tests.
+
+The fixture corpus is unaffected, so the oracle remains 246 declarations / 219 matched /
+0 disagreed / 27 indeterminate, coverage 121 / 106 / 77, with no differences; the verdict
+census remains 25 / 8 / 30 and the inert-findings ledger 16 / 11.
+
 ## 0.71.0 — the instrument throws away seven declarations it asked for
 
 Registry version: `be2ab95ba6bf`, unchanged.

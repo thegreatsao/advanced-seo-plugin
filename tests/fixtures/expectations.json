@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "be2ab95ba6bf",
+  "registry_version": "a47993443434",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -370,7 +370,7 @@
       },
       "MB-105": {
         "expect": "INDETERMINATE",
-        "why": "the fixture artifact carries no html, so there is no rendered document to compare. A settled declaration is deliberately not being written yet because the item's own title says Match Desktop while the script compares served against rendered for one URL with one user agent. That question remains open and is not settled here"
+        "why": "the fixture artifact carries no html, so there is no rendered document and nothing to compare; the title question this raised was settled in 0.72.0"
       },
       "MD-184": {
         "expect": "PASS",
@@ -836,7 +836,7 @@
       },
       "MB-105": {
         "expect": "INDETERMINATE",
-        "why": "the fixture artifact carries no html, so there is no rendered document to compare. A settled declaration is deliberately not being written yet because the item's own title says Match Desktop while the script compares served against rendered for one URL with one user agent. That question remains open and is not settled here"
+        "why": "the fixture artifact carries no html, so there is no rendered document and nothing to compare; the title question this raised was settled in 0.72.0"
       },
       "MD-184": {
         "expect": "PASS",

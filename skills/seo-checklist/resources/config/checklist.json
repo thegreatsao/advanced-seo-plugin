@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "be2ab95ba6bf",
+  "registry_version": "a47993443434",
   "item_count": 215,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -2117,7 +2117,7 @@
       "plerdy_ref": 105,
       "category": "mobile",
       "category_label": "Mobile",
-      "title": "Ensure Parity: Content, Meta & Directives Match Desktop",
+      "title": "Ensure Content, Meta & Directives Match Between Served and Rendered HTML",
       "severity": "high",
       "source": "script",
       "check": {
@@ -2134,7 +2134,7 @@
         }
       },
       "effort": "medium",
-      "fix": "Content, meta and directives must match between mobile and desktop"
+      "fix": "Put the title, description, canonical, H1s, internal links, schema and body text in the served HTML, not only in what JavaScript builds"
     },
     {
       "id": "MB-106",

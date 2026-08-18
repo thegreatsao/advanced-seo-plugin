@@ -64,8 +64,8 @@ HTTP_DECLARED_IDS = {
     "SP-110", "TE-170", "TECH-002",
     # Stage 2d. One is INDETERMINATE on purpose and it is not a shrug: MB-105
     # compares served HTML against a rendered DOM, but both fixture artifacts omit
-    # html. Its Match Desktop title is also still an open question because the script
-    # compares one URL under one user agent, so no settled declaration is written.
+    # html. The title question this raised was settled in 0.72.0; with no rendered
+    # document, there is still nothing to compare and no settled verdict to write.
     #
     # KW-076 was the other, until 0.48.0 gave the registry `--no-autocomplete` and
     # this module a keyword to pass. Its declaration was written before the first run

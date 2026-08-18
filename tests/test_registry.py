@@ -1070,7 +1070,7 @@ class ChecklistProvenance(unittest.TestCase):
         import build_checklist
         overrides = build_checklist.load_title_overrides()
         self.assertEqual(set(overrides),
-                         {"CI-002", "LO-200", "TE-169", "TE-177", "TE-181"})
+                         {"CI-002", "LO-200", "MB-105", "TE-169", "TE-177", "TE-181"})
         self.assertNotIn("_comment", overrides)
 
     def test_every_numbered_title_is_referenced_by_exactly_one_item(self):
@@ -1119,6 +1119,39 @@ class DeliberateTitleOverrides(unittest.TestCase):
             if original == override.get("title"):
                 problems.append(f"{item_id}: override repeats the source title")
         self.assertEqual(problems, [])
+
+    def test_mb_105_names_the_comparison_it_asserts(self):
+        item = next(item for item in ITEMS if item["id"] == "MB-105")
+        title = item["title"]
+        self.assertNotIn("Desktop", title)
+        self.assertNotIn("mobile", title.lower())
+        self.assertIn("Served", title)
+        self.assertIn("Rendered", title)
+
+    def test_mb_105_fix_names_the_fields_the_script_compares(self):
+        from javascript_render_audit import summarize
+
+        item = next(item for item in ITEMS if item["id"] == "MB-105")
+        fix = item["fix"].lower()
+        fields = summarize("<html><head></head><body></body></html>",
+                           "https://example.com/")
+        wording = {
+            "meta_description": "description",
+            "h1_count": "h1s",
+            "internal_link_count": "internal links",
+            "schema_count": "schema",
+            "word_count": "body text",
+        }
+        self.assertIn("served html", fix)
+        for field in fields:
+            phrase = wording.get(field, field.removesuffix("_count").replace("_", " "))
+            self.assertIn(phrase, fix, f"the fix does not name {field}")
+
+    def test_the_three_raw_versus_rendered_items_agree_on_which_one_compares(self):
+        for item_id in ("TE-169", "TE-177"):
+            self.assertIn("MB-105", self.overrides[item_id]["why"])
+        self.assertIn("TE-169", self.overrides["MB-105"]["why"])
+        self.assertIn("TE-177", self.overrides["MB-105"]["why"])
 
     def test_the_builder_refuses_all_invalid_override_shapes(self):
         sys.path.insert(0, os.path.join(SKILL, "tools"))

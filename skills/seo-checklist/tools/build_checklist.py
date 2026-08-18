@@ -754,7 +754,7 @@ item(104, "low", S, "favicon_check.py", PAGE,
      "Serve a favicon that resolves and is at least 48x48 - a declared icon returning 404 shows nothing in a mobile result")
 item(105, "high", S, "javascript_render_audit.py", JSRENDER,
      {"path": "diffs", "len_eq": 0},
-     "Content, meta and directives must match between mobile and desktop")
+     "Put the title, description, canonical, H1s, internal links, schema and body text in the served HTML, not only in what JavaScript builds")
 item(106, "medium", M, fix="Test on real devices before and after release")
 
 # --- 7. Speed ---------------------------------------------------------------
