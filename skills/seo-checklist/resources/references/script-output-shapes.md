@@ -436,6 +436,8 @@ than fetching them.
 `signals.trust_links[]` — array
   - the loosest of the three: locale-aware institutional links, an "About" page
     included, plus language-neutral `tel:` and `mailto:` routes.
+  - these three arrays hold the page's own links; a credit written inside somebody
+    else's contribution is not one.
   - all three arrays use English plus the page's declared carried locale; an
     undeclared or uncarried language uses English alone.
   - item keys (all three arrays): href, text, rel

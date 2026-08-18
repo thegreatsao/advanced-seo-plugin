@@ -1522,6 +1522,168 @@ class EeatSignals(unittest.TestCase):
                          for item_id in ("CN-040", "CN-044", "CN-057", "CN-068"))
         return counts, verdicts
 
+    def test_links_carry_the_shared_foreign_credit_answer(self):
+        from seo_common import parse_html
+
+        links = parse_html(
+            '<a href="/own">Own</a>'
+            '<div itemprop="comment"><a href="/foreign">Foreign</a></div>',
+            "",
+        )["links"]
+        self.assertEqual(links, [
+            {"href": "/own", "text": "Own", "rel": [], "foreign_credit": False},
+            {"href": "/foreign", "text": "Foreign", "rel": [],
+             "foreign_credit": True},
+        ])
+
+    def test_link_flags_follow_the_shared_boundary_exactly(self):
+        from seo_common import parse_html
+
+        links = parse_html(
+            '<div itemprop="commentary"><a href="/own">Own</a></div>'
+            '<div itemprop="mainEntity comment"><a href="/foreign">Foreign</a></div>',
+            "",
+        )["links"]
+        self.assertEqual([link["foreign_credit"] for link in links], [False, True])
+
+    def test_the_shared_link_list_keeps_a_commenters_link(self):
+        from seo_common import parse_html
+
+        parsed = parse_html(
+            '<div itemprop="comment"><a href="/comment-link">Comment link</a></div>',
+            "",
+        )
+        self.assertEqual(len(parsed["links"]), 1)
+
+    def test_only_a_commenters_privacy_about_and_email_give_no_page_credit(self):
+        result = self._check_html(
+            '<p class="author">A Baker</p><div itemprop="comment">'
+            '<a href="/privacy">Privacy</a><a href="/about">About</a>'
+            '<a href="mailto:commenter@example.net">Email</a></div>')
+        self.assertEqual(result["signals"]["privacy_links"], [])
+        self.assertEqual(result["signals"]["trust_links"], [])
+        self.assertEqual(result["score"], 20)
+        self.assertEqual(verdict("CN-040", result), FAIL)
+        self.assertEqual(verdict("CN-044", result), FAIL)
+
+    def test_the_pages_own_privacy_contact_and_email_keep_their_credit(self):
+        result = self._check_html(
+            '<p class="author">A Baker</p><footer>'
+            '<a href="/privacy-policy">Privacy</a><a href="/contact">Contact</a>'
+            '<a href="mailto:hello@example.net">Email</a></footer>')
+        self.assertEqual(
+            [link["href"] for link in result["signals"]["privacy_links"]],
+            ["/privacy-policy"],
+        )
+        self.assertEqual(len(result["signals"]["trust_links"]), 3)
+        self.assertEqual(result["score"], 35)
+        self.assertEqual(verdict("CN-040", result), PASS)
+        self.assertEqual(verdict("CN-044", result), PASS)
+
+    def test_only_the_pages_links_survive_beside_a_commenters(self):
+        result = self._check_html(
+            '<p class="author">A Baker</p><footer>'
+            '<a href="/privacy-policy">Privacy</a><a href="/contact">Contact</a>'
+            '<a href="mailto:hello@example.net">Email</a></footer>'
+            '<div itemprop="comment"><a href="/privacy">Privacy</a>'
+            '<a href="/about">About</a>'
+            '<a href="mailto:commenter@example.net">Email</a></div>')
+        self.assertEqual(
+            [link["href"] for link in result["signals"]["privacy_links"]],
+            ["/privacy-policy"],
+        )
+        self.assertEqual(
+            [link["href"] for link in result["signals"]["trust_links"]],
+            ["/privacy-policy", "/contact", "mailto:hello@example.net"],
+        )
+
+    def test_a_page_with_neither_kind_of_link_stays_unchanged(self):
+        result = self._check_html('<p class="author">A Baker</p>')
+        self.assertEqual(result["signals"]["privacy_links"], [])
+        self.assertEqual(result["signals"]["trust_links"], [])
+        self.assertEqual(result["score"], 20)
+        self.assertEqual(verdict("CN-040", result), FAIL)
+        self.assertEqual(verdict("CN-044", result), FAIL)
+
+    def test_a_foreign_link_matched_only_by_text_is_removed(self):
+        result = self._check_html(
+            '<div itemprop="comment"><a href="/x">Privacy Policy</a></div>')
+        self.assertEqual(result["signals"]["privacy_links"], [])
+
+    def test_same_url_survives_only_for_the_pages_own_link(self):
+        result = self._check_html(
+            '<footer><a href="/privacy">Privacy</a></footer>'
+            '<div itemprop="comment"><a href="/privacy">Privacy</a></div>')
+        self.assertEqual(
+            [link["href"] for link in result["signals"]["privacy_links"]],
+            ["/privacy"],
+        )
+        self.assertEqual(len(result["signals"]["trust_links"]), 1)
+
+    def test_a_commenters_outbound_links_are_not_the_pages_citations(self):
+        links = "".join(
+            f'<a href="https://source-{index}.example/study">Study {index}</a>'
+            for index in range(5)
+        )
+        result = self._check_html(
+            f'<p class="author">A Baker</p><div itemprop="comment">{links}</div>')
+        self.assertEqual(result["signals"]["external_citations"], 0)
+        self.assertEqual(result["score"], 20)
+
+    def test_a_commenters_email_is_not_the_pages_contact_route(self):
+        result = self._check_html(
+            '<footer><a href="mailto:hello@example.net">Page email</a></footer>'
+            '<div itemprop="comment">'
+            '<a href="mailto:commenter@example.net">Commenter email</a></div>')
+        self.assertEqual(
+            [link["href"] for link in result["signals"]["trust_links"]],
+            ["mailto:hello@example.net"],
+        )
+
+    def test_a_commenters_editorial_standards_link_is_not_the_pages_policy(self):
+        result = self._check_html(
+            '<p class="author">A Baker</p><div itemprop="comment">'
+            '<a href="/editorial-standards">Editorial standards</a></div>')
+        self.assertEqual(result["signals"]["policy_links"], [])
+        self.assertEqual(result["score"], 20)
+
+    def test_an_faq_answer_loses_its_own_links_under_the_shared_boundary(self):
+        # This is the current answer, not the right one: KNOWN-ISSUES.md records the
+        # open question about the foreign-credit key set's width.
+        result = self._check_html(
+            '<main itemscope itemtype="https://schema.org/FAQPage">'
+            '<p class="author">A Baker</p><div itemprop="acceptedAnswer">'
+            '<a href="/privacy">Privacy</a><a href="/contact">Contact</a>'
+            '</div></main>')
+        self.assertEqual(result["signals"]["privacy_links"], [])
+        self.assertEqual(result["signals"]["trust_links"], [])
+        self.assertEqual(result["score"], 20)
+
+    def test_comment_links_stay_in_shared_and_anchor_text_lists(self):
+        import anchor_text_audit
+        from seo_common import parse_html
+
+        parsed = parse_html(
+            '<div itemprop="comment"><a href="/bread">Best bread</a></div>',
+            "https://example.test/page",
+        )
+        self.assertEqual(len(parsed["links"]), 1)
+        self.assertTrue(parsed["links"][0]["foreign_credit"])
+        projected = anchor_text_audit.anchors_from_inventory({"pages": {
+            "https://example.test/page": {
+                "status": 200,
+                "html": "present",
+                "links": [{"internal": True, "target": "https://example.test/bread",
+                           "anchor": "Best bread", "rel": [], "nofollow": False}],
+            },
+        }})
+        self.assertEqual(
+            projected["links"],
+            [{"source": "https://example.test/page",
+              "target": "https://example.test/bread", "anchor": "Best bread",
+              "rel": [], "nofollow": False}],
+        )
+
     def test_a_microdata_comment_byline_is_not_the_pages_author(self):
         result = self._check_html(
             '<div itemprop="comment"><span class="author">D Petras</span></div>')

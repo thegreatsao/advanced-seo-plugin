@@ -723,6 +723,7 @@ def parse_html(html: str, base_url: str = "") -> dict:
             "href": abs_url,
             "text": tag.get_text(" ", strip=True)[:160],
             "rel": tag.get("rel") or [],
+            "foreign_credit": under_foreign_credit(tag),
         })
 
     images = []

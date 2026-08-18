@@ -4,8 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.74.0 — see [CHANGELOG.md](CHANGELOG.md). MD-187 now checks distinct image
-URLs across the shared site crawl instead of only the sampled pages.
+Version 0.75.0 — see [CHANGELOG.md](CHANGELOG.md). Privacy, contact, trust-policy
+and external-citation signals now count only the page's own links, not links inside
+somebody else's contribution.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

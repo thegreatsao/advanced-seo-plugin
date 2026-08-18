@@ -17,6 +17,7 @@ from seo_common import (
     parse_html,
     primary_language,
     schema_values,
+    under_foreign_credit,
     walk_json,
 )
 
@@ -219,8 +220,9 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     links = parsed.get("links", [])
     policy_links = [
         link for link in links
-        if _text_matches(patterns["policy"], link.get("text", ""))
-        or patterns["policy"]["href"].search(link.get("href", ""))
+        if (_text_matches(patterns["policy"], link.get("text", ""))
+            or patterns["policy"]["href"].search(link.get("href", "")))
+        and not link["foreign_credit"]
     ]
     contact_routes = [
         {"href": tag.get("href", "").strip(),
@@ -228,11 +230,13 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
          "rel": tag.get("rel") or []}
         for tag in soup.find_all("a", href=True)
         if urlparse(tag.get("href", "").strip()).scheme.lower() in {"tel", "mailto"}
+        and not under_foreign_credit(tag)
     ]
     trust_links = [
         link for link in links
-        if _text_matches(patterns["trust"], link.get("text", ""))
-        or patterns["trust"]["href"].search(link.get("href", ""))
+        if (_text_matches(patterns["trust"], link.get("text", ""))
+            or patterns["trust"]["href"].search(link.get("href", "")))
+        and not link["foreign_credit"]
     ] + contact_routes
     # Privacy specifically, kept apart from both of the above. `policy_links` means
     # editorial standards — fact-checking, corrections, ethics — while `trust_links`
@@ -243,13 +247,15 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     # standards, and a site with an ethics page and no privacy policy passed.
     privacy_links = [
         link for link in links
-        if _text_matches(patterns["privacy"], link.get("text", ""))
-        or patterns["privacy"]["href"].search(link.get("href", ""))
+        if (_text_matches(patterns["privacy"], link.get("text", ""))
+            or patterns["privacy"]["href"].search(link.get("href", "")))
+        and not link["foreign_credit"]
     ]
     page_host = urlparse(url).netloc if url else ""
     external_citations = [
         link for link in links
         if urlparse(link.get("href", "")).netloc and urlparse(link.get("href", "")).netloc != page_host
+        and not link["foreign_credit"]
     ]
 
     score = 0

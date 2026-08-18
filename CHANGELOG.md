@@ -10,6 +10,29 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.75.0 — the page's own privacy policy, contact route and trust links
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`eeat_signal_checker.py` no longer credits a page with privacy, contact, trust-policy
+or external-citation links written inside somebody else's microdata contribution.
+The shared `parse_html` link dictionaries now carry the existing
+`under_foreign_credit` answer while retaining every link for link-graph readers;
+the E-E-A-T readers filter that flag, and `mailto:`/`tel:` contact routes apply the
+same shared boundary directly to their tags.
+
+This knowingly applies the ten-key boundary to `FAQPage.acceptedAnswer` too: those
+links are excluded even where the site wrote the answer. The current cost is pinned
+by a regression test and the open question about the key set's width remains in
+`KNOWN-ISSUES.md`.
+
+Fourteen new test methods cover the carried flag, exact property matching, retained
+shared links, all five readers, text-only matches, duplicate hrefs, external links,
+the FAQ cost and the independent anchor-text projection. The suite moves from 1114
+to 1128 tests. The fixture oracle remains 246 declarations / 219 matched / 0
+disagreed / 27 indeterminate, coverage 121 / 106 / 77, with no differences. The
+verdict census remains 25 / 8 / 30 and the inert-findings ledger remains 16 / 11.
+
 ## 0.74.0 — MD-187 owns broken images and can only see three pages
 
 Registry version: `3c6b20d512c6`, replacing `a47993443434`.
