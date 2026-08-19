@@ -31,12 +31,12 @@ try:
     from lib.schema_types import (LOCAL_BUSINESS_TYPES, is_local_business_type,
                                   schema_types)
     from lib.safe_http import safe_get, safe_head
-    from seo_common import fetch_html
+    from seo_common import fetch_html, html_parser
 except ImportError:
     from scripts.lib.schema_types import (LOCAL_BUSINESS_TYPES,
                                           is_local_business_type, schema_types)
     from scripts.lib.safe_http import safe_get, safe_head
-    from scripts.seo_common import fetch_html
+    from scripts.seo_common import fetch_html, html_parser
 
 # Authoritative sameAs targets (ranked by KG signal strength)
 SAMEAS_PLATFORMS = {
@@ -465,7 +465,7 @@ def run_entity_check(url: str, entity_name: str = "", kg_api_key: str = "") -> d
     if not html:
         return {"error": f"Failed to fetch {url}", "url": url}
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, html_parser())
 
     # Extract entities from schema
     entities = extract_entities_from_schema(soup)

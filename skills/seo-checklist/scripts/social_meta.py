@@ -31,6 +31,11 @@ try:
 except ImportError:
     from scripts.lib.safe_http import default_headers, safe_get
 
+try:
+    from seo_common import html_parser
+except ImportError:
+    from scripts.seo_common import html_parser
+
 
 # basis: presentation — 60 characters of a tag's value in the console listing. The
 #  length limits that decide verdicts are in OG_REQUIREMENTS and TWITTER_REQUIREMENTS
@@ -101,7 +106,7 @@ def check_social_meta(url: str, timeout: int = 15) -> dict:
             result["error"] = f"HTTP {resp.status_code}"
             return result
 
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, html_parser())
     except requests.exceptions.RequestException as e:
         result["error"] = str(e)
         return result

@@ -13,7 +13,8 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_request
 
-from seo_common import BeautifulSoup, is_url, load_source, normalize_url, require_bs4
+from seo_common import (BeautifulSoup, html_parser, is_url, load_source,
+                        normalize_url, require_bs4)
 
 
 # basis: inherited — one week of `max-age` for a fingerprinted static asset, present at
@@ -119,7 +120,7 @@ def audit(source: str, include_assets: bool = False, timeout: int = 15, max_asse
     if not is_url(source):
         html, url, fetched = load_source(source, timeout=timeout)
         require_bs4()
-        soup = BeautifulSoup(html or "", "html.parser")
+        soup = BeautifulSoup(html or "", html_parser())
         return {
             "url": source,
             "resources_checked": 0,
@@ -133,7 +134,7 @@ def audit(source: str, include_assets: bool = False, timeout: int = 15, max_asse
     resources = [_check_url(url or source, timeout)]
     if include_assets and html:
         require_bs4()
-        soup = BeautifulSoup(html or "", "html.parser")
+        soup = BeautifulSoup(html or "", html_parser())
         seen = {resources[0]["url"]}
         for asset in _asset_urls(soup, url):
             if asset in seen:

@@ -34,6 +34,11 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get, safe_post
 
+try:
+    from seo_common import html_parser
+except ImportError:
+    from scripts.seo_common import html_parser
+
 # basis: presentation — a key longer than eight characters is echoed as first four,
 #  last four; anything shorter is replaced outright. A masking rule for the output, and
 #  the only threshold in this tree whose purpose is to *not* report something.
@@ -97,7 +102,7 @@ def check_key_in_meta(html: str, key: str) -> dict:
     if not BeautifulSoup:
         return {"passed": None, "finding": "beautifulsoup4 not available for meta tag check."}
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, html_parser())
     meta = soup.find("meta", attrs={"name": "indexnow"})
     if meta and meta.get("content") == key:
         return {"passed": True, "detail": "IndexNow key found in <meta name='indexnow'> tag."}

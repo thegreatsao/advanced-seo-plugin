@@ -40,6 +40,7 @@ written against sibling position again.
 """
 import json
 import os
+import pathlib
 import sys
 import unittest
 from unittest import mock
@@ -230,6 +231,97 @@ class TheChoiceIsDeliberate(unittest.TestCase):
         could parse the same page two ways depending on which check reached it."""
         import parse_html
         self.assertIs(parse_html.html_parser, seo_common.html_parser)
+
+
+class NoScriptChoosesItsOwnParser(unittest.TestCase):
+    """`html_parser` opens by calling itself "one decision, in one place". It was not.
+
+    Until 0.79.0 thirteen of the seventeen files that build a soup passed `"html.parser"`
+    themselves, so the function's claim was false for most of the tree and a verdict could
+    depend on which file happened to read the page. `WhereTheParsersActuallyDiverge` below
+    says what that costs, in the words 0.15.0 left there: a verdict that depends on which
+    parser is installed is not a fact worth recording, it is a defect.
+
+    The switch was made on evidence. Each of the twelve remaining scripts was run over a
+    page carrying every shape the two parsers are known to read differently —
+    `<picture><source><img>`, unclosed `<p>` and `<li>`, a table with no `<tbody>`, a block
+    inside an inline, `<noscript>` wrapping a `<link>`, a `<meta>`, a `<script src>` and an
+    `<img>` — once under each parser, and ten emitted byte-identical JSON. The two that
+    take no page argument had the reads they actually make measured instead, eleven of
+    eleven identical. The whole suite run with every `"html.parser"` call forced to the
+    shared choice moved nothing and left the oracle at 246/219/0/27.
+
+    **Two censuses, because one of them has a hole a reviewer found before this shipped.**
+    Matching calls whose callee is named `BeautifulSoup` misses
+    `from bs4 import BeautifulSoup as BS` followed by `BS(html, "html.parser")`, and misses
+    a wrapper that takes the parser as an argument. So the first census is over the
+    *literal*: `"html.parser"` may be written in `seo_common.py`, which owns the decision,
+    and nowhere else — which is what "one decision, in one place" means when it is enforced
+    rather than asserted. The second census still walks `BeautifulSoup(` calls, because the
+    literal census cannot see a call that names no parser at all and takes whatever bs4
+    guesses.
+
+    A census rather than a sample, because no test data in this repository can tell the two
+    parsers apart in any field the registry reads — `EveryFieldTheRegistryReadsIsParserIndependent`
+    is the proof of that, and it is why a hardcoded parser in a new script would fail here
+    and nowhere else.
+    """
+
+    @staticmethod
+    def _docstring_nodes(tree):
+        import ast
+        found = set()
+        for node in ast.walk(tree):
+            body = getattr(node, "body", None)
+            if not (body and isinstance(node, (ast.Module, ast.ClassDef,
+                                               ast.FunctionDef, ast.AsyncFunctionDef))):
+                continue
+            first = body[0]
+            if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                    and isinstance(first.value.value, str)):
+                found.add(id(first.value))
+        return found
+
+    def test_the_parser_name_is_written_in_one_file_only(self):
+        """The literal census: it catches an aliased import, which the call census cannot."""
+        import ast
+        written = []
+        for path in sorted(pathlib.Path(SCRIPTS).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            skip = self._docstring_nodes(tree)
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Constant) and node.value == "html.parser"
+                        and id(node) not in skip and path.name != "seo_common.py"):
+                    written.append(f"{path.name}:{node.lineno}")
+        self.assertEqual(written, [],
+                         "the parser name belongs in seo_common.html_parser and nowhere "
+                         "else; these name it themselves")
+
+    def test_every_soup_names_the_shared_choice(self):
+        """The call census: it catches a call that names no parser at all."""
+        import ast
+
+        def called(node):
+            return getattr(node.func, "id", getattr(node.func, "attr", ""))
+
+        shared, unnamed = [], []
+        for path in sorted(pathlib.Path(SCRIPTS).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and called(node) == "BeautifulSoup"):
+                    continue
+                where = f"{path.name}:{node.lineno}"
+                if any(isinstance(x, ast.Call) and called(x) == "html_parser"
+                       for x in ast.walk(node)):
+                    shared.append(where)
+                else:
+                    unnamed.append(where)
+        self.assertEqual(unnamed, [],
+                         "these build a soup without asking html_parser(), so the parser "
+                         "is whatever bs4 guesses from what is installed")
+        self.assertGreaterEqual(len(shared), 18,
+                                "fewer call sites than when this was written; if one was "
+                                "deleted, say so here")
 
 
 class EveryFieldTheRegistryReadsIsParserIndependent(unittest.TestCase):

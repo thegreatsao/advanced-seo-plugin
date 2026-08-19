@@ -25,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
 import site_crawl
-from seo_common import DEAD_FETCH_ERROR_KINDS, fetch_error_kind
+from seo_common import DEAD_FETCH_ERROR_KINDS, fetch_error_kind, html_parser
 
 try:
     import requests
@@ -50,7 +50,7 @@ HEADERS = default_headers()
 
 def extract_links(html: str, base_url: str) -> list:
     """Extract all links from HTML content."""
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, html_parser())
     links = []
     seen = set()
 

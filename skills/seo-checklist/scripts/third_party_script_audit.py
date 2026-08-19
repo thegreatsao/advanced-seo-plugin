@@ -7,7 +7,8 @@ import argparse
 import json
 from urllib.parse import urlparse
 
-from seo_common import BeautifulSoup, fetch_url, load_source, require_bs4, same_host
+from seo_common import (BeautifulSoup, fetch_url, html_parser, load_source,
+                        require_bs4, same_host)
 
 
 KNOWN_TAGS = {
@@ -53,7 +54,7 @@ def _is_third_party(src: str, page_url: str) -> bool:
 def audit(source: str, fetch_scripts: bool = False, timeout: int = 15) -> dict:
     html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
-    soup = BeautifulSoup(html or "", "html.parser")
+    soup = BeautifulSoup(html or "", html_parser())
     scripts = []
     issues = []
 

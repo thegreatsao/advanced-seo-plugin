@@ -35,6 +35,11 @@ try:
 except ImportError:
     from scripts.lib.safe_http import safe_get
 
+try:
+    from seo_common import html_parser
+except ImportError:
+    from scripts.seo_common import html_parser
+
 # The three signals of minified CSS are read together. A corpus containing authored
 # CSS as well as generated build output matters here: generated source alone is much
 # more tightly formatted and would make hand-written CSS look minified.
@@ -112,7 +117,7 @@ def check(url: str, timeout: int = 15) -> dict:
         result["fetch_error"] = str(exc)[:200]
         return result
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, html_parser())
     hrefs = []
     for link in soup.find_all("link"):
         rel = link.get("rel") or []

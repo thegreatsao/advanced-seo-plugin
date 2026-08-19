@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from seo_common import (
     BeautifulSoup,
     fetch_url,
+    html_parser,
     load_source,
     normalize_url,
     require_bs4,
@@ -87,7 +88,7 @@ def _record_font_faces(
 def audit(source: str, fetch_fonts: bool = False, timeout: int = 15) -> dict:
     html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
-    soup = BeautifulSoup(html or "", "html.parser")
+    soup = BeautifulSoup(html or "", html_parser())
     issues = []
 
     preloads = []

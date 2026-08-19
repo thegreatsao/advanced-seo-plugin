@@ -10,6 +10,48 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.79.0 — one parser decision, in one place, at last
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`seo_common.html_parser` opens by calling itself "one decision, in one place". It was not.
+Counted over every `BeautifulSoup(` call site under `scripts/`, **thirteen files across
+fifteen call sites passed `"html.parser"` themselves** and four went through the shared
+choice. `article_seo.py` took the shared one in 0.77.0 because it needed `parse_html`
+anyway; the other twelve are switched here, and the census is now **16 files, 18 call
+sites, zero hardcoded, zero that name no parser at all**.
+
+This matters because of what the tree already says about it. `WhereTheParsersActuallyDiverge`
+in `tests/test_parser.py` records the 0.15.0 finding in its own words: a verdict that
+depends on which parser is installed is not a fact worth recording, it is a defect. Twelve
+files choosing for themselves were twelve places such a defect could appear and be read as
+a site's score.
+
+**Switched on evidence, not on the absence of evidence.** The suite's own corpus is
+well-formed, which is exactly where the two parsers agree, so passing it proves little. Each
+of the twelve was run over a page built to carry every shape they are known to read
+differently — `<picture><source><img>`, unclosed `<p>` and `<li>`, a table with no
+`<tbody>`, a block element inside an inline one, `<noscript><img>` — once under each parser,
+and ten emitted byte-identical JSON. The two that take no page argument, `indexnow_checker`
+and `robots_path_tester`, had the reads they actually make measured instead — eleven of
+eleven identical, including every one of them wrapped in `<noscript>`, which the two
+parsers are documented to treat differently. Separately, the whole suite was run with every
+`"html.parser"` call forced to the shared choice: 78 forced calls, no product failure, the
+oracle unmoved.
+
+`NoScriptChoosesItsOwnParser` is new and is what keeps the claim true. **It is two censuses
+because the first draft had a hole, found by a review of the finished diff before it was
+committed.** Matching calls whose callee is named `BeautifulSoup` misses
+`from bs4 import BeautifulSoup as BS` followed by `BS(html, "html.parser")`. So the first
+census is over the literal — the parser name may be written in `seo_common.py`, which owns
+the decision, and nowhere else — and the second still walks the calls, because a literal
+census cannot see a call that names no parser at all. Both were verified to discriminate:
+one file put back to its old form reddens the second, and a five-line script with an
+aliased import reddens the first.
+
+1189 → 1191 tests. Oracle unmoved at 246 / 219 / 0 / 27 with no differences; both ledgers
+in step.
+
 ## 0.78.0 — the boundary belongs to the page, not to the key
 
 Registry version: `3c6b20d512c6`, unchanged.

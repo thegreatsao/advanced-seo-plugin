@@ -31,6 +31,11 @@ except ImportError:
     print("Error: beautifulsoup4 required. Install with: pip install beautifulsoup4")
     sys.exit(1)
 
+try:
+    from seo_common import html_parser
+except ImportError:
+    from scripts.seo_common import html_parser
+
 # schema.org @type -> (profile, weight, why). Structured data is the strongest
 # signal available because the site author declared it on purpose.
 # basis: inherited — present at import. Weights for guessing a site's type from its
@@ -152,7 +157,7 @@ def detect(html: str, url: str = "") -> dict:
         result["error"] = "no HTML to inspect"
         return result
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, html_parser())
     lower = html.lower()
 
     def hit(profile, weight, why):

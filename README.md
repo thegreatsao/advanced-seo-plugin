@@ -4,9 +4,9 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.78.0 — see [CHANGELOG.md](CHANGELOG.md). A work the page cites, reviews or
-adapts no longer lends the page its author or its publisher when the markup hoists it
-into `@graph`; a page keeps its own subject by declaring it with `mainEntityOfPage`.
+Version 0.79.0 — see [CHANGELOG.md](CHANGELOG.md). Every script that parses a page now
+takes the one parser decision the tree already had, so no verdict can depend on which
+file happened to read the markup.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

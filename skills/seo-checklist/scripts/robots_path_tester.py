@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
-from seo_common import fetch_robots, normalize_url, robots_allowed
+from seo_common import fetch_robots, html_parser, normalize_url, robots_allowed
 
 try:
     from lib.safe_http import default_headers, safe_get
@@ -74,7 +74,7 @@ def discover_asset_paths(site: str, timeout: int = 15) -> tuple[list[str], str |
 
     page_url = getattr(response, "url", None) or normalize_url(site)
     page_origin = _origin(page_url)
-    soup = BeautifulSoup(getattr(response, "text", "") or "", "html.parser")
+    soup = BeautifulSoup(getattr(response, "text", "") or "", html_parser())
     references = []
     for tag in soup.find_all("link", href=True):
         if "stylesheet" in [str(value).lower() for value in (tag.get("rel") or [])]:

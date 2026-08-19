@@ -8,7 +8,8 @@ import json
 import re
 from urllib.parse import urlparse
 
-from seo_common import (BeautifulSoup, fetch_url, load_source, normalize_url,
+from seo_common import (BeautifulSoup, fetch_url, html_parser, load_source,
+                        normalize_url,
                         require_bs4,
                         same_host)
 
@@ -29,7 +30,7 @@ def _imports_from_css(css: str, base_url: str) -> list[str]:
 def audit(source: str, fetch_css: bool = False, timeout: int = 15) -> dict:
     html, url, fetched = load_source(source, timeout=timeout)
     require_bs4()
-    soup = BeautifulSoup(html or "", "html.parser")
+    soup = BeautifulSoup(html or "", html_parser())
     preloads = set()
     preconnects = set()
     chains = []

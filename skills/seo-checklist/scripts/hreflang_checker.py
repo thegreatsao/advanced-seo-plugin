@@ -35,10 +35,10 @@ except ImportError:
 
 try:
     from lib.safe_http import safe_head
-    from seo_common import fetch_html
+    from seo_common import fetch_html, html_parser
 except ImportError:
     from scripts.lib.safe_http import safe_head
-    from scripts.seo_common import fetch_html
+    from scripts.seo_common import fetch_html, html_parser
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +628,7 @@ def check_return_tags(
             })
             continue
 
-        alt_soup = BeautifulSoup(alt_html, "html.parser")
+        alt_soup = BeautifulSoup(alt_html, html_parser())
         alt_tags = extract_hreflang_from_html(alt_soup, alt_url)
         returns_to_source = any(
             t["url"].rstrip("/") == page_url.rstrip("/") for t in alt_tags
@@ -688,7 +688,7 @@ def run_hreflang_check(url: str, verify_returns: bool = False) -> dict:
     if not html:
         return {"error": f"Failed to fetch URL: {url}", "url": url}
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, html_parser())
     tags = extract_hreflang_from_html(soup, final_url)
 
     # Also check HTTP headers (Check 8 — alternative implementation method)
