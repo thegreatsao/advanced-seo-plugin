@@ -591,57 +591,29 @@ name. A column called `url` would be read as "fix this page".
   They are collected so that the next person deciding what a registry version
   is worth spending can see them together.
 
-- **FAIL is unreachable for five items, because their warn band names severities their
-  script never emits.** The registry asserts in critical/high/medium/low; most evidence
-  scripts speak error/warning/info, and `SEVERITY_ALIAS` (`checklist_runner.py:467`)
-  maps error to high, warning to medium, info to low. An item asserting `none_severity:
-  [critical, high, medium]` with a warn band of `none_severity: [critical, high]`
-  therefore returns WARN for every issue its script can raise **that the assertion
-  notices at all**, unless that script can say `error`. The qualifier is not
-  decoration: `warning` becomes medium, which fails the assertion and satisfies the
-  band, so WARN; `info` becomes low, which the assertion tolerates, so a run whose
-  issues are all `info` reports **PASS** and prints the issue underneath it. An
-  earlier version of this paragraph said "every issue its script can raise" and was
-  wrong in that corner — found by a reviewer given the rule and the five scripts, on
-  2026-08-15.
+- **Closed in 0.50.0 — the five items that could not fail, and this entry outlived them
+  by twenty-nine releases.** A `none_severity` assertion fails when an issue carries a
+  severity it grades, then consults the warn band; FAIL arrives only if the band fails
+  too. Five items sat over scripts whose whole vocabulary was `warning` and `info`, which
+  alias to medium and low, so `SP-110`, `TE-170`, `MD-185`, `AR-163` and `TECH-002` could
+  not report FAIL on any site in the world. Two were proven by the oracle rather than
+  argued: on 2026-08-14 it declared FAIL for `SP-110` and `TE-170` on the broken fixture
+  and the run answered WARN on both origins.
 
-  Five items are in that shape and none of their scripts holds an `error` literal:
-  `SP-110` (`critical_request_chain.py`), `TE-170` (`cache_compression_checker.py`),
-  `MD-185` (`image_weight_audit.py`), `AR-163` (`faceted_nav_audit.py`) and
-  `TECH-002` (`font_audit.py`).
+  0.50.0 repaired it in the scripts rather than in the rules — each grades the one finding
+  that is a defect on every site as `error`, and the rest stay advice — and gave
+  `audit_reachability.py` the fourth mechanism this entry said it lacked,
+  `severity_vocabulary`. **Measured on 0.79.0: that mechanism proves zero items today**,
+  against the seven it named when it shipped. The paragraph that used to stand here also
+  warned "do not ship it as a gate before the oracle has calibrated it"; it has been a
+  gate in `ci.yml` since 0.50.0.
 
-  Two are proven rather than argued. On 2026-08-14 the oracle declared FAIL for `SP-110`
-  and `TE-170` on the broken fixture — a 21 KB render-blocking stylesheet with a
-  synchronous script in the head, and responses carrying no compression and no cache
-  headers — and the run answered WARN for both, on **both** origins. `MD-185` reached
-  the same conclusion by hand in an earlier declaration, "a medium optimization issue,
-  which belongs in the rule's warning band". `AR-163` and `TECH-002` are unverified:
-  neither fixture gives either item a subject to judge.
-
-  This is the mirror of the dead warn band `0.47.0` removed from `CN-048` — there a
-  middle verdict the item could never return, here a bottom verdict it can never reach —
-  and it is a fourth mechanism `audit_reachability.py` does not have: its three proofs
-  are all about the assertion's own logic, none about the severity vocabulary underneath
-  it. **Do not ship it as a gate before the oracle has calibrated it**: the fourth
-  detector 0.46.0 attempted named four items and was wrong about all four.
-
-  **And when it is written, it cannot work by scanning for severity literals in the
-  function that returns `issues`.** `cache_compression_checker.py` is the counter-shape
-  already in the tree: `_check_url` initialises `row["issues"]` at line 61 and appends
-  to it only at lines 86-95, all `warning` or `info`, and `audit` re-emits those at
-  line 129 as `{**item, "url": row["url"]}`. The severities are three hops from the
-  returned list. Checked on 2026-08-15 because a reviewer handed the rule and every
-  `severity` line in all five scripts read that unpack as evidence of an upstream
-  producer and concluded `TE-170` can fail after all — an accurate citation and a wrong
-  inference, which is the exact error a literal-scanning detector would make in the
-  other direction. Of the five, only `faceted_nav_audit.py` builds and returns its list
-  in one contiguous scope.
-
-  Not a defect, and checked before filing one: `GO-136` looks unreachable in the same
-  way and is not. `sitemap_checker.py` does emit `error` — no sitemap found, an
-  unreadable one, one over 50,000 URLs — and the dead sitemap URLs its own invocation
-  never fetches (`fetch_urls: bool = False`, `sitemap_checker.py:35`) belong to
-  `GO-138`, which is the invocation that carries `--fetch-urls`.
+  Kept, rewritten rather than deleted, because the entry itself is the finding: **a record
+  of a defect is not evidence the defect is still there**, and this one read as open
+  through every audit of this file until somebody ran the detector it asked for. What
+  `audit_reachability.py` still cannot do is claim reachability — 141 of 143 script-backed
+  assertions are not claimed either way, and that number is the honest measure of how much
+  of the registry this tool speaks about at all.
 
 - **KW-071 asks about keyword overuse, while its evidence measures SERP competition.**
   `gsc_cannibalization.py` now reports close non-branded competition honestly as
