@@ -2916,16 +2916,34 @@ class OneFetchPerUrl(unittest.TestCase):
         self.sh = sh
         self.dir = tempfile.mkdtemp(prefix="test-http-cache-")
         self.saved = os.environ.get(sh.CACHE_DIR_VAR)
+        # `RATE_LIMIT_DIR` is one directory for the whole machine and the robots entry
+        # in it is keyed by `scheme://netloc` and lives half an hour, while every origin
+        # here is 127.0.0.1 plus an ephemeral port the operating system hands out again.
+        # Without this line the robots.txt an earlier test served can answer this one's
+        # question: `test_a_cache_hit_still_refuses_a_path_robots_forbids` failed exactly
+        # that way once in a full suite and never alone, and pre-seeding `Allow: /` for
+        # the port a fresh server got reproduces it verbatim. `RateLimiting` and `Robots`
+        # already point the directory at their own — for pacing state and for a stubbed
+        # fetch — so the shape is theirs; the reason here is the recycled port.
+        #
+        # It closes this class's own reads and not its children's: the setting is a
+        # module global, and the two tests below that start processes cannot hand it to
+        # them. That half is KNOWN-ISSUES `one-test-robots-answers-another`.
+        self.pacing_dir = tempfile.mkdtemp(prefix="test-http-pace-")
+        self.saved_pacing_dir = sh.RATE_LIMIT_DIR
+        sh.RATE_LIMIT_DIR = self.pacing_dir
         self.loopback = harness.allow_loopback()
         self.loopback.__enter__()
 
     def tearDown(self):
         self.loopback.__exit__(None, None, None)
+        self.sh.RATE_LIMIT_DIR = self.saved_pacing_dir
         if self.saved is None:
             os.environ.pop(self.sh.CACHE_DIR_VAR, None)
         else:
             os.environ[self.sh.CACHE_DIR_VAR] = self.saved
         shutil.rmtree(self.dir, ignore_errors=True)
+        shutil.rmtree(self.pacing_dir, ignore_errors=True)
 
     def _on(self):
         os.environ[self.sh.CACHE_DIR_VAR] = self.dir

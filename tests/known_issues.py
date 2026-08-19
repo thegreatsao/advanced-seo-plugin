@@ -474,6 +474,48 @@ def _article_seo_shares_the_answers() -> dict:
     return out
 
 
+@probe("shared_robots_cache")
+def _shared_robots_cache() -> dict:
+    """What makes one test's robots.txt available to another test's question.
+
+    Three facts together, because no one of them is the defect: the directory is
+    machine-wide, the key is the origin and nothing else, and the entry outlives the
+    server by half an hour. A repair moves at least one of them.
+    """
+    import tempfile as _tempfile
+
+    import lib.safe_http as safe
+
+    import ast as _ast
+
+    origin = "http://127.0.0.1:49152"
+    isolating = []
+    for path in sorted((os.path.join(ROOT, "tests", name)
+                        for name in os.listdir(os.path.join(ROOT, "tests"))
+                        if name.startswith("test_") and name.endswith(".py"))):
+        with open(path, encoding="utf-8") as stream:
+            tree = _ast.parse(stream.read())
+        for node in tree.body:
+            if not isinstance(node, _ast.ClassDef):
+                continue
+            if any(isinstance(inner, _ast.Attribute) and inner.attr == "RATE_LIMIT_DIR"
+                   and isinstance(getattr(inner, "ctx", None), _ast.Store)
+                   for inner in _ast.walk(node)):
+                isolating.append("%s.%s" % (os.path.basename(path)[:-3], node.name))
+    return {
+        "cache_dir_is_the_machine_temp_dir":
+            os.path.dirname(safe.RATE_LIMIT_DIR) == _tempfile.gettempdir(),
+        "robots_cache_ttl_seconds": safe.ROBOTS_CACHE_TTL,
+        # The filename, so that a key scheme which started including anything beyond
+        # the origin — a run id, a pid, the served routes — moves this value.
+        "cache_file_for_one_fixed_origin":
+            os.path.basename(safe._robots_cache_path(origin)),
+        # A module global, so it is what a test class can set and what a child process
+        # cannot inherit. Both halves of the entry are in this list.
+        "test_classes_pointing_it_somewhere_else": sorted(isolating),
+    }
+
+
 @probe("foreign_credit_keys")
 def _foreign_credit_keys() -> dict:
     import seo_common

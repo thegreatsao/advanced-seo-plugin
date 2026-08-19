@@ -10,10 +10,10 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Twenty of the
-thirty-nine entries carry a probe; the other nineteen carry a written reason for having
-none, and that count is printed, because a ledger where everything is exempt is a ledger
-that has stopped working.
+fails when the tree stops answering what its entry says it answers. Twenty-one of the
+forty entries carry a probe; the other nineteen carry a written reason for having
+none, and that count is printed, because a ledger where everything is exempt is a
+ledger that has stopped working.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
@@ -1487,6 +1487,40 @@ name. A column called `url` would be read as "fix this page".
    Whether a site-wide `eq 0` should be withheld when its input was truncated is one
    question about twelve items, not twelve questions.
    <!-- ki: a-truncated-crawl-decides-the-whole-site -->
+
+- **One test's robots.txt can answer another test's question for half an hour, and it
+  is the same shape as the flake 0.19.1 diagnosed.** Found on the acceptance run for
+  0.80.0: `test_a_cache_hit_still_refuses_a_path_robots_forbids` reported
+  *RobotsDisallowed not raised*, and did not reproduce in eight runs of its class and
+  its module alone. It is not a flake either. `safe_http.RATE_LIMIT_DIR` is
+  `%TEMP%/seo-checklist-rate`, one directory for the whole machine; the robots entry in
+  it is keyed by `scheme://netloc` alone and lives `ROBOTS_CACHE_TTL` — 1800 seconds.
+  Every loopback origin in this suite is `http://127.0.0.1:` plus an ephemeral port, and
+  the operating system hands those out again.
+
+  **Measured, not reasoned.** Serving the test's own routes on a fresh port raises
+  `RobotsDisallowed`. Writing `User-agent: *\nAllow: /` into the cache path for that
+  same origin first — which is exactly what an earlier test on a recycled port leaves
+  behind — reproduces the failure verbatim. So the answer a test gets can come from a
+  server that stopped listening minutes ago, and across separate runs of the suite as
+  well as within one.
+
+  **Half repaired, and the measurement says which half.** `RateLimiting` and `Robots`
+  already pointed `RATE_LIMIT_DIR` at their own directory in `setUp`; `OneFetchPerUrl`
+  did not, and now does. With that line the failing test writes nothing into the shared
+  directory at all — counted by snapshotting it around a run of just that test.
+
+  The other half stays open, and the obvious repair is not it. **`RATE_LIMIT_DIR` is a
+  module global, so a test can set it and a child process cannot inherit it.** Running
+  the whole class still adds two robots entries to the shared directory, from the two
+  tests that start children on purpose — and one of those tests already says in writing
+  that its cache "lives in the shared rate-limit directory rather than the run's, so
+  this test has to be told about a port nothing has seen before". A port nothing has
+  seen before is exactly the assumption an operating system that recycles ports
+  withdraws. Closing it needs the directory to travel in the environment the way
+  `SEO_HTTP_CACHE` already does, which is a change to the product's own contract and
+  belongs in its own release.
+  <!-- ki: one-test-robots-answers-another -->
 
 ---
 

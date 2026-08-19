@@ -50,12 +50,12 @@ HTML comment at column 0 between two list items ends the list, and two of these 
 are a numbered pair. `tests/known-issues.json` records, per entry, its state, the claim
 in one sentence, and either a probe or a written reason for having none.
 `python tests/known_issues.py --check` re-runs every probe and fails when the tree stops
-answering what the entry says it answers. **39 entries, 20 with a probe**, and the 19
+answering what the entry says it answers. **40 entries, 21 with a probe**, and the 19
 without carry a reason each — that count is printed, because a ledger where everything is
 exempt is a ledger that has stopped working. It is a CI step; `tests/test_known_issues.py`
 holds the cheap half — that no entry is unmarked, unclassified, or exempt in silence.
 
-**Ten of the twenty probes changed before landing — nine rewritten and one split off —
+**Ten of the twenty-one probes changed before landing — nine rewritten and one split off —
 and none of the changes was cosmetic.** Each recorded something narrower than its entry
 claims, so it would have stayed green while the entry became false: a green light on a
 stale claim, which is worse than no probe at all. Five came out of re-reading my own work:
@@ -80,6 +80,31 @@ the reader; recovering that number took a search over candidate definitions, and
 narrower reading gave 59 and nearly convicted a true entry of being stale. The probe now
 carries the definition — nine spellings, over `assert` and `warn` — so the number can be
 re-derived rather than believed.
+
+**A fortieth entry arrived during this release's acceptance run, and it is the first one
+written the way the instrument asks.** One local run of the suite failed
+`test_a_cache_hit_still_refuses_a_path_robots_forbids` with *RobotsDisallowed not
+raised*, and eight runs of that class and of its module alone did not reproduce it. It is
+not a flake either: `safe_http.RATE_LIMIT_DIR` is one machine-wide directory, the robots
+entry in it is keyed by `scheme://netloc` alone, and it outlives its server by 1800
+seconds — while every loopback origin in this suite is `127.0.0.1` plus an ephemeral port
+the operating system hands out again. Serving the test's own routes on a fresh port
+raises `RobotsDisallowed`; writing `Allow: /` into the cache path for that same origin
+first — which is what an earlier test on a recycled port leaves behind — reproduces the
+failure verbatim. That is the shape 0.19.1 diagnosed, where the "flake" was a port
+containing `404`.
+
+Half of it is repaired: `RateLimiting` and `Robots` already gave themselves their own
+directory in `setUp`, `OneFetchPerUrl` did not, and now does — with that line the failing
+test writes nothing into the shared directory at all, counted by snapshotting it around a
+run of that one test. The other half is open, and the obvious repair is not it:
+`RATE_LIMIT_DIR` is a module global, so a test can set it and a child process cannot
+inherit it. Running the whole class still leaves two robots entries in the shared
+directory, from the two tests that start children on purpose — one of which already says
+in writing that it depends on "a port nothing has seen before", which is the assumption
+an operating system that recycles ports withdraws. Closing that needs the directory to
+travel in the environment the way `SEO_HTTP_CACHE` does, which is the product's own
+contract and belongs in its own release.
 
 No registry item, script output or verdict changes in this release.
 

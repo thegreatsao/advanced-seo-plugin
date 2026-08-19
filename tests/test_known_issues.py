@@ -98,7 +98,7 @@ class RecordedKnownIssues(unittest.TestCase):
 
         This runs every probe, which the two ledgers beside this one deliberately do
         not do in the suite. They recompute an AST scan over the whole tree; these
-        twenty probes take about two and a half seconds together, and paying that
+        twenty-one probes take about two and a half seconds together, and paying that
         locally is what makes a stale entry a failure somebody sees before pushing.
         """
         self.assertEqual(known_issues.differences(self.record), [])
