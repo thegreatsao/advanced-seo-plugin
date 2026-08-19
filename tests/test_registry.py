@@ -261,16 +261,22 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
         uncounted = at.scan_uncounted()
         by_kind = {kind: sum(row["kind"] == kind for row in named)
                    for kind in at.KINDS}
+        # 0.80.1 judged the four shapes 0.71.0 had listed and left to a person, and five
+        # constants moved out of the uncounted listing into `inherited`: both MinHash
+        # numbers and the three `detect_profile` weight tables. They are counted among
+        # the numbers a verdict depends on because a declared constant is, whatever its
+        # conditions — the MinHash pair's own basis line says no assertion reads the
+        # field it feeds, and `DEFAULT_MAX_REDIRECTS` stayed uncounted as a fetch budget.
         self.assertEqual(by_kind, {
             "standard": 11,
             "measured": 11,
             "convention": 47,
-            "inherited": 61,
+            "inherited": 66,
             "presentation": 13,
         })
-        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 130)
-        self.assertEqual(len(named), 143)
-        self.assertEqual(len(uncounted), 25)
+        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 135)
+        self.assertEqual(len(named), 148)
+        self.assertEqual(len(uncounted), 20)
         self.assertEqual(sum(len(at.numeric_constants(path))
                              for path in at._script_paths()), 168)
 
@@ -347,8 +353,8 @@ WINDOW = 7
             status = at.main(["--uncounted"])
         output = stdout.getvalue()
         self.assertEqual(status, 0, output)
-        self.assertRegex(output, r"(?m)^  .*site_crawl\.py:\d+  MINHASH_FUNCTIONS$")
-        self.assertIn("\n25 module-level numeric constant(s) not in the inventory\n",
+        self.assertRegex(output, r"(?m)^  .*site_crawl\.py:\d+  DEFAULT_MAX_PAGES$")
+        self.assertIn("\n20 module-level numeric constant(s) not in the inventory\n",
                       output)
         listed = {line.strip() for line in output.splitlines() if line.startswith("  ")}
         for row in named:
@@ -362,7 +368,7 @@ WINDOW = 7
             status = at.main([])
         output = stdout.getvalue()
         self.assertEqual(status, 0, output)
-        self.assertIn("25 module-level numeric constant(s) are not in this inventory",
+        self.assertIn("20 module-level numeric constant(s) are not in this inventory",
                       output)
         self.assertIn("1 basis line(s) name something that is not a module-level "
                       "numeric constant", output)
@@ -381,7 +387,7 @@ WINDOW = 7
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             status = at.main(["--uncounted", "--check"])
         self.assertEqual(status, 0, stdout.getvalue() + stderr.getvalue())
-        self.assertIn("MINHASH_FUNCTIONS", stdout.getvalue())
+        self.assertIn("DEFAULT_MAX_PAGES", stdout.getvalue())
 
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "thresholds.py")

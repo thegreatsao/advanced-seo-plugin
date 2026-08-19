@@ -1,5 +1,22 @@
 {
   "entries": {
+    "a-loop-past-the-tenth-hop-is-no-loop": {
+      "claim": "redirect_checker walks the chain with max_redirects=10, a default argument the threshold inventory cannot see, and CI-014 asserts has_loop falsy — so a loop closing past the cap reads as no loop and the item passes.",
+      "measured": {
+        "ar_150_assert": {
+          "lte": 1,
+          "path": "total_hops"
+        },
+        "cap": 10,
+        "ci_014_assert": {
+          "falsy": true,
+          "path": "has_loop"
+        },
+        "declared_as": "default argument"
+      },
+      "probe": "redirect_walk_cap",
+      "state": "open"
+    },
     "a-mostly-refused-run-reports-a-clean-count": {
       "claim": "A run where almost every image was unchecked still reports broken_image_count 0, with the unchecked count printed beside it.",
       "probe": null,
@@ -390,9 +407,9 @@
       "why": "A closed narrative about a suite repair, held by the discovery rules it fixed."
     },
     "threshold-declarations-unjudged": {
-      "claim": "Twenty-five module-level numeric constants carry no basis and sit outside the name-based scan, and one declaration marks a regular expression rather than a number.",
+      "claim": "The four shapes 0.71.0 singled out are judged and declared — the two MinHash constants and the three detect_profile tables as inherited, DEFAULT_MAX_REDIRECTS left outside as a fetch budget — and twenty module-level numeric constants carry no basis and are beyond the name-based scan.",
       "measured": {
-        "counted": 130,
+        "counted": 135,
         "non_numeric_basis": [
           "scripts/robots_path_tester.py:31"
         ],
@@ -411,15 +428,10 @@
           "ENCODING_SNIFF_BYTES",
           "INVENTORY_VERSION",
           "JPEG_SOF_MARKERS",
-          "MARKUP_SIGNALS",
           "MAX_ICON_BYTES",
           "MAX_SHEETS",
-          "MINHASH_FUNCTIONS",
-          "PATH_SIGNALS",
-          "PLATFORM_SIGNALS",
           "ROBOTS_FETCH_WAIT",
           "ROW_LIMIT",
-          "SHINGLE_WORDS",
           "SOCKET_TIMEOUT",
           "TOP_N",
           "_CACHE_POLL"
@@ -488,7 +500,7 @@
       "state": "open"
     }
   },
-  "entry_count": 40,
-  "probed_entry_count": 21,
+  "entry_count": 41,
+  "probed_entry_count": 22,
   "unprobed_entry_count": 19
 }

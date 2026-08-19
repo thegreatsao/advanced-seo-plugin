@@ -63,6 +63,16 @@ SCHEMA_SIGNALS = {
 }
 
 # Platform fingerprints in markup and asset paths.
+# basis: inherited — present at import, and the same argument as `SCHEMA_SIGNALS` above,
+#  now with the measurement under it. What a profile decides was counted for 0.80.1:
+#  `local` excludes 4 of the 215 items, `saas`, `blog` and `media` exclude 7 each, and
+#  `default` and `ecommerce` exclude none — an excluded item reports N/A. What stops that
+#  from being a silent narrowing is `choose_profile`, and the order of its branches is the
+#  whole of it: `--profile auto` returns the detector's answer in any environment, with or
+#  without a terminal, because typing the flag is the decision. Every other run without an
+#  explicit profile asks a person, and where there is nobody to ask it falls back to
+#  `default` — the whole registry — and says so on stderr. So these weights narrow scope
+#  only behind a flag somebody typed, and never by themselves.
 PLATFORM_SIGNALS = [
     (r"cdn\.shopify\.com|shopify-", "ecommerce", 4, "Shopify"),
     (r"woocommerce|wp-content/plugins/woocommerce", "ecommerce", 4, "WooCommerce"),
@@ -77,6 +87,9 @@ PLATFORM_SIGNALS = [
 ]
 
 # Same-page link paths. Weak on their own; they matter in aggregate.
+# basis: inherited — present at import; the scope argument written over `PLATFORM_SIGNALS`
+#  covers this table too. Its weights run 1 to 3, the same span as `MARKUP_SIGNALS` and one
+#  short of `PLATFORM_SIGNALS`, which is where a fingerprint names the platform outright.
 PATH_SIGNALS = [
     (r"/cart\b|/basket\b|/checkout\b|add-to-cart", "ecommerce", 3, "cart or checkout link"),
     (r"/product[s]?/|/shop\b|/collections?/", "ecommerce", 2, "product or shop paths"),
@@ -89,6 +102,8 @@ PATH_SIGNALS = [
     (r"/contacts?\b|/kontakt|/kontaktai", "local", 1, "contact page"),
 ]
 
+# basis: inherited — present at import; the third table under the same scope argument as
+#  `PLATFORM_SIGNALS`. Read together with it: `detect()` sums both against one page.
 MARKUP_SIGNALS = [
     (r'itemprop=["\']price["\']|class=["\'][^"\']*\bprice\b', "ecommerce", 2, "price markup"),
     (r"google\.com/maps/embed|maps\.google\.|yandex\.[a-z]+/map", "local", 3, "embedded map"),

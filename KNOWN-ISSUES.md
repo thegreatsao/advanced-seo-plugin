@@ -10,8 +10,8 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Twenty-one of the
-forty entries carry a probe; the other nineteen carry a written reason for having
+fails when the tree stops answering what its entry says it answers. Twenty-two of the
+forty-one entries carry a probe; the other nineteen carry a written reason for having
 none, and that count is printed, because a ledger where everything is exempt is a
 ledger that has stopped working.
 
@@ -436,14 +436,41 @@ name. A column called `url` would be read as "fix this page".
 
 ## 6. Smaller, but they will bite
 
-- **The threshold inventory now says what it leaves outside, but those declarations
-  are not yet judged.** Twenty-five module-level numeric constants carry no basis and
-  are beyond the name-based scan. At least four shapes look like thresholds rather
-  than budgets: `site_crawl.py`'s `MINHASH_FUNCTIONS` and `SHINGLE_WORDS` decide
-  near-duplicate similarity, `safe_http.py`'s `DEFAULT_MAX_REDIRECTS` bounds a chain a
-  rule reports on, and `detect_profile.py`'s three weight tables score a platform
-  guess. Each needs somebody to decide whether it decides a verdict and write a basis;
-  0.71.0 lists them instead of guessing.
+- **The four shapes this entry singled out are judged, and twenty constants are still
+  outside the inventory.** 0.71.0 listed twenty-five module-level numeric constants with
+  no basis and named four that looked like thresholds rather than budgets. 0.81.0 answers
+  those four by measurement rather than by reading their names:
+
+  - **`site_crawl.MINHASH_FUNCTIONS` and `SHINGLE_WORDS` decide a printed claim, not a
+    verdict.** They feed the MinHash signature and nothing else; the signature feeds
+    `jaccard_from_minhash`; that feeds `near_duplicates` alone, and **no registry
+    assertion reads any near-duplicate field** — the four items over
+    `duplicate_content.py` read the exact hash, titles, descriptions and a word count.
+    What they do move is the number an operator is shown: over 25/100/400 functions and
+    3/5/9-word shingles one page pair estimates 0.68 to 0.81 similar, against a 0.85
+    reporting line, while all four asserted fields stay put. Declared `inherited`,
+    because 0.1.0 shipped them as default arguments and nobody here has chosen them
+    since; the declaration names what would promote them, which is any item pointed at
+    `near_duplicate_pairs`;
+  - **`safe_http.DEFAULT_MAX_REDIRECTS` is a fetch budget and stays outside the
+    inventory.** The two items about redirect chains do not read it: `redirect_checker.py`
+    carries its own `max_redirects=10`, so `AR-150` (`total_hops lte 1`) and `CI-014`
+    (`has_loop`) are bounded by that and not by this. Past the cap `safe_request` raises
+    `TooManyRedirects`, so the page reads as a fetch failure and its items report
+    `NO_DATA` — the one thing this number can do to a verdict is withhold it, which is
+    the family of `DEFAULT_TIMEOUT` and `DEFAULT_MAX_RESPONSE_BYTES`;
+  - **`detect_profile`'s three weight tables decide scope, under a flag somebody typed.**
+    Counted: `local` excludes 4 of 215 items, `saas`, `blog` and `media` 7 each,
+    `default` and `ecommerce` none, and an excluded item reports N/A. `choose_profile`
+    takes the detector's answer only for an explicit `--profile auto`, and with no
+    terminal falls back to `default` — the whole registry — saying so on stderr. Declared
+    `inherited`, matching `SCHEMA_SIGNALS`, which had carried that argument alone since
+    0.71.0 while its three neighbours carried nothing.
+
+  The inventory reads **135 numbers a verdict depends on** and **20 uncounted** after
+  those five declarations. The twenty are budgets, versions and buffer sizes by
+  inspection, and by inspection is all this entry can say about them: nobody has walked
+  them one at a time the way these four were walked.
 
   One declaration points the other way. `robots_path_tester.py:31` puts
   `# basis: standard` above `_META_ROBOTS`, a regular expression rather than a numeric
@@ -1521,6 +1548,31 @@ name. A column called `url` would be read as "fix this page".
   `SEO_HTTP_CACHE` already does, which is a change to the product's own contract and
   belongs in its own release.
   <!-- ki: one-test-robots-answers-another -->
+
+- **A redirect loop that closes past the tenth hop reports as no loop at all, and
+  `CI-014` passes the site.** `redirect_checker.check_redirects` walks the chain itself
+  with `max_redirects: int = 10` — a default argument, so the threshold inventory, which
+  reads module-level assignments, cannot see it. `CI-014` is `high` and asserts `has_loop`
+  falsy.
+
+  Measured on 2026-08-19 against a local server, three chains: a loop closing at hop 3
+  gives `has_loop True`, `total_hops 3`; the same loop closing at hop 12 gives
+  **`has_loop False`**, `total_hops 10`, *Too many redirects (>10)*; and a plain 12-hop
+  chain that never loops gives the identical answer. So the two cases the item exists to
+  tell apart become indistinguishable exactly where the walk stops, and the verdict it
+  produces there is the passing one.
+
+  `AR-150` still fails both — it asserts `total_hops lte 1` — so a site with a deep loop
+  is not scored clean overall. That is a second rule catching it by accident, not this
+  one being right. The honest repair is a withheld verdict rather than a louder one:
+  when the walk stops at the cap, whether a loop exists is unknown, and `NO_DATA` is what
+  this tree says when it does not know. That changes a live verdict and a script's output
+  shape, so it needs its own release, and the number needs a basis wherever it ends up.
+
+  Found by an independent reading of the 0.80.1 declarations, from the sentence saying
+  `DEFAULT_MAX_REDIRECTS` does not govern these two items: it does not, and the number
+  that does had never been looked at.
+  <!-- ki: a-loop-past-the-tenth-hop-is-no-loop -->
 
 ---
 

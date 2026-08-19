@@ -10,6 +10,71 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.80.1 — four numbers judged, by what they decide
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+0.71.0 listed twenty-five module-level numeric constants with no basis and named four
+shapes that looked like thresholds rather than budgets, leaving the ruling to a person.
+Here is the ruling, and each half of it is a measurement rather than a reading of the
+name:
+
+* **`site_crawl.MINHASH_FUNCTIONS` and `SHINGLE_WORDS` decide a printed claim, not a
+  verdict.** They feed the MinHash signature, which feeds `jaccard_from_minhash`, which
+  feeds `near_duplicates` — and **no registry assertion reads any near-duplicate field**.
+  The four items over `duplicate_content.py` read the exact hash (CN-041), titles
+  (MS-022), descriptions (MS-029) and a word count (CN-039). What the two numbers do move
+  is what an operator is shown: across 25/100/400 hash functions and 3/5/9-word shingles
+  one page pair estimates **0.68 to 0.81** similar against a 0.85 reporting line, while
+  all four asserted fields stay put. Declared `inherited` — 0.1.0 shipped both as default
+  arguments and nobody here has chosen them since — and the declaration names what would
+  promote them: any item pointed at `near_duplicate_pairs`;
+* **`safe_http.DEFAULT_MAX_REDIRECTS` is a fetch budget and stays outside the inventory.**
+  Neither item about redirect chains reads it: `redirect_checker.py` carries its own
+  `max_redirects=10`, so `AR-150` and `CI-014` are bounded by that. Past the cap
+  `safe_request` raises `TooManyRedirects` and the page reads as a fetch failure, so the
+  one thing this number can do to a verdict is withhold it — the family of
+  `DEFAULT_TIMEOUT` and `DEFAULT_MAX_RESPONSE_BYTES`;
+* **`detect_profile`'s three weight tables decide scope, under a flag somebody typed.**
+  Counted: `local` excludes 4 of 215 items, `saas`, `blog` and `media` 7 each, `default`
+  and `ecommerce` none, and an excluded item reports N/A. `choose_profile` accepts the
+  detection only for an explicit `--profile auto` and otherwise falls back to `default`,
+  the whole registry, saying so on stderr. Declared `inherited`, which is what
+  `SCHEMA_SIGNALS` beside them has said since 0.71.0 while the three carried nothing.
+
+The inventory now reads **135 numbers a verdict depends on** and **20 uncounted**,
+against 130 and 25. The twenty remaining are budgets, versions and buffer sizes by
+inspection, and the entry says that inspection is all it has: nobody has walked them one
+at a time the way these four were walked.
+
+**The ledger shipped yesterday caught this release.** Editing the declarations moved the
+`threshold_declarations` probe, `known_issues.py --check` failed with the old numbers
+against the new ones and named the five constants that had left the uncounted list, and
+the entry could not be left as it was. That is the first time it fired on a real change,
+and it fired on the release that was rewriting its own entry.
+
+**An independent reading of the five declarations found a `high` item passing a defect,
+from the sentence that says `DEFAULT_MAX_REDIRECTS` does not govern the redirect items.**
+It does not — and the number that does had never been looked at.
+`redirect_checker.check_redirects` walks the chain with `max_redirects: int = 10`, a
+default argument, so the inventory cannot see it; `CI-014` is `high` and asserts
+`has_loop` falsy. Measured against a local server: a loop closing at hop 3 gives
+`has_loop True`, the same loop closing at hop 12 gives **`has_loop False`** with
+*Too many redirects (>10)*, and a plain 12-hop chain that never loops gives the identical
+answer. `AR-150` fails both on `total_hops lte 1`, so a deep loop is still caught — by
+the other rule, by accident. Recorded as a section 6 entry with a probe over the cap and
+both assertions; repairing it means withholding the verdict when the walk stops, which
+changes a script's output and belongs in its own release.
+
+The same reading corrected three sentences in the declarations themselves, and one of the
+three was wrong rather than imprecise: `--profile auto` returns the detector's answer in
+any environment, terminal or not, so the fallback to `default` belongs to runs that pass
+no profile at all. A declaration is a claim, and a claim about which branch runs first is
+exactly the kind that reads true until somebody follows the code.
+
+No registry item, script output or verdict changes in this release: the five additions
+are `# basis:` comment blocks.
+
 ## 0.80.0 — the defect list gets a reader
 
 Registry version: `3c6b20d512c6`, unchanged.

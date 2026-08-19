@@ -79,7 +79,24 @@ DEFAULT_DEPTH = 3
 CHROME_TAGS = ("script", "style", "nav", "footer", "header", "aside", "noscript",
                "template")
 
+# basis: inherited — present at import: both arrived in 0.1.0 as default arguments
+#  (`num_hashes: int = 100`, `k: int = 5`) and became constants in 0.9.0, when six crawls
+#  became one. Measured for 0.80.1 rather than left as a name: they feed the MinHash
+#  signature and nothing else, the signature feeds `jaccard_from_minhash`, and that feeds
+#  `near_duplicates` alone. **No registry assertion reads any near-duplicate field** — the
+#  four items over `duplicate_content.py` read the exact hash (CN-041), titles (MS-022),
+#  descriptions (MS-029) and a word count (CN-039), and none of those passes through here.
+#  What they do decide is a claim printed about the site: across 25/100/400 functions and
+#  3/5/9-word shingles the same page pair estimates 0.68 to 0.81 similar — a spread of
+#  0.13 under a 0.85 reporting line. The four asserted fields were measured across the same
+#  nine settings and did not move, which the code also guarantees: none of them is computed
+#  from a signature. Pointing any item at `near_duplicate_pairs` promotes both of these to
+#  thresholds, and this line with them.
 MINHASH_FUNCTIONS = 100
+# basis: inherited — the other half of the pair above, and the same argument: `k = 5`
+#  arrived in 0.1.0, nothing here chose it, and the 0.68-to-0.81 spread was measured over
+#  both numbers together. A basis block ends at the constant under it, so this one is
+#  written out rather than shared; the two must move together or the spread means nothing.
 SHINGLE_WORDS = 5
 
 

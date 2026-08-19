@@ -352,6 +352,28 @@ def _wasted_bytes_definition() -> dict:
     }
 
 
+@probe("redirect_walk_cap")
+def _redirect_walk_cap() -> dict:
+    """The cap the two redirect items actually answer under, and where it lives.
+
+    Read off the function's signature rather than a constant, because that is the
+    whole finding: a default argument is invisible to a scan that reads module-level
+    assignments, and this one decides whether `has_loop` can be true at all.
+    """
+    import inspect
+
+    import redirect_checker
+
+    signature = inspect.signature(redirect_checker.check_redirects)
+    items = _items_by_id()
+    return {
+        "cap": signature.parameters["max_redirects"].default,
+        "declared_as": "default argument",
+        "ci_014_assert": items["CI-014"]["check"].get("assert"),
+        "ar_150_assert": items["AR-150"]["check"].get("assert"),
+    }
+
+
 @probe("go_138_matches_a_field")
 def _go_138_matches_a_field() -> dict:
     return {"assert": _items_by_id()["GO-138"]["check"].get("assert")}
