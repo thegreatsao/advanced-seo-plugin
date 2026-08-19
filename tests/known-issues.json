@@ -464,7 +464,10 @@
         ],
         "pairs": 173,
         "savings_fraction": 0.189,
-        "warn_threshold": 20000
+        "warn_threshold": 20000,
+        "what_the_field_accumulates": [
+          "int(row['bytes'] * MINIFICATION_SAVINGS_FRACTION)"
+        ]
       },
       "probe": "wasted_bytes_definition",
       "state": "open"

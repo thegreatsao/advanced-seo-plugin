@@ -321,7 +321,22 @@ def _wasted_bytes_definition() -> dict:
     corpus-only reading green, so the fraction it multiplies, the threshold it
     reports against and the fields it declares are recorded beside them.
     """
+    import ast
+
     import css_minify_check
+
+    # The arithmetic itself, read out of the script rather than restated here. The
+    # constants and the declared fields both survive a rewrite that keeps the names
+    # and charges for compressed bytes instead; this expression does not.
+    source = os.path.join(SCRIPTS, "css_minify_check.py")
+    with open(source, encoding="utf-8") as stream:
+        tree = ast.parse(stream.read())
+    accumulations = sorted(
+        ast.unparse(node.value) for node in ast.walk(tree)
+        if isinstance(node, ast.AugAssign)
+        and isinstance(node.target, ast.Subscript)
+        and isinstance(node.target.slice, ast.Constant)
+        and node.target.slice.value == "wasted_bytes")
 
     shapes = os.path.join(SKILL_DIR, "resources", "references", "script-output-shapes.md")
     with open(shapes, encoding="utf-8") as stream:
@@ -332,6 +347,7 @@ def _wasted_bytes_definition() -> dict:
         "pairs": _css_calibration()["counts"]["pairs"],
         "savings_fraction": css_minify_check.MINIFICATION_SAVINGS_FRACTION,
         "warn_threshold": css_minify_check.WASTED_BYTES_WARN,
+        "what_the_field_accumulates": accumulations,
         "declared_fields": fields,
     }
 
@@ -480,7 +496,7 @@ def entries_in_the_file(path: str = KNOWN_ISSUES) -> list[dict]:
     The marker sits at the end of the entry and indented into it, which is the one
     placement that changes nothing about how the file renders: an HTML comment at
     column 0 between two list items ends the list, and two of these entries are a
-    numbered pair whose numbering that would restate.
+    numbered pair whose numbering that would restart.
 
     An entry with no marker is reported with `slug: None`, not skipped. A scan that
     passes silently over what it cannot read is the failure this whole file is about.
