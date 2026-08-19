@@ -1,0 +1,476 @@
+{
+  "entries": {
+    "a-mostly-refused-run-reports-a-clean-count": {
+      "claim": "A run where almost every image was unchecked still reports broken_image_count 0, with the unchecked count printed beside it.",
+      "probe": null,
+      "state": "open",
+      "why": "Withholding the count above some share of unchecked images needs that share, and this corpus gives it no basis. There is no number to re-measure until somebody decides one."
+    },
+    "a-truncated-crawl-decides-the-whole-site": {
+      "claim": "Twelve site-wide items assert eq 0 over a crawl that reports itself truncated.",
+      "probe": null,
+      "state": "open",
+      "why": "The question is whether a site-wide assertion should be withheld on truncated input, which is a decision about twelve items rather than a measurement."
+    },
+    "answer-block-score-and-the-parser": {
+      "claim": "Closed in 0.15.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a parser-dependent verdict, held by the test that asserts the two parsers agree."
+    },
+    "article-seo-private-answers": {
+      "claim": "article_seo.py takes the shared author and publication-date answers; no HTML fixture disagrees with them, and neither class-matched shape produces a name or a date.",
+      "measured": {
+        "author_grid": {
+          "authors": [],
+          "publish_date": ""
+        },
+        "divergent_fixtures": [],
+        "fixtures": 12,
+        "published_widget": {
+          "authors": [],
+          "publish_date": ""
+        }
+      },
+      "probe": "article_seo_shares_the_answers",
+      "state": "closed"
+    },
+    "cache-cleanup-test-claimed-the-machine": {
+      "claim": "Fixed.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a test repair, held by the test itself."
+    },
+    "ci-002-scope-and-title": {
+      "claim": "CI-002 is retitled to what one inspected URL can answer; inspecting a set of important URLs is still not built.",
+      "measured": {
+        "args": [
+          "{url}",
+          "--property",
+          "{gsc_property}",
+          "--credentials",
+          "{gsc_credentials}"
+        ],
+        "script": "gsc_url_inspection.py",
+        "title": "Confirm Google Has Indexed the Audited URL"
+      },
+      "probe": "ci_002_title",
+      "state": "open"
+    },
+    "ci-019-and-cn-053": {
+      "claim": "Both items closed, CI-019 in 0.21.0 and CN-053 in 0.22.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative. What it says stays open is a lesson about how the sweeps find things, not a defect a probe can reproduce."
+    },
+    "class-named-comments-are-invisible": {
+      "claim": "A byline inside a container named only by class is read as the page's author.",
+      "measured": {
+        "authors": [
+          "D Petras"
+        ]
+      },
+      "probe": "class_named_comment_author",
+      "state": "open"
+    },
+    "cn-068-floor-and-the-good-fixture": {
+      "claim": "On the repaired good fixture the entry page scores 75 and both other sampled pages score 35, against a floor of 60.",
+      "measured": {
+        "floor": 60,
+        "scores": {
+          "about.html": 35,
+          "index.html": 75,
+          "privacy.html": 35
+        }
+      },
+      "probe": "cn_068_scores_on_the_good_fixture",
+      "state": "open"
+    },
+    "credit-boundary-ignores-itemref": {
+      "claim": "A byline referenced into a comment by itemref is still read as the page's, and a byline the page claims by itemref from inside a comment is still dropped.",
+      "measured": {
+        "page_byline_nested_in_the_comment": [],
+        "referenced_byline_outside_the_comment": [
+          "D Petras"
+        ]
+      },
+      "probe": "credit_boundary_and_itemref",
+      "state": "open"
+    },
+    "default-locale-route-tree": {
+      "claim": "Closed in 0.36.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a release, held by the hreflang tests it added."
+    },
+    "duplicate-twin-items": {
+      "claim": "Closed in two halves, 0.22.0 and 0.24.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about the report's own weighting, held by the report tests."
+    },
+    "eeat-vocabulary-by-declared-language": {
+      "claim": "Three reviewed vocabularies ship — English, Lithuanian and Russian — and a page declaring any other language is read with the English one, marker for marker.",
+      "measured": {
+        "languages": [
+          "en",
+          "lt",
+          "ru"
+        ],
+        "one_english_page_read_under_each_declared_language": {
+          "de": {
+            "credential_markers": 4,
+            "privacy_links": 1,
+            "score": 35,
+            "trust_links": 3
+          },
+          "en": {
+            "credential_markers": 4,
+            "privacy_links": 1,
+            "score": 35,
+            "trust_links": 3
+          },
+          "lt": {
+            "credential_markers": 4,
+            "privacy_links": 1,
+            "score": 35,
+            "trust_links": 3
+          }
+        }
+      },
+      "probe": "eeat_reviewed_languages",
+      "state": "open"
+    },
+    "foreign-credit-keys-width": {
+      "claim": "The boundary is ten keys wide, and the author of a book the page is only about is still read as the page's own.",
+      "measured": {
+        "author_of_a_book_the_page_is_about": [
+          "Herman Melville"
+        ],
+        "keys": [
+          "acceptedAnswer",
+          "citation",
+          "comment",
+          "comments",
+          "isBasedOn",
+          "itemReviewed",
+          "review",
+          "reviews",
+          "suggestedAnswer",
+          "userComments"
+        ]
+      },
+      "probe": "foreign_credit_keys",
+      "state": "open"
+    },
+    "four-rulings-closed": {
+      "claim": "All four rulings closed in 0.25.0 and 0.26.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about four registry repairs, held by their assertions."
+    },
+    "freshness-and-foreign-dates": {
+      "claim": "A date inside a container named only by class or by microformats is still read as the page's own, while the declared itemprop spelling is filtered.",
+      "measured": {
+        "class_named_comment": {
+          "age_days": 2728,
+          "latest_date": "2019-03-01"
+        },
+        "declared_itemprop_comment": {
+          "age_days": null,
+          "latest_date": null
+        },
+        "h_cite_comment": {
+          "age_days": 2728,
+          "latest_date": "2019-03-01"
+        }
+      },
+      "probe": "freshness_foreign_dates",
+      "state": "open"
+    },
+    "go-138-nondeterminism-as-first-written": {
+      "claim": "Superseded by the entry above it, which diagnosed the cause.",
+      "probe": null,
+      "state": "history",
+      "why": "Kept deliberately as the entry the diagnosis replaced. Probing it would probe the entry above."
+    },
+    "go-138-was-never-a-flake": {
+      "claim": "GO-138's rule matches a named field rather than the whole serialised issue, which is what made an ephemeral port read as a 404.",
+      "measured": {
+        "assert": {
+          "field": "message",
+          "none_matching": "(?i)404|redirect|noindex",
+          "path": "issues"
+        }
+      },
+      "probe": "go_138_matches_a_field",
+      "state": "history"
+    },
+    "gsc-scenarios-accepted-a-dead-rule": {
+      "claim": "Fixed.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a test repair, held by the scenarios it rewrote."
+    },
+    "gsc-thresholds-uncalibrated": {
+      "claim": "Nine Search Console numbers keep their inherited values and are deliberately not relabelled measured.",
+      "measured": {
+        "HIGH_SEVERITY_IMPRESSIONS": {
+          "basis": "inherited",
+          "value": 100
+        },
+        "LOW_CTR_PCT": {
+          "basis": "inherited",
+          "value": 5
+        },
+        "RANKS_FIRST_POSITION": {
+          "basis": "inherited",
+          "value": 1.5
+        },
+        "STRIKING_DISTANCE_MAX_POSITION": {
+          "basis": "inherited",
+          "value": 20
+        },
+        "STRIKING_DISTANCE_MIN_IMPRESSIONS": {
+          "basis": "inherited",
+          "value": 50
+        },
+        "STRIKING_DISTANCE_MIN_POSITION": {
+          "basis": "inherited",
+          "value": 4
+        },
+        "TOP1_SHARE_PCT": {
+          "basis": "inherited",
+          "value": 50
+        },
+        "TOP_POSITION_MAX": {
+          "basis": "inherited",
+          "value": 3
+        },
+        "VERY_LOW_CTR_PCT": {
+          "basis": "inherited",
+          "value": 2
+        }
+      },
+      "probe": "gsc_threshold_values",
+      "state": "open"
+    },
+    "image-inventory-count-on-a-page-with-no-images": {
+      "claim": "Fixed in 0.49.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a release. Its repair is held by the tests that release added, not by this file."
+    },
+    "items-that-could-not-fail": {
+      "claim": "Closed in 0.50.0; the severity_vocabulary mechanism that closed it proves no item today, against the seven it named when it shipped.",
+      "measured": {
+        "items_proved": []
+      },
+      "probe": "severity_vocabulary_proofs",
+      "state": "history"
+    },
+    "kw-071-evidence-and-title": {
+      "claim": "KW-071 asserts summary.contested_queries eq 0 with a warn band at lte 3, and no item in the registry names the removed worst_spread this entry was written about.",
+      "measured": {
+        "assert": {
+          "eq": 0,
+          "path": "summary.contested_queries"
+        },
+        "items_naming_worst_spread": [],
+        "title": "Is there evidence of keyword duplication or overuse?",
+        "warn": {
+          "lte": 3,
+          "path": "summary.contested_queries"
+        },
+        "worst_spread_anywhere_in_the_registry": false
+      },
+      "probe": "kw_071_assertion",
+      "state": "closed"
+    },
+    "line-wrapped-minified-css": {
+      "claim": "The pinned corpus has a minified file at 37.13 bytes per line and an authored one at 47.09, so no bytes-per-line boundary separates them.",
+      "measured": {
+        "bulma_minified_min": 37.130058,
+        "codicons_source_median": 47.085714,
+        "pairs": 173
+      },
+      "probe": "css_minification_corpus",
+      "state": "open"
+    },
+    "macos-kills-a-forked-child": {
+      "claim": "Closed in 0.15.0 as three AST-checked rules over every subprocess call.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative. The three rules it ends with are a test in this suite, which is the reader that keeps it true."
+    },
+    "pacing-test-never-forked": {
+      "claim": "Fixed.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a test repair, held by the test itself."
+    },
+    "page-guard-is-fingerprint-based": {
+      "claim": "An interstitial from a vendor the guard does not recognise is scored with a warning rather than refused, because it cannot be told from a client-rendered shell.",
+      "probe": null,
+      "state": "open",
+      "why": "The claim is about pages nobody has a fingerprint for. A probe would have to invent one, and inventing the input is how a check comes to test its own assumption."
+    },
+    "privacy-and-trust-links-boundary": {
+      "claim": "A commenter's privacy link and contact route no longer count as the page's own: on the page this entry was measured on, both lists are empty.",
+      "measured": {
+        "authors": [],
+        "policy_links": 0,
+        "privacy_links": 0,
+        "trust_links": 0
+      },
+      "probe": "privacy_and_trust_links_boundary",
+      "state": "closed"
+    },
+    "rendered-artifacts-cannot-be-re-measured": {
+      "claim": "An operator-supplied artifact can be bounded by age and refused for naming another page, and nothing can verify what it says about itself.",
+      "probe": null,
+      "state": "open",
+      "why": "Nothing executable is a witness: the limit is that a file's own claims cannot be re-measured, and `touch` exists. A probe here could only assert that the flag it already has still exists."
+    },
+    "rendered-mobile-measures-owed": {
+      "claim": "Horizontal scroll at a phone width and clipped or overflowing text are still absent from the rendered artifact contract, whose mobile measures are two.",
+      "measured": {
+        "mobile_metrics": [
+          "mobile_overlays_covering_content",
+          "tap_targets_below_48px"
+        ]
+      },
+      "probe": "rendered_mobile_metrics",
+      "state": "open"
+    },
+    "russian-report-english-titles-as-first-written": {
+      "claim": "Superseded by the entry above it.",
+      "probe": null,
+      "state": "history",
+      "why": "Kept deliberately as the entry the repair replaced."
+    },
+    "russian-report-is-russian-throughout": {
+      "claim": "Every registry item carries a Russian title and a Russian recommendation, by id and not only by count.",
+      "measured": {
+        "ids_with_no_fix": [],
+        "ids_with_no_title": [],
+        "item_fixes": 215,
+        "item_titles": 215,
+        "registry_items": 215,
+        "translated_ids_not_in_the_registry": []
+      },
+      "probe": "russian_item_coverage",
+      "state": "history"
+    },
+    "te-179-and-go-134": {
+      "claim": "Closed, TE-179 in 0.21.0 and GO-134 in 0.23.0.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about two registry repairs, held by their assertions."
+    },
+    "test-files-that-ran-part-of-themselves": {
+      "claim": "Fixed.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative about a suite repair, held by the discovery rules it fixed."
+    },
+    "threshold-declarations-unjudged": {
+      "claim": "Twenty-five module-level numeric constants carry no basis and sit outside the name-based scan, and one declaration marks a regular expression rather than a number.",
+      "measured": {
+        "counted": 130,
+        "non_numeric_basis": [
+          "scripts/robots_path_tester.py:31"
+        ],
+        "presentation": 13,
+        "uncounted": [
+          "CACHE_ENTRY_VERSION",
+          "DEFAULT_DEPTH",
+          "DEFAULT_MAX_IMAGES",
+          "DEFAULT_MAX_LINES",
+          "DEFAULT_MAX_LINKS",
+          "DEFAULT_MAX_PAGES",
+          "DEFAULT_MAX_REDIRECTS",
+          "DEFAULT_MAX_RESPONSE_BYTES",
+          "DEFAULT_MAX_RPS",
+          "DEFAULT_TIMEOUT",
+          "ENCODING_SNIFF_BYTES",
+          "INVENTORY_VERSION",
+          "JPEG_SOF_MARKERS",
+          "MARKUP_SIGNALS",
+          "MAX_ICON_BYTES",
+          "MAX_SHEETS",
+          "MINHASH_FUNCTIONS",
+          "PATH_SIGNALS",
+          "PLATFORM_SIGNALS",
+          "ROBOTS_FETCH_WAIT",
+          "ROW_LIMIT",
+          "SHINGLE_WORDS",
+          "SOCKET_TIMEOUT",
+          "TOP_N",
+          "_CACHE_POLL"
+        ],
+        "unnamed": 0
+      },
+      "probe": "threshold_declarations",
+      "state": "open"
+    },
+    "title-polarity-has-no-gate": {
+      "claim": "Seventy-four of 215 items pass only when a path is absent or bounded, over nine spellings; whether a title states the side of its subject that its assertion means is read by a person, and the entry says why no check can.",
+      "measured": {
+        "items": 215,
+        "negative_polarity": 74
+      },
+      "probe": "negative_polarity_share",
+      "state": "open"
+    },
+    "titles-thinner-than-their-assertions": {
+      "claim": "AR-152 asserts that robots.txt has any user-agent group at all, and CN-056 asserts one date of any kind, while both titles promise more.",
+      "measured": {
+        "AR-152": {
+          "assert": {
+            "path": "user_agents",
+            "truthy": true
+          },
+          "title": "Block Crawl Strategically with robots.txt"
+        },
+        "CN-056": {
+          "assert": {
+            "len_gte": 1,
+            "path": "dates"
+          },
+          "title": "Show Publication and Updated Dates"
+        }
+      },
+      "probe": "thin_assertions",
+      "state": "open"
+    },
+    "verify-bots-and-the-default-claim": {
+      "claim": "Closed in 0.15.0; the default remains a claim, and says so.",
+      "probe": null,
+      "state": "history",
+      "why": "A closed narrative whose open half is a deliberate refusal to make a network call about a third party without being asked."
+    },
+    "wasted-bytes-before-gzip": {
+      "claim": "The gzip survival rate was measured across 173 source/minified pairs, and `wasted_bytes` still multiplies raw bytes by the raw-byte savings fraction and reports against an uncompressed threshold.",
+      "measured": {
+        "declared_fields": [
+          "url",
+          "stylesheets[]",
+          "checked",
+          "unminified_count",
+          "wasted_bytes",
+          "issues[]",
+          "fetch_error"
+        ],
+        "pairs": 173,
+        "savings_fraction": 0.189,
+        "warn_threshold": 20000
+      },
+      "probe": "wasted_bytes_definition",
+      "state": "open"
+    }
+  },
+  "entry_count": 39,
+  "probed_entry_count": 20,
+  "unprobed_entry_count": 19
+}

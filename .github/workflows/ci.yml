@@ -93,6 +93,15 @@ jobs:
       - name: Public suffix snapshot ships and is dated
         run: python skills/seo-checklist/tools/refresh_public_suffix_list.py --check
 
+      # KNOWN-ISSUES.md is the one file here that makes claims about the code and had
+      # no reader, so three entries went on describing a tree that had been repaired
+      # underneath them - KW-071 for 36 releases. Each section 6 entry now carries a
+      # marker and either a probe or a written reason for having none; this re-runs the
+      # probes. A failure is not "fix the code": it is somebody deciding whether the
+      # tree moved or the entry is now wrong, and then re-recording.
+      - name: The defect list still describes this tree
+        run: python tests/known_issues.py --check
+
       # A smoke run against a local page proves the whole path still works end to
       # end — registry, runner, report — without touching the network.
       - name: Offline smoke run
@@ -465,3 +474,12 @@ jobs:
 
       - name: Public suffix snapshot ships and is dated
         run: python skills/seo-checklist/tools/refresh_public_suffix_list.py --check
+
+      # KNOWN-ISSUES.md is the one file here that makes claims about the code and had
+      # no reader, so three entries went on describing a tree that had been repaired
+      # underneath them - KW-071 for 36 releases. Each section 6 entry now carries a
+      # marker and either a probe or a written reason for having none; this re-runs the
+      # probes. A failure is not "fix the code": it is somebody deciding whether the
+      # tree moved or the entry is now wrong, and then re-recording.
+      - name: The defect list still describes this tree
+        run: python tests/known_issues.py --check

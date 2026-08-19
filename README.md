@@ -4,9 +4,10 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.79.0 — see [CHANGELOG.md](CHANGELOG.md). Every script that parses a page now
-takes the one parser decision the tree already had, so no verdict can depend on which
-file happened to read the markup.
+Version 0.80.0 — see [CHANGELOG.md](CHANGELOG.md). The defect list is now re-run rather
+than re-read: every entry in its open section carries a probe or a written reason for
+having none, and CI fails when the tree stops answering what an entry says it answers.
+Three entries described a tree that had been repaired underneath them.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

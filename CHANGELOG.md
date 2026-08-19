@@ -10,6 +10,79 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.80.0 — the defect list gets a reader
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`KNOWN-ISSUES.md` was the one file here that makes claims about the code and is read by
+nothing. Everything else has a reader — the registry has `build_checklist --check`, the
+translations have `i18n_digest --check`, the thresholds have `audit_thresholds`, the
+verdicts have two ledgers — so a defect written down and later repaired left its entry
+standing, and the entry went on reading as open until somebody re-ran it by hand.
+
+**Three entries described a tree that no longer existed.** Each was found by running
+what it claimed rather than by reading it:
+
+* **KW-071.** The entry said the registry still points the item at the removed
+  directional `worst_spread`, so it reports `NO_DATA`. The registry asserts
+  `summary.contested_queries` `eq: 0` with a warn band at `lte: 3`, and has since
+  **0.43.0** — `v0.42.0` carries `worst_spread`, `v0.43.0` carries `contested_queries`.
+  The entry read as open for the **36** releases after that;
+* **the page's own privacy and trust links.** The entry said a commenter's `/privacy`
+  link and `mailto:` route are accepted as the page's own, so CN-040 and CN-044 pass on
+  somebody else's policy. Re-measured on the page the entry names: `privacy_links` 0,
+  `trust_links` 0, `policy_links` 0. Repaired in **0.75.0**, four releases before this
+  reading;
+* **`article_seo.py`'s private author and date answers.** The entry said
+  `extract_content` matches classes by substring and disagrees with the shared answer on
+  one of twelve HTML fixtures. It reads `page_author_names` and
+  `declared_publication_dates` and **0 of 12** fixtures disagree. Repaired in **0.77.0**.
+
+Three counts had also gone stale in the flattering direction: the file's own header said
+0.37.0, section 2 counted 55 evidence scripts where the registry now names 58, and the
+Russian-report entry counted 214 items where 215 of 215 titles and recommendations are
+translated. One sentence pointed at a `FINDINGS-REVIEW.md` that has never existed in this
+repository's history; the finding it was standing in for is written out instead.
+
+**The mechanism, so that this is the last time.** Every entry in section 6 carries a
+marker, `<!-- ki: slug -->`, placed at the end of the entry and indented into it — an
+HTML comment at column 0 between two list items ends the list, and two of these entries
+are a numbered pair. `tests/known-issues.json` records, per entry, its state, the claim
+in one sentence, and either a probe or a written reason for having none.
+`python tests/known_issues.py --check` re-runs every probe and fails when the tree stops
+answering what the entry says it answers. **39 entries, 20 with a probe**, and the 19
+without carry a reason each — that count is printed, because a ledger where everything is
+exempt is a ledger that has stopped working. It is a CI step; `tests/test_known_issues.py`
+holds the cheap half — that no entry is unmarked, unclassified, or exempt in silence.
+
+**Ten of the twenty probes changed before landing — nine rewritten and one split off —
+and none of the changes was cosmetic.** Each recorded something narrower than its entry
+claims, so it would have stayed green while the entry became false: a green light on a
+stale claim, which is worse than no probe at all. Five came out of re-reading my own work:
+a *count* of unbased
+constants survives judging the four the entry names while four others arrive, so it
+records names; an assertion recorded without its title misses the other way to close that
+entry, which is to bring the title down to the assertion; and three of the same shape.
+Seven more came out of handing the finished change to an independent reader with the
+question "which probe would go on passing while its entry has become false" — the
+`wasted_bytes` probe read the calibration corpus and not the field the entry is about;
+the Russian one compared two map *lengths* against 215, which two maps covering different
+items both satisfy; KW-071's read one item where the claim is about the whole registry;
+the language one listed three vocabularies without measuring what a page in a fourth is
+graded on; and `tests/test_known_issues.py` would have passed a `differences()` gutted to
+`return []`, which is the same defect one level up. It now asserts that a moved value is
+reported by name, and that the check is quiet on the record as recorded — a check that
+always complains being as useless as one that never does.
+
+One probe repays its own writing immediately. The polarity entry quotes "74 of 215" items
+whose assertion passes only when a path is absent or bounded, and left the spellings to
+the reader; recovering that number took a search over candidate definitions, and a first,
+narrower reading gave 59 and nearly convicted a true entry of being stale. The probe now
+carries the definition — nine spellings, over `assert` and `warn` — so the number can be
+re-derived rather than believed.
+
+No registry item, script output or verdict changes in this release.
+
 ## 0.79.0 — one parser decision, in one place, at last
 
 Registry version: `3c6b20d512c6`, unchanged.

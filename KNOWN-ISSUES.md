@@ -1,8 +1,19 @@
 # Known issues
 
-What is wrong with this plugin as of **0.37.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.80.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
+
+That last sentence was true when each entry was written and stopped being true three
+times without anyone noticing, because a release that repairs a defect has no reason to
+open this file. Section 6 therefore carries a marker per entry, and
+`tests/known-issues.json` records against each marker what the entry claims and — where
+the claim can be re-run — a probe that re-runs it.
+`python tests/known_issues.py --check` executes every probe and
+fails when the tree stops answering what its entry says it answers. Twenty of the
+thirty-nine entries carry a probe; the other nineteen carry a written reason for having
+none, and that count is printed, because a ledger where everything is exempt is a ledger
+that has stopped working.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
@@ -237,9 +248,14 @@ server.
 ## 2. The tests prove a script's shape, not its thresholds
 
 **Closed in 0.8.0**: all 55 evidence scripts have unit tests, and each asserts *the
-field the registry actually reads*, named in the test. The count is not the point —
-the yield is. Four releases of writing these found, in order: eighteen assertions that
-had never fired, two items that failed sites for serving images the recommended way,
+field the registry actually reads*, named in the test. The surface has grown since:
+measured on 0.80.0, the registry names **58** distinct scripts, and all 58 are named in
+a test file. That last is a weaker statement than "has a unit test" on purpose — being
+named is what a grep can show, and the two sweeps below are what actually hold the line,
+because they take their list from the registry rather than from a list somebody keeps.
+The count is not the point — the yield is. Four releases of writing these found, in
+order: eighteen assertions that had never fired, two items that failed sites for
+serving images the recommended way,
 sixty-two items grading a site that refused every connection, and then twelve more of
 that family plus five checks that accused every correct site. Roughly one defect per
 three tests, and the rate has not fallen off.
@@ -443,6 +459,7 @@ name. A column called `url` would be read as "fix this page".
   today, so that hole is waiting rather than leaking. Finally, a blank line ends the
   basis block by design. A separated basis therefore leaves its constant in the
   uncounted listing, visible but not silently claimed.
+  <!-- ki: threshold-declarations-unjudged -->
 
 - **Two rendered mobile-layout measures are owed after deleting a branch no product
   invocation ever ran.** `mobile_render_checker.py` carried an optional Playwright
@@ -460,6 +477,7 @@ name. A column called `url` would be read as "fix this page".
   artifact contract beside its existing mobile measures, for 0.62.0; restoring a
   browser-launching flag to one evidence script would recreate the split measurement
   model that 0.53.0 removed.
+  <!-- ki: rendered-mobile-measures-owed -->
 
 - **The good fixture is exemplary on its entry page and not under sampling.** The two
   suites that run it audit differently: `test_contract.py` runs one page, and
@@ -527,6 +545,7 @@ name. A column called `url` would be read as "fix this page".
   marker vocabulary. Writing the marker phrases into the fixture to make it green was
   rejected outright — that is shaping the fixture to suit the check, which is the
   failure this tree exists to refuse.
+  <!-- ki: cn-068-floor-and-the-good-fixture -->
 
 - **Fixed in 0.49.0 — `image_inventory.py` emitted `count: 0` for a page it found no
   images on, and four items graded it.** Measured on 2026-08-14 against the good
@@ -569,6 +588,7 @@ name. A column called `url` would be read as "fix this page".
   page that has an image and says nothing about pages that do not, which is not an
   audit of sitewide usage — it is a check that images exist somewhere in the sample.
   That is a registry question, and it changes what a live audit reports.
+  <!-- ki: image-inventory-count-on-a-page-with-no-images -->
 
 - **Two items assert a thinner thing than their titles promise.** Collected rather
   than filed separately, because the shape is the
@@ -580,16 +600,21 @@ name. A column called `url` would be read as "fix this page".
   user-agent group at all |
   | `CN-056` | *Show Publication **and** Updated Dates* | one date of any kind |
 
-  `AR-152` was found on the live audit of 2026-08-14 and is written up in
-  `FINDINGS-REVIEW.md`; `CN-056` was found by reading the eight declarations that
-  the fixture repair touched. `TE-169` and `TE-177` used to be in this table, but
-  0.53.0 brought their titles to their served-HTML assertions, not the assertions to
-  the old titles. The served-versus-rendered comparison those titles implied is
-  `MB-105`; scoring that comparison three times would duplicate it.
+  `AR-152` was found on the live audit of 2026-08-14. That sentence pointed at a
+  `FINDINGS-REVIEW.md` for the write-up, and there is no such file and never has been
+  in this repository's history — so the finding is restated here instead, which is what
+  a pointer to nothing was standing in for: the item runs `robots_checker.py` and
+  asserts `user_agents` is truthy, which any `robots.txt` with a single `User-agent:`
+  line satisfies, whatever it then allows. `CN-056` was found by reading the eight
+  declarations that the fixture repair touched. `TE-169` and `TE-177` used to be in
+  this table, but 0.53.0 brought their titles to their served-HTML assertions, not the
+  assertions to the old titles. The served-versus-rendered comparison those titles
+  implied is `MB-105`; scoring that comparison three times would duplicate it.
 
   Neither is acted on here: each changes what a live audit reports and the registry.
   They are collected so that the next person deciding what a registry version
   is worth spending can see them together.
+  <!-- ki: titles-thinner-than-their-assertions -->
 
 - **Closed in 0.50.0 — the five items that could not fail, and this entry outlived them
   by twenty-nine releases.** A `none_severity` assertion fails when an issue carries a
@@ -614,8 +639,22 @@ name. A column called `url` would be read as "fix this page".
   `audit_reachability.py` still cannot do is claim reachability — 141 of 143 script-backed
   assertions are not claimed either way, and that number is the honest measure of how much
   of the registry this tool speaks about at all.
+  <!-- ki: items-that-could-not-fail -->
 
-- **KW-071 asks about keyword overuse, while its evidence measures SERP competition.**
+- **Closed in 0.43.0, and this entry read as open for the thirty-six releases after
+  it.** KW-071 asserts `summary.contested_queries` `eq: 0` with a warn band at `lte: 3`
+  — read off the registry, not recalled — and the directional `worst_spread` this entry
+  was written about is not in the contract at all. The registry carried `worst_spread`
+  at `v0.42.0` and `contested_queries` at `v0.43.0`, which dates it to *Give KW-071 the
+  warn band its old rule already had*. The decision this entry called open, between
+  becoming the close-competition assertion and moving to evidence that measures
+  duplicated copy, was taken in favour of the first. `audit_item_semantics.py` has
+  carried the ruling in writing ever since: cannibalisation is keyword duplication seen
+  from the SERP side, and `contested_queries` counts queries whose URLs compete in the
+  same close position band. What follows is the entry as it stood, kept because being
+  wrong here for thirty-six releases is the reason `tests/known_issues.py` exists.
+
+  **KW-071 asks about keyword overuse, while its evidence measures SERP competition.**
   `gsc_cannibalization.py` now reports close non-branded competition honestly as
   `summary.contested_queries` and retains each query's raw position `spread`. A wide
   spread is not treated as ambiguity: position 1.5 beside 11.2 shows a winner, while
@@ -627,6 +666,7 @@ name. A column called `url` would be read as "fix this page".
   `registry_version`; this release deliberately does neither. The open decision is
   whether KW-071 should become the close-competition assertion or move to evidence
   that actually measures duplicated or overused copy.
+  <!-- ki: kw-071-evidence-and-title -->
 
 - **Closed in 0.36.0: the default locale's whole unprefixed route tree is compatible
   with a subdirectory scheme.** The 0.35.0 repair accepted only the root: `example.lt/`
@@ -640,6 +680,7 @@ name. A column called `url` would be read as "fix this page".
   0.33.0 guard remains: `/about` beside `/fr/` is still `mixed` and fails, because
   stripping `/fr/` produces `/`, not `/about`. An unreadable path under another
   locale's prefix also remains `mixed`; the unreadable path itself is never stripped.
+  <!-- ki: default-locale-route-tree -->
 
 - **Narrowed in 0.56.0; declared Lithuanian and Russian now use reviewed E-E-A-T
   vocabularies, while undeclared and other languages remain open.** Measured on two
@@ -669,6 +710,7 @@ name. A column called `url` would be read as "fix this page".
   Russian terms deliberately mirror that weakness rather than inventing a stricter
   cross-language distinction. Fixing it requires grading credentials by where they
   appear, and remains separate work.
+  <!-- ki: eeat-vocabulary-by-declared-language -->
 
 - **Narrowed in 0.34.0; inspecting a set of important URLs remains open.** CI-002
   got the right evidence in 0.26.0 — Google's URL Inspection answer — but for eight
@@ -686,6 +728,7 @@ name. A column called `url` would be read as "fix this page".
   compares *subject*. This is the neighbour of the polarity limit recorded directly
   below: the words can identify the right subject while the sentence still promises
   the wrong thing.
+  <!-- ki: ci-002-scope-and-title -->
 
 - **A title can name the right subject and still state the wrong side of it, and no
   gate here reads polarity.** `audit_item_semantics.py` answers whether an item
@@ -745,6 +788,7 @@ name. A column called `url` would be read as "fix this page".
   suite has no reader. The line is held by reading each new title against its
   assertion at the moment it is written, and by this entry saying that out loud
   rather than leaving CI's silence to be read as coverage.
+  <!-- ki: title-polarity-has-no-gate -->
 
 - **Nine Search Console thresholds are examined and deliberately not calibrated.**
   The pilot evidence is one small property, roughly ten thousand impressions over
@@ -776,6 +820,7 @@ name. A column called `url` would be read as "fix this page".
   What would settle the market claims is many properties across languages and markets,
   with property-level estimates kept independent. More months from this one property
   would deepen the same sampling bias, not create the missing market evidence.
+  <!-- ki: gsc-thresholds-uncalibrated -->
 
 - **Line-wrapped minified CSS reads as unminified.** The pinned corpus labels
   `bulma-1.0.2/css/versions/bulma-prefixed.min.css` as minified, but its line wrapping
@@ -784,6 +829,7 @@ name. A column called `url` would be read as "fix this page".
   the indentation signal false, and it also crosses authored source such as
   `codicons-0.0.36/dist/codicon.css` at 47.09 bytes per line. This needs a different
   signal or classifier shape, not a tuned constant.
+  <!-- ki: line-wrapped-minified-css -->
 
 - **`wasted_bytes` counts uncompressed bytes visitors normally do not pay.** Across
   173 source/minified pairs, only 10.824% of the aggregate raw-byte saving survives
@@ -793,6 +839,7 @@ name. A column called `url` would be read as "fix this page".
   roughly a ninefold overstatement on a gzip-serving site. The threshold remains
   measured against its current meaning here; redefining the field and its output is a
   separate verdict-changing change.
+  <!-- ki: wasted-bytes-before-gzip -->
 
 - **Fixed. The one test that guards somebody else's server never started a second
   process.** `test_the_pacing_state_is_shared_between_processes` opened with
@@ -807,6 +854,7 @@ name. A column called `url` would be read as "fix this page".
   against the failure mode it names by giving each child its own `RATE_LIMIT_DIR`:
   gaps 0.000s / 0.001s and the assertion fails, against 0.205s / 0.205s for the real
   implementation.
+  <!-- ki: pacing-test-never-forked -->
 
 - **Fixed. The GSC scenarios accepted a rule that had stopped deciding.** The positive
   fixtures asserted `verdict in (PASS, NO_DATA)` and the negative ones "at least one
@@ -819,6 +867,7 @@ name. A column called `url` would be read as "fix this page".
   declared one — and pinning it is what makes that a statement rather than an
   accident. Verified by dropping `summary` from the output: KW-071 and MS-023 fall to
   `NO_DATA`, which the old assertion accepted and the map does not.
+  <!-- ki: gsc-scenarios-accepted-a-dead-rule -->
 
 - **Fixed. The cache-cleanup test made a claim about the machine, not about the run.**
   It listed the shared temp directory for `seo-http-*` and required none, so a second
@@ -829,6 +878,7 @@ name. A column called `url` would be read as "fix this page".
   under test; and the test asserts the pacing directory *is* in there, so an empty
   result cannot mean it looked in the wrong place. Verified by running two full suites
   concurrently: both 666 tests, both OK.
+  <!-- ki: cache-cleanup-test-claimed-the-machine -->
 
 - **Fixed. Four test files ran 96% of what they defined and said OK.** Found 6 August
   2026 while reading `test_runner.py` for an unrelated reason, and it is a defect of
@@ -858,6 +908,7 @@ name. A column called `url` would be read as "fix this page".
 
   Independently confirmed by a second reviewer working from the same tree, which is
   also where the count of 237 comes from.
+  <!-- ki: test-files-that-ran-part-of-themselves -->
 
 - **Both items closed — CI-019 in 0.21.0, CN-053 in 0.22.0. What stays open is the
   reason neither was caught here first, and it has since caught two more.**
@@ -951,6 +1002,7 @@ name. A column called `url` would be read as "fix this page".
     the keyword items fired on their own remediation text in 0.5.0, three assert rules
     matched a port number in 0.19.1, and the runner's soft-404 guard carries the warning
     in writing. Each time it was found by a test that happened to look, never by a rule.
+  <!-- ki: ci-019-and-cn-053 -->
 
 - **Closed in two halves — the weight in 0.22.0, the reader's own list in 0.24.0.** The
   header below said "both halves score" and was half stale for two releases: `scores_with`
@@ -1064,6 +1116,7 @@ name. A column called `url` would be read as "fix this page".
   `tools/audit_item_semantics.py` still reports eight duplicate groups. A conjunction
   would raise the theme from 6 to 9 weight points and charge a missing modern format to
   both MD-189 and MB-097, so `scores_with` cannot make that aggregate honest.
+  <!-- ki: duplicate-twin-items -->
 
 - **All four rulings are closed. Three Core Web Vitals items in 0.25.0, `CI-002` and
   `IN-127` in 0.26.0.** The entry below is the original finding; the paragraphs after it
@@ -1131,6 +1184,7 @@ name. A column called `url` would be read as "fix this page".
   `critical` "responsive layout" on the presence of a viewport meta tag, which a
   fixed-width page can carry; `CN-044` accepts any trust link for "a clear contact
   page", so a site with a privacy policy and no contact page passes.
+  <!-- ki: four-rulings-closed -->
 
 - **Closed — TE-179 in 0.21.0, GO-134 in 0.23.0. Two items reported something that is
   not a defect of the site, and one of them could not be acted on at all.**
@@ -1200,6 +1254,7 @@ name. A column called `url` would be read as "fix this page".
   knowing but not actionable". GO-134's list of unattached findings still belongs in
   prose outside the score, partition and fix list. Domain age is a scalar with an item
   already named for it, so its evidence belongs on that row.
+  <!-- ki: te-179-and-go-134 -->
 
 - **Closed in 0.19.1 — and it was never a flake.** `none_matching` over an `issues[]`
   array without a `field` matches the whole serialised issue, URLs included, so
@@ -1214,6 +1269,7 @@ name. A column called `url` would be read as "fix this page".
   turned on the rules. The entry below is what it replaced; it is kept because the
   useful part is the shape: printing the payload cost four lines and settled in one
   firing what three rounds of reasoning got wrong.
+  <!-- ki: go-138-was-never-a-flake -->
 
 - **One test is not deterministic, in a suite whose whole premise is that it is.**
   `test_go_138_needs_the_urls_fetched_to_find_anything` failed once on CI under 3.10
@@ -1231,6 +1287,7 @@ name. A column called `url` would be read as "fix this page".
   which is the same class of defect as the parser divergence 0.14.0 pinned as a fact
   — and the lesson from that one is that recording the symptom is not the same as
   understanding it.
+  <!-- ki: go-138-nondeterminism-as-first-written -->
 
 - **Closed in 0.15.0 — the answer-block score.** `answer_block_scanner.py` found the
   answer to a heading with `find_next_sibling()`, which asks the parser where the
@@ -1243,6 +1300,7 @@ name. A column called `url` would be read as "fix this page".
   `<div>` between the heading and the paragraph, which is every themed CMS there is, was
   itself read as the answer, so the word count was the whole section's. **The bug that
   gets written down instead of fixed is the bug whose neighbour never gets found.**
+  <!-- ki: answer-block-score-and-the-parser -->
 - **macOS kills a forked child inside Apple's own framework, and the runner forks 55 of
   them.** Once Network.framework has been initialised in a process, `fork()` runs its
   `pthread_atfork` child handler — `nw_settings_child_has_forked` — which dereferences
@@ -1265,6 +1323,7 @@ name. A column called `url` would be read as "fix this page".
   `close_fds=False`, no `cwd=`, no bare binary name. The lesson kept here: **a workaround
   guarded at its own call site is guarded at one call site**, and a diagnostic that names
   the wrong cause is worse than no diagnostic.
+  <!-- ki: macos-kills-a-forked-child -->
 - **Closed in 0.15.0, and still a claim by default.** `--verify-bots` does the
   reverse-then-forward DNS check Google, Bing and Yandex document, and re-attributes a
   forged crawler's requests out of the crawl-budget figures rather than annotating them
@@ -1274,6 +1333,7 @@ name. A column called `url` would be read as "fix this page".
   DuckDuckBot, SeznamBot, PetalBot — publish address ranges rather than a DNS
   convention, so they answer `no_published_rule` and remain claims even with the flag;
   inventing a rule for them would report every visit they make as forged.
+  <!-- ki: verify-bots-and-the-default-claim -->
 - **The rendered-page artifacts are the one input that cannot be checked by
   re-measuring**, and 0.15.0 got as close as that allows. 0.7.0 closed the part that
   could be checked: an artifact naming a different page is refused with the reason. The
@@ -1284,19 +1344,24 @@ name. A column called `url` would be read as "fix this page".
   what it adds: everything an artifact says about itself is the operator's claim. **Still
   not verifiable** — `touch` exists — only visible and boundable, which is as far as
   re-measuring cannot reach.
+  <!-- ki: rendered-artifacts-cannot-be-re-measured -->
 - **The page guard is fingerprint-based**, so an interstitial from a vendor it does
   not recognise still gets through. Deliberate: an unknown interstitial and a
   client-rendered shell are indistinguishable from the HTML, and the second is a
   real finding, so the run warns with the visible word count instead of refusing to
   score.
+  <!-- ki: page-guard-is-fingerprint-based -->
 - **Closed in 0.19.0 — the Russian report is Russian throughout.** All 214 item
-  titles and all 214 recommendations are translated, and the claim is computed by a
-  test against `checklist.json` rather than declared in the file. That matters here
-  more than the translation does: this file has twice asserted a completeness it did
+  titles and all 214 recommendations were translated, and the registry has grown by one
+  since: **215** of 215 titles and 215 of 215 recommendations carry Russian today, with
+  no untranslated id. The claim is computed by a test against `checklist.json` rather
+  than declared in the file. That matters here more than the translation does:
+  this file has twice asserted a completeness it did
   not have, both times in the flattering direction. What no test can catch is a
   translation that has drifted in meaning from the item it translates — a translated
   title is a second copy of the registry's wording, and only the ids are checkable.
   The stale entry below is what it replaced.
+  <!-- ki: russian-report-is-russian-throughout -->
 
 - **A Russian report still carries English item titles.** The report's own 100 strings
   are fully translated as of 0.15.0. The 19 that were not — and this file said six,
@@ -1307,6 +1372,7 @@ name. A column called `url` would be read as "fix this page".
   rather than a code change. The stderr warning names both layers rather than implying
   the report is fully Russian, and that counting — added in 0.7.0 — is the only reason
   either gap was ever visible.
+  <!-- ki: russian-report-english-titles-as-first-written -->
 
 - **Freshness has a boundary for foreign microdata dates, not a general answer to
   which dates are about the page.** Measured on 2026-08-17, a page whose only date is
@@ -1332,6 +1398,7 @@ name. A column called `url` would be read as "fix this page".
   100 to 55 and failed CN-038. A later repair must establish what a date is about,
   not merely what role it declares; 0.70.0 therefore only removes provably foreign
   dates and never promotes one.
+  <!-- ki: freshness-and-foreign-dates -->
 
 - **The HTML credit boundary follows DOM nesting, not microdata's `itemref`, and is
   wrong in both directions.** Measured for 0.73.0: `<div itemprop="comment"
@@ -1343,6 +1410,7 @@ name. A column called `url` would be read as "fix this page".
   removed because it is physically nested inside the comment even though the article
   claims it by reference. Closing both directions needs a microdata resolver; the
   JSON-LD half already has the analogous `@graph` and `@id` hoisting rule.
+  <!-- ki: credit-boundary-ignores-itemref -->
 
 - **Comments named only by class remain invisible to the foreign-credit boundary.**
   A comment container convention such as `<div class="comment">` carries no
@@ -1350,16 +1418,33 @@ name. A column called `url` would be read as "fix this page".
   unchanged from 0.70.0, which rejected a container-name dictionary because this
   corpus provides **no measurable error rate** for that convention. The deliberate
   boundary therefore removes only the six structurally declared foreign properties.
+  <!-- ki: class-named-comments-are-invisible -->
 
-- **The same page's privacy and trust links still have no foreign-credit boundary.**
+- **Closed in 0.75.0.** Re-measured on the page this entry names: an unauthored article
+  whose only `mailto:` and `/privacy` links belong to a commenter now reports
+  `privacy_links` **0**, `trust_links` **0** and `policy_links` **0**, so neither CN-040
+  nor CN-044 passes on somebody else's privacy policy. `parsed["links"]` carries a
+  `foreign_credit` flag, which is what the sentence below said was missing; the readers
+  filter on it rather than re-deriving the boundary from a tag they no longer hold.
+  The original, kept because the entry outlived its repair by four releases:
+
+  **The same page's privacy and trust links still have no foreign-credit boundary.**
   Measured on the unauthored page used for 0.73.0, with the commenter's only links an
   `<a href="mailto:...">` and an `<a href="/privacy">`: `signals.privacy_links` and
   `signals.trust_links` each accept the commenter's link, so `CN-040` and `CN-044`, both
   `medium`, **PASS**. Those readers use `parsed["links"]`, whose dicts no longer retain
   the source tag needed by `under_foreign_credit`; repairing them is not another call
   to the helper shipped here.
+  <!-- ki: privacy-and-trust-links-boundary -->
 
-- **`article_seo.py` has private, weaker author and publication-date answers beside
+- **Closed in 0.77.0, both halves.** `extract_content` reads `page_author_names` and
+  `declared_publication_dates` and keeps no private answer of its own. Re-measured on
+  the two shapes below: `author-grid` produces `authors: []` and `publish_date: ''`,
+  `published-widget` the same, and across all **12** HTML fixtures **0** disagree with
+  the shared answers, against the one this entry recorded. The date half got the shared
+  definition the entry said did not exist. The original follows:
+
+  **`article_seo.py` has private, weaker author and publication-date answers beside
   the shared ones.** Its `extract_content` uses substring class matching. Measured in
   both directions for both fields: `<div class="author-grid"><p>Meet the
   team</p><p>Recipes by many hands</p></div>` produces `author: 'Meet the teamRecipes by
@@ -1373,6 +1458,7 @@ name. A column called `url` would be read as "fix this page".
   `freshness_checker.py` reports `2026-08-01` and `2026-07-01`. The author half could
   adopt the shared definition; the date half has no shared `page_dates` equivalent, so
   changing only one of the adjacent six lines would leave the duplication half-fixed.
+  <!-- ki: article-seo-private-answers -->
 
 - **`FOREIGN_CREDIT_KEYS` is deliberately narrower than every subject relation.**
   It contains **ten** keys, counted rather than recalled: `acceptedAnswer`, `comment`,
@@ -1384,6 +1470,7 @@ name. A column called `url` would be read as "fix this page".
   not a traversal failure: the JSON-LD half has used exactly the same ten-key width
   since 0.66.0. Widening the set changes both spellings and live JSON-LD verdicts, so it
   needs its own release and measurement rather than a one-sided HTML exception.
+  <!-- ki: foreign-credit-keys-width -->
 
 1. **A mostly-refused run still reports a clean count.** The withholding fires only
    when no status was collected. A site with a hundred images where ninety-nine time
@@ -1391,6 +1478,7 @@ name. A column called `url` would be read as "fix this page".
    Reporting `unchecked_image_count` beside it is what 0.74.0 does about it;
    suppressing the count above some share of unchecked images would need a share,
    and that number has no basis on this corpus.
+   <!-- ki: a-mostly-refused-run-reports-a-clean-count -->
 
 2. **A truncated crawl decides a whole site from part of it.** `site_crawl` caps pages
    and `broken_links.py:184-191` caps links, both reporting `truncated`; `TE-168` —
@@ -1398,6 +1486,7 @@ name. A column called `url` would be read as "fix this page".
    written. `MD-187` joins that convention rather than inventing a stricter one.
    Whether a site-wide `eq 0` should be withheld when its input was truncated is one
    question about twelve items, not twelve questions.
+   <!-- ki: a-truncated-crawl-decides-the-whole-site -->
 
 ---
 
