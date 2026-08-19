@@ -2206,13 +2206,22 @@ class EeatSignals(unittest.TestCase):
         """The other direction, and the reason the `@id` rule covers contributions
         only. A review site hoists the product and points at it with `itemReviewed`;
         treating that reference the way a `review` reference is treated would prune the
-        page's own product node and lose the brand that is its publisher evidence."""
+        page's own product node and lose the brand that is its publisher evidence.
+
+        **Reversed in 0.78.0, and the argument above is kept because it is half of the
+        trade.** The same markup is emitted by a review site reviewing somebody else's
+        product, where that brand is the manufacturer; reporting it as the review page's
+        publisher passed `CN-057` — a `high` item — on a page that never names its own.
+        The markup cannot separate the two, so neither is credited. A page that wants the
+        old answer declares its subject, which
+        `test_a_declared_subject_keeps_its_brand_however_the_claim_is_written` in
+        `tests/test_page_boundary.py` proves."""
         result = self._ld({"@context": "https://schema.org", "@graph": [
             {"@type": "Product", "@id": "#p", "name": "Tin", "brand": self._org()},
             {"@type": "Review", "itemReviewed": {"@id": "#p"},
              "author": self._person("Staff Journalist")}]})
         self.assertEqual(result["signals"]["authors"], ["Staff Journalist"])
-        self.assertEqual(result["signals"]["publishers"], ["Fixture Bakery"])
+        self.assertEqual(result["signals"]["publishers"], [])
 
     def test_the_reviewed_work_and_the_cited_work_are_not_the_page(self):
         """A review of Moby Dick reported Herman Melville among its authors."""
@@ -3268,8 +3277,8 @@ class CitationReadiness(unittest.TestCase):
             {"@id": "#c", "name": "Hoisted contributor"},
             {"@id": "#s", "name": "Hoisted subject"},
         ]}
-        with self.subTest("defaults reproduce 0.66.0"):
-            self.assertEqual(names(document), {"Page", "Hoisted subject"})
+        with self.subTest("defaults reproduce 0.78.0"):
+            self.assertEqual(names(document), {"Page"})
         with self.subTest("hoisted accepts subject keys"):
             self.assertEqual(names(document, hoisted=FOREIGN_CREDIT_KEYS), {"Page"})
         with self.subTest("exclude can keep nested subjects"):

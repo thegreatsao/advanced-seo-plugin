@@ -10,6 +10,47 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.78.0 — the boundary belongs to the page, not to the key
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`page_nodes` skips a node whose `@id` is referenced from under a key naming somebody
+else's contribution. The set it skipped on left `SUBJECT_KEYS` out, deliberately and with
+its reason written down: pruning on them would prune a review page's own product node and
+lose the brand that is its publisher evidence. **That decision is reversed here.**
+
+Scored against thirteen graph shapes and twenty-six assertions, the old default answered
+**14 of 26**. Six of its wrong answers name somebody with no connection to the page: a
+hoisted cited paper contributes its author and its publisher, a hoisted reviewed book
+contributes Melville and Penguin, a hoisted `isBasedOn` original contributes the original
+cook, and an editorial review reports the reviewed product's manufacturer as its own
+publisher. `CN-057` — *Show Author and Publisher Clearly*, `high` — reads both halves, so
+each is a page passing it on credits it never earned.
+
+The default is now the wide set, with one exemption: a node the page itself declares as
+its subject through `mainEntityOfPage` or `mainEntity`, anchored to this page's URL or its
+canonical and compared through `normalize_url`. That scores **25 of 26**. Three other
+exemptions were built and scored first and are recorded in the tests that killed them —
+unanchored main-entity at 23, mutual-link at 21, strict-ownership at 24. Every one of their
+failures was a foreign credit becoming the page's; the one failure the chosen rule keeps is
+the opposite, and `checklist_runner.py` already says a check that cannot decide turns "into
+NO_DATA, never a false PASS".
+
+**The cost, knowingly shipped and pinned by a test.** A product page emitting
+`{@graph: [Product{brand}, Review{itemReviewed: #p}]}` and declaring nothing about its own
+subject loses that brand as publisher evidence. The markup is identical to a review site
+reviewing somebody else's product; the difference is a fact about the site, not the
+document. Where they cannot be told apart neither is credited, and a page that wants the
+old answer says so in one property. `test_a_hoisted_subject_keeps_the_page_node` is
+rewritten to the new answer and keeps both arguments in its docstring.
+
+1171 → 1189 tests. `tests/test_page_boundary.py` is new and carries all thirteen shapes
+plus five implementations that satisfy every one of them and are still wrong — among them
+one that forgets the exemption on the author path, one that forgets it on the date path,
+and one that scans only the top level of `@graph`. Ten of its eighteen are red on
+`v0.77.0`. The fixture oracle is unmoved at 246 / 219 / 0 / 27 with no differences, and no
+fixture carries an `@graph` at all, so no declared verdict could move.
+
 ## 0.77.0 — `article_seo.py` stops answering privately
 
 Registry version: `3c6b20d512c6`, unchanged.

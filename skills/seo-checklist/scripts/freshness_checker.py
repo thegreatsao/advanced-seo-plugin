@@ -62,10 +62,10 @@ def _parse_date(value: str | None) -> date | None:
     return None
 
 
-def _schema_dates(schema_items: list) -> dict[str, list[str]]:
+def _schema_dates(schema_items: list, protected=frozenset()) -> dict[str, list[str]]:
     dates = {"dateModified": []}
     for item in schema_items:
-        for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS):
+        for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS, protected=protected):
             if isinstance(node.get("dateModified"), str):
                 dates["dateModified"].append(node["dateModified"])
     return dates
@@ -108,7 +108,7 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
                 and not under_foreign_credit(tag)):
             meta_dates[key] = tag.get("content")
     time_dates = _time_dates(soup)
-    schema_dates = _schema_dates(parsed.get("page_schema", []))
+    schema_dates = _schema_dates(parsed.get("page_schema", []), protected=parsed.get("page_own_ids", frozenset()))
     publication_dates = declared_publication_dates_by_source(parsed)
 
     parsed_dates = []

@@ -558,7 +558,8 @@ def _referenced_ids(value, keys, inside=False, found=None):
     return found
 
 
-def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS):
+def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=FOREIGN_CREDIT_KEYS,
+               protected=frozenset()):
     """Every dict in a JSON-LD tree except the ones whose credits are not the page's.
 
     `walk_json` yields the whole graph. That is right for asking what a document
@@ -576,10 +577,15 @@ def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS):
     * a node is skipped when its `@id` is referenced from under a `hoisted`
       key anywhere in the document. Flattening a page into `@graph` hoists the customer
       review to the top level and leaves `"review": {"@id": "#r1"}` behind, which
-      pruning by key alone never reaches. The defaults deliberately keep
-      `SUBJECT_KEYS` out of this second rule: `{"@graph": [Product #p,
-      Review{itemReviewed: #p}]}` is an ordinary review page, and pruning `#p` would
-      lose the brand that is its publisher evidence.
+      pruning by key alone never reaches.
+
+    Before 0.78.0, the `hoisted` default deliberately excluded `SUBJECT_KEYS` because
+    pruning a review page's own product node lost its brand as publisher evidence. That
+    decision was reversed because a review site reviewing somebody else's product emits
+    identical markup and wrongly credited the manufacturer as its own publisher — a false
+    pass, while the loss of the page's own brand is a false fail. The check cannot decide
+    and now turns into NO_DATA (never a false PASS). The default is now the wide set plus
+    one exemption the page itself declares via `mainEntityOfPage`.
 
     What this deliberately costs, both measured: a specialist publication's own review
     nested as `Product -> review -> author` loses that author, and an `FAQPage` whose
@@ -598,7 +604,7 @@ def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=CONTRIBUTION_KEYS):
     sets. `walk_json` has always had that hole, JSON-LD needs a context mapping to
     produce it, and closing it needs context expansion this repository does not do.
     """
-    excluded_ids = _referenced_ids(value, hoisted)
+    excluded_ids = _referenced_ids(value, hoisted) - set(protected)
 
     def walk(node):
         if isinstance(node, dict):
@@ -636,10 +642,10 @@ def under_foreign_credit(tag, keys=FOREIGN_CREDIT_KEYS) -> bool:
     return False
 
 
-def schema_values(schema_items: list, keys: set[str]) -> list[str]:
+def schema_values(schema_items: list, keys: set[str], protected=frozenset()) -> list[str]:
     values = []
     for item in schema_items:
-        for node in page_nodes(item):
+        for node in page_nodes(item, protected=protected):
             for key in keys:
                 value = node.get(key)
                 if isinstance(value, str):
@@ -678,7 +684,7 @@ def page_author_names(parsed: dict) -> list[str]:
         and tag.get_text(strip=True)
         and not under_foreign_credit(tag)
     ]
-    schema_authors = schema_values(parsed.get("page_schema", []), {"author"})
+    schema_authors = schema_values(parsed.get("page_schema", []), {"author"}, parsed.get("page_own_ids", frozenset()))
     return sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
 
 
@@ -697,7 +703,7 @@ def declared_publication_dates_by_source(parsed) -> dict[str, list[str]]:
     """
     dates = {"schema": [], "meta": [], "microdata": []}
     for item in parsed.get("page_schema", []):
-        for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS):
+        for node in page_nodes(item, hoisted=FOREIGN_CREDIT_KEYS, protected=parsed.get("page_own_ids", frozenset())):
             value = node.get("datePublished")
             if isinstance(value, str):
                 dates["schema"].append(value)
@@ -738,6 +744,65 @@ def as_list(value: Any) -> list[Any]:
     if value is None:
         return []
     return value if isinstance(value, list) else [value]
+
+
+def page_own_ids(page_schema, base_url: str = "", canonical: str | None = None) -> frozenset:
+    """`@id`s the document declares to be what *this* page is about.
+
+    `page_nodes` prunes a node whose `@id` is referenced from under a foreign-credit key,
+    and since 0.78.0 that includes the subject keys. This is the one exemption: a page may
+    say which node is its own subject, and the two spellings run in opposite directions.
+    `mainEntityOfPage` points *from* the subject *to* the page, so the **carrier** is the
+    subject; `mainEntity` points *from* the page *to* the subject, so the **value** is.
+
+    **Anchored to this page, and that is the whole point.** A cited work routinely carries
+    `mainEntityOfPage` naming its own canonical page. Reading that as a claim about the
+    page in hand re-admits a foreign node and hands back its author — measured, and the
+    reason the unanchored version of this rule was scored and rejected.
+
+    Comparison goes through `normalize_url` against both `base_url` and `canonical`.
+    Measured, so that the limits are not guessed at: `normalize_url` resolves a relative
+    reference against the base and supplies a scheme to a bare host, and does **not**
+    reconcile a trailing slash, a scheme, or host case. Both anchors are kept because a
+    page whose canonical differs from its fetch URL by a slash is then matched by one of
+    them. What is left over — a document naming its page with a different scheme or host
+    case — gets no exemption, which is a false fail and the safe side of this release.
+
+    Empty values are dropped before normalising, and must be: `normalize_url("")` is
+    `'https:///'`, and so is `normalize_url("/", "")`. A local file has no `base_url`, so
+    without the filter every page would carry a bogus anchor and any node claiming `"/"`
+    would be wrongly protected.
+    """
+    anchors = {normalize_url(url) for url in (base_url, canonical) if url}
+    if not anchors:
+        return frozenset()
+    # A relative claim is resolved against the fetch URL when there is one and against the
+    # canonical otherwise. A local file has no fetch URL, which is how every file-based
+    # test in this suite runs, and `"/p"` has to resolve to something for those to mean
+    # anything.
+    base = base_url or canonical or ""
+
+    def names_this_page(value) -> bool:
+        return isinstance(value, str) and normalize_url(value, base) in anchors
+
+    own_ids = set()
+    for item in page_schema or []:
+        for node in walk_json(item):
+            node_id = node.get("@id")
+            declared = node.get("mainEntityOfPage")
+            if isinstance(declared, dict):
+                claims = [declared.get("@id"), declared.get("url")]
+            else:
+                claims = [declared]
+            if any(names_this_page(claim) for claim in claims) and isinstance(node_id, str):
+                own_ids.add(node_id)
+
+            if names_this_page(node_id) or names_this_page(node.get("url")):
+                subject = node.get("mainEntity")
+                subject_id = subject.get("@id") if isinstance(subject, dict) else subject
+                if isinstance(subject_id, str):
+                    own_ids.add(subject_id)
+    return frozenset(own_ids)
 
 
 def parse_html(html: str, base_url: str = "") -> dict:
@@ -837,6 +902,7 @@ def parse_html(html: str, base_url: str = "") -> dict:
         "images": images,
         "schema": schema,
         "page_schema": page_schema,
+        "page_own_ids": page_own_ids(page_schema, base_url, canonical),
         "word_count": len(words),
         "body_text": body_text,
         "forms": len(soup.find_all("form")),

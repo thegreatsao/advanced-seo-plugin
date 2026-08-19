@@ -137,7 +137,7 @@ def _is_org_type(raw) -> bool:
     return False
 
 
-def _credited_nodes(schema_items: list) -> set[int]:
+def _credited_nodes(schema_items: list, protected=frozenset()) -> set[int]:
     """Every dict that is, or sits under, an `author` or `reviewedBy` value.
 
     An organisation the page credits — as its author or as its reviewer — is already
@@ -153,7 +153,7 @@ def _credited_nodes(schema_items: list) -> set[int]:
     """
     credited: set[int] = set()
     for item in schema_items:
-        for node in page_nodes(item):
+        for node in page_nodes(item, protected=protected):
             for key in ("author", "reviewedBy"):
                 if key in node:
                     for inner in walk_json(node[key]):
@@ -179,10 +179,11 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
     whose only publisher signal is that line reports FAIL.
     """
     schema = parsed.get("page_schema", [])
-    credited = _credited_nodes(schema)
-    names = list(schema_values(schema, {"publisher"}))
+    protected = parsed.get("page_own_ids", frozenset())
+    credited = _credited_nodes(schema, protected=protected)
+    names = list(schema_values(schema, {"publisher"}, protected))
     for item in schema:
-        for node in page_nodes(item):
+        for node in page_nodes(item, protected=protected):
             if id(node) in credited:
                 continue
             if _is_org_type(node.get("@type")) and node.get("name"):
@@ -212,7 +213,8 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
     # no author passed CN-057 — an item whose title asks for two parties.
     reviewers = sorted({value.strip()
                         for value in schema_values(parsed.get("page_schema", []),
-                                                   {"reviewedBy"})
+                                                   {"reviewedBy"},
+                                                   parsed.get("page_own_ids", frozenset()))
                         if value and value.strip()})
     publishers = sorted({v.strip() for v in _publisher_names(parsed, soup) if v and v.strip()})
 
