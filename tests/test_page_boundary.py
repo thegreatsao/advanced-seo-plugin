@@ -256,10 +256,16 @@ class TheCostThisReleaseShips(unittest.TestCase):
 
 
 class EveryReaderOfTheBoundaryGetsTheExemption(unittest.TestCase):
-    """Five implementations that satisfy every shape above and are still wrong.
+    """Six implementations that satisfy every shape above and are still wrong.
 
     Named by a cross-check asked what wrong implementation the thirteen shapes would pass.
     Each test here is the only one that fails the implementation it names.
+
+    The class was called *every reader* while covering three of four: 0.86.0 found
+    `citation_readiness._schema_entity_signals` passing no `protected` at all, which the
+    title said could not happen. The fourth test below is that reader, and it is here
+    rather than beside the other citation-readiness tests because what it guards is this
+    class's claim.
     """
 
     def test_the_exempted_nodes_author_is_read(self):
@@ -300,6 +306,28 @@ class EveryReaderOfTheBoundaryGetsTheExemption(unittest.TestCase):
         self.assertEqual(result["latest_date"], "2026-08-01")
         self.assertIn("2026-08-01", [entry["raw"] for entry in result["dates"]
                                      if entry["source"] == "schema_published"])
+
+    def test_the_exempted_nodes_entity_signals_are_read(self):
+        """The fourth reader, and the one the class's title used to skip.
+
+        `citation_readiness` scores up to 20 of its 100 points on `sameAs`, so a page
+        whose own declared entity is claimed by an `acceptedAnswer` loses its only
+        anchor when the exemption is not threaded. Measured before 0.86.0 threaded it:
+        this shape returned an empty `sameAs` list.
+        """
+        import citation_readiness
+        document = {"@context": "https://schema.org", "@graph": [
+            {"@type": "FAQPage", "name": "Our FAQ",
+             "mainEntity": {"@type": "Question", "name": "Who are you?",
+                            "acceptedAnswer": {"@id": "#us"}}},
+            {"@id": "#us", "@type": "Organization", "name": "The Publisher",
+             "mainEntityOfPage": PAGE,
+             "sameAs": ["https://www.wikidata.org/wiki/Q_publisher"]}]}
+        result = _through(_page(document),
+                          citation_readiness.check_citation_readiness)
+        self.assertEqual(result["entity_signals"]["sameAs"],
+                         ["https://www.wikidata.org/wiki/Q_publisher"])
+        self.assertIn("The Publisher", result["entity_signals"]["names"])
 
     def test_a_declaring_node_nested_below_the_top_level_is_found(self):
         """A scan of the top-level `@graph` members alone passes all thirteen shapes.

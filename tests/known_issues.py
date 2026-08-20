@@ -184,6 +184,63 @@ def _thin_assertions() -> dict:
             for item_id in ("AR-152", "CN-056")}
 
 
+@probe("entity_checker_reads_the_graph_unbounded")
+def _entity_checker_reads_the_graph_unbounded() -> dict:
+    """All three halves, because any one of them could be repaired alone.
+
+    The entry says `entity_checker.py` reads the JSON-LD graph with no foreign-credit
+    boundary and a top-level-only scan. Recording only the false PASS would let
+    somebody add `Product` to the type set and leave this green while a reviewed
+    company still supplied the page's identity; recording only the type set would miss
+    the reverse. So the reading is: what a reviewed organisation contributes, what a
+    page's own nested publisher contributes, and how many critical platforms the item
+    is counting.
+    """
+    import entity_checker
+    from bs4 import BeautifulSoup
+
+    def entities(document):
+        html = ('<html><head><script type="application/ld+json">'
+                + json.dumps(document) + '</script></head><body></body></html>')
+        return entity_checker.extract_entities_from_schema(
+            BeautifulSoup(html, "html.parser"))
+
+    links = ["https://www.wikidata.org/wiki/Q_them",
+             "https://en.wikipedia.org/wiki/Them",
+             "https://www.linkedin.com/company/them",
+             "https://x.com/them"]
+    reviewed_org = {"@graph": [{"@type": "Review", "itemReviewed": {"@id": "#o"}},
+                               {"@id": "#o", "@type": "Organization",
+                                "name": "Them", "sameAs": links}]}
+    reviewed_product = {"@type": "Review",
+                        "itemReviewed": {"@type": "Product", "name": "X100",
+                                         "sameAs": links}}
+    own_nested = {"@type": "Article",
+                  "publisher": {"@type": "Organization", "name": "Us",
+                                "sameAs": links}}
+    item = _items_by_id().get("GEO-006", {})
+    return {
+        "geo_006_assert": (item.get("check") or {}).get("assert"),
+        # By name and deduplicated, because that is how `missing` is keyed:
+        # twitter.com and x.com are two domains under one name, so the list of
+        # entries is five and the number the item counts is four.
+        "critical_or_high_platforms": sorted(
+            {info["name"] for info in entity_checker.SAMEAS_PLATFORMS.values()
+             if info["priority"] in ("Critical", "High")}),
+        "missing_critical_with_no_entities":
+            entity_checker.analyze_sameas([])["total_missing_critical"],
+        "missing_critical_from_a_reviewed_organisation":
+            entity_checker.analyze_sameas(links)["total_missing_critical"],
+        "entities_from_a_reviewed_organisation":
+            [entity["name"] for entity in entities(reviewed_org)],
+        "entities_from_a_reviewed_product":
+            [entity["name"] for entity in entities(reviewed_product)],
+        "entities_from_the_pages_own_nested_publisher":
+            [entity["name"] for entity in entities(own_nested)],
+        "product_is_an_entity_type": "Product" in entity_checker.ENTITY_TYPES,
+    }
+
+
 @probe("severity_vocabulary_proofs")
 def _severity_vocabulary_proofs() -> dict:
     import audit_reachability

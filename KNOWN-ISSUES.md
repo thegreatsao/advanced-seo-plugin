@@ -1569,7 +1569,41 @@ name. A column called `url` would be read as "fix this page".
   not a traversal failure: the JSON-LD half has used exactly the same ten-key width
   since 0.66.0. Widening the set changes both spellings and live JSON-LD verdicts, so it
   needs its own release and measurement rather than a one-sided HTML exception.
+
+  **The constant is not the only place this width is decided, as of 0.86.0.** A reader
+  may name its own set at the call site, and the entity reader in
+  `citation_readiness.py` now does: `CONTRIBUTION_KEYS | {"citation"}`, because a page
+  is not about the works it cites, while `itemReviewed` and `isBasedOn` — what a page
+  *is* about — stay. So this entry's ten keys are the shared default and the answer for
+  the DOM half, not a single width every reader takes.
   <!-- ki: foreign-credit-keys-width -->
+
+- **`entity_checker.py` reads the same graph with no boundary and a top-level-only
+  scan, and `GEO-006` is graded on what it finds.** The item asserts
+  `summary.sameas_missing_critical eq 0`, counted over four platforms — Wikidata,
+  Wikipedia, LinkedIn and Twitter/X, four rather than five because `twitter.com` and
+  `x.com` are two domains under one name and `missing` is keyed by name. Measured on
+  2026-08-20, three readings and each one is a different defect:
+
+  | markup | entities extracted | what the item then sees |
+  |---|---|---|
+  | a reviewed `Organization` hoisted into `@graph`, carrying all four links | `Them` | `0` missing — **PASS on somebody else's identity** |
+  | the page's own `Organization` nested under `publisher`, same four links | none | `4` missing — **FAIL on a page that is anchored** |
+  | a reviewed `Product` with all four links, nested or hoisted | none | `Product` is not one of the 132 `ENTITY_TYPES` |
+
+  `extract_entities_from_schema` walks the top level and `@graph` members and matches
+  on `@type`; it never consults `page_nodes`, so nothing tells it whose entity it is
+  reading. This is the fourth reader of a page's JSON-LD, and the docstring of
+  `page_nodes` names the danger in as many words — *that is the distinction to keep in
+  mind before adding a fourth caller*. The other three took the boundary across 0.66.0
+  to 0.86.0; this one never did.
+
+  Not taken here, and the reason is that the three readings above are three different
+  repairs — a boundary, a deeper scan, and a type set — with one live `medium` verdict
+  between them. `citation_readiness` covers none of this: 0.86.0 measured that its own
+  entity component is what credits a reviewed `Product`, and that `GEO-006` cannot see
+  that product at all.
+  <!-- ki: entity-checker-reads-the-graph-unbounded -->
 
 1. **A mostly-refused run still reports a clean count.** The withholding fires only
    when no status was collected. A site with a hundred images where ninety-nine time

@@ -260,13 +260,24 @@ counted in neither direction)
 `citation_signals.trusted_external_links` — int
 `citation_signals.cite_or_blockquote_tags` — int
 `citation_signals.footnote_links` — int
+`citation_signals.schema_citations` — int
+  - how many works the page's own nodes declare they cite, counted into
+    `citation_capacity` beside the three DOM sources above. A `citation` inside a
+    customer's review is not one of them; the count is read through the same boundary
+    as the entity signals below
 `entity_signals.types[]` — array
 `entity_signals.names[]` — array
   - names from the page's own entities, not the author signal read by
     `seo_common.page_author_names`
 `entity_signals.sameAs[]` — array
   - signals from the page's own entities: contributor subtrees and hoisted contributor
-    nodes are excluded, while the subject the page reviews, cites, or is based on stays
+    nodes are excluded, and so is `citation` since 0.86.0 — a page is not about the
+    works it cites, and four cited DOIs took the whole 20-point component. The subject
+    the page reviews or is based on stays: `itemReviewed` and `isBasedOn` are what a
+    page is about, which is 0.68's reason for keeping them
+  - the `mainEntityOfPage` exemption is threaded here as it is in the author, reviewer
+    and date readers, so a node the page declares as its own subject survives being
+    claimed by a contribution key
 `issues[]` — array
   - item keys: severity, message
 `fetch_error` — NoneType

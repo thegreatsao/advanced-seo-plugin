@@ -3533,6 +3533,108 @@ class CitationReadiness(unittest.TestCase):
             self.assertEqual(names(custom), {"Page", "Custom child"})
             self.assertEqual(names(custom, exclude={"custom"}), {"Page"})
 
+    def test_a_cited_works_sameas_is_not_the_pages_entity(self):
+        """A page is not about the works it cites.
+
+        Before 0.86.0 `citation` sat in the entity reader's kept set with
+        `itemReviewed` and `isBasedOn`, on a reason written about the reviewed subject.
+        A DOI resolves the cited paper, never the citing page.
+        """
+        result = self._ld({
+            "@type": "Article", "name": "A piece",
+            "citation": {"@type": "ScholarlyArticle", "name": "The paper",
+                         "sameAs": ["https://doi.org/10.0000/paper"]}})
+        self.assertEqual(result["entity_signals"]["sameAs"], [])
+        self.assertNotIn("The paper", result["entity_signals"]["names"])
+
+    def test_four_cited_works_no_longer_take_the_whole_entity_component(self):
+        """The measurement this release was decided on.
+
+        Five points per `sameAs` and a cap of twenty: four cited works took the entire
+        component — a third of the floor of 60 that GO-145 and GEO-005 assert, both
+        `high` — for identifiers belonging to somebody else's work.
+        """
+        cited = [{"@type": "ScholarlyArticle", "name": f"Paper {index}",
+                  "sameAs": [f"https://doi.org/10.0000/paper{index}"]}
+                 for index in range(4)]
+        result = self._ld({"@type": "Article", "name": "A piece",
+                           "citation": cited})
+        self.assertEqual(result["entity_signals"]["sameAs"], [])
+
+    def test_a_declared_citation_counts_as_citation_capacity(self):
+        """And it is moved rather than deleted.
+
+        `claim_coverage` reads `cite`, `blockquote` and footnote links out of the DOM
+        and has never read JSON-LD, so dropping the key with no new home would make a
+        machine-readable bibliography worth nothing on an item about citation
+        readiness. Both pages below make the same single factual claim; only the second
+        declares where it comes from.
+        """
+        claim = '<p>A 2025 study found that warm dough rises.</p>'
+        bare = self._check_html(
+            '<!doctype html><html><head><title>t</title></head><body>'
+            + claim + '</body></html>')
+        declared = self._check_html(
+            '<!doctype html><html><head><title>t</title>'
+            '<script type="application/ld+json">' + json.dumps({
+                "@type": "Article", "name": "A piece",
+                "citation": {"@type": "ScholarlyArticle", "name": "The paper"}})
+            + '</script></head><body>' + claim + '</body></html>')
+        self.assertEqual(bare["citation_signals"]["schema_citations"], 0)
+        self.assertEqual(declared["citation_signals"]["schema_citations"], 1)
+        self.assertGreater(declared["score"], bare["score"])
+
+    def test_a_citation_inside_a_customers_review_is_not_the_pages(self):
+        """The count is read through the same boundary as the entity signals."""
+        result = self._ld({
+            "@type": "Product", "name": "Tin",
+            "review": {"@type": "Review",
+                       "citation": {"@type": "ScholarlyArticle", "name": "Theirs"}}})
+        self.assertEqual(result["citation_signals"]["schema_citations"], 0)
+
+    def test_the_same_work_cited_twice_counts_twice(self):
+        """Deliberate, and it is here so that a later dedup is a decision.
+
+        Two `<cite>` tags naming one source count twice, and so do two links to one
+        URL. All four sources feed one `citation_capacity`; deduplicating the schema
+        one alone would make it the odd source out.
+        """
+        paper = {"@type": "ScholarlyArticle", "name": "A",
+                 "sameAs": ["https://doi.org/10.0/a"]}
+        result = self._ld({"@type": "Article", "name": "P",
+                           "citation": [paper, dict(paper)]})
+        self.assertEqual(result["citation_signals"]["schema_citations"], 2)
+
+    def test_a_citation_under_an_excluded_key_is_not_readmitted_by_a_declaration(self):
+        """The exemption is an `@id` mechanism, and this is where that shows.
+
+        The review below declares itself the page's own subject through
+        `mainEntityOfPage`, and its citation is still not counted: the node is written
+        out in place rather than hoisted, so it carries no `@id` for `page_own_ids` to
+        name. A reader who expects `protected` to reopen a nested subtree will find
+        this test rather than a wrong number in a report.
+        """
+        result = self._ld({
+            "@type": "Product", "name": "T",
+            "review": {"@type": "Review", "name": "R",
+                       "mainEntityOfPage": "https://example.com/p",
+                       "citation": {"@type": "ScholarlyArticle", "name": "A"}}})
+        self.assertEqual(result["citation_signals"]["schema_citations"], 0)
+
+    def test_a_work_the_page_is_based_on_is_still_its_subject(self):
+        """`isBasedOn` keeps its place beside `itemReviewed`.
+
+        A derivative work's subject is the work it derives from, which is 0.68's reason
+        and not a new one. This is the test that fails an implementation that answers
+        the release by excluding every subject key.
+        """
+        result = self._ld({
+            "@type": "Article", "name": "A piece",
+            "isBasedOn": {"@type": "ScholarlyArticle", "name": "The paper",
+                          "sameAs": ["https://doi.org/10.0000/paper"]}})
+        self.assertEqual(result["entity_signals"]["sameAs"],
+                         ["https://doi.org/10.0000/paper"])
+
     def test_a_reviewed_works_title_is_not_an_author(self):
         result = self._ld({
             "@type": "Review",

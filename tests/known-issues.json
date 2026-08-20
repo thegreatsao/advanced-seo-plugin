@@ -162,6 +162,31 @@
       "probe": "eeat_reviewed_languages",
       "state": "open"
     },
+    "entity-checker-reads-the-graph-unbounded": {
+      "claim": "GEO-006 is graded on entities extracted with no foreign-credit boundary and a top-level-only scan: a reviewed organisation's four links pass it, the page's own publisher nested one level does not reach it, and a reviewed Product is not an entity type at all.",
+      "measured": {
+        "critical_or_high_platforms": [
+          "LinkedIn",
+          "Twitter/X",
+          "Wikidata",
+          "Wikipedia"
+        ],
+        "entities_from_a_reviewed_organisation": [
+          "Them"
+        ],
+        "entities_from_a_reviewed_product": [],
+        "entities_from_the_pages_own_nested_publisher": [],
+        "geo_006_assert": {
+          "eq": 0,
+          "path": "summary.sameas_missing_critical"
+        },
+        "missing_critical_from_a_reviewed_organisation": 0,
+        "missing_critical_with_no_entities": 4,
+        "product_is_an_entity_type": false
+      },
+      "probe": "entity_checker_reads_the_graph_unbounded",
+      "state": "open"
+    },
     "foreign-credit-keys-width": {
       "claim": "The boundary is ten keys wide, and the author of a book the page is only about is still read as the page's own.",
       "measured": {
@@ -519,7 +544,7 @@
       "state": "open"
     }
   },
-  "entry_count": 41,
-  "probed_entry_count": 22,
+  "entry_count": 42,
+  "probed_entry_count": 23,
   "unprobed_entry_count": 19
 }

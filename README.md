@@ -4,12 +4,12 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.85.0 — see [CHANGELOG.md](CHANGELOG.md). `MD-184` no longer calls itself
-*Audit Sitewide Image Usage*: it runs one script over one URL asserting `count gte 1`,
-it answers PASS or nothing at all, and it has answered PASS on every tree this
-repository can serve — including the one built to fail. A title saying *Audit* named a
-judgement the item cannot deliver. The title and its fix now say what the assertion
-says; the assertion itself is unchanged.
+Version 0.86.0 — see [CHANGELOG.md](CHANGELOG.md). The entity signals `GO-145` and
+`GEO-005` are scored on stop counting a page's bibliography as the page's own identity:
+four `citation` nodes with DOIs used to take the whole 20-point component, for
+identifiers that resolve somebody else's work. A reviewed or adapted subject still
+counts — that is what a page is about — and a declared citation is now counted as a
+citation instead of as an entity. The registry does not move.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

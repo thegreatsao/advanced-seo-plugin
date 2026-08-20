@@ -10,6 +10,75 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.86.0 — the entity reader's boundary, decided one subject key at a time
+
+Registry version: unchanged at `91f6634fe6c8`. No item, title or assertion moves; what
+changes is what two of them are scored on.
+
+`citation_readiness._schema_entity_signals` swept the page's JSON-LD with
+`exclude=CONTRIBUTION_KEYS, hoisted=CONTRIBUTION_KEYS` and no `protected=`, while its
+two neighbours over the same graph take the wide `FOREIGN_CREDIT_KEYS` and thread the
+`mainEntityOfPage` exemption. **That narrowness was deliberate and written down**, in
+0.68's *Give each reader of a graph the boundary its fields require*:
+
+> Entity signals exclude contributions and keep subjects: the reviewed book is what a
+> review page is about, and its Wikidata `sameAs` is the page's best evidence that its
+> subject resolves.
+
+The reason holds. It was written about one of the three `SUBJECT_KEYS` and does not
+carry to all three, which is what measuring them separately shows:
+
+| markup | entity `sameAs` | of the 20-point component |
+|---|---|---|
+| reviews one product with a Wikidata anchor | the product's | 5 |
+| is based on one work | the work's | 5 |
+| **cites four works with DOIs** | **all four** | **20** |
+| own `Organization` claimed by an `acceptedAnswer` and declared with `mainEntityOfPage` | none | 0 |
+
+A page is not about the works it cites. Four `citation` nodes took the whole component
+— a third of the floor of 60 that `GO-145` and `GEO-005` assert, both `high` — for
+identifiers that resolve somebody else's paper. And the last row is the missing
+exemption: a node the page declares its own is dropped for being claimed by a
+contribution key.
+
+So the boundary is now decided per key rather than per set. `itemReviewed` and
+`isBasedOn` stay, on 0.68's reason. `citation` leaves. `protected=page_own_ids` is
+threaded through, which makes the fourth reader behave like the three that
+`EveryReaderOfTheBoundaryGetsTheExemption` already names — a class that called itself
+*every reader* while covering three of four, and now covers four.
+
+**`citation` is moved rather than deleted.** `claim_coverage` counts `cite`,
+`blockquote` and footnote links out of the DOM and has never read JSON-LD, so dropping
+the key with no new home would make a machine-readable bibliography worth nothing on an
+item called *Content is citation-ready for AI search*. A declared citation is now
+counted into `citation_capacity`, beside the three DOM sources, and reported as
+`citation_signals.schema_citations`. No new constant: the arithmetic already there
+absorbs it.
+
+Two behaviours of the new count are pinned rather than left to be discovered: the same
+work cited twice counts twice, because the three DOM sources beside it count duplicates
+too and deduplicating one of four would make it the odd one out; and a `citation` under
+an excluded key is not readmitted by a `mainEntityOfPage` declaration, because that
+exemption is an `@id` mechanism and a node written out in place carries no `@id` to
+name. Both were named by the independent read and then measured.
+
+**No fixture verdict moves, and that is a statement about the corpus rather than about
+the change.** No page in this repository carries a `sameAs`, a `citation`, an
+`itemReviewed` or an `isBasedOn`; run over all eight fixture and corpus pages, the old
+and the new boundary return the same eight scores. The behaviour is exercised by unit
+tests only — and no test asserted that a cited work's `sameAs` was kept, which is how
+that behaviour survived long enough to be measured.
+
+**Found on the way and written down rather than fixed**: `entity_checker.py` is the
+fourth reader of a page's JSON-LD and it took no boundary at all. `GEO-006` *Entity is
+resolvable (Wikidata / KG)* asserts `sameas_missing_critical eq 0` over four platforms,
+and a reviewed company's four links bring that to zero — the item passes on somebody
+else's identity — while a page's own `Organization` nested under `publisher` is not
+extracted at all and fails a page that is anchored. A reviewed `Product` is invisible
+either way; `Product` is not among the 132 `ENTITY_TYPES`. Three readings, three
+different repairs, one live `medium` verdict: `KNOWN-ISSUES.md` gains the entry and the
+probe, and the fix gets its own release.
+
 ## 0.85.0 — MD-184 stops promising an audit it cannot deliver
 
 Registry version: `167e11b6679a` → **`91f6634fe6c8`**. The registry stays at 217 items;
