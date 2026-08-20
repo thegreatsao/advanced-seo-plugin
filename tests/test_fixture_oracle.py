@@ -85,6 +85,11 @@ HTTP_DECLARED_IDS = {
     # and the fixture is moved to match, rather than being written to agree with a
     # tree nobody intended.
     "CN-038", "CN-040", "CN-044", "CN-056", "CN-057",
+    # 0.84.0, with the items themselves: the two mobile-layout measures owed since
+    # 0.62.0. Both are decided from the hand-written render artifact, which is why
+    # they can be declared on the HTTP pair and not on the TLS one — the TLS origins
+    # are served without artifacts.
+    "MB-107", "MB-108",
 }
 TLS_DECLARED_IDS = {"AR-150", "CI-014", "SE-115", "SE-117", "SE-118", "SE-120",
                     "TE-175"}

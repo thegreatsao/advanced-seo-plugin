@@ -10,6 +10,64 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.84.0 — paying a debt from 0.62.0, with the original's own arithmetic
+
+Registry version: `3c6b20d512c6` → **`167e11b6679a`**. The registry goes 215 → 217.
+
+Two mobile-layout measures have been owed since 0.62.0. `mobile_render_checker.py`
+carried an optional Playwright branch for horizontal scroll at 390px, tap targets and
+clipped text; 0.61.0 deleted it, and that cost nothing, because no product invocation
+ever ran it — `MB-100` passed the script only a URL, no test supplied `--render`, and
+Playwright was not installed. Tap targets were already covered better by `MB-103`. The
+other two were not covered at all.
+
+**The definitions are the deleted branch's, not a fresh guess.** Recovered from
+`git show 8afea49^`: `scrollWidth > innerWidth + 1` for the scroll, and
+`scrollWidth > clientWidth + 1 || scrollHeight > clientHeight + 1` over
+`h1,h2,h3,p,a,button,li` for the clipping. The measurements were never what was wrong
+with that branch; nobody running them was. Two deviations, stated because they are
+deviations: the clipped-text scan skips invisible elements the way the snippet's other
+four measures already do, and skips elements with no text. The branch did neither, so
+an empty `<p>` overflowing its box counted as a clipped *text* node there.
+
+`horizontal_overflow_px` compares `documentElement.scrollWidth` with `innerWidth`, so
+it answers about the page and not about a container inside it: a table in an
+`overflow-x: auto` wrapper is a designed affordance and does not count. A page that
+hides its overflow instead of fixing it still does — the content is then cut off rather
+than scrollable, which is the same defect wearing a different symptom.
+
+| new key | asserted by | rule |
+|---|---|---|
+| `horizontal_overflow_px` | `MB-107` *Page fits the phone viewport without horizontal scrolling* (`high`) | `lte 1` |
+| `text_nodes_clipped` | `MB-108` *Text is not clipped or cut off at a phone width* (`medium`) | `eq 0` |
+
+**A measure nothing asserts is a field, not a check**, which is why this is a registry
+change and not only a contract one. Both new items follow `SP-214/215/216`: they read
+an operator-supplied artifact, so without `--rendered-json` they report NEEDS_INPUT
+rather than a verdict. `MB-093` keeps its own check — a declared viewport is an HTML
+fact and cannot be read from a render — so nothing existing lost coverage to make room
+for these.
+
+`lte 1` and not `eq 0`: `scrollWidth` and `innerWidth` are both integers, and one pixel
+of rounding is not a page that scrolls sideways. Asserted in both directions — 0 and 1
+pass, 2 fails — rather than left as a comment.
+
+Both keys are **mobile-only** and join the two that already are: from a desktop render
+all four are dropped rather than zeroed, because a window that fits its own content
+answers nothing about a phone.
+
+**What `MB-108` costs, priced rather than hidden.** `text-overflow: ellipsis` is a
+deliberate layout choice, and an element truncated that way overflows its box like any
+other. A site that truncates card titles on purpose fails this item. That is a false
+fail with the count printed beside it; telling deliberate truncation from a defect
+needs a rule nothing here can price, and inventing one would be the kind of
+uncalibrated cleverness `KNOWN-ISSUES` §6 already warns about twice.
+
+The fixture pair exercises both directions, which is the whole point of it being a
+pair: the good artifact declares zero for both, the broken one declares 96 pixels of
+overflow and five clipped nodes, and the oracle declares PASS and FAIL accordingly. Ten
+assertions now produce two verdicts where eight did.
+
 ## 0.83.0 — a comment can own a byline that is nowhere near it
 
 Registry version: `3c6b20d512c6`, unchanged.

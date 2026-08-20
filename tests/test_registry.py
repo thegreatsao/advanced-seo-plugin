@@ -1081,14 +1081,14 @@ class ChecklistProvenance(unittest.TestCase):
 
     def test_every_numbered_title_is_referenced_by_exactly_one_item(self):
         """plerdy_ref is the trace back to the source line, so the mapping has to be
-        a bijection over 1..200 — and the 15 items this plugin added must not claim
+        a bijection over 1..200 — and the 17 items this plugin added must not claim
         a reference they do not have."""
         numbered = sorted(int(k) for k in self.raw if k.lstrip("-").isdigit())
         refs = [i["plerdy_ref"] for i in ITEMS if i["plerdy_ref"] is not None]
         self.assertEqual(numbered, list(range(1, 201)))
         self.assertEqual(sorted(refs), numbered)
         added = [i["id"] for i in ITEMS if i["plerdy_ref"] is None]
-        self.assertEqual(len(added), 15, f"unexpected unreferenced items: {added}")
+        self.assertEqual(len(added), 17, f"unexpected unreferenced items: {added}")
 
 
 class DeliberateTitleOverrides(unittest.TestCase):

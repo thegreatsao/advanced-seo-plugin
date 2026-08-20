@@ -24,15 +24,44 @@ not measured:
       "text_nodes_below_12px": 0,
       "links_indistinct": 2,
       "overlays_covering_content": 0,
-      "tap_targets_below_48px": 3
+      "tap_targets_below_48px": 3,
+      "horizontal_overflow_px": 0,
+      "text_nodes_clipped": 0
     }
 
 `SKILL.md` carries the snippet that produces it.
 
-**Tap targets and mobile interstitials are only reported from a mobile render.**
-A desktop trace says nothing about either, and passing them from one would be a
-fabricated verdict about a viewport nobody looked at — so those keys are dropped
-unless the recorded viewport is narrow enough, and the items then report NO_DATA.
+**The mobile keys are only reported from a mobile render.** A desktop trace says
+nothing about tap targets, interstitials, horizontal scrolling or clipped text at a
+phone width, and passing one through would be a fabricated verdict about a viewport
+nobody looked at — so those keys are dropped unless the recorded viewport is narrow
+enough, and the items then report NO_DATA.
+
+`horizontal_overflow_px` and `text_nodes_clipped` were owed from 0.62.0. A Playwright
+branch in `mobile_render_checker.py` measured both at 390px until 0.61.0 deleted it,
+and deleting it cost the product nothing because no product invocation ever ran it:
+`MB-100` passed that script only a URL, no test supplied `--render`, and Playwright
+was not installed. The measurements themselves were not wrong, so their definitions
+are that branch's rather than a fresh guess — `SKILL.md` carries the arithmetic. Two
+deviations, both deliberate. The clipped-text scan skips invisible elements the way
+the other four measures in that snippet already do, and it skips elements with no
+text: the branch counted neither, so an empty `<p>` overflowing its box was a
+"clipped text node" there and the key's own name was false.
+
+**Where `horizontal_overflow_px` stops, and it is a boundary rather than a gap.** It
+compares `documentElement.scrollWidth` with `innerWidth`, so it answers about the page
+and not about a container inside it. A table in an `overflow-x: auto` wrapper is a
+designed affordance and does not count; a page whose content is wider than the screen
+does, including one that hides the overflow rather than fixing it — the content is
+then cut off instead of scrollable, which is the same defect wearing a different
+symptom.
+
+**What `text_nodes_clipped` costs, and it is not hidden:** `text-overflow: ellipsis`
+is a deliberate layout choice, and an element truncated that way has
+`scrollWidth > clientWidth` like any other clipped one. A site that truncates card
+titles on purpose fails `MB-108`. That is a false fail rather than a false pass — the
+direction this tree is allowed to be wrong in — and narrowing it would need a rule for
+telling deliberate truncation from a defect, which nothing here can price.
 """
 from __future__ import annotations
 
@@ -49,8 +78,12 @@ MOBILE_MAX_WIDTH = 480
 # Metrics that describe the page at any viewport.
 GENERAL_METRICS = ("text_nodes_below_12px", "links_indistinct",
                    "overlays_covering_content")
-# Metrics that mean nothing unless the render was a phone.
-MOBILE_METRICS = ("tap_targets_below_48px", "mobile_overlays_covering_content")
+# Metrics that mean nothing unless the render was a phone. `horizontal_overflow_px`
+# and `text_nodes_clipped` are here rather than in the general set for the same reason
+# tap targets are: both are answers about how the layout behaved at the width it was
+# measured at, and a desktop window that fits its content says nothing about a phone.
+MOBILE_METRICS = ("tap_targets_below_48px", "mobile_overlays_covering_content",
+                  "horizontal_overflow_px", "text_nodes_clipped")
 
 
 def read(path: str) -> dict:
@@ -93,7 +126,7 @@ def read(path: str) -> dict:
             out["missing"].append(key)
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError(f"{key} must be a count, found {value!r}")
+            raise ValueError(f"{key} must be a number, found {value!r}")
         if value < 0:
             raise ValueError(f"{key} is negative ({value})")
         if key in MOBILE_METRICS and not is_mobile:

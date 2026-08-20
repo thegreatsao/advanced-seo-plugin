@@ -368,15 +368,31 @@
       "why": "Nothing executable is a witness: the limit is that a file's own claims cannot be re-measured, and `touch` exists. A probe here could only assert that the flag it already has still exists."
     },
     "rendered-mobile-measures-owed": {
-      "claim": "Horizontal scroll at a phone width and clipped or overflowing text are still absent from the rendered artifact contract, whose mobile measures are two.",
+      "claim": "The rendered artifact carries four mobile measures, and each is asserted by exactly one item: horizontal overflow by MB-107 and clipped text by MB-108, the two owed since 0.62.0.",
       "measured": {
+        "items_asserting_each": {
+          "horizontal_overflow_px": [
+            "MB-107"
+          ],
+          "mobile_overlays_covering_content": [
+            "MB-094"
+          ],
+          "tap_targets_below_48px": [
+            "MB-103"
+          ],
+          "text_nodes_clipped": [
+            "MB-108"
+          ]
+        },
         "mobile_metrics": [
+          "horizontal_overflow_px",
           "mobile_overlays_covering_content",
-          "tap_targets_below_48px"
+          "tap_targets_below_48px",
+          "text_nodes_clipped"
         ]
       },
       "probe": "rendered_mobile_metrics",
-      "state": "open"
+      "state": "closed"
     },
     "russian-report-english-titles-as-first-written": {
       "claim": "Superseded by the entry above it.",
@@ -389,9 +405,9 @@
       "measured": {
         "ids_with_no_fix": [],
         "ids_with_no_title": [],
-        "item_fixes": 215,
-        "item_titles": 215,
-        "registry_items": 215,
+        "item_fixes": 217,
+        "item_titles": 217,
+        "registry_items": 217,
         "translated_ids_not_in_the_registry": []
       },
       "probe": "russian_item_coverage",
@@ -447,8 +463,8 @@
     "title-polarity-has-no-gate": {
       "claim": "Seventy-four of 215 items pass only when a path is absent or bounded, over nine spellings; whether a title states the side of its subject that its assertion means is read by a person, and the entry says why no check can.",
       "measured": {
-        "items": 215,
-        "negative_polarity": 74
+        "items": 217,
+        "negative_polarity": 76
       },
       "probe": "negative_polarity_share",
       "state": "open"

@@ -775,7 +775,9 @@ rather than demanding zero.
 Reads a JSON file of measurements taken from a rendered page (chrome-devtools MCP
 `evaluate_script`); takes no URL and makes no request. Registry args:
 `["{rendered_json}"]`, so without `--rendered-json` the placeholder is unresolved
-and CN-034/035/051, MB-094 and MB-103 report NO_DATA.
+and CN-034/035/051, MB-094, MB-103, MB-107 and MB-108 report NEEDS_INPUT — the
+item applies and one file is what stands in the way, which is not the same as the
+site having served no such field.
 
 `url` — str or null
 `source` — str — `"unspecified"` when the file did not say
@@ -790,8 +792,15 @@ and CN-034/035/051, MB-094 and MB-103 report NO_DATA.
 `tap_targets_below_48px` — int — MB-103, **mobile renders only**
 `mobile_overlays_covering_content` — int — MB-094, **mobile renders only**; derived
   from `overlays_covering_content`
+`horizontal_overflow_px` — int — MB-107, **mobile renders only**; how far
+  `documentElement.scrollWidth` exceeds `innerWidth`, floored at 0. Asserted `lte: 1`
+  and not `eq: 0` because both are integers and one pixel of rounding is not a page
+  that scrolls sideways
+`text_nodes_clipped` — int — MB-108, **mobile renders only**; headings, paragraphs,
+  links, buttons and list items whose own content overflows their box in either axis.
+  A deliberate `text-overflow: ellipsis` is counted, which is a known false fail
 
-From a desktop render the two mobile keys are dropped rather than zeroed, and the
+From a desktop render the four mobile keys are dropped rather than zeroed, and the
 `missing[]` entry says how wide the render was. A desktop window cannot answer a
 question about tap targets, and a 0 would be a verdict about a viewport nobody
 looked at.
@@ -800,7 +809,7 @@ looked at.
 
 Reads a JSON file written from a browser performance trace (chrome-devtools MCP);
 takes no URL and makes no request. Registry args: `["{cwv_json}"]`, so without
-`--cwv-json` the placeholder is unresolved and SP-214/215/216 report NO_DATA.
+`--cwv-json` the placeholder is unresolved and SP-214/215/216 report NEEDS_INPUT.
 
 `url` — str or null (whatever the trace file recorded)
 `source` — str — free text describing the trace; `"unspecified"` when absent

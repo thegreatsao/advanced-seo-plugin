@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "registry_version": "3c6b20d512c6",
-  "item_count": 215,
+  "registry_version": "167e11b6679a",
+  "item_count": 217,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
     {
@@ -4482,6 +4482,50 @@
       },
       "effort": "medium",
       "fix": "Break up long tasks and defer third-party JavaScript. INP needs a real interaction and cannot be measured from a page load, so TBT stands in for it"
+    },
+    {
+      "id": "MB-107",
+      "plerdy_ref": null,
+      "category": "mobile",
+      "category_label": "Mobile",
+      "title": "Page fits the phone viewport without horizontal scrolling",
+      "severity": "high",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "horizontal_overflow_px",
+          "lte": 1
+        }
+      },
+      "effort": "medium",
+      "fix": "Constrain what is wider than the screen at a phone width — media, tables, navigation and code blocks are the usual four"
+    },
+    {
+      "id": "MB-108",
+      "plerdy_ref": null,
+      "category": "mobile",
+      "category_label": "Mobile",
+      "title": "Text is not clipped or cut off at a phone width",
+      "severity": "medium",
+      "source": "script",
+      "check": {
+        "script": "rendered_audit.py",
+        "args": [
+          "{rendered_json}"
+        ],
+        "requires": "offline",
+        "assert": {
+          "path": "text_nodes_clipped",
+          "eq": 0
+        }
+      },
+      "effort": "medium",
+      "fix": "Let headings, paragraphs, links, buttons and list items wrap instead of overflowing their box; a deliberate ellipsis counts here too, so give the text room rather than hiding the overflow"
     }
   ]
 }

@@ -132,11 +132,27 @@ def _threshold_declarations() -> dict:
 
 @probe("rendered_mobile_metrics")
 def _rendered_mobile_metrics() -> dict:
+    """Which mobile measures the rendered contract carries, and who reads them.
+
+    The list alone would not have closed this entry: a measure nothing asserts is a
+    field, not a check. So the items reading each one are measured beside it, taken
+    from the registry rather than named here.
+    """
     import rendered_audit
 
+    with open(REGISTRY, encoding="utf-8") as stream:
+        items = json.load(stream)["items"]
+    readers = {}
+    for item in items:
+        rule = (item.get("check") or {}).get("assert") or {}
+        path = rule.get("path")
+        if path in rendered_audit.MOBILE_METRICS:
+            readers.setdefault(path, []).append(item["id"])
     # Sorted, not as declared: the claim is about which measures exist, and an order
     # that came from a set would move on its own and teach people to re-record.
-    return {"mobile_metrics": sorted(rendered_audit.MOBILE_METRICS)}
+    return {"mobile_metrics": sorted(rendered_audit.MOBILE_METRICS),
+            "items_asserting_each": {key: sorted(value)
+                                     for key, value in sorted(readers.items())}}
 
 
 @probe("cn_068_scores_on_the_good_fixture")

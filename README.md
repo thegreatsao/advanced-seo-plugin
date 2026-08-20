@@ -1,14 +1,14 @@
 # seo-checklist
 
-A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
+A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.83.0 — see [CHANGELOG.md](CHANGELOG.md). A page whose only byline belonged to a
-commenter passed *Show Author and Publisher Clearly*, a `high` check, when the comment
-claimed that byline through microdata's `itemref` instead of containing it. The credit
-boundary follows `itemref` now, through chains of it, so the credit goes where the markup
-puts it.
+Version 0.84.0 — see [CHANGELOG.md](CHANGELOG.md). Two mobile-layout measures owed since
+0.62.0 are paid: a page that scrolls sideways on a phone and text that is clipped are
+measured from the rendered page now, and asserted by two new items, `MB-107` and
+`MB-108`. Their definitions come from the Playwright branch deleted in 0.61.0 rather
+than from a fresh guess — nobody had ever run that branch, but its arithmetic was sound.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0
@@ -28,7 +28,7 @@ whatever the model remembered.
 
 This plugin separates the two halves of that problem.
 
-`resources/config/checklist.json` is the contract: 215 items, each naming what
+`resources/config/checklist.json` is the contract: 217 items, each naming what
 answers it — a script plus an assertion over that script's output, a Search
 Console call, a language-model judgement, or a human. Nothing in the registry is
 executable; assertions are declarative and interpreted by the runner. Coverage is
@@ -41,10 +41,10 @@ whose action moves it:
 ```
 SEO Score 69/100 — over 107 items, 55% of the weight in scope
   decided           107
-  waiting on you     49   (36 unanswered LLM items, 13 missing inputs)
+  waiting on you     51   (36 unanswered LLM items, 15 missing inputs)
   needs a person     34
   undecided          25
-                   ---- 215 items in the registry
+                   ---- 217 items in the registry
 ```
 
 There was a single `Coverage %` until 0.16 and removing it was the point: it added
@@ -56,19 +56,22 @@ nobody.
 
 ## What is in the registry
 
-215 items: the [Plerdy 200-point checklist](https://www.plerdy.com/seo-checklist/) plus 15
+217 items: the [Plerdy 200-point checklist](https://www.plerdy.com/seo-checklist/) plus 17
 checks it does not cover — GEO/AI search, `llms.txt`, AI-crawler policy, IndexNow,
-schema guards, and lab Core Web Vitals from a local trace.
+schema guards, lab Core Web Vitals from a local trace, and two mobile-layout
+measures read from a rendered page.
 
 | Answered by | Items |
 |---|---|
-| a script, asserted against its real output | 146 |
-| a language model reading the page | 33 |
-| a human | 32 |
+| a script, asserted against its real output | 145 |
+| a language model reading the page | 38 |
+| a human | 31 |
 | Search Console, with no API to answer it, so a person opens the UI | 3 |
 
-147 script-backed items collapse to **55 unique process launches** — the runner
-deduplicates, so `pagespeed.py` runs once, not seven times.
+Those 145 items collapse to **66 unique process launches** over 58 distinct scripts —
+the runner deduplicates by script *and* arguments, so `pagespeed.py` runs once, not
+seven times, and `MB-107` and `MB-108` cost no launch at all: they read the artifact
+five other items already read.
 
 Nine items moved from script to judgement in August 2026 as a correction, not a
 design change: each asked a script about wording it never emits, so each had been
@@ -361,7 +364,7 @@ client's report is the same category of mistake as showing them a stack trace: t
 old report did it in every row of every table.
 
 Explanations live in the translation files rather than the code, per category
-rather than per item — sixteen texts can be kept true, and 215 would drift out of
+rather than per item — sixteen texts can be kept true, and 217 would drift out of
 step with a generated registry the first time an item changed.
 
 **Client-facing reports are English-only in 0.2.0.** `--lang ru` translates the
@@ -528,14 +531,15 @@ and announces itself once.
 
 ## Measuring the rendered page
 
-Font size, link distinctness, overlays and tap targets are **computed** values:
-they depend on stylesheets, media queries and scripts that HTML does not settle.
-Measure them in a browser (chrome-devtools MCP, one `evaluate_script` — the snippet
-is in `SKILL.md`), save the numbers and pass `--rendered-json`.
+Font size, link distinctness, overlays, tap targets, horizontal scrolling and
+clipped text are **computed** values: they depend on stylesheets, media queries and
+scripts that HTML does not settle. Measure them in a browser (chrome-devtools MCP,
+one `evaluate_script` — the snippet is in `SKILL.md`), save the numbers and pass
+`--rendered-json`.
 
-`viewport.width` is required, and from a desktop render the tap-target and
-mobile-interstitial keys are dropped rather than zeroed: a desktop window cannot
-answer either question, and a 0 would be a verdict about a viewport nobody looked
+`viewport.width` is required, and from a desktop render the four mobile keys are
+dropped rather than zeroed: a desktop window that fits its own content answers
+nothing about a phone, and a 0 would be a verdict about a viewport nobody looked
 at.
 
 **A supplied measurement is the one input an audit cannot check by measuring again.** A

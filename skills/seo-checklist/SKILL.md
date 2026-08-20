@@ -1,7 +1,7 @@
 ---
 name: seo-checklist
 description: >
-  Deterministic SEO audit against a fixed 215-item registry. Every item gets a
+  Deterministic SEO audit against a fixed 217-item registry. Every item gets a
   status and nothing is silently skipped, so two audits of the same site check
   the same things. Use when the user asks for a checklist audit, a full SEO
   checklist, reproducible coverage, a comparison against a previous run, or an
@@ -10,9 +10,9 @@ description: >
 
 # Checklist Audit
 
-`resources/config/checklist.json` holds **215 items** — the Plerdy 200-point
-checklist plus 15 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
-policy, IndexNow, schema guards, lab Core Web Vitals). Each item names what
+`resources/config/checklist.json` holds **217 items** — the Plerdy 200-point
+checklist plus 17 checks it does not cover (GEO/AI search, `llms.txt`, AI-crawler
+policy, IndexNow, schema guards, lab Core Web Vitals, rendered mobile layout). Each item names what
 answers it: a script and an
 assertion over that script's output, a Search Console call, a language-model
 judgement, or a human.
@@ -179,9 +179,10 @@ silently applied.
 
 ## Measuring the rendered page
 
-Five items are answered from what a browser actually laid out, not from HTML: font
-size, link distinctness, overlays, and — from a mobile render — tap targets. They
-are computed values, so markup alone does not settle them.
+Seven items are answered from what a browser actually laid out, not from HTML: font
+size, link distinctness, overlays, and — from a mobile render — tap targets,
+horizontal scrolling and clipped text. They are computed values, so markup alone does
+not settle them.
 
 Resize to a phone viewport first (375×812), load the page, then run one
 `evaluate_script`:
@@ -233,9 +234,19 @@ Resize to a phone viewport first (375×812), load the page, then run one
     if (r.width < 48 || r.height < 48) taps++;
   }
 
+  const overflow = Math.max(0, document.documentElement.scrollWidth - vw);
+
+  let clipped = 0;
+  for (const el of document.querySelectorAll('h1, h2, h3, p, a, button, li')) {
+    if (!visible(el) || !el.textContent.trim()) continue;
+    if (el.scrollWidth > el.clientWidth + 1 ||
+        el.scrollHeight > el.clientHeight + 1) clipped++;
+  }
+
   return {url: location.href, viewport: {width: vw, height: vh},
           text_nodes_below_12px: small, links_indistinct: indistinct,
           overlays_covering_content: overlays, tap_targets_below_48px: taps,
+          horizontal_overflow_px: overflow, text_nodes_clipped: clipped,
           html: document.documentElement.outerHTML};
 })()
 ```
@@ -251,15 +262,23 @@ and its subresources again behind the response cache, which took one audit of th
 test fixture from 22 requests to 31. Omit the key and both MB-105 and TE-181 report
 `NO_DATA`, which is honest — the other items in this file are unaffected either way.
 
-`viewport.width` is required. From a desktop render the tap-target and
-mobile-interstitial keys are **dropped**, and those items report `NO_DATA` — a
-desktop window cannot answer either question, and passing them through would be a
-verdict about a viewport nobody looked at.
+`viewport.width` is required. From a desktop render the four mobile keys — tap
+targets, mobile interstitials, horizontal overflow and clipped text — are
+**dropped**, and those items report `NO_DATA`. A desktop window that fits its own
+content answers nothing about a phone, and passing one through would be a verdict
+about a viewport nobody looked at.
+
+`horizontal_overflow_px` is asserted `lte: 1` rather than `eq: 0`: `scrollWidth` and
+`innerWidth` are both integers, and one pixel of rounding is not a page that scrolls
+sideways. `text_nodes_clipped` counts an element truncated with `text-overflow:
+ellipsis` along with one clipped by accident — telling the two apart needs a rule
+nothing here can price, so MB-108 fails a site that truncates card titles on purpose.
+That is a false fail with a visible count beside it, not a silent pass.
 
 Adjust the snippet when a site needs it — a cookie banner counted as an overlay is
 a true positive, a `sticky` header covering a quarter of a phone screen usually is
 too — but say what you changed in `source`. If the MCP is unavailable, skip it:
-five `NO_DATA` items with a stated reason beat five guesses.
+seven `NO_DATA` items with a stated reason beat seven guesses.
 
 ## Core Web Vitals from a local trace
 

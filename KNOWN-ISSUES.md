@@ -488,8 +488,8 @@ name. A column called `url` would be read as "fix this page".
   uncounted listing, visible but not silently claimed.
   <!-- ki: threshold-declarations-unjudged -->
 
-- **Two rendered mobile-layout measures are owed after deleting a branch no product
-  invocation ever ran.** `mobile_render_checker.py` carried an optional Playwright
+- **Paid in 0.84.0 — two rendered mobile-layout measures owed since 0.62.0.**
+  `mobile_render_checker.py` carried an optional Playwright
   branch for horizontal scroll at 390px, tap targets below 44px, and clipped or
   overflowing text. `MB-100` invoked the script with only the URL, no test supplied
   `--render`, Playwright was not installed, and rendered measurement moved in 0.53.0
@@ -497,13 +497,36 @@ name. A column called `url` would be read as "fix this page".
   product nothing: it had never measured or reported any of those three findings in
   a production run.
 
-  Tap targets are already covered better by `MB-103`, which reads
-  `tap_targets_below_48px` from `rendered_audit.py` and follows the current 48px
-  guidance. The two genuinely unique measures remain owed: **horizontal scroll at a
-  phone width**, and **text that is clipped or overflows**. They belong in the rendered
-  artifact contract beside its existing mobile measures, for 0.62.0; restoring a
-  browser-launching flag to one evidence script would recreate the split measurement
-  model that 0.53.0 removed.
+  Tap targets were already covered better by `MB-103`, which reads
+  `tap_targets_below_48px` and follows the current 48px guidance. The other two are
+  now in the artifact contract, and **their definitions are the deleted branch's
+  rather than a fresh guess** — recovered from `git show 8afea49^`:
+  `scrollWidth > innerWidth + 1` for the scroll, and
+  `scrollWidth > clientWidth + 1 || scrollHeight > clientHeight + 1` over
+  `h1,h2,h3,p,a,button,li` for the clipping. The measurements were never what was
+  wrong with that branch; nobody running it was. Two deviations: the clipped-text scan skips
+  invisible elements the way the snippet's other four measures do, and skips elements
+  with no text — the branch did neither, so an empty `<p>` overflowing its box counted
+  as a clipped text node there and the key's own name was false.
+
+  **A measure nothing asserts is a field, not a check**, so this is a registry change
+  and not only a contract one: `MB-107` *Page fits the phone viewport without
+  horizontal scrolling* (`high`, `horizontal_overflow_px` `lte 1`) and `MB-108` *Text
+  is not clipped or cut off at a phone width* (`medium`, `text_nodes_clipped` `eq 0`).
+  The registry goes 215 → 217. Both follow `SP-214/215/216`: an operator-supplied
+  artifact, so without `--rendered-json` they report NEEDS_INPUT rather than a verdict.
+  `MB-093` keeps its own check — a declared viewport is an HTML fact and cannot be read
+  from a render — so nothing existing lost coverage to them.
+
+  `lte 1` and not `eq 0` for the overflow: `scrollWidth` and `innerWidth` are integers,
+  and one pixel of rounding is not a page that scrolls sideways. That is the tolerance
+  the deleted branch used, kept.
+
+  **The cost, priced rather than hidden:** `text-overflow: ellipsis` is a deliberate
+  layout choice, and an element truncated that way overflows its box like any other.
+  A site that truncates card titles on purpose fails `MB-108`. That is a false fail
+  with the count printed beside it, and narrowing it needs a rule for telling
+  deliberate truncation from a defect that nothing here can price.
   <!-- ki: rendered-mobile-measures-owed -->
 
 - **The good fixture is exemplary on its entry page and not under sampling.** The two

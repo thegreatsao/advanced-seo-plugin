@@ -1156,9 +1156,12 @@ class BrowserArtifacts(unittest.TestCase):
         # rendered-page artifact rather than starting a browser inside the audit.
         # MB-105 joined in 0.53.0: unlike TE-169 and TE-177, it compares the served
         # document with the rendered artifact for this one URL.
+        # MB-107 and MB-108 joined in 0.84.0: the two mobile-layout measures owed
+        # since 0.62.0, read from the same rendered-page artifact.
         self.assertEqual(found, {"SP-214", "SP-215", "SP-216", "CN-034", "CN-035",
                                  "CN-051", "MB-094", "MB-103", "BL-084", "BL-086",
-                                 "BL-087", "CI-018", "MB-105", "TE-181"})
+                                 "BL-087", "CI-018", "MB-105", "TE-181",
+                                 "MB-107", "MB-108"})
         # What actually has to hold: an item reading an artifact measured at one URL
         # must never be run against a second page, or it would judge that page on
         # numbers taken somewhere else.
@@ -2510,9 +2513,10 @@ class EntityAddressesAndNap(unittest.TestCase):
 
 
 class RenderedPageMeasurements(unittest.TestCase):
-    """Five items came back from the LLM queue to being measured. The thing that
-    makes that honest is refusing to answer what the render cannot: a desktop
-    window says nothing about tap targets."""
+    """Seven items are measured from a rendered page rather than judged. The thing
+    that makes that honest is refusing to answer what the render cannot: a desktop
+    window says nothing about tap targets, and a window that fits its own content
+    says nothing about whether a phone would have to scroll sideways."""
 
     def _file(self, payload):
         path = os.path.join(tempfile.mkdtemp(), "rendered.json")
@@ -2522,14 +2526,16 @@ class RenderedPageMeasurements(unittest.TestCase):
 
     MOBILE = {"url": "https://e.com/", "viewport": {"width": 375, "height": 812},
               "text_nodes_below_12px": 0, "links_indistinct": 2,
-              "overlays_covering_content": 0, "tap_targets_below_48px": 3}
+              "overlays_covering_content": 0, "tap_targets_below_48px": 3,
+              "horizontal_overflow_px": 0, "text_nodes_clipped": 0}
 
     def test_a_mobile_render_answers_everything(self):
         out = rendered_read(self._file(self.MOBILE))
         self.assertEqual(out["viewport_class"], "mobile")
         for key in ("text_nodes_below_12px", "links_indistinct",
                     "overlays_covering_content", "tap_targets_below_48px",
-                    "mobile_overlays_covering_content"):
+                    "mobile_overlays_covering_content", "horizontal_overflow_px",
+                    "text_nodes_clipped"):
             self.assertIn(key, out["measured"], key)
 
     def test_a_desktop_render_drops_the_mobile_metrics(self):
@@ -2538,9 +2544,12 @@ class RenderedPageMeasurements(unittest.TestCase):
         desktop = dict(self.MOBILE, viewport={"width": 1280, "height": 800})
         out = rendered_read(self._file(desktop))
         self.assertEqual(out["viewport_class"], "desktop")
-        self.assertNotIn("tap_targets_below_48px", out)
-        self.assertNotIn("mobile_overlays_covering_content", out)
+        for key in ("tap_targets_below_48px", "mobile_overlays_covering_content",
+                    "horizontal_overflow_px", "text_nodes_clipped"):
+            self.assertNotIn(key, out, key)
         self.assertIsNone(evaluate({"path": "tap_targets_below_48px", "eq": 0}, out)[0])
+        self.assertIsNone(evaluate({"path": "horizontal_overflow_px", "lte": 1}, out)[0])
+        self.assertIsNone(evaluate({"path": "text_nodes_clipped", "eq": 0}, out)[0])
         self.assertTrue(any("mobile render" in m for m in out["missing"]))
 
     def test_the_desktop_metrics_still_answer_from_a_desktop_render(self):
@@ -2577,11 +2586,33 @@ class RenderedPageMeasurements(unittest.TestCase):
         with self.assertRaises(ValueError):
             rendered_read(self._file({"viewport": {"width": 375}}))
 
-    def test_the_registry_uses_it_for_the_five_items(self):
+    def test_the_two_owed_mobile_measures_decide_their_items(self):
+        """Owed since 0.62.0, when 0.61.0 deleted the Playwright branch that took
+        them. The definitions are that branch's: `scrollWidth` past `innerWidth`,
+        and text overflowing its own box in either axis.
+
+        `lte: 1` and not `eq: 0` for the overflow, because both numbers are integers
+        and one pixel of rounding is not a page that scrolls sideways — so the
+        tolerance is asserted here in both directions rather than assumed.
+        """
+        fits = dict(self.MOBILE, horizontal_overflow_px=0, text_nodes_clipped=0)
+        rounding = dict(self.MOBILE, horizontal_overflow_px=1)
+        scrolls = dict(self.MOBILE, horizontal_overflow_px=2)
+        clipped = dict(self.MOBILE, text_nodes_clipped=1)
+        overflow = {"path": "horizontal_overflow_px", "lte": 1}
+        clip = {"path": "text_nodes_clipped", "eq": 0}
+        self.assertTrue(evaluate(overflow, rendered_read(self._file(fits)))[0])
+        self.assertTrue(evaluate(overflow, rendered_read(self._file(rounding)))[0])
+        self.assertFalse(evaluate(overflow, rendered_read(self._file(scrolls)))[0])
+        self.assertTrue(evaluate(clip, rendered_read(self._file(fits)))[0])
+        self.assertFalse(evaluate(clip, rendered_read(self._file(clipped)))[0])
+
+    def test_the_registry_uses_it_for_the_seven_items(self):
         with open(os.path.join(SCRIPTS, "..", "resources", "config",
                                "checklist.json"), encoding="utf-8") as f:
             by_id = {i["id"]: i for i in json.load(f)["items"]}
-        for item_id in ("CN-034", "CN-035", "CN-051", "MB-094", "MB-103"):
+        for item_id in ("CN-034", "CN-035", "CN-051", "MB-094", "MB-103",
+                        "MB-107", "MB-108"):
             self.assertEqual(by_id[item_id]["source"], "script", item_id)
             self.assertEqual(by_id[item_id]["check"]["script"], "rendered_audit.py",
                              item_id)

@@ -1269,6 +1269,27 @@ EXTRA = [
      "medium", S, "cwv_metrics.py", ["{cwv_json}"], {"path": "tbt_ms", "lte": 200},
      "Break up long tasks and defer third-party JavaScript. INP needs a real "
      "interaction and cannot be measured from a page load, so TBT stands in for it"),
+    # The two mobile-layout measures owed since 0.62.0, when 0.61.0 deleted the
+    # Playwright branch that took them. Same shape as the three lab-vitals items
+    # above: an operator-supplied artifact, so without `--rendered-json` both report
+    # NEEDS_INPUT rather than a verdict. `MB-093` keeps its own check — a declared
+    # viewport is an HTML fact and cannot be read from a render — so nothing existing
+    # loses coverage to these.
+    #
+    # `lte 1` and not `eq 0`: `scrollWidth` and `innerWidth` are integers, and the
+    # branch these definitions come from compared `scrollWidth > innerWidth + 1`. One
+    # pixel of rounding is not a page that scrolls sideways.
+    ("MB-107", "mobile", "Page fits the phone viewport without horizontal scrolling",
+     "high", S, "rendered_audit.py", RENDERED,
+     {"path": "horizontal_overflow_px", "lte": 1},
+     "Constrain what is wider than the screen at a phone width — media, tables, "
+     "navigation and code blocks are the usual four"),
+    ("MB-108", "mobile", "Text is not clipped or cut off at a phone width",
+     "medium", S, "rendered_audit.py", RENDERED,
+     {"path": "text_nodes_clipped", "eq": 0},
+     "Let headings, paragraphs, links, buttons and list items wrap instead of "
+     "overflowing their box; a deliberate ellipsis counts here too, so give the text "
+     "room rather than hiding the overflow"),
 ]
 
 

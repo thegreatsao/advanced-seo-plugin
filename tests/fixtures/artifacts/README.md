@@ -1,9 +1,10 @@
 # Supplied-by-the-operator inputs, for the fixture pair
 
-Twelve registry items are decided from a file rather than from a request:
+Fourteen registry items are decided from a file rather than from a request:
 `cwv_metrics.py` reads Core Web Vitals from a browser performance trace,
-`rendered_audit.py` reads font size, link distinctness, overlays and tap targets
-from a rendered page, `server_log_audit.py` reads a server access log, and
+`rendered_audit.py` reads font size, link distinctness, overlays, tap targets,
+horizontal overflow and clipped text from a rendered page, `server_log_audit.py`
+reads a server access log, and
 `gsc_links_csv.py` reads a Search Console Links export. The first two exist because
 those numbers are *computed* values — a subprocess cannot obtain them, and a model
 reading HTML has not measured them. The other two exist because their facts are in
@@ -28,12 +29,16 @@ What the fixtures then verify is precise, and it is not "the site is fast":
   which is exactly the direction the CrUX rating bug had backwards in 0.5.0;
 - `mobile_overlays_covering_content` derives from the general overlay count when
   the viewport is a phone, and the derivation is exercised rather than assumed;
-- eight assertions that had never once produced a verdict now produce two.
+- ten assertions that had never once produced a verdict now produce two. Eight
+  arrived with the artifacts themselves; `MB-107` and `MB-108` joined them in
+  0.84.0, when the two mobile-layout measures owed since 0.62.0 were added to the
+  contract.
 
-Both files record a 390px viewport, because `rendered_audit.py` refuses to
-answer tap-target and mobile-interstitial questions from a desktop render — a
-desktop fixture would leave MB-094 and MB-103 NO_DATA and two of the eight
-unexercised.
+Both files record a 390px viewport, because `rendered_audit.py` refuses to answer
+its four mobile questions from a desktop render — a desktop fixture would leave
+MB-094, MB-103, MB-107 and MB-108 NO_DATA and four of the ten unexercised. 390px is
+also the width the deleted Playwright branch measured at, which is where MB-107's and
+MB-108's definitions come from.
 
 ## top-linking-sites.csv
 

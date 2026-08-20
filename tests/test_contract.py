@@ -650,8 +650,8 @@ class ArtifactsMustDescribeTheAuditedPage(unittest.TestCase):
     Nothing else in an audit is like it: every other verdict comes from a request
     this process made, and can be checked by making it again. A trace is a file
     somebody hands over, and the only question available is whether it says which
-    page it is about. Eight items are decided from these two files, two of them
-    `high`, so an artifact from the wrong page is eight fabricated verdicts — and
+    page it is about. Ten items are decided from these two files, three of them
+    `high`, so an artifact from the wrong page is ten fabricated verdicts — and
     it would look exactly like a clean result.
     """
 
