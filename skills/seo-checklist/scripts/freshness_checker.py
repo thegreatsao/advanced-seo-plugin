@@ -71,7 +71,7 @@ def _schema_dates(schema_items: list, protected=frozenset()) -> dict[str, list[s
     return dates
 
 
-def _time_dates(soup) -> list[str]:
+def _time_dates(soup, claimed=None) -> list[str]:
     """The page's own `<time>` values.
 
     A `<time>` under an `itemprop` naming a foreign credit belongs to whatever that
@@ -88,7 +88,7 @@ def _time_dates(soup) -> list[str]:
     return [
         tag.get("datetime") or tag.get_text(" ", strip=True)
         for tag in soup.find_all("time")
-        if not under_foreign_credit(tag)
+        if not under_foreign_credit(tag, claimed=claimed)
     ]
 
 
@@ -105,9 +105,10 @@ def check_freshness(source: str, timeout: int = 15, today: date | None = None) -
         key = (tag.get("property") or tag.get("name") or "").lower()
         if (key in {"article:published_time", "article:modified_time", "date",
                     "last-modified", "dc.date"}
-                and not under_foreign_credit(tag)):
+                and not under_foreign_credit(
+                    tag, claimed=parsed.get("foreign_itemref_ids"))):
             meta_dates[key] = tag.get("content")
-    time_dates = _time_dates(soup)
+    time_dates = _time_dates(soup, parsed.get("foreign_itemref_ids"))
     schema_dates = _schema_dates(parsed.get("page_schema", []), protected=parsed.get("page_own_ids", frozenset()))
     publication_dates = declared_publication_dates_by_source(parsed)
 

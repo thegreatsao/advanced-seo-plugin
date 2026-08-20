@@ -1427,16 +1427,43 @@ name. A column called `url` would be read as "fix this page".
   dates and never promotes one.
   <!-- ki: freshness-and-foreign-dates -->
 
-- **The HTML credit boundary follows DOM nesting, not microdata's `itemref`, and is
-  wrong in both directions.** Measured for 0.73.0: `<div itemprop="comment"
-  itemref="c1"></div><span id="c1" class="author">D Petras</span>` still returns
-  `['D Petras']`, because the referenced byline is outside the comment element. The
-  reverse markup, `<div itemprop="comment"><span id="b1" class="author">M
-  Kazlauskiene</span></div><article itemscope itemref="b1"></article>`, returned
-  `['M Kazlauskiene']` before 0.73.0 and returns `[]` after it: the page's own byline is
-  removed because it is physically nested inside the comment even though the article
-  claims it by reference. Closing both directions needs a microdata resolver; the
-  JSON-LD half already has the analogous `@graph` and `@id` hoisting rule.
+- **Closed in 0.83.0 — the HTML credit boundary followed DOM nesting and not
+  microdata's `itemref`.** One of the two directions this entry named was a false pass
+  on a `high` item; the other turns out not to be a defect, and the difference is
+  measured rather than argued.
+
+  **The direction that was wrong.** `itemref` names elements elsewhere in the document
+  that are also an item's properties, so a comment can own a byline nowhere near it in
+  the DOM. Through the runner's own `evaluate()`, on a page carrying a publisher and no
+  author of its own:
+
+  | page | `authors` | `CN-057` |
+  |---|---|---|
+  | no byline at all | `[]` | FAIL |
+  | commenter's byline nested in the comment | `[]` | FAIL |
+  | **commenter's byline claimed by the comment through `itemref`** | `['D Petras']` | **PASS** |
+  | page's own byline, outside any comment | `['M Kazlauskiene']` | PASS |
+
+  The third row is the defect: a page with no author of its own passing *Show Author and
+  Publisher Clearly* — `high` — with the same verdict as the honest fourth row.
+  `under_foreign_credit` now resolves `itemref` to a fixed point, so a chain of claims is
+  as foreign as its first link, and `itemscope` is deliberately not required: for a
+  removal rule, honouring an invalid `itemref` costs a false fail while ignoring one
+  costs a false pass.
+
+  **The direction that was not wrong.** The entry said the page's own byline is dropped
+  "even though the article claims it by reference". The markup it cited —
+  `<div itemprop="comment"><span id="b1" class="author">M Kazlauskiene</span></div>
+  <article itemscope itemref="b1"></article>` — claims the *element* and no property:
+  `b1` carries no `itemprop`, and a referenced element with none contributes nothing to
+  the item that named it. Spelled so that it does carry one, the same person is declared
+  for both items and nothing says which was meant. That is ambiguity, and this tree
+  answers ambiguity by withholding, exactly as `page_nodes` does for a graph it cannot
+  resolve. Preferring the outer claim would let any `itemscope` on the page rescue a
+  commenter by naming their id — a false pass built to repair a false fail.
+
+  That decision is a test rather than a paragraph: installing the preference flips
+  `test_a_byline_two_items_both_claim_stays_withheld`, which is how it was checked.
   <!-- ki: credit-boundary-ignores-itemref -->
 
 - **Comments named only by class remain invisible to the foreign-credit boundary.**

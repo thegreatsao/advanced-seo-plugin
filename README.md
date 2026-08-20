@@ -4,12 +4,11 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.82.0 — see [CHANGELOG.md](CHANGELOG.md). The directory holding pacing state and
-cached `robots.txt` answers is named by `SEO_RATE_LIMIT_DIR` now, rather than by a module
-constant a process could set and could not pass to the ones it starts. The default is
-unchanged and an audit behaves exactly as it did; what this closes is a test suite whose
-recycled loopback ports let one fixture's `robots.txt` answer another's question for half
-an hour.
+Version 0.83.0 — see [CHANGELOG.md](CHANGELOG.md). A page whose only byline belonged to a
+commenter passed *Show Author and Publisher Clearly*, a `high` check, when the comment
+claimed that byline through microdata's `itemref` instead of containing it. The credit
+boundary follows `itemref` now, through chains of it, so the credit goes where the markup
+puts it.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

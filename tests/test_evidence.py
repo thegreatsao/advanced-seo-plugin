@@ -81,7 +81,8 @@ class SharedHelpersStayShared(unittest.TestCase):
                         "_is_url", "as_list", "favicon_href", "_rel_contains",
                         "page_nodes", "_page_nodes", "page_author_names",
                         "_page_author_names", "under_foreign_credit",
-                        "_under_foreign_credit", "schema_values", "_schema_values"):
+                        "_under_foreign_credit", "foreign_itemref_ids",
+                        "_foreign_itemref_ids", "schema_values", "_schema_values"):
                     offenders.append(f"{name}:{node.lineno} defines {node.name}")
         self.assertEqual(offenders, [], "import it from seo_common instead: "
                                         + "; ".join(offenders))

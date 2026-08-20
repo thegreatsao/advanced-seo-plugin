@@ -68,7 +68,8 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
 
     cite_tags = [tag.get_text(" ", strip=True)
                  for tag in soup.find_all(["cite", "blockquote"])
-                 if not under_foreign_credit(tag)]
+                 if not under_foreign_credit(
+                     tag, claimed=parsed.get("foreign_itemref_ids"))]
     footnote_links = [
         link for link in parsed.get("links", [])
         if re.search(r"(footnote|reference|citation|source)", " ".join(map(str, link.get("rel", []))) + " " + link.get("href", ""), re.I)

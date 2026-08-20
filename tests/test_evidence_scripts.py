@@ -1632,6 +1632,126 @@ class EeatSignals(unittest.TestCase):
             own + '<div itemprop="comment">' + foreign + '</div>')
         self.assertEqual(result["signals"]["authors"], ["M K"])
 
+    # `itemref` puts elements from elsewhere in the document inside an item, so the
+    # ancestor walk alone is not the boundary microdata describes. Measured before the
+    # repair: the first page below passed CN-057 — `high` — on a byline that belongs
+    # to a commenter, indistinguishably from a page whose author is its own.
+    PUBLISHER_META = '<meta property="og:site_name" content="Page Press">'
+
+    def test_a_commenters_byline_claimed_by_itemref_does_not_pass_cn_057(self):
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<article itemscope itemtype="https://schema.org/Article"><h1>T</h1>'
+            '<div itemprop="comment" itemscope itemtype="https://schema.org/Comment"'
+            ' itemref="c1"></div></article>'
+            '<span id="c1" itemprop="author" class="author">D Petras</span>')
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
+    def test_a_byline_inside_a_claimed_wrapper_is_claimed_too(self):
+        """A claim reaches the referenced element's subtree, not only the element:
+        microdata crawls a referenced element for properties the same way it crawls a
+        descendant one."""
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<article itemscope itemtype="https://schema.org/Article"><h1>T</h1>'
+            '<div itemprop="comment" itemscope itemtype="https://schema.org/Comment"'
+            ' itemref="w1"></div></article>'
+            '<div id="w1"><span itemprop="author" class="author">D Petras</span></div>')
+        self.assertEqual(result["signals"]["authors"], [])
+
+    def test_the_claim_is_followed_through_a_chain_of_itemrefs(self):
+        """Two hops, and the second owner is foreign only because the first claimed it.
+
+        The comment claims `w1`; `w1` is an item of its own and claims `w2`; the byline
+        is in `w2`. Nothing about `w1` or `w2` is foreign by DOM nesting, so a rule
+        that resolves one hop and stops credits the commenter to the page. Verified by
+        installing exactly that rule.
+        """
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<article itemscope itemtype="https://schema.org/Article"><h1>T</h1>'
+            '<div itemprop="comment" itemscope itemtype="https://schema.org/Comment"'
+            ' itemref="w1"></div></article>'
+            '<div id="w1" itemscope itemtype="https://schema.org/Comment"'
+            ' itemref="w2"></div>'
+            '<div id="w2"><span class="author">D Petras</span></div>')
+        self.assertEqual(result["signals"]["authors"], [])
+
+    def test_an_itemref_without_itemscope_is_still_honoured(self):
+        """The specification allows `itemref` only beside `itemscope`, and this reads
+        it anyway. Deliberate, because the two ways of being wrong do not cost the
+        same: honouring an invalid `itemref` can drop a credit the page deserved,
+        ignoring one hands the page a commenter's. Only the second is a false pass."""
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<div itemprop="comment" itemref="c1"></div>'
+            '<span id="c1" class="author">D Petras</span>')
+        self.assertEqual(result["signals"]["authors"], [])
+
+    def test_a_byline_no_comment_claims_is_untouched_by_the_itemref_rule(self):
+        """The other half, so the rule above is known to remove what a comment claims
+        rather than everything on a page that happens to contain an `itemref`."""
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<article itemscope itemtype="https://schema.org/Article"><h1>T</h1>'
+            '<div itemprop="comment" itemscope itemtype="https://schema.org/Comment"'
+            ' itemref="c1"></div>'
+            '<span id="mine" class="author">M Kazlauskiene</span></article>'
+            '<span id="c1" class="author">D Petras</span>')
+        self.assertEqual(result["signals"]["authors"], ["M Kazlauskiene"])
+        self.assertEqual(verdict("CN-057", result), PASS)
+
+    def test_the_claim_resolver_survives_the_markup_that_can_break_it(self):
+        """`itemref` is author-written, so it arrives broken: ids that name nothing,
+        two elements sharing one id, an item naming itself, a pair naming each other.
+        The resolver walks to a fixed point, and a cycle is where that stops
+        terminating if the loop is written to re-enter what it has already claimed.
+        """
+        untouched = [
+            # names an id no element carries
+            '<div itemprop="comment" itemref="nope"></div>',
+            # a cycle between two elements, neither holding the byline
+            '<div itemprop="comment" id="a" itemref="b"></div><div id="b" itemref="a">'
+            '</div>',
+            '<div itemprop="comment" id="s" itemref="s"></div>',
+            '<div itemprop="comment" itemref=""></div>',
+        ]
+        for prefix in untouched:
+            with self.subTest(markup=prefix):
+                result = self._check_html(
+                    self.PUBLISHER_META + prefix
+                    + '<span class="author">M Kazlauskiene</span>')
+                self.assertEqual(result["signals"]["authors"], ["M Kazlauskiene"])
+        # Two elements share `x`, and the second one claims further. A claim reaches
+        # "the element with that id", and invalid markup offers two; both are claimed,
+        # which is the direction this rule is allowed to be wrong in.
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<div itemprop="comment" itemref="x"></div><div id="x"></div>'
+            '<div id="x" itemref="y"></div>'
+            '<div id="y"><span class="author">D Petras</span></div>')
+        self.assertEqual(result["signals"]["authors"], [])
+
+    def test_a_byline_two_items_both_claim_stays_withheld(self):
+        """The reverse direction, and it is a decision rather than an oversight.
+
+        The byline is nested in the comment *and* claimed by the article through
+        `itemref`, so microdata declares the same person for both items and nothing
+        says which was meant. This withholds — the answer `page_nodes` gives an
+        ambiguous graph — rather than preferring the outer claim, which would let any
+        `itemscope` on a page rescue a commenter by naming their id.
+        """
+        result = self._check_html(
+            self.PUBLISHER_META
+            + '<article itemscope itemtype="https://schema.org/Article" itemref="b1">'
+            '<h1>T</h1>'
+            '<div itemprop="comment" itemscope itemtype="https://schema.org/Comment">'
+            '<span id="b1" itemprop="author" class="author">M Kazlauskiene</span>'
+            '</div></article>')
+        self.assertEqual(result["signals"]["authors"], [])
+        self.assertEqual(verdict("CN-057", result), FAIL)
+
     def test_a_commenters_json_ld_publisher_is_not_the_pages(self):
         publisher = self._schema_script({
             "@type": "Article",
@@ -2379,6 +2499,25 @@ class Freshness(unittest.TestCase):
             return freshness_checker.check_freshness(path, today=today)
         finally:
             os.unlink(path)
+
+    def test_a_date_a_comment_claims_by_itemref_is_not_the_pages_date(self):
+        """The same `itemref` boundary as the byline one, through the other reader
+        that has verdicts on it. It is here as well as in `EeatSignals` because this
+        reader is handed the document's answer rather than computing it, and a wrong
+        set threaded in would be invisible to a test that only asks about authors.
+        """
+        claimed = self._check_html(
+            '<div itemprop="comment" itemscope itemref="t1"></div>'
+            '<time id="t1" datetime="2018-05-10">2018</time>',
+            today=date(2026, 8, 18),
+        )
+        self.assertEqual(claimed["dates"], [])
+        self.assertIsNone(claimed["latest_date"])
+        # And the same `<time>` with nothing claiming it is still the page's own, so
+        # the assertion above is known to be about the claim.
+        own = self._check_html('<time datetime="2018-05-10">2018</time>',
+                               today=date(2026, 8, 18))
+        self.assertEqual([entry["raw"] for entry in own["dates"]], ["2018-05-10"])
 
     def test_json_ld_date_inside_a_comment_is_not_the_pages_date(self):
         script = ('<script type="application/ld+json">' + json.dumps({
@@ -3267,9 +3406,13 @@ class CitationReadiness(unittest.TestCase):
              '</span></div>', []),
             ('<p class="author">M Kazlauskiene</p><div itemprop="comment">'
              '<span class="author">D Petras</span></div>', ["M Kazlauskiene"]),
-            # Finding 1: `itemref` keeps this foreign author; current, not right.
+            # Kept this foreign author until 0.83.0, which follows `itemref`. The
+            # `itemref` is on an element with no `itemscope`, where the specification
+            # gives it no meaning; honoured anyway, because a removal rule that reads
+            # an invalid claim costs a false fail and one that ignores it costs a
+            # false pass.
             ('<div itemprop="comment" itemref="c1"></div>'
-             '<span id="c1" class="author">D Petras</span>', ["D Petras"]),
+             '<span id="c1" class="author">D Petras</span>', []),
             ('<span class="author" itemprop="comment">D Petras</span>', []),
             ('<div itemprop="commentary"><span class="author">D Petras</span></div>',
              ["D Petras"]),
@@ -3278,7 +3421,11 @@ class CitationReadiness(unittest.TestCase):
              '<div itemprop="about" itemscope itemtype="https://schema.org/Book">'
              '<span class="author">Herman Melville</span></div></article>',
              ["Herman Melville"]),
-            # Finding 1: DOM nesting removes the page's real author; current, not right.
+            # Read as a defect until 0.83.0 and re-read then: the article's `itemref`
+            # claims the *element* and no property — `b1` carries no `itemprop`, and a
+            # referenced element without one contributes nothing to the item that named
+            # it. Removing the byline is right here, and `EeatSignals` carries the
+            # spelling where it does carry one, which is ambiguous and withheld.
             ('<div itemprop="comment"><span id="b1" class="author">M Kazlauskiene'
              '</span></div><article itemscope itemref="b1"></article>', []),
         ]

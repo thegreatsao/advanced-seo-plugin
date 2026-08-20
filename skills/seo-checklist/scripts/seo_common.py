@@ -12,6 +12,7 @@ HTTP and source resolution are ``require_requests``, ``fetch_url``,
 dependency handle, ``require_bs4``, ``html_parser``, ``parse_html``,
 ``primary_language``, ``favicon_href``, ``has_byline_class``,
 ``page_author_names``, ``page_nodes``, ``under_foreign_credit``,
+``foreign_itemref_ids``,
 ``is_responsive_fill_image``, ``srcset_urls``, ``picture_sources`` and
 ``likely_lcp_candidate``. Robots and
 sitemaps use ``fetch_robots``, ``parse_robots_txt``, ``robots_allowed``,
@@ -621,7 +622,72 @@ def page_nodes(value, exclude=FOREIGN_CREDIT_KEYS, hoisted=FOREIGN_CREDIT_KEYS,
     yield from walk(value)
 
 
-def under_foreign_credit(tag, keys=FOREIGN_CREDIT_KEYS) -> bool:
+def _nested_under_foreign_credit(tag, keys) -> bool:
+    """The DOM half: an ancestor carries a foreign-credit `itemprop`."""
+    for ancestor in (tag, *tag.parents):
+        itemprop = ancestor.get("itemprop")
+        values = [itemprop] if isinstance(itemprop, str) else itemprop or []
+        if any(token in keys for value in values for token in value.split()):
+            return True
+    return False
+
+
+def _own_and_ancestor_ids(tag) -> set[str]:
+    """Every `id` on `tag` or above it — the ids an `itemref` could name to claim it."""
+    found = set()
+    for element in (tag, *tag.parents):
+        value = element.get("id")
+        if isinstance(value, str) and value:
+            found.add(value)
+    return found
+
+
+def _root_of(tag):
+    root = tag
+    for parent in tag.parents:
+        root = parent
+    return root
+
+
+def foreign_itemref_ids(root, keys=FOREIGN_CREDIT_KEYS) -> frozenset:
+    """Every `id` an element under foreign credit claims through `itemref`.
+
+    Microdata does not stop at the DOM. `itemref` on an item names elements elsewhere
+    in the document that are also that item's properties, so a comment can own a
+    byline nowhere near it in the tree — and the ancestor walk alone then reads that
+    byline as the page's own. Measured: a page whose only byline is a commenter's,
+    claimed by `itemref`, passes `CN-057` *Show Author and Publisher Clearly*, which
+    is `high`, exactly as an honestly authored page does.
+
+    To a fixed point, because an item inside a claimed region can claim further
+    elements of its own, and that chain is as foreign as its first link.
+
+    **`itemscope` is deliberately not required**, although the specification permits
+    `itemref` only on an element that has it. This is a removal rule, so the two ways
+    of being wrong do not cost the same: honouring an invalid `itemref` can drop a
+    credit the page deserved — a false fail — while ignoring one hands the page a
+    credit that belongs to a commenter. Only the second is a false pass, and a false
+    pass on a `high` item is what this boundary exists to prevent.
+    """
+    owners = root.find_all(attrs={"itemref": True})
+    if not owners:
+        return frozenset()
+    claimed: set[str] = set()
+    while True:
+        added = False
+        for owner in owners:
+            tokens = str(owner.get("itemref") or "").split()
+            if not tokens or set(tokens) <= claimed:
+                continue
+            if (_nested_under_foreign_credit(owner, keys)
+                    or _own_and_ancestor_ids(owner) & claimed):
+                claimed.update(tokens)
+                added = True
+        if not added:
+            return frozenset(claimed)
+
+
+def under_foreign_credit(tag, keys=FOREIGN_CREDIT_KEYS, claimed=None) -> bool:
     """Whether `tag` sits under a property carrying somebody else's credit.
 
     Exclusion is by the property descended through, never by the container's
@@ -630,16 +696,31 @@ def under_foreign_credit(tag, keys=FOREIGN_CREDIT_KEYS) -> bool:
     says what a thing is, not whose it is, so preferring declared credits can promote
     a nested entity's author over the page's own undeclared byline.
 
-    Known and not handled: microdata traversal also follows `itemref`. This DOM walk
-    can therefore keep a referenced foreign credit or remove a physically nested
-    credit that another item references as its own.
+    Two ways to be inside somebody else's credit: nested under it, and claimed by it
+    through `itemref` — see `foreign_itemref_ids`. The `itemref` question is asked
+    only for a tag that could be its target, which is a tag carrying an `id` or having
+    an ancestor that does.
+
+    `claimed` is that document's answer, computed once. `parse_html` puts it in
+    `foreign_itemref_ids` and every caller that loops over tags passes it, because the
+    fallback here scans the whole document per call: measured at 3ms on a
+    2400-element page, which is nothing once and a fifth of a second over sixty
+    id-bearing bylines. Omitting it stays correct, only slower.
+
+    Not handled, and it is a decision rather than a gap: an element that a *second*
+    item claims by `itemref` while it is nested inside a comment stays removed. The
+    same person is then declared for both items and nothing in the markup says which
+    is meant, so this withholds rather than choosing — the same answer `page_nodes`
+    gives an ambiguous graph.
     """
-    for ancestor in (tag, *tag.parents):
-        itemprop = ancestor.get("itemprop")
-        values = [itemprop] if isinstance(itemprop, str) else itemprop or []
-        if any(token in keys for value in values for token in value.split()):
-            return True
-    return False
+    if _nested_under_foreign_credit(tag, keys):
+        return True
+    ids = _own_and_ancestor_ids(tag)
+    if not ids:
+        return False
+    if claimed is None:
+        claimed = foreign_itemref_ids(_root_of(tag), keys)
+    return bool(ids & claimed)
 
 
 def schema_values(schema_items: list, keys: set[str], protected=frozenset()) -> list[str]:
@@ -671,18 +752,19 @@ def page_author_names(parsed: dict) -> list[str]:
     page; this is the list that verdict is taken from.
     """
     soup = parsed["soup"]
+    claimed = parsed.get("foreign_itemref_ids")
     author_meta = [
         tag.get("content") or tag.get_text(" ", strip=True)
         for tag in soup.find_all(["meta", "span", "a"], attrs={"name": "author"})
         + soup.find_all(["a", "span"], rel=lambda value: value and "author" in value)
-        if not under_foreign_credit(tag)
+        if not under_foreign_credit(tag, claimed=claimed)
     ]
     class_authors = [
         tag.get_text(" ", strip=True)
         for tag in soup.find_all(class_=True)
         if has_byline_class(tag)
         and tag.get_text(strip=True)
-        and not under_foreign_credit(tag)
+        and not under_foreign_credit(tag, claimed=claimed)
     ]
     schema_authors = schema_values(parsed.get("page_schema", []), {"author"}, parsed.get("page_own_ids", frozenset()))
     return sorted({value.strip() for value in author_meta + class_authors + schema_authors if value and value.strip()})
@@ -709,12 +791,13 @@ def declared_publication_dates_by_source(parsed) -> dict[str, list[str]]:
                 dates["schema"].append(value)
 
     soup = parsed["soup"]
+    claimed = parsed.get("foreign_itemref_ids")
     for tag in soup.find_all("meta"):
         names = (tag.get("property"), tag.get("name"))
         content = tag.get("content")
         if (any(isinstance(value, str) and value.lower() == "article:published_time"
                 for value in names)
-                and not under_foreign_credit(tag)
+                and not under_foreign_credit(tag, claimed=claimed)
                 and content):
             dates["meta"].append(content)
 
@@ -722,7 +805,7 @@ def declared_publication_dates_by_source(parsed) -> dict[str, list[str]]:
         itemprop = tag.get("itemprop")
         values = [itemprop] if isinstance(itemprop, str) else itemprop or []
         if (any(token == "datePublished" for value in values for token in value.split())
-                and not under_foreign_credit(tag)):
+                and not under_foreign_credit(tag, claimed=claimed)):
             value = tag.get("datetime") or tag.get("content") or tag.get_text(" ", strip=True)
             if value:
                 dates["microdata"].append(value)
@@ -808,6 +891,12 @@ def page_own_ids(page_schema, base_url: str = "", canonical: str | None = None) 
 def parse_html(html: str, base_url: str = "") -> dict:
     require_bs4()
     soup = BeautifulSoup(html or "", html_parser())
+    # Once, and here rather than on demand: `under_foreign_credit` otherwise scans the
+    # whole document for every tag that carries an `id`. Taken before the `script`,
+    # `style` and `template` removal below, so an `itemref` inside a `<template>` is
+    # still read — which errs towards removing a credit rather than granting one, the
+    # direction this boundary is allowed to be wrong in.
+    foreign_itemref = foreign_itemref_ids(soup)
 
     def text_or_none(tag):
         return tag.get_text(" ", strip=True) if tag else None
@@ -834,7 +923,7 @@ def parse_html(html: str, base_url: str = "") -> dict:
             "href": abs_url,
             "text": tag.get_text(" ", strip=True)[:160],
             "rel": tag.get("rel") or [],
-            "foreign_credit": under_foreign_credit(tag),
+            "foreign_credit": under_foreign_credit(tag, claimed=foreign_itemref),
         })
 
     images = []
@@ -881,7 +970,7 @@ def parse_html(html: str, base_url: str = "") -> dict:
         except json.JSONDecodeError:
             data = {"error": "invalid_json", "snippet": raw[:160]}
         schema.append(data)
-        if not under_foreign_credit(script):
+        if not under_foreign_credit(script, claimed=foreign_itemref):
             # Share the same object with schema; neither list is mutated by readers.
             page_schema.append(data)
 
@@ -903,6 +992,7 @@ def parse_html(html: str, base_url: str = "") -> dict:
         "schema": schema,
         "page_schema": page_schema,
         "page_own_ids": page_own_ids(page_schema, base_url, canonical),
+        "foreign_itemref_ids": foreign_itemref,
         "word_count": len(words),
         "body_text": body_text,
         "forms": len(soup.find_all("form")),

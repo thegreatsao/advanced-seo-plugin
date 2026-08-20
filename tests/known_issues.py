@@ -433,17 +433,34 @@ def _freshness_foreign_dates() -> dict:
 
 @probe("credit_boundary_and_itemref")
 def _credit_boundary_and_itemref() -> dict:
+    """Both directions of the `itemref` boundary, and the credit it must not take.
+
+    The third case is why the first two are readable. A rule that stopped crediting
+    anybody would empty the first two lists as well and look like the repair, so the
+    page's own byline is measured beside a claimed one — with an `itemref` in the same
+    document, so the removal path is running.
+    """
     import seo_common
+
+    def authors(body):
+        return seo_common.page_author_names(
+            seo_common.parse_html(_page(body), PAGE_URL))
 
     referenced_out = ('<div itemprop="comment" itemref="c1"></div>'
                       '<span id="c1" class="author">D Petras</span>')
     nested_claimed = ('<div itemprop="comment"><span id="b1" class="author">'
                       'M Kazlauskiene</span></div><article itemscope itemref="b1"></article>')
+    chained = ('<div itemprop="comment" itemscope itemref="w1"></div>'
+               '<div id="w1" itemscope itemref="w2"></div>'
+               '<div id="w2"><span class="author">D Petras</span></div>')
+    own_beside_claimed = ('<div itemprop="comment" itemscope itemref="c1"></div>'
+                          '<span class="author">M Kazlauskiene</span>'
+                          '<span id="c1" class="author">D Petras</span>')
     return {
-        "referenced_byline_outside_the_comment":
-            seo_common.page_author_names(seo_common.parse_html(_page(referenced_out), PAGE_URL)),
-        "page_byline_nested_in_the_comment":
-            seo_common.page_author_names(seo_common.parse_html(_page(nested_claimed), PAGE_URL)),
+        "referenced_byline_outside_the_comment": authors(referenced_out),
+        "page_byline_nested_in_the_comment": authors(nested_claimed),
+        "byline_claimed_through_a_chain": authors(chained),
+        "page_byline_beside_a_claimed_one": authors(own_beside_claimed),
     }
 
 

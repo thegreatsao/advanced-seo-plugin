@@ -192,7 +192,8 @@ def _publisher_names(parsed: dict, soup) -> list[str]:
         prop = str(tag.get("property") or "").lower()
         name = str(tag.get("name") or "").lower()
         if ((prop in {"og:site_name", "article:publisher"} or name == "copyright")
-                and not under_foreign_credit(tag)):
+                and not under_foreign_credit(
+                    tag, claimed=parsed.get("foreign_itemref_ids"))):
             if tag.get("content"):
                 names.append(str(tag["content"]))
     return names
@@ -233,7 +234,8 @@ def check_eeat(source: str, timeout: int = 15) -> dict:
          "rel": tag.get("rel") or []}
         for tag in soup.find_all("a", href=True)
         if urlparse(tag.get("href", "").strip()).scheme.lower() in {"tel", "mailto"}
-        and not under_foreign_credit(tag)
+        and not under_foreign_credit(
+            tag, claimed=parsed.get("foreign_itemref_ids"))
     ]
     trust_links = [
         link for link in links

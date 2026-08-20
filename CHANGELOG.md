@@ -10,6 +10,68 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.83.0 — a comment can own a byline that is nowhere near it
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+**A page with no author of its own passed `CN-057`** — *Show Author and Publisher
+Clearly*, `high` — when its only byline belonged to a commenter. Microdata's `itemref`
+names elements elsewhere in the document that are also an item's properties, and the
+credit boundary walked DOM ancestors only, so a comment's byline placed outside the
+comment element read as the page's own. Measured through the runner's own `evaluate()`,
+on pages carrying a publisher:
+
+| page | `authors` | `CN-057` |
+|---|---|---|
+| no byline at all | `[]` | FAIL |
+| commenter's byline nested in the comment | `[]` | FAIL |
+| **commenter's byline claimed by the comment through `itemref`** | `['D Petras']` | **PASS** |
+| page's own byline, outside any comment | `['M Kazlauskiene']` | PASS |
+
+The third row and the fourth were the same verdict on opposite facts. They are now the
+second row and the fourth.
+
+`under_foreign_credit` resolves `itemref` to a fixed point, so a claim that arrives
+through a chain — a comment claiming a wrapper that claims another — is as foreign as
+its first link. **`itemscope` is deliberately not required**, although the specification
+allows `itemref` only beside it: this is a removal rule, and honouring an invalid
+`itemref` can cost a credit the page deserved while ignoring one hands the page a
+commenter's. Only the second is a false pass.
+
+**The reverse direction was not a defect, and that is measured too.** `KNOWN-ISSUES`
+said the page's own byline is dropped "even though the article claims it by reference".
+The markup it cited claims the *element* and no property — the referenced `<span>`
+carries no `itemprop`, and a referenced element without one contributes nothing to the
+item that named it. Spelled so that it does carry one, the same person is declared for
+both items and nothing says which was meant; this withholds, the way `page_nodes`
+withholds on a graph it cannot resolve. Preferring the outer claim would let any
+`itemscope` rescue a commenter by naming their id — a false pass built to repair a false
+fail. `test_a_byline_two_items_both_claim_stays_withheld` is that decision, and
+installing the preference is how it was checked.
+
+Each of the five properties has a test that fails when the property is removed, verified
+by removing it: ignoring `itemref` fails five, resolving only the first hop fails the
+chain test, requiring `itemscope` fails the invalid-markup test, claiming every id in a
+document that has any `itemref` fails the untouched-byline test, and preferring the outer
+claim fails the withholding test.
+
+The date reader has the same boundary and now the same answer: a `<time>` a comment
+claims by `itemref` is not the page's date, while the same `<time>` with nothing
+claiming it still is. That test exists separately from the byline ones because
+`freshness_checker` is *handed* the document's answer rather than computing it, and a
+wrong set threaded in would be invisible to a test that only asks about authors.
+
+`itemref` is author-written, so it arrives broken. Ids that name nothing, an item naming
+itself, two naming each other, an empty attribute: all measured, none changes a byline
+nothing claims, and the cycle terminates — the fixed-point loop is where that stops
+being true if it is written to re-enter what it has already claimed. Two elements sharing
+one id are both claimed, which is the direction this rule is allowed to be wrong in.
+
+The document's answer is computed once, in `parse_html`, and carried in
+`foreign_itemref_ids`; every reader that loops over tags passes it. Asking per tag
+instead scans the whole document each time — measured at 0.19s against 0.009s for sixty
+id-bearing bylines on a 2400-element page. Omitting it stays correct, only slower.
+
 ## 0.82.0 — an answer must not outlive the server that gave it
 
 Registry version: `3c6b20d512c6`, unchanged.

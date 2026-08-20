@@ -106,15 +106,17 @@
       "state": "open"
     },
     "credit-boundary-ignores-itemref": {
-      "claim": "A byline referenced into a comment by itemref is still read as the page's, and a byline the page claims by itemref from inside a comment is still dropped.",
+      "claim": "A byline a comment claims through itemref, directly or along a chain, is no longer read as the page own; a byline two items both claim stays withheld, and a byline nothing claims is untouched.",
       "measured": {
+        "byline_claimed_through_a_chain": [],
+        "page_byline_beside_a_claimed_one": [
+          "M Kazlauskiene"
+        ],
         "page_byline_nested_in_the_comment": [],
-        "referenced_byline_outside_the_comment": [
-          "D Petras"
-        ]
+        "referenced_byline_outside_the_comment": []
       },
       "probe": "credit_boundary_and_itemref",
-      "state": "open"
+      "state": "closed"
     },
     "default-locale-route-tree": {
       "claim": "Closed in 0.36.0.",
