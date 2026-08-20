@@ -257,9 +257,16 @@ counted in neither direction)
 `factual_claims` — int
 `claim_samples[]` — array
 `citation_signals.external_links` — int
+  - reported, and since 0.87.0 not counted as capacity to cite: an ordinary outbound
+    link is not a source for the claim above it. The broken fixture's entry page took
+    23 of the 35 coverage points from two of them
 `citation_signals.trusted_external_links` — int
+  - a subset of the above, and these do count: a link to a .gov or a university is a
+    source whether or not the author wrapped it in a `<cite>`
 `citation_signals.cite_or_blockquote_tags` — int
 `citation_signals.footnote_links` — int
+  - matched on `rel` tokens and the URL *path*. A query string is not read, because
+    `utm_source` is not a source
 `citation_signals.schema_citations` — int
   - how many works the page's own nodes declare they cite, counted into
     `citation_capacity` beside the three DOM sources above. A `citation` inside a

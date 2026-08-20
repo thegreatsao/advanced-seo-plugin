@@ -93,9 +93,9 @@
       "state": "open"
     },
     "cn-068-floor-and-the-good-fixture": {
-      "claim": "On the repaired good fixture the entry page scores 75 and both other sampled pages score 35, against a floor of 60.",
+      "claim": "Closed in 0.87.0: the floor moved from 60 to 35, the sum of the components eeat_signal_checker awards that a page of any type can carry. Five items in this class reported FAIL on both fixture origins and now separate them.",
       "measured": {
-        "floor": 60,
+        "floor": 35,
         "scores": {
           "about.html": 35,
           "index.html": 75,
@@ -103,7 +103,7 @@
         }
       },
       "probe": "cn_068_scores_on_the_good_fixture",
-      "state": "open"
+      "state": "closed"
     },
     "credit-boundary-ignores-itemref": {
       "claim": "A byline a comment claims through itemref, directly or along a chain, is no longer read as the page own; a byline two items both claim stays withheld, and a byline nothing claims is untouched.",

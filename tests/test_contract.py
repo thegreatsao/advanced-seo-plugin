@@ -302,6 +302,12 @@ SAME_ON_BOTH = {
 # record. What is left is the item the fixtures *do* exercise, past the band and
 # into FAIL.
 BAND_UNSEEN = {
+    "SP-110": "the band needs a medium with no high, and since 0.87.0 the only "
+              "medium this script emits is a parser-blocking script outside the "
+              "head. Neither fixture has one: the good origin's single head script "
+              "is the async gtag loader and the broken origin's is synchronous and "
+              "in the head, which is the high the item fails on. The stylesheet that "
+              "used to reach this band is graded info, because every site has one",
     "CI-018": "the band needs a log whose worst finding is medium; the broken "
               "fixture's log has 43.8% of bot requests returning nothing indexable, "
               "which is graded above that, so the item fails before the band",
@@ -507,8 +513,9 @@ class NothingAccusesTheGoodSiteWithoutAReason(unittest.TestCase):
         # header, so an exemplary tree passes the item about server configuration
         # instead of being excused from it.
         "TE-175": "http.server sends no cache headers and no gzip",
-        "SP-110": "the fixture blocks rendering on one stylesheet in the head, which "
-                  "is the defect SP-110 exists to find and it has to be somewhere",
+        # SP-110 was here until 0.87.0, and it left because the reasoning stopped
+        # being true: a render-blocking stylesheet is how CSS is delivered, not a
+        # defect the good fixture carries on purpose, and it is graded `info` now.
         "GEO-006": "entity_checker verifies sameAs targets by fetching them, so a "
                    "fixture with real Wikidata links would take this suite online — "
                    "see PLACEHOLDER_EXTERNAL in harness.py",

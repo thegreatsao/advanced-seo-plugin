@@ -4,12 +4,12 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.86.0 — see [CHANGELOG.md](CHANGELOG.md). The entity signals `GO-145` and
-`GEO-005` are scored on stop counting a page's bibliography as the page's own identity:
-four `citation` nodes with DOIs used to take the whole 20-point component, for
-identifiers that resolve somebody else's work. A reviewed or adapted subject still
-counts — that is what a page is about — and a declared citation is now counted as a
-citation instead of as an entity. The registry does not move.
+Version 0.87.0 — see [CHANGELOG.md](CHANGELOG.md). Five items could not pass any site:
+each was cleared by exactly one page of the fifteen this repository serves, and all five
+reported FAIL on the exemplary tree and the deliberately broken one alike. Their floors
+now rest on the score components a page of any type can carry, `SP-110` stops grading an
+ordinary stylesheet as a defect, and the citation score stops counting a footer link as
+a source. The oracle's count of items that tell the two fixtures apart goes 79 to 84.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

@@ -62,7 +62,15 @@ def audit(source: str, fetch_css: bool = False, timeout: int = 15) -> dict:
             for imported in _imports_from_css(fetched_css.get("text") or "", href):
                 node["children"].append({"type": "css-import", "url": imported, "blocking": True})
         chains.append(node)
-        issues.append({"severity": "warning", "message": "Render-blocking stylesheet", "url": href})
+        # `info`, not `warning`, since 0.87.0. A `<link rel="stylesheet">` in the head
+        # is how CSS is delivered on the web, and `warning` aliases to medium, which
+        # SP-110 asserts against: every page here with an external stylesheet emitted
+        # exactly this one issue and nothing else, so the item could report PASS only
+        # on a page with no external CSS at all — two of the fifteen this repository
+        # serves. 0.50.0 set the rule this line missed: a script grades as an error the
+        # one finding that is a defect on every site, and the rest stay advice. The
+        # parser-blocking script below is that finding; a stylesheet is not.
+        issues.append({"severity": "info", "message": "Render-blocking stylesheet", "url": href})
 
     for script in soup.find_all("script", src=True):
         src = normalize_url(script.get("src"), url) if url else script.get("src")

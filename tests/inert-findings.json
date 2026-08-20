@@ -293,6 +293,10 @@
         {
           "message": "Cross-origin critical resource lacks preconnect",
           "severity": "low"
+        },
+        {
+          "message": "Render-blocking stylesheet",
+          "severity": "low"
         }
       ],
       "path": "issues",
@@ -373,5 +377,5 @@
     }
   },
   "none_severity_item_count": 16,
-  "registry_version": "91f6634fe6c8"
+  "registry_version": "66d1b2037c32"
 }

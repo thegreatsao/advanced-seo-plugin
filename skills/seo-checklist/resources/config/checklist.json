@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "91f6634fe6c8",
+  "registry_version": "66d1b2037c32",
   "item_count": 217,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -1451,7 +1451,7 @@
         "requires": "fetch",
         "assert": {
           "path": "score",
-          "gte": 60
+          "gte": 35
         }
       },
       "effort": "high",
@@ -2992,7 +2992,7 @@
         "requires": "fetch",
         "assert": {
           "path": "score",
-          "gte": 70
+          "gte": 32
         }
       },
       "effort": "low",
@@ -3014,7 +3014,7 @@
         "requires": "fetch",
         "assert": {
           "path": "score",
-          "gte": 60
+          "gte": 25
         }
       },
       "effort": "low",
@@ -4219,7 +4219,7 @@
         "requires": "fetch",
         "assert": {
           "path": "score",
-          "gte": 70
+          "gte": 32
         }
       },
       "effort": "medium",
@@ -4242,7 +4242,7 @@
         "requires": "fetch",
         "assert": {
           "path": "score",
-          "gte": 60
+          "gte": 25
         }
       },
       "effort": "medium",

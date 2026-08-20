@@ -1438,11 +1438,12 @@
         "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
-        "fixture:good": "FAIL",
-        "fixture:good_tls": "FAIL"
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "FAIL"
+        "FAIL",
+        "PASS"
       ],
       "script": "eeat_signal_checker.py",
       "severity": "high",
@@ -1601,11 +1602,12 @@
         "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
-        "fixture:good": "FAIL",
-        "fixture:good_tls": "FAIL"
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "FAIL"
+        "FAIL",
+        "PASS"
       ],
       "script": "answer_block_scanner.py",
       "severity": "medium",
@@ -1617,11 +1619,12 @@
         "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
-        "fixture:good": "FAIL",
-        "fixture:good_tls": "FAIL"
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "FAIL"
+        "FAIL",
+        "PASS"
       ],
       "script": "citation_readiness.py",
       "severity": "high",
@@ -1895,11 +1898,12 @@
         "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
-        "fixture:good": "FAIL",
-        "fixture:good_tls": "FAIL"
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "FAIL"
+        "FAIL",
+        "PASS"
       ],
       "script": "answer_block_scanner.py",
       "severity": "medium",
@@ -1911,11 +1915,12 @@
         "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
-        "fixture:good": "FAIL",
-        "fixture:good_tls": "FAIL"
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
-        "FAIL"
+        "FAIL",
+        "PASS"
       ],
       "script": "citation_readiness.py",
       "severity": "high",
@@ -3102,12 +3107,12 @@
         "failing-shapes": "FAIL",
         "fixture:broken": "FAIL",
         "fixture:broken_tls": "FAIL",
-        "fixture:good": "WARN",
-        "fixture:good_tls": "WARN"
+        "fixture:good": "PASS",
+        "fixture:good_tls": "PASS"
       },
       "distinct": [
         "FAIL",
-        "WARN"
+        "PASS"
       ],
       "script": "critical_request_chain.py",
       "severity": "medium",
@@ -3581,7 +3586,7 @@
       "title": "LCP subparts within budget"
     }
   },
-  "registry_version": "91f6634fe6c8",
+  "registry_version": "66d1b2037c32",
   "sites": [
     "fixture:good",
     "fixture:broken",

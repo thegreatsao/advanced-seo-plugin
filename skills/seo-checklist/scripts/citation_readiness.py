@@ -23,6 +23,40 @@ CLAIM_RE = re.compile(
     r"\b(?:study|research|survey|report|data|according to|found that|shows that|largest|first|only|most)\b)",
     re.I,
 )
+# The words a link uses to say it is a source. Matched three ways and none of them is a
+# substring search over the whole href, which is what this replaced:
+#
+#   * a `rel` token, which is the only spelling that is a declaration;
+#   * a path *segment* that is one of the words, so `/sources/the-study` counts and
+#     `/blog/open-source` and `/docs/api-reference` do not — the word has to be the
+#     segment rather than sit inside one;
+#   * a fragment that begins with one of them, which is how a footnote is linked at
+#     all: `#footnote-1`, `#cite-3`, `#ref-2` — and `urlparse().path` never sees a
+#     fragment, so reading the path alone missed every one.
+#
+# The query string is not read: `utm_source` is a tracking parameter, and six faceted
+# links carrying one were counted as six citations before 0.87.0.
+#
+# Known and not handled here: `parse_html` drops a link whose href is a bare fragment,
+# so `<a href="#footnote-1">` never reaches this function at all — measured, and the
+# reason the fragment rule below only helps a link that also has a path. Widening the
+# link set is a change to what every item over `links` sees, not to this one.
+FOOTNOTE_WORDS = ("footnote", "footnotes", "reference", "references",
+                  "citation", "citations", "source", "sources", "cite", "ref")
+
+
+def _declares_a_source(link) -> bool:
+    rel = " ".join(map(str, link.get("rel", []))).lower().split()
+    if any(token in FOOTNOTE_WORDS for token in rel):
+        return True
+    parsed = urlparse(link.get("href", ""))
+    if any(segment.lower() in FOOTNOTE_WORDS
+           for segment in parsed.path.split("/") if segment):
+        return True
+    fragment = parsed.fragment.lower()
+    return any(fragment == word or fragment.startswith(word + "-")
+               or fragment.startswith(word + "_")
+               for word in FOOTNOTE_WORDS)
 HIGH_TRUST_HOST_RE = re.compile(
     r"((^|\.)gov(\.|$)|(^|\.)edu$|who\.int$|nih\.gov$|cdc\.gov$|worldbank\.org$|oecd\.org$|wikipedia\.org$)",
     re.I,
@@ -133,10 +167,13 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
                  for tag in soup.find_all(["cite", "blockquote"])
                  if not under_foreign_credit(
                      tag, claimed=parsed.get("foreign_itemref_ids"))]
-    footnote_links = [
-        link for link in parsed.get("links", [])
-        if re.search(r"(footnote|reference|citation|source)", " ".join(map(str, link.get("rel", []))) + " " + link.get("href", ""), re.I)
-    ]
+    # The `rel` tokens and the URL *path*, never the query string. Measured on the
+    # deliberately failing evidence page: six faceted-navigation links of the form
+    # `/shop?utm_source=s0&sort=k0` were counted as footnote links, because `source`
+    # appears inside `utm_source`. A tracking parameter is not a citation, and every
+    # link a campaign ever tagged carried one.
+    footnote_links = [link for link in parsed.get("links", [])
+                      if _declares_a_source(link)]
     page_own = parsed.get("page_own_ids", frozenset())
     schema_items = parsed.get("page_schema", [])
     entity_signals = _schema_entity_signals(schema_items, protected=page_own)
@@ -149,9 +186,33 @@ def check_citation_readiness(source: str, timeout: int = 15) -> dict:
     # fallback `or` belongs here: page_author_names already reads byline classes.
     author_signals = bool(page_author_names(parsed))
 
-    citation_capacity = (len(external_links) + len(cite_tags)
+    # What counts as capacity to cite, and why an ordinary outbound link does not.
+    #
+    # Until 0.87.0 every external link counted. Measured on the two fixture origins:
+    # the broken entry page carries no `cite`, no `blockquote`, no footnote link and no
+    # schema citation, and scored 33 of 100 anyway — 23 of those points were claim
+    # coverage bought with two ordinary outbound links, one of them a social profile.
+    # The exemplary entry page scored 60. A floor between them was the only thing
+    # separating a site that cites its claims from one that links its social accounts,
+    # and no floor could separate them at all once it was low enough for a policy page
+    # to clear.
+    #
+    # A high-trust external host is different and stays: a link to a .gov or a
+    # university is a source whether or not the author wrapped it in a `<cite>`. It is
+    # already computed for its own 20-point component, and counting it here as well is
+    # deliberate — the same link is both evidence that a claim has a source and
+    # evidence that the source is a good one.
+    citation_capacity = (len(trusted_links) + len(cite_tags)
                          + len(footnote_links) + schema_citations)
-    claim_coverage = min(1.0, citation_capacity / max(1, len(factual_claims)))
+    # A page with no factual claims has nothing to cover, and that is not the same as
+    # having covered everything. `max(1, 0)` made the denominator one, so any single
+    # citation signal saturated the component and a page asserting nothing took all 35
+    # points: measured at 45 of 100 on the evidence origin's deliberately failing page,
+    # above the 42 of the good one. This is the family three earlier releases already
+    # removed from image_inventory and image_weight_audit — an empty input must not
+    # produce a verdict-shaped number.
+    claim_coverage = (min(1.0, citation_capacity / len(factual_claims))
+                      if factual_claims else 0.0)
     score = 0
     score += int(claim_coverage * 35)
     score += min(20, len(trusted_links) * 5)

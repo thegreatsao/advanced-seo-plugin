@@ -623,8 +623,22 @@ item(66, "medium", S, "parse_html.py", HTMLARG,
      {"path": "h2", "len_gte": 2},
      "Structure the copy with H2 subheadings")
 item(67, "high", L, fix="Publish people-first content; AI assistance is fine when the result helps a human")
+# The floor is the sum of the score components a page of any type can carry, read
+# out of eeat_signal_checker's own arithmetic: authors 20 + trust 15. The other four
+# components are not page-type-neutral. Credentials (20), first-hand experience (20)
+# and external citations (10) are article signals — a privacy policy has no business
+# carrying them, and they are exactly the 40 points that separate the good fixture's
+# entry page from its policy pages. `policy 15` is editorial standards — fact-checking,
+# corrections, ethics — and is 0 on every page of every tree here, so the reachable
+# maximum for a site with no standards page is 85 rather than 100.
+#
+# Measured before it moved: at 60 this item passed one page in the fifteen this
+# repository can serve, and reported FAIL on both fixture origins — an item that cannot
+# tell the exemplary tree from the broken one has stopped measuring. A page-level check
+# aggregates on the worst sampled page, so a floor above 35 asks a policy page for a
+# byline's worth of expertise and fails every real site that has one.
 item(68, "high", S, "eeat_signal_checker.py", PAGE,
-     {"path": "score", "gte": 60},
+     {"path": "score", "gte": 35},
      "Strengthen authorship and E-E-A-T: author, credentials, first-hand experience, sourced claims")
 
 # --- 4. Keyword analysis ----------------------------------------------------
@@ -941,11 +955,29 @@ item(143, "low", S, "schema_required_props.py", PAGE,
      {"path": "issues", "field": "message",
       "none_matching": "(?i)WebSite|SearchAction"},
      "Optimize for sitelinks and the Sitelinks Search Box")
+# 32 is one direct answer (20) plus one definition (12) — the two strongest of the four
+# signals answer_block_scanner scores, the one a snippet can be lifted from verbatim and
+# the one that says what the subject is. Unlike item 68's, this derivation is not about
+# page types: all four signals are content-structure signals and none of them belongs to
+# an article the way a credential marker does. It is the level a page that structures its
+# content at all reaches.
+#
+# At 70 the item needed at least four signals, because the three strongest sum to 60;
+# the cheapest four are three direct answers and a list, which is an FAQ page, asked of
+# every sampled page including a privacy policy.
+#
+# And a floor is a number rather than a requirement: four lists reach 40 and clear this
+# without a direct answer anywhere. The derivation says where the line sits, not which
+# signals a page must carry. GEO-004 is its twin and carries the same floor.
 item(144, "medium", S, "answer_block_scanner.py", PAGE,
-     {"path": "score", "gte": 70},
+     {"path": "score", "gte": 32},
      "Optimize for featured snippets: direct answers, lists, tables")
+# 25 is author (15) plus canonical (10) — the two components of citation_readiness's
+# score that any page type can carry. Claim coverage (35), trusted links (20) and
+# sameAs (20) are article and entity signals. GEO-005 is its twin and carries the same
+# floor.
 item(145, "high", S, "citation_readiness.py", PAGE,
-     {"path": "score", "gte": 60},
+     {"path": "score", "gte": 25},
      "Optimize for AI Overviews and zero-click: citability, facts, sources")
 
 # --- 11. Website Architecture ----------------------------------------------
@@ -1211,11 +1243,13 @@ EXTRA = [
      "Google-Extended covers Gemini training and grounding, not AI Overviews or AI "
      "Mode. Applebot-Extended controls training; Applebot answer use follows "
      "nosnippet"),
+    # The floor moves with its twin GO-144; the derivation is written there.
     ("GEO-004", "geo_ai", "Answer blocks present for AEO", "medium", S,
-     "answer_block_scanner.py", PAGE, {"path": "score", "gte": 70},
+     "answer_block_scanner.py", PAGE, {"path": "score", "gte": 32},
      "Add direct answers, definitions, lists and tables for featured snippets"),
+    # The floor moves with its twin GO-145; the derivation is written there.
     ("GEO-005", "geo_ai", "Content is citation-ready for AI search", "high", S,
-     "citation_readiness.py", PAGE, {"path": "score", "gte": 60},
+     "citation_readiness.py", PAGE, {"path": "score", "gte": 25},
      "Back factual claims with sources, add cite/blockquote, populate sameAs"),
     ("GEO-006", "geo_ai", "Entity is resolvable (Wikidata / KG)", "medium", S,
      "entity_checker.py", PAGE, {"path": "summary.sameas_missing_critical", "eq": 0},

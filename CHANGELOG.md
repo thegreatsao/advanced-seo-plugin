@@ -10,6 +10,108 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.87.0 — five items that could not pass any site
+
+Registry version: `91f6634fe6c8` → **`66d1b2037c32`**. The registry stays at 217 items;
+five floors move and no title, assertion path or item does.
+
+`tests/census.json` has recorded for several releases that eight items answered a
+verdict somewhere and never PASS. Read per page rather than per site, over all fifteen
+pages of the three trees this repository can serve:
+
+| item | floor | best page here | pages at or over it |
+|---|---|---|---|
+| `CN-068` | 60 | 75 | 1 of 15 |
+| `GO-144` | 70 | 100 | 1 of 15 |
+| `GEO-004` | 70 | 100 | 1 of 15 |
+| `GO-145` | 60 | 60 | 1 of 15 |
+| `GEO-005` | 60 | 60 | 1 of 15 |
+
+In every row the one page is the good fixture's entry page. A page-level check
+aggregates on the **worst** sampled page, so each of these passed only where every
+sampled page was exemplary — and all five reported FAIL on the exemplary origin and the
+deliberately broken one alike. An item that cannot tell those two apart has stopped
+measuring, which is what 0.49.0 said about `MD-184`.
+
+**The floors now rest on the score's own decomposition** — and on two different
+readings of it, which is worth separating rather than blurring. For
+`eeat_signal_checker.py` and `citation_readiness.py` the sum is of the components a page
+of *any* type can carry, because both scores mix page-type-neutral signals with article
+ones. `answer_block_scanner.py` has no such split — all four of its signals are
+content-structure signals — so there the floor is the two strongest of the four:
+
+* `CN-068` **60 → 35**. Of six components, credentials (20), first-hand experience (20)
+  and external citations (10) are article signals a policy page has no business
+  carrying, and the editorial-standards component (15) reads 0 on every page of every
+  tree — the reachable maximum for a site with no standards page is 85, not 100. What
+  remains is authors 20 + trust 15.
+* `GO-144` and `GEO-004` **70 → 32**: one direct answer (20) plus one definition (12).
+  At 70 the item needed at least four signals — the three strongest sum to 60 — and the
+  cheapest four are three direct answers and a list, which is an FAQ page, asked of
+  every sampled page including a privacy policy.
+* `GO-145` and `GEO-005` **60 → 25**: author 15 + canonical 10. Claim coverage, trusted
+  links and `sameAs` are article and entity signals.
+
+**A floor is a number and not a requirement**, and the derivations above say where a
+line sits rather than which signals a page must carry: four lists reach 40 and clear
+`GO-144` without a direct answer anywhere, and a page with an author and a canonical
+clears `GEO-005` having cited nothing. That is also why the two citation repairs below
+are not optional extras — without them a page could clear 25 on capacity it had not
+earned, which is exactly what the broken fixture's entry page was doing at 33. There are
+three of them, and the floor is what made all three visible.
+
+`KNOWN-ISSUES.md` refused this repair in as many words — *lowering a `high` item's floor
+so a fixture goes green is the registry taking instruction from the fixture* — and the
+entry now carries the argument for the difference rather than assuming it. The test of a
+derivation is what it would have done had it disagreed: at a component sum of 50 the
+floor would be 50 and these fixture pages would still fail. They sit at 35 because they
+carry exactly the page-type-neutral components and nothing else, which is what makes
+them policy pages.
+
+**`SP-110` was in the class for its own reason.** `critical_request_chain.py` graded
+every `<link rel="stylesheet">` as `warning`, which aliases to medium, and the item
+asserts against medium. Every page here with an external stylesheet emitted exactly that
+one issue, so PASS was reachable only on a page with no external CSS at all — two of the
+fifteen. It is `info` now. The finding is still reported; it stopped deciding a verdict.
+The parser-blocking script in `<head>` keeps its `error`, and the broken fixture still
+fails on it.
+
+**Two defects in the citation score, found by the lowered floor rather than in spite of
+it.** With the floor at 60 both were hidden above it:
+
+* every outbound link counted as capacity to cite. The broken fixture's entry page
+  carries no `cite`, no `blockquote`, no footnote link and no schema citation, and took
+  23 of the 35 coverage points from two ordinary links. Trusted hosts still count — a
+  `.gov` link is a source whether or not it is wrapped — and ordinary ones no longer do;
+* a page with **no** factual claims took the whole coverage component, because
+  `max(1, 0)` made the denominator one. Measured after the change: such a page carrying
+  an author and a canonical scores exactly 25 and still passes, so the repair costs it
+  nothing — but that is true only because the floor moved in the same release. At 60 it
+  would have been a false FAIL for every page that asserts nothing. The evidence origin's deliberately failing page
+  scored 45 of 100 that way, above the good page's 42. Nothing to cover is not
+  everything covered — the same family 0.49.0 and 0.50.0 removed from
+  `image_inventory.py` and `image_weight_audit.py`.
+
+Six more, and `utm_source` is the reason: the footnote match read the whole href, so
+six faceted-navigation links of the form `/shop?utm_source=s0` counted as citations. It
+reads `rel` tokens and the URL path now.
+
+**What the release is measured by.** `tests/census.json`'s count of items that answered
+a verdict somewhere and never PASS goes **8 → 2**, and the two that remain are the two
+that were never in this class: `AR-158` and `GEO-006`. The oracle's items opposed across
+the fixture origins goes **79 → 84**, and no declaration disagrees. Six declarations on the good
+origin were re-read and moved to PASS; the six on the broken origin were re-read and
+stand. `AR-158` is *not* in this class and is untouched: its `ui` half reads false on
+all fifteen pages because no fixture carries a visible breadcrumb trail, which is a
+corpus gap already recorded, and its detector is covered by unit tests in both
+spellings.
+
+**What this does not settle.** The five items still grade every sampled page against one
+floor. A floor any page type can clear is not an item that knows what kind of page it is
+looking at, and nothing here builds a page-type classifier — `detect_profile.py`
+classifies the site, and refuses to narrow a checklist on a guess. Scoring per site
+rather than per sampled page was the alternative and was not taken.
+
 ## 0.86.0 — the entity reader's boundary, decided one subject key at a time
 
 Registry version: unchanged at `91f6634fe6c8`. No item, title or assertion moves; what

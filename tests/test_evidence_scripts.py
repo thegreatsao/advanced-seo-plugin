@@ -688,6 +688,7 @@ RUNS = [
     ("collection", "collection_page_checker.py", ["{good}"]),
     ("collection_bad", "collection_page_checker.py", ["{bad}"]),
     ("chain", "critical_request_chain.py", ["{good}"]),
+    ("chain_bad", "critical_request_chain.py", ["{bad}"]),
     ("cssmin", "css_minify_check.py", ["{good}"]),
     ("cssmin_bad", "css_minify_check.py", ["{bad}"]),
     ("dupes", "duplicate_content.py", ["{good}"]),
@@ -2143,11 +2144,29 @@ class EeatSignals(unittest.TestCase):
             self.assertEqual(verdict(item_id, bad), FAIL, item_id)
 
     def test_the_score_separates_the_two_pages(self):
-        """Asserted as a direction rather than a threshold: CN-068 wants 60 and the
-        good fixture reaches 52, because a page cannot earn the rest of the score
-        without things a fixture has no business inventing — an author page with a
-        real byline history, an organisation with verifiable sameAs targets."""
+        """Asserted as a direction rather than a threshold, and the direction is what
+        the item rests on: a fixture page cannot earn the top of this score without
+        things it has no business inventing — an author page with a real byline
+        history, an organisation with verifiable sameAs targets. The floor moved to 35
+        in 0.87.0 and this assertion did not, because it never named the floor."""
         self.assertGreater(out("eeat")["score"], out("eeat_bad")["score"] + 30)
+
+    def test_the_floor_is_the_sum_of_the_page_type_neutral_components(self):
+        """35 = authors 20 + trust 15, and the test fails if either weight moves.
+
+        The floor is not a round number: it is what a page of any type can carry out
+        of this script's six components. Credentials (20), first-hand experience (20)
+        and external citations (10) are article signals — a privacy policy has no
+        business carrying them — and the editorial-standards component (15) is 0 on
+        every page of every tree this repository serves. If a weight changes, the
+        derivation changes with it and the floor has to be re-read rather than kept.
+        """
+        with open(os.path.join(SCRIPTS, "eeat_signal_checker.py"),
+                  encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("score += 20 if authors else 0", source)
+        self.assertIn("score += 15 if trust_links else 0", source)
+        self.assertEqual(ITEMS["CN-068"]["check"]["assert"]["gte"], 20 + 15)
 
     def test_a_publisher_only_page_fails_cn_057(self):
         """This fails if a publisher re-enters authors or CN-057 reads only one half."""
@@ -3104,6 +3123,31 @@ class AnswerBlocks(unittest.TestCase):
         self.assertEqual(verdict("GO-144", good), PASS)
         self.assertEqual(verdict("GEO-004", good), PASS)
 
+    def test_the_floor_is_one_direct_answer_and_one_definition(self):
+        """32 is derived from the script's own weights, not chosen as a round number.
+
+        `direct_answer` is the only one of the four signals a snippet can be lifted
+        from verbatim; a definition is the one that says what the subject is. At 70 the
+        item needed at least four signals, because the three strongest sum to 60, and
+        the cheapest four are three direct answers and a list — an FAQ page, asked of
+        every sampled page including a privacy policy. Both twins carry the same floor
+        because `scores_with` makes them one check.
+
+        The floor is a number and not a requirement, and this asserts only that it
+        equals the derivation: four lists reach 40 and clear it with no direct answer
+        anywhere.
+        """
+        sys.path.insert(0, SCRIPTS)
+        import answer_block_scanner
+        points = answer_block_scanner.SIGNAL_POINTS
+        for item_id in ("GO-144", "GEO-004"):
+            self.assertEqual(ITEMS[item_id]["check"]["assert"]["gte"],
+                             points["direct_answer"] + points["definition"], item_id)
+        # The claim about the old floor, computed rather than remembered: no three
+        # signals reach 70, whatever they are.
+        strongest = sorted(points.values(), reverse=True)
+        self.assertLess(sum(strongest[:3]), 70)
+
     def test_a_page_with_no_questions_scores_zero(self):
         bad = out("answers_bad")
         self.assertEqual(bad["score"], 0)
@@ -3532,6 +3576,92 @@ class CitationReadiness(unittest.TestCase):
             custom = {"name": "Page", "custom": {"name": "Custom child"}}
             self.assertEqual(names(custom), {"Page", "Custom child"})
             self.assertEqual(names(custom, exclude={"custom"}), {"Page"})
+
+    def test_the_floor_is_an_author_and_a_canonical(self):
+        """25 is the two components of this score any page type can carry.
+
+        Claim coverage (35), trusted links (20) and `sameAs` (20) are article and
+        entity signals: a privacy policy carries none of them and scored 25 on the
+        exemplary fixture, against a floor of 60. Read from the script so that moving
+        either weight breaks this rather than silently changing what the floor means.
+        """
+        with open(os.path.join(SCRIPTS, "citation_readiness.py"),
+                  encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("score += 15 if author_signals else 0", source)
+        self.assertIn('score += 10 if parsed.get("canonical") else 0', source)
+        for item_id in ("GO-145", "GEO-005"):
+            self.assertEqual(ITEMS[item_id]["check"]["assert"]["gte"], 15 + 10, item_id)
+
+    def test_a_tracking_parameter_is_not_a_footnote(self):
+        """`utm_source` is not a source, and six of them were six citations.
+
+        The footnote match read the whole href. On the deliberately failing evidence
+        page, six faceted-navigation links of the form `/shop?utm_source=s0&sort=k0`
+        were counted, which is most of what took that page to 45 of 100 — above the
+        good page's 42. The match now reads `rel` tokens and the URL path only.
+        """
+        claim = '<p>A 2025 study found that warm dough rises.</p>'
+        counted = {
+            "a tracking parameter": ('<a href="/shop?utm_source=news">F</a>', 0),
+            "a word inside a segment": ('<a href="/blog/open-source">Os</a>', 0),
+            "a hyphenated segment": ('<a href="/docs/api-reference">Api</a>', 0),
+            "an unrelated fragment": ('<a href="/notes#chapter-2">2</a>', 0),
+            "a segment that is the word": ('<a href="/sources/the-study">S</a>', 1),
+            "a footnote fragment": ('<a href="/notes#footnote-1">1</a>', 1),
+            "a cite fragment": ('<a href="/notes#cite-3">3</a>', 1),
+            "a rel token": ('<a rel="footnote" href="/x">n</a>', 1),
+        }
+        for label, (markup, expected) in counted.items():
+            with self.subTest(label):
+                result = self._check_html(claim + markup)
+                self.assertEqual(
+                    result["citation_signals"]["footnote_links"], expected)
+
+    def test_a_bare_fragment_link_never_reaches_this_script(self):
+        """The boundary, asserted so it is a decision rather than a surprise.
+
+        `parse_html` drops a link whose href is only a fragment, so the commonest
+        footnote spelling of all — `<a href="#footnote-1">` — is invisible here however
+        this match is written. Widening the link set changes what every item over
+        `links` sees, so it is not done from this script.
+        """
+        result = self._check_html(
+            '<p>A 2025 study found that warm dough rises.</p>'
+            '<a href="#footnote-1">1</a>')
+        self.assertEqual(result["citation_signals"]["footnote_links"], 0)
+
+    def test_a_page_with_no_factual_claims_earns_no_coverage(self):
+        """Nothing to cover is not everything covered.
+
+        `min(1.0, capacity / max(1, claims))` gave a page asserting nothing the whole
+        35-point coverage component as soon as it carried one citation signal. This is
+        the family 0.49.0 and 0.50.0 removed from image_inventory and
+        image_weight_audit: an empty input must not produce a verdict-shaped number.
+        """
+        silent = self._check_html('<p>Bread.</p><a href="/sources/x">Source</a>')
+        claiming = self._check_html(
+            '<p>A 2025 study found that warm dough rises.</p>'
+            '<a href="/sources/x">Source</a>')
+        self.assertEqual(silent["factual_claims"], 0)
+        self.assertEqual(silent["citation_signals"]["footnote_links"], 1)
+        self.assertGreater(claiming["score"], silent["score"])
+        self.assertEqual(claiming["score"] - silent["score"], 35)
+
+    def test_an_ordinary_outbound_link_is_not_citation_capacity(self):
+        """A social profile in the footer is not a source for the claim above it.
+
+        Measured on the two fixture origins: the broken entry page carries no cite,
+        no blockquote, no footnote link and no schema citation, and took 23 of the 35
+        coverage points from two ordinary outbound links. A high-trust host still
+        counts, because a link to a .gov is a source whether or not it is wrapped.
+        """
+        claim = '<p>A 2025 study found that warm dough rises.</p>'
+        ordinary = self._check_html(claim + '<a href="https://example.net/x">Us</a>')
+        trusted = self._check_html(claim + '<a href="https://www.cdc.gov/x">CDC</a>')
+        self.assertEqual(ordinary["citation_signals"]["external_links"], 1)
+        self.assertEqual(ordinary["score"], 0)
+        self.assertGreater(trusted["score"], ordinary["score"])
 
     def test_a_cited_works_sameas_is_not_the_pages_entity(self):
         """A page is not about the works it cites.
@@ -4618,10 +4748,28 @@ class CacheAndCompression(unittest.TestCase):
 class CriticalChain(unittest.TestCase):
     """SP-110 `issues`."""
 
-    def test_a_stylesheet_in_the_head_is_render_blocking(self):
+    def test_a_stylesheet_in_the_head_is_reported_and_no_longer_graded(self):
+        """Still found, and `info` since 0.87.0.
+
+        The finding is not withdrawn: a render-blocking stylesheet is worth telling an
+        operator about, and the chain output still carries it. What changed is that it
+        stopped deciding a verdict. `warning` aliases to medium, and SP-110 asserts
+        against medium, so one ordinary stylesheet in the head — which every site has —
+        left the item unable to report PASS anywhere. This test fails if that grading
+        returns.
+        """
         chain = out("chain")
-        self.assertEqual(verdict("SP-110", chain), WARN)
-        self.assertRegex(json.dumps(chain["issues"]), "(?i)render-blocking")
+        self.assertEqual(verdict("SP-110", chain), PASS)
+        blocking = [issue for issue in chain["issues"]
+                    if "render-blocking" in issue["message"].lower()]
+        self.assertTrue(blocking)
+        self.assertEqual({issue["severity"] for issue in blocking}, {"info"})
+
+    def test_a_parser_blocking_script_in_the_head_still_fails_the_item(self):
+        """The finding this script grades as a defect on every site, unchanged."""
+        bad = out("chain_bad")
+        self.assertEqual(verdict("SP-110", bad), FAIL)
+        self.assertRegex(json.dumps(bad["issues"]), "(?i)parser-blocking script in")
 
 
 class ThirdPartyScripts(unittest.TestCase):

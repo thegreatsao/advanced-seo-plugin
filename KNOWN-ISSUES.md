@@ -595,6 +595,36 @@ name. A column called `url` would be read as "fix this page".
   marker vocabulary. Writing the marker phrases into the fixture to make it green was
   rejected outright — that is shaping the fixture to suit the check, which is the
   failure this tree exists to refuse.
+
+  **Closed in 0.87.0 by moving the floor, which is what the paragraph above refused to
+  do — so the difference has to be argued rather than assumed.** What that paragraph
+  forbids is moving a number *so that a fixture goes green*. The floor now rests on the
+  score's own decomposition: of the six components `eeat_signal_checker.py` awards,
+  credentials (20), first-hand experience (20) and external citations (10) are article
+  signals, and the editorial-standards component (15) reads 0 on every page of every
+  tree here — so the reachable maximum for a site without a standards page is 85 rather
+  than 100, and what remains for a page of any type is authors 20 + trust 15 = 35.
+
+  **The test of whether that is a derivation or a rationalisation is what it would have
+  done if it disagreed**: had the components summed to 50, the floor would be 50 and
+  this fixture's policy pages would still fail, and the entry would say so. The number
+  lands on 35 because those pages carry exactly the page-type-neutral components and
+  nothing else, which is what makes them policy pages.
+
+  **Measured across the class rather than for this item alone.** Per page over all
+  fifteen pages of the three servable trees, five items — `CN-068`, `GO-144`,
+  `GEO-004`, `GO-145`, `GEO-005` — were cleared by exactly one page each, the good
+  tree's entry page, and all five reported FAIL on *both* fixture origins. An item that
+  cannot tell the exemplary tree from the broken one has stopped measuring, which is
+  the reading 0.49.0 applied to `MD-184`. After 0.87.0 the oracle's count of items
+  opposed across the origins goes 79 → 84.
+
+  **Still not taken, and now for a measured reason.** Scoring per site rather than per
+  sampled page was the alternative, and it was not chosen: the decision was Anton's on
+  2026-08-20, with both on the table. Widening the marker vocabulary is untouched — the
+  `/about.html` sentence about eleven years in kitchens still scores zero for
+  experience, and a floor that no longer asks a policy page for experience markers does
+  not make the scan read English any better.
   <!-- ki: cn-068-floor-and-the-good-fixture -->
 
 - **Fixed in 0.49.0 — `image_inventory.py` emitted `count: 0` for a page it found no

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "91f6634fe6c8",
+  "registry_version": "66d1b2037c32",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -110,7 +110,7 @@
       },
       "MS-030": {
         "expect": "PASS",
-        "why": "the sampled high-value pages carry clear meta descriptions in the fixture's intended 120\u2013160-character range"
+        "why": "the sampled high-value pages carry clear meta descriptions in the fixture's intended 120–160-character range"
       },
       "MS-031": {
         "expect": "PASS",
@@ -285,8 +285,8 @@
         "why": "every crawlable page carries several hundred words of prose; the one short page, /private/secret.html, is disallowed in robots.txt and is never crawled"
       },
       "CN-068": {
-        "expect": "FAIL",
-        "why": "corrected back to FAIL after the run, and the correction is the answer to the question \u00a76 left open: the repair was not enough, so this is about the floor rather than about the fixture. Measured on the repaired tree \u2014 the entry page scores 75, /about.html and /privacy.html score 35 each against a floor of 60. Both carry a named author, two dates, a privacy link and a contact route; what they cannot carry is credential markers, external citations and first-hand-experience markers, which is where the missing 25 points live and which belong to a content page rather than to a policy page. See KNOWN-ISSUES.md \u00a76"
+        "expect": "PASS",
+        "why": "re-read for 0.87.0, which took the floor from 60 to 35 — the sum of the score components a page of any type can carry, authors 20 + trust 15. The sample is the entry page plus /about.html and /privacy.html. All three carry a named author and a contact route, so all three clear 35; the entry page reaches 75 on credential markers, first-hand experience and external citations, which are the article signals a policy page has no business carrying. The declaration this replaces read FAIL and said so about the floor rather than about the fixture, which is the reading 0.87.0 acted on"
       },
       "GEO-008": {
         "expect": "PASS",
@@ -321,12 +321,12 @@
         "why": "the only third-party script in the tree is the gtag loader and it is async, so nothing third-party holds the render up"
       },
       "SP-110": {
-        "expect": "WARN",
-        "why": "re-declared for 0.50.0, which split the parser-blocking script by where it sits. The exemplary page's chain observations are a render-blocking stylesheet \u2014 one ordinary stylesheet in the head, which every site has and which stays 'warning' = medium \u2014 and an info-level missing preconnect. Its only script in the head is the async gtag loader, which blocks nothing. A medium finding fails the assertion and satisfies the band, so WARN, and FAIL is now reachable for the page that earns it"
+        "expect": "PASS",
+        "why": "re-read for 0.87.0, which regraded the render-blocking stylesheet from 'warning' to 'info'. A stylesheet in the head is how CSS is delivered, not a defect every site shares; the one finding this script grades as a defect on every site is the parser-blocking script in <head>, and this origin has none — its only head script is the async gtag loader, which blocks nothing. With the stylesheet at info and the missing preconnect already info, no finding reaches the asserted severities. The broken origin still earns FAIL on its blocking script, so the item keeps separating the two"
       },
       "TE-170": {
         "expect": "PASS",
-        "why": "re-declared for 0.50.0. Serving text uncompressed is now graded 'error' = high, and the good origin compresses: the fixture server offers gzip on textual responses to a client that asks for it, with Vary and a validator header, which is what a competently configured server does and what this item's title is about. Nothing else here fires on an HTML entry page \u2014 the cache-lifetime findings are for static assets, which this invocation does not request"
+        "why": "re-declared for 0.50.0. Serving text uncompressed is now graded 'error' = high, and the good origin compresses: the fixture server offers gzip on textual responses to a client that asks for it, with Vary and a validator header, which is what a competently configured server does and what this item's title is about. Nothing else here fires on an HTML entry page — the cache-lifetime findings are for static assets, which this invocation does not request"
       },
       "TECH-002": {
         "expect": "PASS",
@@ -398,15 +398,15 @@
       },
       "AR-153": {
         "expect": "PASS",
-        "why": "corrected from FAIL after the run: five flat pages and a two-post blog clear the silo score's floor, so 'Design Clear Topic Hubs (Silos)' cannot tell a site with hubs from one without. test_contract.py already had AR-153 in SAME_ON_BOTH, but under a reason belonging to its neighbour \u2014 'neither fixture is an ecommerce catalogue' \u2014 which is repaired in the same commit as this correction"
+        "why": "corrected from FAIL after the run: five flat pages and a two-post blog clear the silo score's floor, so 'Design Clear Topic Hubs (Silos)' cannot tell a site with hubs from one without. test_contract.py already had AR-153 in SAME_ON_BOTH, but under a reason belonging to its neighbour — 'neither fixture is an ecommerce catalogue' — which is repaired in the same commit as this correction"
       },
       "GEO-004": {
-        "expect": "FAIL",
-        "why": "declared against the sampled set, and the entry page is not the one that decides: it was built for exactly this item \u2014 the entry page carries two question-shaped headings with their answers immediately under them. /privacy.html carries none, and a policy page is not where answer blocks belong, so the worst sampled page decides against an item the site satisfies where it matters. Same shape as MS-033 and CN-068 \u2014 KNOWN-ISSUES.md \u00a76"
+        "expect": "PASS",
+        "why": "re-read for 0.87.0, which took the floor from 70 to 32 — one direct answer (20) plus one definition (12), out of the four signals answer_block_scanner scores. Declared against the sampled set: the entry page carries question-shaped headings with their answers under them, and /about.html and /privacy.html each carry definition paragraphs. At 70 the item asked every sampled page to be an FAQ; at 32 it asks for the one signal a snippet can be lifted from"
       },
       "GEO-005": {
-        "expect": "FAIL",
-        "why": "declared against the sampled set, and the entry page is not the one that decides: it was built for exactly this item \u2014 the entry page carries a cited blockquote, outbound citations, an experience claim and two dates. /privacy.html carries a date and nothing else a citation would rest on"
+        "expect": "PASS",
+        "why": "re-read for 0.87.0, which took the floor from 60 to 25 — author 15 plus canonical 10, the two components of the score any page type can carry. Declared against the sampled set: the entry page is built to be cited and reaches 60 on claim coverage, while /about.html and /privacy.html carry an author and a canonical and nothing a citation would rest on. Claim coverage, trusted links and sameAs are article and entity signals, and a floor above 25 asks a policy page for them"
       },
       "GEO-006": {
         "expect": "FAIL",
@@ -421,12 +421,12 @@
         "why": "the entry page carries a complete WebSite block with a SearchAction and its query-input, which is the markup 'Optimize for Sitelinks & Sitelinks Search Box' names; the other sampled pages declare no schema that could be reported against it"
       },
       "GO-144": {
-        "expect": "FAIL",
-        "why": "twin of GEO-004 through scores_with, same script and same floor, so it must land on the same verdict: the entry page's answer blocks are real and /privacy.html has none"
+        "expect": "PASS",
+        "why": "twin of GEO-004 through scores_with, same script and same floor, so it must land on the same verdict. Re-read for 0.87.0: the floor is 32, one direct answer plus one definition, and every sampled page of this origin carries at least that"
       },
       "GO-145": {
-        "expect": "FAIL",
-        "why": "twin of GEO-005 through scores_with, same script and same floor: the entry page is built to be cited and the sampled policy page is not"
+        "expect": "PASS",
+        "why": "twin of GEO-005 through scores_with, same script and same floor: re-read for 0.87.0 against a floor of 25, which every sampled page of this origin clears on its author and its canonical alone"
       },
       "IN-121": {
         "expect": "INDETERMINATE",
@@ -744,7 +744,7 @@
       },
       "AR-154": {
         "expect": "INDETERMINATE",
-        "why": "'Optimize E-commerce Category Pages' needs a category page to judge, and this tree has none either \u2014 its defects are elsewhere"
+        "why": "'Optimize E-commerce Category Pages' needs a category page to judge, and this tree has none either — its defects are elsewhere"
       },
       "AR-163": {
         "expect": "INDETERMINATE",
@@ -756,11 +756,11 @@
       },
       "CN-039": {
         "expect": "WARN",
-        "why": "the tree deliberately carries a thin page (/blog/thin.html, three words of body), two short duplicates and a short orphan \u2014 at most four of its five crawlable pages, which is inside the up-to-five band the item preserves, so this fixture demonstrates the warn band rather than the failure"
+        "why": "the tree deliberately carries a thin page (/blog/thin.html, three words of body), two short duplicates and a short orphan — at most four of its five crawlable pages, which is inside the up-to-five band the item preserves, so this fixture demonstrates the warn band rather than the failure"
       },
       "CN-068": {
         "expect": "FAIL",
-        "why": "no page on this origin carries an author, a byline, credentials, a policy page or a date, so there is nothing for 'Strengthen Authorship & E-E-A-T Signals' to find"
+        "why": "no page on this origin carries an author, a byline, credentials, a policy page or a date, so there is nothing for 'Strengthen Authorship & E-E-A-T Signals' to find Re-read for 0.87.0 against the new floor of 35: no page here carries an author or a contact route, so the two page-type-neutral components are both absent and FAIL stands."
       },
       "GEO-008": {
         "expect": "FAIL",
@@ -772,7 +772,7 @@
       },
       "GO-136": {
         "expect": "WARN",
-        "why": "corrected from FAIL after the run: the cross-host URL, the non-ISO lastmod and the missing ones are all graded warning or info, which is the whole of what 'clean' means to this item. The two sitemap entries that 404 are not missed by the tool \u2014 they belong to GO-138, which is the invocation that carries --fetch-urls"
+        "why": "corrected from FAIL after the run: the cross-host URL, the non-ISO lastmod and the missing ones are all graded warning or info, which is the whole of what 'clean' means to this item. The two sitemap entries that 404 are not missed by the tool — they belong to GO-138, which is the invocation that carries --fetch-urls"
       },
       "MB-102": {
         "expect": "N/A",
@@ -796,7 +796,7 @@
       },
       "SP-110": {
         "expect": "FAIL",
-        "why": "re-declared for 0.50.0. This page carries `<script src=\"/assets/blocking.js\">` in its head with neither async nor defer, which is now graded 'error' = high: the parser stops before anything has been painted. The 21 KB render-blocking stylesheet beside it stays medium, because a stylesheet in the head is what every site does. FAIL needs a high finding and this page has one, which is the whole point of a tree built to be slow"
+        "why": "re-declared for 0.50.0. This page carries `<script src=\"/assets/blocking.js\">` in its head with neither async nor defer, which is now graded 'error' = high: the parser stops before anything has been painted. The 21 KB render-blocking stylesheet beside it stays medium, because a stylesheet in the head is what every site does. FAIL needs a high finding and this page has one, which is the whole point of a tree built to be slow Re-read for 0.87.0, which regraded the render-blocking stylesheet to info: this origin's FAIL never rested on the stylesheet but on the parser-blocking script in its head, which is graded error and unchanged."
       },
       "TE-170": {
         "expect": "FAIL",
@@ -808,7 +808,7 @@
       },
       "AR-152": {
         "expect": "FAIL",
-        "why": "this origin serves no robots.txt at all \u2014 the tree carries robots-note.txt explaining the omission \u2014 so there are no user-agent groups to find"
+        "why": "this origin serves no robots.txt at all — the tree carries robots-note.txt explaining the omission — so there are no user-agent groups to find"
       },
       "CI-013": {
         "expect": "PASS",
@@ -868,7 +868,7 @@
       },
       "TE-177": {
         "expect": "FAIL",
-        "why": "the entry page has no title element \u2014 the tree's own comment lists it first among the things the page exists to fail"
+        "why": "the entry page has no title element — the tree's own comment lists it first among the things the page exists to fail"
       },
       "AR-153": {
         "expect": "PASS",
@@ -876,11 +876,11 @@
       },
       "GEO-004": {
         "expect": "FAIL",
-        "why": "no page here poses a question or answers one; the entry page is filler prose, the duplicates are one paragraph twice and the orphan is three sentences"
+        "why": "no page here poses a question or answers one; the entry page is filler prose, the duplicates are one paragraph twice and the orphan is three sentences Re-read for 0.87.0 against the new floor of 32: a single definition paragraph is 12, and no page here carries a direct answer, so the worst sampled page stays below it."
       },
       "GEO-005": {
         "expect": "FAIL",
-        "why": "nothing here carries a citation, a date, an author or an evidence claim, which is the whole of what makes content citable"
+        "why": "nothing here carries a citation, a date, an author or an evidence claim, which is the whole of what makes content citable Re-read for 0.87.0 against the new floor of 25: the sampled pages carry no author, so canonical alone is 10 and FAIL stands."
       },
       "GEO-006": {
         "expect": "FAIL",
@@ -896,11 +896,11 @@
       },
       "GO-144": {
         "expect": "FAIL",
-        "why": "twin of GEO-004 through scores_with: no answer blocks anywhere"
+        "why": "twin of GEO-004 through scores_with: no answer blocks anywhere Re-read for 0.87.0 against the new floor of 32; unchanged."
       },
       "GO-145": {
         "expect": "FAIL",
-        "why": "twin of GEO-005 through scores_with: nothing here is citable"
+        "why": "twin of GEO-005 through scores_with: nothing here is citable Re-read for 0.87.0 against the new floor of 25; unchanged."
       },
       "IN-121": {
         "expect": "INDETERMINATE",
