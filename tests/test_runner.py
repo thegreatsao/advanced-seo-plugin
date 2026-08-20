@@ -190,6 +190,28 @@ class _Resp:
         self.status_code, self.headers = status_code, headers
 
 
+class TheSuiteKeepsItsOwnState(unittest.TestCase):
+    """This suite must not read or write the directory a real audit uses.
+
+    It did until 0.82.0, and not marginally: a full run left fifteen robots answers in
+    `%TEMP%/seo-checklist-rate`, keyed by `127.0.0.1:<port>` and live for half an hour,
+    where the next run's fixtures draw from the same ports. The classes that had
+    noticed pointed a module constant at their own directory, which their child
+    processes could not inherit.
+
+    Asserted as "not the default" rather than as one particular path, because a caller
+    who has already chosen a directory keeps it — `harness` sets the floor with
+    `setdefault`.
+    """
+
+    def test_the_state_directory_is_not_the_one_an_audit_would_use(self):
+        import lib.safe_http as sh
+        chosen = os.environ.get(sh.RATE_LIMIT_DIR_VAR)
+        self.assertTrue(chosen, "the suite left the state directory unnamed")
+        self.assertNotEqual(chosen, sh.DEFAULT_RATE_LIMIT_DIR)
+        self.assertEqual(sh.rate_limit_dir(), chosen)
+
+
 class RateLimiting(unittest.TestCase):
     """An audit is a burst by construction: the evidence scripts run concurrently
     and several walk a sitemap inside their own process. This is the only open item
@@ -200,13 +222,11 @@ class RateLimiting(unittest.TestCase):
         os.environ.pop("SEO_MAX_RPS", None)
         import lib.safe_http as sh
         self.sh = sh
-        self.dir = tempfile.mkdtemp()
-        self.saved_dir = sh.RATE_LIMIT_DIR
-        sh.RATE_LIMIT_DIR = self.dir
+        self.pacing = harness.own_rate_limit_dir()
+        self.dir = self.pacing.__enter__()
 
     def tearDown(self):
-        self.sh.RATE_LIMIT_DIR = self.saved_dir
-        shutil.rmtree(self.dir, ignore_errors=True)
+        self.pacing.__exit__(None, None, None)
         if self.saved is None:
             os.environ.pop("SEO_MAX_RPS", None)
         else:
@@ -257,16 +277,20 @@ class RateLimiting(unittest.TestCase):
         compare against it, and why these numbers are comparable here.
         """
         import subprocess
+        # The child is told where the state lives the way the product tells it —
+        # through `SEO_RATE_LIMIT_DIR`, inherited from this process. It used to be
+        # told with `sh.RATE_LIMIT_DIR = os.environ['PACE_DIR']`, a line that existed
+        # only because a module constant cannot be inherited; the test then measured
+        # sharing through a mechanism no audit has.
         code = (
             "import os, sys, time\n"
             f"sys.path.insert(0, {SCRIPTS!r})\n"
             "import lib.safe_http as sh\n"
-            "sh.RATE_LIMIT_DIR = os.environ['PACE_DIR']\n"
             "sh.pace('shared.example', rps=float(os.environ['PACE_RPS']))\n"
             "print(time.monotonic())\n"
         )
         env = os.environ.copy()
-        env["PACE_DIR"], env["PACE_RPS"] = self.dir, str(rps)
+        env["PACE_RPS"] = str(rps)
         procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                   text=True, close_fds=False)
@@ -285,7 +309,7 @@ class RateLimiting(unittest.TestCase):
         directory, from one process. It never started a second one, so the one property
         it is named for went unmeasured through every release: a limiter that paced each
         process against itself would have passed it. Verified the other way round, by
-        giving each child its own `RATE_LIMIT_DIR`: the gaps collapse to 0.00s and the
+        giving each child its own state directory: the gaps collapse to 0.00s and the
         assertion below fails.
         """
         times = self._paced_at(self.PACE_RPS)
@@ -295,6 +319,12 @@ class RateLimiting(unittest.TestCase):
         self.assertTrue(all(g >= interval * 0.8 for g in gaps),
                         f"processes did not queue behind each other: gaps {gaps}, "
                         f"expected each >= {interval * 0.8:.2f}s")
+        # And they queued *here*, in the directory this test named. Without it the
+        # three would have shared the machine-wide one, queued just the same, and the
+        # assertion above would have been satisfied by state belonging to nobody.
+        self.assertEqual([n for n in os.listdir(self.dir) if n.endswith(".slot")],
+                         [os.path.basename(self.sh._slot_path("shared.example"))],
+                         "the children did not inherit the state directory")
 
     def test_pacing_off_lets_the_processes_go_together(self):
         """The other half, so the test above is known to measure pacing rather than
@@ -303,6 +333,36 @@ class RateLimiting(unittest.TestCase):
         self.assertLess(times[-1] - times[0], 1.0 / self.PACE_RPS,
                         "unpaced processes were spaced anyway; the test above cannot "
                         "tell pacing from startup")
+
+    def test_the_state_directory_defaults_to_one_shared_by_the_machine(self):
+        """Not per run, and not per process. Pacing is a promise to somebody else's
+        server, so two audits started a second apart have to queue behind each other;
+        a default that were per run would keep the promise only within one."""
+        var = self.sh.RATE_LIMIT_DIR_VAR
+        saved = os.environ.pop(var)
+        try:
+            self.assertEqual(self.sh.rate_limit_dir(), self.sh.DEFAULT_RATE_LIMIT_DIR)
+            self.assertEqual(os.path.dirname(self.sh.DEFAULT_RATE_LIMIT_DIR),
+                             tempfile.gettempdir())
+            os.environ[var] = "   "
+            self.assertEqual(self.sh.rate_limit_dir(), self.sh.DEFAULT_RATE_LIMIT_DIR,
+                             "a variable set to whitespace named a directory")
+        finally:
+            os.environ[var] = saved
+
+    def test_the_state_directory_is_read_on_every_use(self):
+        """Read, not captured at import. A value captured once is a value a process
+        cannot pass to the one it starts, which is what this replaced."""
+        first, second = tempfile.mkdtemp(), tempfile.mkdtemp()
+        try:
+            os.environ[self.sh.RATE_LIMIT_DIR_VAR] = first
+            self.assertTrue(self.sh._slot_path("example.com").startswith(first))
+            os.environ[self.sh.RATE_LIMIT_DIR_VAR] = second
+            self.assertTrue(self.sh._slot_path("example.com").startswith(second))
+        finally:
+            os.environ[self.sh.RATE_LIMIT_DIR_VAR] = self.dir
+            shutil.rmtree(first, ignore_errors=True)
+            shutil.rmtree(second, ignore_errors=True)
 
     def test_zero_switches_pacing_off(self):
         os.environ["SEO_MAX_RPS"] = "0"
@@ -352,7 +412,7 @@ class RateLimiting(unittest.TestCase):
         # A merely unusable-looking path is creatable on Windows, so confinement
         # would decide whether this test passes or fails.
         with tempfile.NamedTemporaryFile(dir=self.dir) as blocker:
-            self.sh.RATE_LIMIT_DIR = os.path.join(blocker.name, "nope")
+            os.environ[self.sh.RATE_LIMIT_DIR_VAR] = os.path.join(blocker.name, "nope")
             start = time.monotonic()
             waited = self.sh.pace("example.com", rps=20)
             self.assertGreater(waited, 0)
@@ -734,16 +794,14 @@ class Robots(unittest.TestCase):
     def setUp(self):
         import lib.safe_http as sh
         self.sh = sh
-        self.dir = tempfile.mkdtemp()
-        self.saved_dir = sh.RATE_LIMIT_DIR
-        sh.RATE_LIMIT_DIR = self.dir
+        self.pacing = harness.own_rate_limit_dir()
+        self.dir = self.pacing.__enter__()
         self.fetched = []
         self.saved_fetch = sh._fetch_robots
 
     def tearDown(self):
-        self.sh.RATE_LIMIT_DIR = self.saved_dir
+        self.pacing.__exit__(None, None, None)
         self.sh._fetch_robots = self.saved_fetch
-        shutil.rmtree(self.dir, ignore_errors=True)
 
     def serve(self, body):
         def fake(origin):
@@ -2916,34 +2974,32 @@ class OneFetchPerUrl(unittest.TestCase):
         self.sh = sh
         self.dir = tempfile.mkdtemp(prefix="test-http-cache-")
         self.saved = os.environ.get(sh.CACHE_DIR_VAR)
-        # `RATE_LIMIT_DIR` is one directory for the whole machine and the robots entry
-        # in it is keyed by `scheme://netloc` and lives half an hour, while every origin
-        # here is 127.0.0.1 plus an ephemeral port the operating system hands out again.
-        # Without this line the robots.txt an earlier test served can answer this one's
-        # question: `test_a_cache_hit_still_refuses_a_path_robots_forbids` failed exactly
-        # that way once in a full suite and never alone, and pre-seeding `Allow: /` for
-        # the port a fresh server got reproduces it verbatim. `RateLimiting` and `Robots`
-        # already point the directory at their own — for pacing state and for a stubbed
-        # fetch — so the shape is theirs; the reason here is the recycled port.
+        # Robots answers are keyed by `scheme://netloc` and live half an hour, while
+        # every origin here is 127.0.0.1 plus an ephemeral port the operating system
+        # hands out again. Without a directory of its own, the robots.txt an earlier
+        # test served can answer this one's question:
+        # `test_a_cache_hit_still_refuses_a_path_robots_forbids` failed exactly that
+        # way once in a full suite and never alone, and pre-seeding `Allow: /` for the
+        # port a fresh server got reproduces it verbatim.
         #
-        # It closes this class's own reads and not its children's: the setting is a
-        # module global, and the two tests below that start processes cannot hand it to
-        # them. That half is KNOWN-ISSUES `one-test-robots-answers-another`.
-        self.pacing_dir = tempfile.mkdtemp(prefix="test-http-pace-")
-        self.saved_pacing_dir = sh.RATE_LIMIT_DIR
-        sh.RATE_LIMIT_DIR = self.pacing_dir
+        # It now covers this class's children too — the two tests below that start
+        # processes — because the directory travels in `SEO_RATE_LIMIT_DIR` and they
+        # inherit this process's environment. While it was a module constant they
+        # could not be told, which is the half `one-test-robots-answers-another` kept
+        # open until 0.82.0.
+        self.pacing = harness.own_rate_limit_dir()
+        self.pacing_dir = self.pacing.__enter__()
         self.loopback = harness.allow_loopback()
         self.loopback.__enter__()
 
     def tearDown(self):
         self.loopback.__exit__(None, None, None)
-        self.sh.RATE_LIMIT_DIR = self.saved_pacing_dir
+        self.pacing.__exit__(None, None, None)
         if self.saved is None:
             os.environ.pop(self.sh.CACHE_DIR_VAR, None)
         else:
             os.environ[self.sh.CACHE_DIR_VAR] = self.saved
         shutil.rmtree(self.dir, ignore_errors=True)
-        shutil.rmtree(self.pacing_dir, ignore_errors=True)
 
     def _on(self):
         os.environ[self.sh.CACHE_DIR_VAR] = self.dir
@@ -3167,9 +3223,13 @@ class OneFetchPerUrl(unittest.TestCase):
                     "print(safe_get(%r, respect_robots=True).status_code)"
                     % (SCRIPTS, site.base + "/a"))
             env = harness.offline_env(**{self.sh.CACHE_DIR_VAR: self.dir})
-            # Its cache is keyed on the origin and lives in the shared rate-limit
-            # directory rather than the run's, so this test has to be told about a
-            # port nothing has seen before — which every `served()` origin is.
+            # The robots cache is keyed on the origin and lives in the rate-limit
+            # directory rather than the run's response cache, so the six children have
+            # to agree about which directory that is: they inherit this test's through
+            # `SEO_RATE_LIMIT_DIR`, which `offline_env` copies from this process. This
+            # test used to rely instead on `served()` handing out a port nothing had
+            # ever seen — an assumption an operating system that recycles ports
+            # withdraws, and one this suite was measured breaking within a single run.
             procs = [subprocess.Popen([sys.executable, "-c", code], env=env,
                                       stdout=subprocess.PIPE,
                                       stderr=subprocess.PIPE, text=True,
@@ -3179,6 +3239,63 @@ class OneFetchPerUrl(unittest.TestCase):
             self.assertEqual([o.strip() for o, _ in outs], ["200"] * 6,
                              [e for _, e in outs])
             self.assertEqual(site.paths("GET").count("/robots.txt"), 1)
+
+    def test_a_child_process_caches_robots_where_it_was_told_to(self):
+        """The half of `one-test-robots-answers-another` that stayed open until 0.82.0.
+
+        A test could point the state directory at its own and the processes it started
+        could not be told, because the directory was a module constant. So every child
+        went on writing robots answers into `%TEMP%/seo-checklist-rate`, keyed by
+        `127.0.0.1:<port>` and good for half an hour — and a full suite left fifteen of
+        them there, measured by snapshotting the directory around a run.
+        """
+        import subprocess
+        with harness.served({"/a": self.PAGE,
+                             "/robots.txt": (200, {"Content-Type": "text/plain"},
+                                             "User-agent: *\nAllow: /\n")}) as site:
+            entry = os.path.basename(self.sh._robots_cache_path(site.base))
+            # This origin's answer in the *machine-wide* directory, before and after.
+            # Existence alone proves nothing: that directory is where every child of
+            # every suite run wrote until this release, and it still holds thousands
+            # of them — 3451 on the machine this was measured on, one of which can
+            # belong to this very port. What this test can say is that nothing touched
+            # it now.
+            shared = os.path.join(self.sh.DEFAULT_RATE_LIMIT_DIR, entry)
+            before = os.path.getmtime(shared) if os.path.exists(shared) else None
+            code = ("import sys; sys.path.insert(0, %r);"
+                    "from lib.safe_http import safe_get;"
+                    "print(safe_get(%r, respect_robots=True).status_code)"
+                    % (SCRIPTS, site.base + "/a"))
+            proc = subprocess.Popen([sys.executable, "-c", code],
+                                    env=harness.offline_env(),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, close_fds=False)
+            out, err = proc.communicate(timeout=60)
+            self.assertEqual(out.strip(), "200", err)
+            self.assertIn(entry, os.listdir(self.pacing_dir),
+                          "the child did not inherit the state directory")
+            after = os.path.getmtime(shared) if os.path.exists(shared) else None
+            self.assertEqual(after, before,
+                             "the child answered into the machine-wide directory")
+
+    def test_a_stopped_fixture_leaves_no_answer_behind_it(self):
+        """An answer must not outlive the server that gave it.
+
+        For a real host, outliving one request is the whole point of the cache. For a
+        throwaway origin it is the defect: ports are recycled *inside* one run —
+        logging every origin whose robots path was computed across a full suite gave
+        `127.0.0.1:59747` served by one process at second 0 and by five others from
+        second 10 to second 14, well inside a 1800-second entry's life.
+        """
+        with harness.served({"/a": self.PAGE,
+                             "/robots.txt": (200, {"Content-Type": "text/plain"},
+                                             "User-agent: *\nAllow: /\n")}) as site:
+            self.sh.safe_get(site.base + "/a", respect_robots=True)
+            entry = self.sh._robots_cache_path(site.base)
+            self.assertTrue(os.path.exists(entry), "nothing was cached to forget")
+        self.assertFalse(os.path.exists(entry),
+                         "the next test to draw this port would be answered by this "
+                         "server, which has stopped listening")
 
     def test_eight_processes_asking_at_once_make_one_request(self):
         """The runner starts eight workers together, so without single-flight they
@@ -3231,6 +3348,11 @@ class OneFetchPerUrl(unittest.TestCase):
         sandbox = tempfile.mkdtemp()
         env = harness.offline_env()
         env["TMPDIR"] = sandbox
+        # This one child is deliberately *not* told where the pacing state goes: the
+        # witness below is that it put its default there, and the default is read from
+        # its own `gettempdir()`. Every other child in this file inherits the suite's
+        # directory instead.
+        env.pop(self.sh.RATE_LIMIT_DIR_VAR, None)
         with harness.served({"/": self.PAGE, "/robots.txt": (404, "")}) as site:
             out = harness.spawn(
                 [sys.executable, "-c", launch, self.dir,

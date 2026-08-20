@@ -878,7 +878,7 @@ name. A column called `url` would be read as "fix this page".
   start together at 5 rps and the gaps between the times they proceed are measured;
   `test_pacing_off_lets_the_processes_go_together` is the other half, so the first is
   known to measure pacing rather than the cost of starting interpreters. Verified
-  against the failure mode it names by giving each child its own `RATE_LIMIT_DIR`:
+  against the failure mode it names by giving each child its own state directory:
   gaps 0.000s / 0.001s and the assertion fails, against 0.205s / 0.205s for the real
   implementation.
   <!-- ki: pacing-test-never-forked -->
@@ -1515,38 +1515,46 @@ name. A column called `url` would be read as "fix this page".
    question about twelve items, not twelve questions.
    <!-- ki: a-truncated-crawl-decides-the-whole-site -->
 
-- **One test's robots.txt can answer another test's question for half an hour, and it
-  is the same shape as the flake 0.19.1 diagnosed.** Found on the acceptance run for
-  0.80.0: `test_a_cache_hit_still_refuses_a_path_robots_forbids` reported
-  *RobotsDisallowed not raised*, and did not reproduce in eight runs of its class and
-  its module alone. It is not a flake either. `safe_http.RATE_LIMIT_DIR` is
-  `%TEMP%/seo-checklist-rate`, one directory for the whole machine; the robots entry in
-  it is keyed by `scheme://netloc` alone and lives `ROBOTS_CACHE_TTL` — 1800 seconds.
-  Every loopback origin in this suite is `http://127.0.0.1:` plus an ephemeral port, and
-  the operating system hands those out again.
+- **Closed in 0.82.0 — one test's robots.txt could answer another test's question for
+  half an hour.** Found on the acceptance run for 0.80.0:
+  `test_a_cache_hit_still_refuses_a_path_robots_forbids` reported *RobotsDisallowed not
+  raised*, and did not reproduce in eight runs of its class and its module alone. It was
+  not a flake. `safe_http.RATE_LIMIT_DIR` was `%TEMP%/seo-checklist-rate`, one directory
+  for the whole machine; the robots entry in it is keyed by `scheme://netloc` alone and
+  lives `ROBOTS_CACHE_TTL` — 1800 seconds. Every loopback origin in this suite is
+  `http://127.0.0.1:` plus an ephemeral port, and the operating system hands those out
+  again.
 
   **Measured, not reasoned.** Serving the test's own routes on a fresh port raises
   `RobotsDisallowed`. Writing `User-agent: *\nAllow: /` into the cache path for that
   same origin first — which is exactly what an earlier test on a recycled port leaves
-  behind — reproduces the failure verbatim. So the answer a test gets can come from a
-  server that stopped listening minutes ago, and across separate runs of the suite as
-  well as within one.
+  behind — reproduces the failure verbatim.
 
-  **Half repaired, and the measurement says which half.** `RateLimiting` and `Robots`
-  already pointed `RATE_LIMIT_DIR` at their own directory in `setUp`; `OneFetchPerUrl`
-  did not, and now does. With that line the failing test writes nothing into the shared
-  directory at all — counted by snapshotting it around a run of just that test.
+  **How large it actually was, counted rather than described.** The entry said two
+  robots entries, from the two tests that start children. Snapshotting the shared
+  directory around a full suite says **fifteen**, and the directory on the machine this
+  was measured on had accumulated 3451 of them — each answerable for 1800 seconds after
+  it is written, which is longer than a whole run takes. And it was not only
+  across runs: logging every origin whose robots path was computed, across one run,
+  gave 270 lookups over 21 origins — with `127.0.0.1:59747` served by one process at
+  second 0 and by five different ones from second 10 to second 14. Two servers, one
+  port, one run, well inside a 1800-second entry's life. So per-run isolation would not
+  have been enough, and the shape of the repair follows from that number.
 
-  The other half stays open, and the obvious repair is not it. **`RATE_LIMIT_DIR` is a
-  module global, so a test can set it and a child process cannot inherit it.** Running
-  the whole class still adds two robots entries to the shared directory, from the two
-  tests that start children on purpose — and one of those tests already says in writing
-  that its cache "lives in the shared rate-limit directory rather than the run's, so
-  this test has to be told about a port nothing has seen before". A port nothing has
-  seen before is exactly the assumption an operating system that recycles ports
-  withdraws. Closing it needs the directory to travel in the environment the way
-  `SEO_HTTP_CACHE` already does, which is a change to the product's own contract and
-  belongs in its own release.
+  **What closed it, in three parts.** `RATE_LIMIT_DIR` is gone as a module constant —
+  a constant is what a caller can assign and a child cannot inherit — replaced by
+  `rate_limit_dir()`, which reads `SEO_RATE_LIMIT_DIR` on every use and otherwise
+  answers the same machine-wide default as before. The suite names its own directory
+  once, and every child it starts inherits it. And a fixture server drops its origin's
+  answer when it stops, which is the rule the directory alone cannot state: *an answer
+  must not outlive the server that gave it.* For a real host, outliving one request is
+  the point of the cache; for a throwaway origin whose port the system will hand to the
+  next test, it was this defect.
+
+  Each of the three has a test that fails when it is removed, verified by removing it:
+  ignoring the environment fails three, a `forget_robots` that does nothing fails
+  `test_a_stopped_fixture_leaves_no_answer_behind_it`, and a suite that stops naming
+  its own directory fails `test_the_state_directory_is_not_the_one_an_audit_would_use`.
   <!-- ki: one-test-robots-answers-another -->
 
 - **Closed in 0.81.0 — the walk that stops early stops answering.** When the chain runs

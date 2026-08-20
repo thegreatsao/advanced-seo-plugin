@@ -491,6 +491,11 @@ to audit: a block on that URL is a `critical` finding to report, not a reason to
 audit nothing. `Crawl-delay` is honoured when it asks for more patience than the
 configured rate.
 
+The lock file and the cached `robots.txt` answers share one directory for the whole
+machine, so that two audits started a second apart pace each other rather than each
+starting fresh. `SEO_RATE_LIMIT_DIR` moves it for a run that needs its own, and the
+processes that run starts inherit it.
+
 **When a threshold comes up, the basis is beside it.** Every number a verdict depends on
 carries a `# basis:` line saying whether it is an external standard, a measurement, a
 convention, or inherited from the borrowed code unexamined. If a client argues with a

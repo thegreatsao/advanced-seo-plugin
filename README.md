@@ -4,10 +4,12 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.81.0 — see [CHANGELOG.md](CHANGELOG.md). A redirect loop that closed past the
-tenth hop used to read as no loop at all, and the `high` item about loops passed the site.
-The walk that stops early now stops answering: the field is withheld and the item reports
-NO_DATA, which is this tree's word for the audit having tried and failed.
+Version 0.82.0 — see [CHANGELOG.md](CHANGELOG.md). The directory holding pacing state and
+cached `robots.txt` answers is named by `SEO_RATE_LIMIT_DIR` now, rather than by a module
+constant a process could set and could not pass to the ones it starts. The default is
+unchanged and an audit behaves exactly as it did; what this closes is a test suite whose
+recycled loopback ports let one fixture's `robots.txt` answer another's question for half
+an hour.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0
@@ -379,6 +381,14 @@ process. Requests are paced to **4 per second per host by default**, shared acro
 those processes through a lock file — an in-process limiter would simply let eight
 scripts go at once. `--max-rps N` changes it, `--max-rps 0` removes it, and
 `SEO_MAX_RPS` does the same for a script run on its own.
+
+That lock file, and the cached `robots.txt` answers beside it, live in one directory for
+the whole machine — deliberately, because pacing is a promise to somebody else's server
+and two audits started a second apart have to queue behind each other rather than each
+starting fresh. `SEO_RATE_LIMIT_DIR` names it when a run needs its own: a sandbox with no
+writable temp directory, or a harness whose origins are recycled loopback ports. It is
+read on every use and inherited by the processes a run starts, which a module constant
+was not.
 
 A `429` or `503` carrying `Retry-After` is honoured once, up to 30 seconds. Past
 that the request fails and the item reports `NO_DATA` with the reason, which is

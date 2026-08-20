@@ -46,17 +46,20 @@ of neither being a stub.
 """
 from __future__ import annotations
 
+import atexit
 import gzip
 import http.server
 import io
 import os
 import shutil
 import socketserver
+import sys
 import tempfile
 import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.join(HERE, "fixtures")
+SCRIPTS = os.path.join(os.path.dirname(HERE), "skills", "seo-checklist", "scripts")
 PLACEHOLDER = "http://127.0.0.1:8000"
 
 # The *other* fixture origin, so a page can carry a genuinely external link without
@@ -74,6 +77,58 @@ TEXTUAL = (".html", ".xml", ".txt", ".css", ".json", ".md")
 # They live outside both document roots on purpose — an artifact is an input to
 # the audit, not a page of the site, and serving one would put it in the crawl.
 ARTIFACTS = "artifacts"
+
+
+def safe_http():
+    """`lib.safe_http`, imported the way a test module imports it."""
+    if SCRIPTS not in sys.path:
+        sys.path.insert(0, SCRIPTS)
+    import lib.safe_http as module
+    return module
+
+
+# Pacing slots and cached robots.txt answers default to one directory for the whole
+# machine, which is right for the product — pacing is a promise to somebody else's
+# server, and two audits a second apart have to queue behind each other — and wrong
+# for this suite twice over.
+#
+# **Across runs.** The robots answer is keyed by `scheme://netloc` and nothing else,
+# and lives half an hour. Every origin here is `127.0.0.1` plus an ephemeral port,
+# and the operating system hands those out again, so a suite started five minutes
+# after the last one can be answered by a server that stopped listening then. That is
+# how `test_a_cache_hit_still_refuses_a_path_robots_forbids` failed once in 1200 and
+# never alone, and pre-seeding `Allow: /` for a fresh server's port reproduces it
+# verbatim.
+#
+# **Within one run, measured.** Logging every origin whose robots path was computed
+# across a full suite gave 270 lookups over 21 origins — and one of them,
+# `127.0.0.1:59747`, was served by one process at second 0 and by five different ones
+# from second 10 to second 14. Two servers, one port, one run, inside a 1800-second
+# entry's life.
+#
+# So the suite gets its own directory, and it travels in the environment, which is
+# what lets the child processes these tests start share it instead of falling back to
+# the machine's. `setdefault`, so a caller that already chose one keeps it.
+SUITE_RATE_LIMIT_DIR = tempfile.mkdtemp(prefix="seo-suite-rate-")
+os.environ.setdefault(safe_http().RATE_LIMIT_DIR_VAR, SUITE_RATE_LIMIT_DIR)
+atexit.register(shutil.rmtree, SUITE_RATE_LIMIT_DIR, True)
+
+
+def forget_robots(origin: str) -> None:
+    """Drop the cached robots.txt answer for `origin`, if there is one.
+
+    Called when a fixture server stops, which is the rule the directory alone cannot
+    state: **an answer must not outlive the server that gave it.** For a real host it
+    outliving one request is the point; for a throwaway origin whose port the system
+    will hand to the next test it is the defect above.
+    """
+    module = safe_http()
+    path = module._robots_cache_path(origin)
+    for name in (path, path + ".lock"):
+        try:
+            os.remove(name)
+        except OSError:
+            pass
 
 
 def substitute(root: str, needle: str, replacement: str) -> None:
@@ -227,6 +282,9 @@ class _Site:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=5)
+        # The port goes back to the system; the answer this origin gave must not
+        # outlive it. See `forget_robots`.
+        forget_robots(self.base)
 
 
 class FixtureSite:
@@ -482,6 +540,9 @@ class Served:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=5)
+        # The port goes back to the system; the answer this origin gave must not
+        # outlive it. See `forget_robots`.
+        forget_robots(self.base)
 
     def __enter__(self):
         return self
@@ -523,6 +584,31 @@ class allow_loopback:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = was
+
+
+class own_rate_limit_dir:
+    """A pacing-and-robots directory nothing outside this scope writes to.
+
+    Same shape and the same reason as `allow_loopback`: an environment variable read
+    at call time, restored on exit so a test cannot decide where the next one keeps
+    its state. The suite-wide directory above is the floor; this is for the classes
+    that want their own — the pacing tests, whose whole subject is what is in those
+    files, and the cache tests, whose recycled ports are what made this necessary.
+    """
+
+    def __enter__(self) -> str:
+        self.path = tempfile.mkdtemp(prefix="test-rate-")
+        self.var = safe_http().RATE_LIMIT_DIR_VAR
+        self.saved = os.environ.get(self.var)
+        os.environ[self.var] = self.path
+        return self.path
+
+    def __exit__(self, *exc):
+        if self.saved is None:
+            os.environ.pop(self.var, None)
+        else:
+            os.environ[self.var] = self.saved
+        shutil.rmtree(self.path, ignore_errors=True)
 
 
 def served(routes: dict, tls: bool = False) -> Served:

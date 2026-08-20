@@ -511,43 +511,58 @@ def _article_seo_shares_the_answers() -> dict:
 
 @probe("shared_robots_cache")
 def _shared_robots_cache() -> dict:
-    """What makes one test's robots.txt available to another test's question.
+    """Whether one test's robots.txt can still answer another test's question.
 
-    Three facts together, because no one of them is the defect: the directory is
+    Three facts made it possible, and no one of them was the defect: the directory was
     machine-wide, the key is the origin and nothing else, and the entry outlives the
-    server by half an hour. A repair moves at least one of them.
+    server by half an hour. 0.82.0 moved the first and, for fixture origins, the third.
+    So this now measures the repair rather than the defect — what would have to come
+    back for the entry to reopen.
+
+    The key is deliberately still measured: it did *not* move, and a change to it —
+    a run id, a pid, the served routes — is a different tree than the one this entry
+    was closed against.
     """
     import tempfile as _tempfile
 
     import lib.safe_http as safe
 
-    import ast as _ast
-
     origin = "http://127.0.0.1:49152"
-    isolating = []
-    for path in sorted((os.path.join(ROOT, "tests", name)
-                        for name in os.listdir(os.path.join(ROOT, "tests"))
-                        if name.startswith("test_") and name.endswith(".py"))):
-        with open(path, encoding="utf-8") as stream:
-            tree = _ast.parse(stream.read())
-        for node in tree.body:
-            if not isinstance(node, _ast.ClassDef):
-                continue
-            if any(isinstance(inner, _ast.Attribute) and inner.attr == "RATE_LIMIT_DIR"
-                   and isinstance(getattr(inner, "ctx", None), _ast.Store)
-                   for inner in _ast.walk(node)):
-                isolating.append("%s.%s" % (os.path.basename(path)[:-3], node.name))
+    var = safe.RATE_LIMIT_DIR_VAR
+    saved = os.environ.get(var)
+    try:
+        os.environ[var] = os.path.join(_tempfile.gettempdir(), "probe-rate-dir")
+        honours_environment = safe.rate_limit_dir() == os.environ[var]
+        os.environ.pop(var, None)
+        default = safe.rate_limit_dir()
+    finally:
+        if saved is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = saved
+
+    with open(os.path.join(ROOT, "tests", "harness.py"), encoding="utf-8") as stream:
+        harness_source = stream.read()
     return {
         "cache_dir_is_the_machine_temp_dir":
-            os.path.dirname(safe.RATE_LIMIT_DIR) == _tempfile.gettempdir(),
+            os.path.dirname(default) == _tempfile.gettempdir(),
+        "directory_is_read_from_the_environment": honours_environment,
+        # A module constant is exactly what a caller could assign and a child process
+        # could not inherit. Its absence is the repair; its return is the defect.
+        "module_constant_that_cannot_be_inherited": hasattr(safe, "RATE_LIMIT_DIR"),
         "robots_cache_ttl_seconds": safe.ROBOTS_CACHE_TTL,
         # The filename, so that a key scheme which started including anything beyond
         # the origin — a run id, a pid, the served routes — moves this value.
         "cache_file_for_one_fixed_origin":
             os.path.basename(safe._robots_cache_path(origin)),
-        # A module global, so it is what a test class can set and what a child process
-        # cannot inherit. Both halves of the entry are in this list.
-        "test_classes_pointing_it_somewhere_else": sorted(isolating),
+        # The other half: a suite that names its own directory, and fixture servers
+        # that drop their answer when they stop, so a recycled port finds nothing.
+        # Either spelling — the variable's own name or the constant holding it — so
+        # this moves when the harness stops naming it at all, not when it renames it.
+        "suite_names_its_own_directory":
+            var in harness_source or "RATE_LIMIT_DIR_VAR" in harness_source,
+        "fixture_servers_forget_their_origin":
+            harness_source.count("forget_robots(self.base)"),
     }
 
 

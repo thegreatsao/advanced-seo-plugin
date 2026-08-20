@@ -323,19 +323,18 @@
       "why": "A closed narrative. The three rules it ends with are a test in this suite, which is the reader that keeps it true."
     },
     "one-test-robots-answers-another": {
-      "claim": "The robots cache is one machine-wide directory keyed by origin alone and outlives its server by 1800 seconds; three test classes now point it elsewhere in setUp, and a child process still cannot inherit that because it is a module global.",
+      "claim": "The state directory is read from SEO_RATE_LIMIT_DIR on every use rather than captured in a module constant, so a child process inherits it; the suite names its own and its fixture servers drop their origin answer when they stop.",
       "measured": {
         "cache_dir_is_the_machine_temp_dir": true,
         "cache_file_for_one_fixed_origin": "f294a29f58ad3e7ccc64bb4c14c98fe0.robots",
+        "directory_is_read_from_the_environment": true,
+        "fixture_servers_forget_their_origin": 2,
+        "module_constant_that_cannot_be_inherited": false,
         "robots_cache_ttl_seconds": 1800.0,
-        "test_classes_pointing_it_somewhere_else": [
-          "test_runner.OneFetchPerUrl",
-          "test_runner.RateLimiting",
-          "test_runner.Robots"
-        ]
+        "suite_names_its_own_directory": true
       },
       "probe": "shared_robots_cache",
-      "state": "open"
+      "state": "closed"
     },
     "pacing-test-never-forked": {
       "claim": "Fixed.",

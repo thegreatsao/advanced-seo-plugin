@@ -419,11 +419,16 @@ jobs:
               "an unreachable robots.txt must allow, not fail the audit")
 
           sh._fetch_robots = lambda origin: f"User-agent: {sh.ROBOTS_TOKEN}\nDisallow: /no\n"
-          import shutil, tempfile
-          sh.RATE_LIMIT_DIR = tempfile.mkdtemp()
+          import os, shutil, tempfile
+          # Through the environment, which is the only way that reaches a child
+          # process — see `rate_limit_dir`. Assigning a module attribute here used to
+          # work by accident: this step starts nothing.
+          own = tempfile.mkdtemp()
+          os.environ[sh.RATE_LIMIT_DIR_VAR] = own
+          assert sh.rate_limit_dir() == own
           assert sh.robots_allows("https://example.com/no/x")[0] is False
           assert sh.robots_allows("https://example.com/yes")[0] is True
-          shutil.rmtree(sh.RATE_LIMIT_DIR, ignore_errors=True)
+          shutil.rmtree(own, ignore_errors=True)
           print("robots policy holds")
           PY
 

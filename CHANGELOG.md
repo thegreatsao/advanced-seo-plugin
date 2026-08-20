@@ -10,6 +10,51 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.82.0 — an answer must not outlive the server that gave it
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+Pacing slots and cached `robots.txt` answers lived in `%TEMP%/seo-checklist-rate`,
+named by a module constant. A constant is exactly what a caller can *assign* and a
+child process cannot *inherit*, so a test that pointed it at its own directory changed
+its own process and nothing it went on to start. `SEO_RATE_LIMIT_DIR` now names the
+directory and `rate_limit_dir()` reads it on every use. **The default has not moved**:
+pacing is a promise to somebody else's server, and two audits started a second apart
+still have to queue behind each other, which a per-run directory would have broken.
+
+For an audit this changes nothing it does not ask for. For the test suite it closes
+`one-test-robots-answers-another`, and the size of what it closes was counted rather
+than assumed:
+
+| | |
+|---|---|
+| robots answers a full suite left in the shared directory | **15** (the entry said two) |
+| answers accumulated there on the development machine | 3451, each answerable for 1800s after it is written — longer than a whole run |
+| robots lookups in one run / distinct origins | 270 / 21 |
+| origins served by more than one process in one run | **1** — `127.0.0.1:59747`, at second 0 and again from second 10 |
+
+That last row is why the repair is not simply a directory per run. A robots answer is
+keyed by `scheme://netloc` and lives 1800 seconds; every fixture origin is `127.0.0.1`
+plus an ephemeral port, and the operating system hands those out again *inside* one
+run. So a fixture server now drops its origin's answer when it stops. For a real host,
+an answer outliving one request is the point of caching it; for a throwaway origin
+whose port the next test will draw, it was the defect.
+
+Each of the three parts has a test that fails when that part is removed, verified by
+removing it: `rate_limit_dir()` ignoring the environment fails three tests, a
+`forget_robots` that does nothing fails
+`test_a_stopped_fixture_leaves_no_answer_behind_it`, and a suite that stops naming its
+own directory fails `test_the_state_directory_is_not_the_one_an_audit_would_use`.
+
+One existing test stopped lying in passing.
+`test_the_pacing_state_is_shared_between_processes` told its children where the state
+was with `sh.RATE_LIMIT_DIR = os.environ['PACE_DIR']` — a line that existed only
+because a constant cannot be inherited, and which measured sharing through a mechanism
+no audit has. The children now inherit the directory the way an evidence script does,
+and the test also asserts the slot file landed *there*: without that, three children
+falling back to the machine-wide directory would have queued just the same and
+satisfied the assertion with state belonging to nobody.
+
 ## 0.81.0 — the walk that stops early stops answering
 
 Registry version: `3c6b20d512c6`, unchanged.

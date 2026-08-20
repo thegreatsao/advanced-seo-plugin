@@ -134,11 +134,32 @@ def normalize_url(url: str, default_scheme: str = "https") -> str:
 # per host holding the last request time, guarded by a lock: cheap, no daemon, and
 # it survives a script crashing mid-audit.
 DEFAULT_MAX_RPS = 4.0
-RATE_LIMIT_DIR = os.path.join(tempfile.gettempdir(), "seo-checklist-rate")
+# Where that file lives, and the robots.txt answers beside it. Machine-wide by
+# default and deliberately so: pacing is a promise to somebody else's server, and two
+# audits started a second apart have to queue behind each other or the promise is
+# only kept per process tree.
+DEFAULT_RATE_LIMIT_DIR = os.path.join(tempfile.gettempdir(), "seo-checklist-rate")
+RATE_LIMIT_DIR_VAR = "SEO_RATE_LIMIT_DIR"
 # basis: convention — 30s. A server that says 'come back in an hour' is not worth
 #  waiting for inside an audit; past this the item reports NO_DATA with the reason,
 #  which is more useful than a run that appears to hang
 MAX_RETRY_AFTER_WAIT = 30.0
+
+
+def rate_limit_dir() -> str:
+    """The directory pacing slots and cached robots.txt answers live in.
+
+    `SEO_RATE_LIMIT_DIR` moves it, and it is read on every use rather than captured
+    at import — which is the whole difference from the module constant this replaced.
+    That constant could be *assigned* and could not be *inherited*: a caller that set
+    it changed its own process and nothing it went on to start, so every child went
+    back to the machine-wide directory and read whatever was in it. A caller that
+    needs its own state — a sandboxed run, a second audit on one machine, a test
+    suite whose origins are recycled loopback ports — has to be able to hand that
+    decision to the processes it launches, and the environment is how this tree
+    already does it for `SEO_HTTP_CACHE`.
+    """
+    return os.environ.get(RATE_LIMIT_DIR_VAR, "").strip() or DEFAULT_RATE_LIMIT_DIR
 
 
 def max_rps() -> float:
@@ -157,7 +178,7 @@ def _slot_path(host: str) -> str:
     # The host is not a safe filename (ports, IDN, path-like garbage from a
     # malformed URL), so it is hashed rather than sanitised.
     digest = hashlib.sha256(host.encode("utf-8", "replace")).hexdigest()[:32]
-    return os.path.join(RATE_LIMIT_DIR, f"{digest}.slot")
+    return os.path.join(rate_limit_dir(), f"{digest}.slot")
 
 
 def _lock_exclusive(fd, *, blocking: bool) -> bool:
@@ -208,7 +229,11 @@ def pace(host: str, rps: float | None = None) -> float:
     interval = 1.0 / limit
     fd = None
     try:
-        os.makedirs(RATE_LIMIT_DIR, exist_ok=True)
+        # The directory is the slot's own, read once: `rate_limit_dir()` answers from
+        # the environment, so creating one directory and then opening a file in
+        # whatever the next call says would be two decisions where there is one.
+        slot = _slot_path(host)
+        os.makedirs(os.path.dirname(slot), exist_ok=True)
         # Deliberately not open(path, "a+"): in append mode POSIX writes at the end
         # of the file whatever seek() and truncate() say, so two updates
         # concatenated into "153761.19671379115376.196978791" and float() raised —
@@ -216,7 +241,7 @@ def pace(host: str, rps: float | None = None) -> float:
         # pwrite is deliberately not used: it does not exist on Windows, where its
         # absence silently disabled shared coordination instead of failing the
         # request.
-        fd = os.open(_slot_path(host), os.O_RDWR | os.O_CREAT, 0o600)
+        fd = os.open(slot, os.O_RDWR | os.O_CREAT, 0o600)
         if not _lock_exclusive(fd, blocking=True):
             raise OSError("could not lock pacing slot")
         try:
@@ -336,7 +361,7 @@ def _close_lock(fd) -> None:
 
 def _robots_cache_path(origin: str) -> str:
     digest = hashlib.sha256(origin.encode("utf-8", "replace")).hexdigest()[:32]
-    return os.path.join(RATE_LIMIT_DIR, f"{digest}.robots")
+    return os.path.join(rate_limit_dir(), f"{digest}.robots")
 
 
 def _read_robots_cache(path: str) -> str | None:
@@ -351,7 +376,9 @@ def _read_robots_cache(path: str) -> str | None:
 
 def _write_robots_cache(path: str, text: str) -> None:
     try:
-        os.makedirs(RATE_LIMIT_DIR, exist_ok=True)
+        # `path`'s own directory, not whatever `rate_limit_dir()` says now: the caller
+        # already decided where this entry goes.
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = f"{path}.{os.getpid()}"
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
