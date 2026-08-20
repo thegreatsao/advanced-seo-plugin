@@ -4,11 +4,12 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.84.0 — see [CHANGELOG.md](CHANGELOG.md). Two mobile-layout measures owed since
-0.62.0 are paid: a page that scrolls sideways on a phone and text that is clipped are
-measured from the rendered page now, and asserted by two new items, `MB-107` and
-`MB-108`. Their definitions come from the Playwright branch deleted in 0.61.0 rather
-than from a fresh guess — nobody had ever run that branch, but its arithmetic was sound.
+Version 0.85.0 — see [CHANGELOG.md](CHANGELOG.md). `MD-184` no longer calls itself
+*Audit Sitewide Image Usage*: it runs one script over one URL asserting `count gte 1`,
+it answers PASS or nothing at all, and it has answered PASS on every tree this
+repository can serve — including the one built to fail. A title saying *Audit* named a
+judgement the item cannot deliver. The title and its fix now say what the assertion
+says; the assertion itself is unchanged.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

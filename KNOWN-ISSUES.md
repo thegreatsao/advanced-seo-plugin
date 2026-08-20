@@ -633,11 +633,27 @@ name. A column called `url` would be read as "fix this page".
   exactly that shape and reports the count as `skipped_no_src`, the name its neighbour
   already uses.
 
-  **Still open, and deliberately not taken with it: whether `count gte 1` is the
-  assertion *Audit Sitewide Image Usage* wants at all.** The item now agrees with every
-  page that has an image and says nothing about pages that do not, which is not an
-  audit of sitewide usage — it is a check that images exist somewhere in the sample.
-  That is a registry question, and it changes what a live audit reports.
+  **Answered in 0.85.0, from the title's side rather than the assertion's.** The
+  question left standing here was whether `count gte 1` is the assertion *Audit
+  Sitewide Image Usage* wants at all: the item agrees with every page that has an
+  image and says nothing about pages that do not, which is not an audit of sitewide
+  usage — it is a check that images exist somewhere in the sample. The census then
+  said the same thing in numbers: `MD-184` answered PASS on all five trees this
+  repository can serve, `tests/corpus/failing-shapes/` included. The one FAIL it ever
+  produced is the one three paragraphs above — the defect this entry is about — so
+  since 0.49.0 *Audit* has named a judgement the item cannot deliver. 0.85.0 renamed it
+  *Confirm the Page References at Least One Image* through `title-overrides.json`,
+  which is the repair 0.53.0 made for `TE-169` and `TE-177` — bring the title to the
+  assertion, not the assertion to the title. *References* and not *uses*: an `<img>`
+  with no `src` is skipped before the count, so the assertion is about what the markup
+  names.
+
+  **What that does not settle is held outside this entry**, so that a closed narrative
+  stops carrying an open question — which is what the paragraph replaced here had
+  become. Whether a page with no image should be able to fail something is one of the
+  25 never-FAIL items `tests/census.json` counts. What an image-usage item should
+  assert over a script handed one URL at a time is a title-versus-assertion question,
+  and it sits with the other two of those in the entry immediately below.
   <!-- ki: image-inventory-count-on-a-page-with-no-images -->
 
 - **Two items assert a thinner thing than their titles promise.** Collected rather
@@ -659,11 +675,17 @@ name. A column called `url` would be read as "fix this page".
   declarations that the fixture repair touched. `TE-169` and `TE-177` used to be in
   this table, but 0.53.0 brought their titles to their served-HTML assertions, not the
   assertions to the old titles. The served-versus-rendered comparison those titles
-  implied is `MB-105`; scoring that comparison three times would duplicate it.
+  implied is `MB-105`; scoring that comparison three times would duplicate it. `MD-184`
+  was never in this table and belongs to the same shape — 0.85.0 renamed it the same
+  way, and the entry above records why. What that rename did not settle belongs here
+  with these two: `image_inventory.py` is handed one URL at a time, so no assertion
+  over it can be sitewide, and what an image-usage item should assert instead of
+  `count gte 1` is open.
 
-  Neither is acted on here: each changes what a live audit reports and the registry.
-  They are collected so that the next person deciding what a registry version
-  is worth spending can see them together.
+  Neither of the two in the table is acted on here, and nor is the question `MD-184`
+  left behind: each changes what a live audit reports and the registry. They are
+  collected so that the next person deciding what a registry version is worth
+  spending can see them together.
   <!-- ki: titles-thinner-than-their-assertions -->
 
 - **Closed in 0.50.0 — the five items that could not fail, and this entry outlived them

@@ -2595,7 +2595,7 @@
       "script": "image_inventory.py",
       "severity": "medium",
       "source": "script",
-      "title": "Audit Sitewide Image Usage"
+      "title": "Confirm the Page References at Least One Image"
     },
     "MD-185": {
       "answers": {
@@ -3581,7 +3581,7 @@
       "title": "LCP subparts within budget"
     }
   },
-  "registry_version": "167e11b6679a",
+  "registry_version": "91f6634fe6c8",
   "sites": [
     "fixture:good",
     "fixture:broken",

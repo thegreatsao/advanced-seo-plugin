@@ -470,7 +470,7 @@
       "state": "open"
     },
     "titles-thinner-than-their-assertions": {
-      "claim": "AR-152 asserts that robots.txt has any user-agent group at all, and CN-056 asserts one date of any kind, while both titles promise more.",
+      "claim": "AR-152 asserts that robots.txt has any user-agent group at all, and CN-056 asserts one date of any kind, while both titles promise more; MD-184's title was brought to its assertion in 0.85.0 and what an image-usage item should assert instead of `count gte 1` is still open.",
       "measured": {
         "AR-152": {
           "assert": {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "167e11b6679a",
+  "registry_version": "91f6634fe6c8",
   "item_count": 217,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -3825,7 +3825,7 @@
       "plerdy_ref": 184,
       "category": "media",
       "category_label": "Images / Video",
-      "title": "Audit Sitewide Image Usage",
+      "title": "Confirm the Page References at Least One Image",
       "severity": "medium",
       "source": "script",
       "check": {
@@ -3840,7 +3840,7 @@
         }
       },
       "effort": "medium",
-      "fix": "Audit sitewide image usage"
+      "fix": "Reference at least one image with a src in the served HTML"
     },
     {
       "id": "MD-185",

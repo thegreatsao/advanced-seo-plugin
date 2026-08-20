@@ -10,6 +10,45 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.85.0 — MD-184 stops promising an audit it cannot deliver
+
+Registry version: `167e11b6679a` → **`91f6634fe6c8`**. The registry stays at 217 items;
+one title and one fix change, and no assertion does.
+
+`MD-184` was *Audit Sitewide Image Usage*, and what it runs is `image_inventory.py`
+over one fetched URL with `count gte 1`. That asserts the served HTML of one page names
+at least one image with a `src`. It says nothing about how a site uses images anywhere
+else, and the runner's per-page sampling cannot make it say more: the script is handed
+one URL at a time.
+
+The scope is only half of the gap. `image_inventory.py` has withheld `count` from a
+page carrying no image since 0.49.0 — deliberately, so that "there was nothing here to
+judge" stops reading as a verdict — and where the key is present its value is
+`len(rows)`, which is never below one. PASS and NO_DATA are the item's whole
+vocabulary. `tests/census.json` records what all five servable trees answered: `PASS`
+on the two fixture origins, on both TLS variants, and on
+`tests/corpus/failing-shapes/`, the tree built to fail as much as a static server can
+express. This item did once report a `medium` FAIL — on the *exemplary* fixture, and it
+was the defect 0.49.0 repaired, which `KNOWN-ISSUES.md` records. Since that repair
+*Audit* has named a judgement the item cannot deliver.
+
+The title now says what the assertion says — *Confirm the Page References at Least One
+Image* — and the fix follows it: *Reference at least one image with a src in the served
+HTML*, in place of a fix that was the false title again in lower case. **References,
+not uses**: `image_inventory.py` skips an `<img>` with no `src` and counts what remains,
+so the assertion proves the markup names an image and never that one loads. The
+departure is declared in `title-overrides.json` with its reason, which is the only way
+a borrowed Plerdy title is allowed to change here; `plerdy-titles.json` still carries
+the source wording untouched.
+
+**What is deliberately not done.** The assertion stays where it is. Whether a page
+with no image should be able to fail something, and what a sitewide reading would
+assert over a script handed one URL at a time, both move live verdicts. Both are now
+held where a reader looks for open questions rather than in the tail of a closed
+narrative: the first among the 25 never-FAIL items `tests/census.json` counts, the
+second in `KNOWN-ISSUES.md` beside `AR-152` and `CN-056`. This release makes the title
+honest about the item as it is, which is the half that costs no verdict.
+
 ## 0.84.0 — paying a debt from 0.62.0, with the original's own arithmetic
 
 Registry version: `3c6b20d512c6` → **`167e11b6679a`**. The registry goes 215 → 217.

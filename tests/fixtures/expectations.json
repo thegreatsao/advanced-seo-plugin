@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "167e11b6679a",
+  "registry_version": "91f6634fe6c8",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -382,7 +382,7 @@
       },
       "MD-184": {
         "expect": "PASS",
-        "why": "re-declared for 0.49.0, which stopped image_inventory.py emitting count on a page with no images. The sample is the entry page plus /about.html and /privacy.html: the two policy pages reference no image at all and are now undecided rather than counted as zero, so the entry page decides, and it carries the loaf mark in a picture/source pair. 'Audit Sitewide Image Usage' is answered by the pages that have images, which is what the previous FAIL was recording the absence of"
+        "why": "re-declared for 0.49.0, which stopped image_inventory.py emitting count on a page with no images. The sample is the entry page plus /about.html and /privacy.html: the two policy pages reference no image at all and are now undecided rather than counted as zero, so the entry page decides, and it carries the loaf mark in a picture/source pair. 'Audit Sitewide Image Usage' is answered by the pages that have images, which is what the previous FAIL was recording the absence of. Re-read for 0.85.0 against the item's new title, Confirm the Page References at Least One Image: a declaration derived from a title has to be read again when the title moves. PASS stands and now follows from the title directly — the entry page's served HTML names an image with a src"
       },
       "MD-189": {
         "expect": "PASS",
@@ -856,7 +856,7 @@
       },
       "MD-184": {
         "expect": "PASS",
-        "why": "re-declared for 0.49.0 alongside the good origin. The entry page carries five img elements and decides; the sampled duplicate post and orphan page reference no image and are undecided rather than counted as zero. The item stops separating the fixtures, and that is the honest reading: both trees put images on the pages that have them, and everything this tree gets wrong about images is somebody else's item — alt text is CI-016 and MD-186, responsive variants are MB-096 and MD-189, weight is MB-095"
+        "why": "re-declared for 0.49.0 alongside the good origin. The entry page carries five img elements and decides; the sampled duplicate post and orphan page reference no image and are undecided rather than counted as zero. The item stops separating the fixtures, and that is the honest reading: both trees put images on the pages that have them, and everything this tree gets wrong about images is somebody else's item — alt text is CI-016 and MD-186, responsive variants are MB-096 and MD-189, weight is MB-095. Re-read for 0.85.0 against the new title, Confirm the Page References at Least One Image; PASS stands, and the reason the item stops separating the fixtures is the same under either wording"
       },
       "MD-189": {
         "expect": "FAIL",

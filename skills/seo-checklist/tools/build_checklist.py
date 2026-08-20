@@ -1130,7 +1130,7 @@ item(183, "high", M, fix="Handle migrations, parameters and status codes correct
 # --- 13. Images / Video -----------------------------------------------------
 item(184, "medium", S, "image_inventory.py", PAGE,
      {"path": "count", "gte": 1},
-     "Audit sitewide image usage")
+     "Reference at least one image with a src in the served HTML")
 # `--fetch-images` since 0.50.0, and the band is why. Grading the lazy LCP candidate
 # `error` left `Large image transfer size` as the only `warning` this script can raise,
 # and it reads `content_length`, which `_local_size` returns `None` for over http —
