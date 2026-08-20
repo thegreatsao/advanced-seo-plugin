@@ -10,6 +10,57 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.81.0 — the walk that stops early stops answering
+
+Registry version: `3c6b20d512c6`, unchanged.
+
+`CI-014` is `high`, its subject is redirect loops, and it passed a site that loops.
+`redirect_checker.check_redirects` walks the chain itself and stops after ten hops; on a
+chain that had not ended it still reported `has_loop: False`, which the item reads as
+"no loop". Measured on four chains through the runner's own `evaluate()`:
+
+| chain | hops | `has_loop` | CI-014 | AR-150 |
+|---|---|---|---|---|
+| ends after 3 hops | 3 | `False` | PASS | FAIL |
+| loops at hop 3 | 3 | `True` | the loop is reported | FAIL |
+| **loops at hop 12** | 10 | **absent** | **NO_DATA** | FAIL |
+| ends after 12 hops | 10 | absent | NO_DATA | FAIL |
+
+Before this release the last two rows both read `has_loop: False` and CI-014 PASS — the
+two cases the item exists to tell apart, answered identically, with the answer that
+clears the site.
+
+**The repair is a withheld verdict, not a louder one.** When the walk stops at the cap the
+key is removed from the output and `truncated` says why, so the runner reports NO_DATA:
+this tree's word for "the audit tried and could not". Removed rather than set to `None`,
+because `evaluate` reads an absent path as undecided and a null one as a pass — `not None`
+is True — so the two spellings differ by exactly the defect. `AR-150` still fails every
+long chain on `total_hops lte 1`, which stays honest: ten hops is a floor, and a floor
+above one is enough to fail.
+
+The cap was `max_redirects: int = 10`, a default argument, which is where the threshold
+inventory could not see it — that scan reads module-level assignments. It is now
+`MAX_REDIRECT_HOPS` with a basis line saying what it decides and how the defect was
+measured. The inventory reads **136 numbers a verdict depends on** and 20 uncounted.
+
+Found by an independent reading of 0.80.1's declarations, from the sentence saying
+`DEFAULT_MAX_REDIRECTS` does not govern these two items: it does not, and nobody had
+looked at the number that does.
+
+**A second independent reading, of this change, added two tests and one branch.** It asked
+what wrong implementation the new tests would still pass, and named one: a repair keyed on
+`total_hops >= 10` rather than on the walk running out of hops would withhold the verdict
+from a chain of ten redirects that ends in a page — a chain followed to its end. There was
+no such case in the suite. There is now, and it was checked the only way that means
+anything: by installing the wrong repair and watching the new test go red. The same
+reading pointed at the network-error branch, where the walk also stops mid-chain; no
+verdict rests on it, because the runner replaces a result carrying `error` before any rule
+reads it, but the artifact said `has_loop: False` about a chain nobody finished, and now
+it says nothing. Its third row — that removing a key could break a consumer that indexes
+rather than `.get()`s — was checked against every reader of the field and holds for none
+of them: the registry resolves by path, `main()` never reads it, and the shapes reference
+now documents the absence.
+
 ## 0.80.1 — four numbers judged, by what they decide
 
 Registry version: `3c6b20d512c6`, unchanged.

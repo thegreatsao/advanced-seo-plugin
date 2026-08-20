@@ -591,6 +591,35 @@ GOOD_ROUTES = {
     "/hop3": (301, {"Location": "PLACEHOLDER/"}, ""),
     "/loop1": (301, {"Location": "PLACEHOLDER/loop2"}, ""),
     "/loop2": (301, {"Location": "PLACEHOLDER/loop1"}, ""),
+    # A loop that closes past the walk's own cap of ten hops. Written out rather than
+    # generated because every other route here is: a reader comparing the served tree
+    # with a report should be able to count the hops without running anything.
+    "/deep1": (301, {"Location": "PLACEHOLDER/deep2"}, ""),
+    "/deep2": (301, {"Location": "PLACEHOLDER/deep3"}, ""),
+    "/deep3": (301, {"Location": "PLACEHOLDER/deep4"}, ""),
+    "/deep4": (301, {"Location": "PLACEHOLDER/deep5"}, ""),
+    "/deep5": (301, {"Location": "PLACEHOLDER/deep6"}, ""),
+    "/deep6": (301, {"Location": "PLACEHOLDER/deep7"}, ""),
+    "/deep7": (301, {"Location": "PLACEHOLDER/deep8"}, ""),
+    "/deep8": (301, {"Location": "PLACEHOLDER/deep9"}, ""),
+    "/deep9": (301, {"Location": "PLACEHOLDER/deep10"}, ""),
+    "/deep10": (301, {"Location": "PLACEHOLDER/deep11"}, ""),
+    "/deep11": (301, {"Location": "PLACEHOLDER/deep12"}, ""),
+    "/deep12": (301, {"Location": "PLACEHOLDER/deep1"}, ""),
+    # And a chain that ends on the last hop the walk is allowed to take: ten redirects
+    # and a page. `total_hops` is 10 here too, which is the point — a repair that
+    # withheld on the count rather than on running out of hops would withhold here, on
+    # a chain it followed to the end.
+    "/edge1": (301, {"Location": "PLACEHOLDER/edge2"}, ""),
+    "/edge2": (301, {"Location": "PLACEHOLDER/edge3"}, ""),
+    "/edge3": (301, {"Location": "PLACEHOLDER/edge4"}, ""),
+    "/edge4": (301, {"Location": "PLACEHOLDER/edge5"}, ""),
+    "/edge5": (301, {"Location": "PLACEHOLDER/edge6"}, ""),
+    "/edge6": (301, {"Location": "PLACEHOLDER/edge7"}, ""),
+    "/edge7": (301, {"Location": "PLACEHOLDER/edge8"}, ""),
+    "/edge8": (301, {"Location": "PLACEHOLDER/edge9"}, ""),
+    "/edge9": (301, {"Location": "PLACEHOLDER/edge10"}, ""),
+    "/edge10": (301, {"Location": "PLACEHOLDER/"}, ""),
 }
 
 # No robots.txt, no llms.txt, a sitemap full of problems, and the bad page at the
@@ -712,6 +741,8 @@ RUNS = [
     ("redirect", "redirect_checker.py", ["{good}"]),
     ("redirect_hops", "redirect_checker.py", ["{good}hop1"]),
     ("redirect_loop", "redirect_checker.py", ["{good}loop1"]),
+    ("redirect_deep_loop", "redirect_checker.py", ["{good}deep1"]),
+    ("redirect_at_the_cap", "redirect_checker.py", ["{good}edge1"]),
     ("rich", "rich_results_guard.py", ["{good}"]),
     ("rich_bad", "rich_results_guard.py", ["{good}schema-bad.html"]),
     ("robots", "robots_checker.py", ["{good}"]),
@@ -1229,6 +1260,70 @@ class Redirects(unittest.TestCase):
         loop = out("redirect_loop")
         self.assertIs(loop["has_loop"], True)
         self.assertEqual(verdict("CI-014", loop), WARN)
+
+    def test_a_loop_past_the_cap_is_not_answered_as_no_loop(self):
+        """The walk stops at ten hops; `/deep1` loops back at the twelfth.
+
+        Before 0.81.0 this served `has_loop: False` and CI-014 — `high`, and the item
+        whose whole subject is loops — reported PASS on a site that loops. The field is
+        now absent, which the runner reads as NO_DATA. Absent and not `None`: `falsy`
+        is satisfied by a null, so a null here would be the same false PASS with a
+        different spelling.
+        """
+        deep = out("redirect_deep_loop")
+        self.assertNotIn("has_loop", deep)
+        self.assertIs(deep["truncated"], True)
+        self.assertEqual(deep["total_hops"], 10)
+        self.assertEqual(verdict("CI-014", deep), NO_DATA)
+
+    def test_a_chain_that_ends_on_the_last_allowed_hop_is_still_answered(self):
+        """Ten redirects and a page: the walk uses its last hop and the chain ends.
+
+        `total_hops` is 10 here and 10 on the truncated walk as well, so a repair that
+        withheld on the number would withhold on a chain it had followed to the end.
+        The two are told apart by *why* the walk stopped, which is what `for ... else`
+        answers and a count cannot.
+        """
+        edge = out("redirect_at_the_cap")
+        self.assertEqual(edge["total_hops"], 10)
+        self.assertIs(edge["truncated"], False)
+        self.assertIs(edge["has_loop"], False)
+        self.assertEqual(verdict("CI-014", edge), PASS)
+
+    def test_a_walk_stopped_by_a_network_error_withholds_the_same_field(self):
+        """No verdict rests on this: the runner replaces a result carrying `error`
+        before any rule reads it. The artifact is read by people too, and on its own it
+        would otherwise say `has_loop: False` about a chain nobody finished."""
+        import redirect_checker
+        import requests
+
+        calls = []
+
+        def refuse(url, **kwargs):
+            calls.append(url)
+            raise requests.exceptions.ConnectionError("refused")
+
+        original = redirect_checker.safe_head
+        redirect_checker.safe_head = refuse
+        try:
+            result = redirect_checker.check_redirects("https://example.test/")
+        finally:
+            redirect_checker.safe_head = original
+
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("has_loop", result)
+        self.assertIs(result["truncated"], True)
+        self.assertIn("refused", result["error"])
+
+    def test_the_chain_is_still_too_long_when_the_walk_was_cut_short(self):
+        """`total_hops` is a floor rather than a count once the walk stops, and a floor
+        of ten is enough for AR-150: the site is still told its chain is too long. Both
+        halves matter — withholding one verdict must not withhold the other."""
+        deep = out("redirect_deep_loop")
+        self.assertEqual(verdict("AR-150", deep), FAIL)
+        self.assertTrue(any("whether it loops is unknown" in issue
+                            for issue in deep["issues"]),
+                        deep["issues"])
 
 
 class UrlQuality(unittest.TestCase):

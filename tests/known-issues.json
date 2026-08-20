@@ -1,21 +1,23 @@
 {
   "entries": {
     "a-loop-past-the-tenth-hop-is-no-loop": {
-      "claim": "redirect_checker walks the chain with max_redirects=10, a default argument the threshold inventory cannot see, and CI-014 asserts has_loop falsy — so a loop closing past the cap reads as no loop and the item passes.",
+      "claim": "The cap is a named constant with a basis, and the walk that stops at it removes has_loop rather than answering False, so CI-014 reports NO_DATA on a chain nobody followed to its end.",
       "measured": {
         "ar_150_assert": {
           "lte": 1,
           "path": "total_hops"
         },
+        "branches_that_withhold_has_loop": 2,
         "cap": 10,
+        "cap_basis": "inherited",
+        "cap_is_a_named_constant": true,
         "ci_014_assert": {
           "falsy": true,
           "path": "has_loop"
-        },
-        "declared_as": "default argument"
+        }
       },
       "probe": "redirect_walk_cap",
-      "state": "open"
+      "state": "closed"
     },
     "a-mostly-refused-run-reports-a-clean-count": {
       "claim": "A run where almost every image was unchecked still reports broken_image_count 0, with the unchecked count printed beside it.",
@@ -409,7 +411,7 @@
     "threshold-declarations-unjudged": {
       "claim": "The four shapes 0.71.0 singled out are judged and declared — the two MinHash constants and the three detect_profile tables as inherited, DEFAULT_MAX_REDIRECTS left outside as a fetch budget — and twenty module-level numeric constants carry no basis and are beyond the name-based scan.",
       "measured": {
-        "counted": 135,
+        "counted": 136,
         "non_numeric_basis": [
           "scripts/robots_path_tester.py:31"
         ],

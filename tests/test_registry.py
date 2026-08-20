@@ -271,14 +271,14 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
             "standard": 11,
             "measured": 11,
             "convention": 47,
-            "inherited": 66,
+            "inherited": 67,
             "presentation": 13,
         })
-        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 135)
-        self.assertEqual(len(named), 148)
+        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 136)
+        self.assertEqual(len(named), 149)
         self.assertEqual(len(uncounted), 20)
         self.assertEqual(sum(len(at.numeric_constants(path))
-                             for path in at._script_paths()), 168)
+                             for path in at._script_paths()), 169)
 
     def test_a_basis_the_scan_cannot_see_is_counted_whatever_the_constant_is(self):
         at = self._tool()

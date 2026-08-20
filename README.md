@@ -4,11 +4,10 @@ A deterministic SEO audit for Claude Code. One fixed registry of 215 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.80.1 — see [CHANGELOG.md](CHANGELOG.md). Four numbers that had been listed and
-not judged are judged by what they decide: two move a printed similarity claim no rule
-reads, one is a fetch budget, and three weight tables narrow scope only under a flag
-somebody typed. The threshold inventory reads 135 numbers a verdict depends on, 20 still
-uncounted.
+Version 0.81.0 — see [CHANGELOG.md](CHANGELOG.md). A redirect loop that closed past the
+tenth hop used to read as no loop at all, and the `high` item about loops passed the site.
+The walk that stops early now stops answering: the field is withheld and the item reports
+NO_DATA, which is this tree's word for the audit having tried and failed.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

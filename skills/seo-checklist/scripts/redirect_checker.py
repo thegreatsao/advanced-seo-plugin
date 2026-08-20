@@ -29,8 +29,19 @@ except ImportError:
 
 HEADERS = default_headers()
 
+# basis: inherited — present at import as a default argument, `max_redirects: int = 10`,
+#  which is where the threshold inventory could not see it: that scan reads module-level
+#  assignments. It is a threshold and not a budget, because `CI-014` asserts `has_loop`
+#  falsy and this number decides how far the walk looks for one. Measured for 0.81.0: a
+#  loop closing at hop 3 gives `has_loop True`; before this release the same loop closing
+#  at hop 12 gave `has_loop False`, indistinguishable from a chain of twelve hops that
+#  never loops, and the item passed. Raising it would move the line rather than remove it,
+#  so the release changed the answer at the line instead of the number.
+MAX_REDIRECT_HOPS = 10
 
-def check_redirects(url: str, max_redirects: int = 10, timeout: int = 10) -> dict:
+
+def check_redirects(url: str, max_redirects: int = MAX_REDIRECT_HOPS,
+                    timeout: int = 10) -> dict:
     """
     Follow and analyze the redirect chain for a URL.
 
@@ -53,6 +64,7 @@ def check_redirects(url: str, max_redirects: int = 10, timeout: int = 10) -> dic
         "total_hops": 0,
         "total_time_ms": 0,
         "has_loop": False,
+        "truncated": False,
         "has_mixed_protocol": False,
         "issues": [],
         "error": None,
@@ -112,10 +124,28 @@ def check_redirects(url: str, max_redirects: int = 10, timeout: int = 10) -> dic
                 result["total_time_ms"] += hop["time_ms"]
                 break
         else:
-            result["issues"].append(f"🔴 Too many redirects (>{max_redirects})")
+            # The walk ran out of hops; the chain did not end. Whether what comes
+            # after it loops is unknown, and `has_loop: False` is the one answer this
+            # must not give: CI-014 asserts it falsy, so "we stopped looking" would
+            # read as "there is no loop" — a PASS on a chain nobody followed to its
+            # end. Removed rather than set to None, because the runner turns an
+            # absent path into NO_DATA and a null one into a pass: `not None` is True.
+            result["truncated"] = True
+            result.pop("has_loop", None)
+            result["issues"].append(
+                f"🔴 Too many redirects (>{max_redirects}) — the walk stopped before "
+                f"the chain ended, so whether it loops is unknown"
+            )
 
     except requests.exceptions.RequestException as e:
+        # The same withholding as at the cap, for the same reason: the walk stopped in
+        # the middle and what follows it was never seen. No verdict rests on this line —
+        # the runner replaces a result carrying `error` before any rule reads it, so
+        # CI-014 is already NO_DATA here — but the artifact is read by people too, and
+        # on its own it would say "no loop" about a chain nobody followed.
         result["error"] = str(e)
+        result["truncated"] = True
+        result.pop("has_loop", None)
 
     result["total_hops"] = max(0, len(result["chain"]) - 1)
 

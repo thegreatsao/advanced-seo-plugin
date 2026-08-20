@@ -362,13 +362,26 @@ def _redirect_walk_cap() -> dict:
     """
     import inspect
 
+    import audit_thresholds
     import redirect_checker
 
     signature = inspect.signature(redirect_checker.check_redirects)
+    basis = {row["name"]: row["kind"] for row in audit_thresholds.scan()[0]}
     items = _items_by_id()
+    source = inspect.getsource(redirect_checker.check_redirects)
     return {
         "cap": signature.parameters["max_redirects"].default,
-        "declared_as": "default argument",
+        "cap_is_a_named_constant":
+            signature.parameters["max_redirects"].default
+            == getattr(redirect_checker, "MAX_REDIRECT_HOPS", None),
+        "cap_basis": basis.get("MAX_REDIRECT_HOPS"),
+        # The repair itself, not a symptom of it: every branch that leaves the walk
+        # unfinished must stop answering. A `has_loop = False` there is the false PASS
+        # this entry was written about, and a `None` is the same thing spelled
+        # differently. Two branches withhold — the cap and the network error — and the
+        # count is recorded because a third way to stop early would have to join them.
+        "branches_that_withhold_has_loop":
+            source.count('result.pop("has_loop", None)'),
         "ci_014_assert": items["CI-014"]["check"].get("assert"),
         "ar_150_assert": items["AR-150"]["check"].get("assert"),
     }

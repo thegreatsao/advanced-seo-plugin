@@ -1265,7 +1265,10 @@ sitemap URL reachable and this check vacuous.
   - item keys: step, url, status, time_ms, final
 `total_hops` — int
 `total_time_ms` — int
-`has_loop` — bool
+`has_loop` — bool — CI-014, **absent when `truncated`**: the walk stopped at ten hops
+  and whether the rest of the chain loops was never seen. Absent rather than null,
+  because a null satisfies `falsy` and would pass the item it must not.
+`truncated` — bool
 `has_mixed_protocol` — bool
 `issues[]` — array
 `error` — NoneType

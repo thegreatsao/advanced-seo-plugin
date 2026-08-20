@@ -1549,7 +1549,31 @@ name. A column called `url` would be read as "fix this page".
   belongs in its own release.
   <!-- ki: one-test-robots-answers-another -->
 
-- **A redirect loop that closes past the tenth hop reports as no loop at all, and
+- **Closed in 0.81.0 — the walk that stops early stops answering.** When the chain runs
+  past the cap, `has_loop` is now removed from the output rather than left at `False`, and
+  `truncated` says why. Measured through the runner's own `evaluate()` on four chains: one
+  ending after 3 hops gives CI-014 PASS; a loop closing at hop 3 reports the loop; a loop
+  closing at hop 12 and an honest 12-hop chain both give **NO_DATA** — the walk did not
+  reach the end, so nobody knows. `AR-150` still fails all three long chains on
+  `total_hops lte 1`, which is honest: ten hops is a floor, and a floor above one is
+  enough to fail. The cap is a module constant now, `MAX_REDIRECT_HOPS`, with a basis
+  line, so the inventory can see the number it could not see before.
+
+  Removed and not set to `None`: the runner reads an absent path as NO_DATA and a null one
+  as a pass, because `not None` is True. The difference between the two spellings is the
+  whole repair, which is why the test asserts the key is absent rather than falsy.
+
+  Two branches withhold, not one. The other is a network error mid-chain: no verdict rests
+  on it, because the runner replaces a result carrying `error` before any rule reads it,
+  but the artifact is read by people too and on its own it would have said "no loop" about
+  a chain nobody finished. And the boundary is tested from both sides: a chain of ten
+  redirects that ends in a page reports `total_hops` 10 with `truncated` false and CI-014
+  PASS, so a repair keyed on the count rather than on why the walk stopped fails that test
+  — which is how it was checked, by installing that repair and watching it go red.
+
+  The original follows:
+
+  **A redirect loop that closes past the tenth hop reports as no loop at all, and
   `CI-014` passes the site.** `redirect_checker.check_redirects` walks the chain itself
   with `max_redirects: int = 10` — a default argument, so the threshold inventory, which
   reads module-level assignments, cannot see it. `CI-014` is `high` and asserts `has_loop`
