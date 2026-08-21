@@ -69,7 +69,17 @@ from seo_common import (
 # 4 adds image references; an older inventory cannot answer a site-wide image rule.
 INVENTORY_VERSION = 4
 
+# basis: inherited — 100 pages, present at import, and the widest-reaching number
+#  here: every site-wide item reads this crawl, and nine of them pass by finding
+#  none of something. Raising it costs requests linearly; leaving it means a site
+#  past 100 pages is judged on 100 of them, which is why `summary.truncated` now
+#  withholds those verdicts instead of only annotating them.
 DEFAULT_MAX_PAGES = 100
+# basis: inherited — three hops from the entry, present at import. It bounds the same
+#  nineteen verdicts `DEFAULT_MAX_PAGES` does, and less visibly: a page at the limit
+#  has its links dropped rather than queued, so the crawl stops without any budget
+#  being spent. Pages a sitemap lists enter at depth 0 and are unaffected, which is
+#  why a site with a sitemap rarely meets this number at all.
 DEFAULT_DEPTH = 3
 
 # Stripped before the text is hashed or counted, because a shared navigation and
@@ -586,7 +596,19 @@ def _finish(site_url: str, entry: str, pages: dict, robots_blocked: dict,
             "reachable_pages": len(reachable),
             # The cap bit, not a judgement: a truncated crawl understates every
             # count above and a reader has to be able to tell.
-            "truncated": more_queued or len(pages) >= max_pages,
+            #
+            # `unchecked` is the third way, and it was missing until 0.88.0 — which
+            # made this flag wrong in the one direction that matters. Links from a
+            # page sitting at `--depth` are never queued, so on a site deeper than
+            # the limit the queue empties on its own: `more_queued` is False, the
+            # page budget is untouched, and the crawl reported itself complete
+            # having read part of the site. Measured on a five-page chain at
+            # `depth=2`: three pages read, one internal target never fetched,
+            # `truncated` False. It is exactly the subtraction the orphan check
+            # already makes — `internal_targets - pages - robots_blocked` — so a
+            # page refused on purpose is politeness and does not count here.
+            "truncated": (more_queued or len(pages) >= max_pages
+                          or bool(unchecked)),
         },
         "pages": pages,
         "reachable": sorted(reachable),

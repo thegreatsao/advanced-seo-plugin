@@ -117,6 +117,8 @@ for that page. Use `--no-http-cache` for an isolated timing.
 
 Reads `--inventory` (see `site_crawl.py`); crawls one for itself without it.
 
+`truncated` — bool — the crawl behind this stopped at `--max-pages`, so every
+  count here is over the pages it read
 `fetch_error` — NoneType or str (the crawl's reason, copied through)
 `start_url` — str
 `pages_crawled` — int
@@ -214,7 +216,9 @@ one it fetches a single page and checks every link on it, internal and external.
 `scope` — str: `internal` (inventory) — absent on the single-page path
 `total_links` — int
 `checked` — int
-`truncated` — bool
+`truncated` — bool — the answer rests on less than the whole input: the
+  `--max-links` cap bit, or a link answered nothing (`summary.unchecked`,
+  `summary.timeout`) and so was neither cleared nor found broken
 `broken[]` — array
   - item keys: url, anchor_text, is_internal, status, error, error_kind, redirect, response_time_ms, linked_from
 `redirected[]` — array
@@ -319,6 +323,8 @@ counted in neither direction)
     minification heuristic), status, error
 `checked` — int
 `unminified_count` — int
+`truncated` — bool — the page links more than `MAX_SHEETS` stylesheets, so
+  `unminified_count` counts only the first twelve
 `wasted_bytes` — int
 `issues[]` — array
 `fetch_error` — str | null
@@ -380,6 +386,8 @@ Reads `--inventory` (see `site_crawl.py`): the word count, the content hash and 
 MinHash signature are computed by the crawl, so this script compares pages rather
 than fetching them.
 
+`truncated` — bool — the crawl behind this stopped at `--max-pages`, so every
+  count here is over the pages it read
 `fetch_error` — NoneType or str
 `pages_analyzed` — int
 `exact_duplicates[]` — array
@@ -539,6 +547,10 @@ than fetching them.
 `favicon.reason` — str
 `issues[]` — array
   - item keys: severity, message, url, evidence
+`truncated` — bool — the answer rests on less than the whole input: more distinct
+  external links than `--max-links`, so the ones past it were never requested, or
+  a requested link answered nothing (`summary.unchecked_links`). A dead host is
+  not here — that is a finding, and it is already counted as broken
 `fetch_error` — NoneType or str
 
 ### font_audit.py
@@ -605,8 +617,12 @@ of this file.
   - query, page_count, impressions and spread deliberately repeat classified-list
     data so readers do not need a join; brand_form deliberately exposes the
     normalized verdict rather than requiring readers to reproduce normalization
-`queries_truncated` — bool
-`cannibalized[]` — array, capped at 25 for human-facing output
+`queries_truncated` — bool — the evidence list was shortened after counting
+`truncated` — bool — the API answered with a full page of rows (`ROW_LIMIT`),
+  so there were query/page rows this analysis never saw. Upstream of every
+  count in `summary`, unlike `queries_truncated`, which is downstream of them
+`cannibalized[]` — array, capped at 25 for human-facing output; the cap is on
+  the listing only — `summary.cannibalized_queries` counts them all
   - item keys: query, pages[] (page, clicks, impressions, position), page_count,
     clicks, impressions, spread (float — max minus min position),
     positions_compared
@@ -901,6 +917,10 @@ Without one it audits one page's image markup and optional fetched bytes.
 `modern_format_on_img_count` — int — the narrow count: `img` src only
 `srcset_on_img_count` — int — the narrow count: `img` attribute only
 `picture_count` — int — images wrapped in a `<picture>` carrying a `<source>`
+`truncated` — bool — an image on this page answered nothing, so the counts above are
+  over the images that did. `broken_image_count` is withheld outright when nothing
+  broken was found; this is the other half, said beside a count that *was* emitted
+  because something broken was found and is therefore a floor
 `issues[]` — array
   - item keys: severity, message, url
 `images[]` — array
@@ -922,7 +942,10 @@ Inventory mode:
 `broken_images[]` — array of str — absent under the same condition
 `broken[]` — array
   - item keys: url, status, error_kind, pages
-`truncated` — bool — carried through from the crawl
+`truncated` — bool — true for any of three reasons: the crawl behind this was capped,
+  an image answered nothing, or an image sat past `--max-images` and was never asked.
+  `broken_image_count` and `broken_images` are absent whenever one of the last two
+  applies and nothing broken was found
 `fetch_error` — NoneType or str
 
 ### indexability_matrix.py
@@ -970,6 +993,8 @@ script predates the `issues[].severity` + `message` convention the rest follow.
 Reads `--inventory` (see `site_crawl.py`). `pages` is keyed by page URL, so the paths
 below are examples rather than a schema.
 
+`truncated` — bool — the crawl behind this stopped at `--max-pages`, so every
+  count here is over the pages it read
 `fetch_error` — NoneType or str
 `start_url` — str
 `domain` — str
@@ -1066,6 +1091,8 @@ below are examples rather than a schema.
 Reads `--inventory` (see `site_crawl.py`). `total_internal_links` counts every `<a>`,
 not distinct targets — link equity divides among links.
 
+`truncated` — bool — the crawl behind this stopped at `--max-pages`, so every
+  count here is over the pages it read
 `fetch_error` — NoneType or str
 `pages_crawled` — int
 `total_internal_links` — int
@@ -1172,6 +1199,8 @@ the shared crawl seeds from the sitemap, so "we got a status for it" would make 
 sitemap URL reachable and this check vacuous.
 
 `site` — str
+`truncated` — bool — the crawl behind this stopped at `--max-pages`, so
+  `summary.orphan_pages` is over the pages it read
 `fetch_error` — NoneType or str
 `summary.sitemaps_checked` — int
 `summary.sitemap_urls` — int
@@ -1574,6 +1603,8 @@ root. `--out PATH` writes the inventory to a file and prints the summary instead
   - item keys: severity, message, url
 `scripts[]` — array
   - item keys: src, inline, async, defer, type, third_party, known_tag, content_length, status, blocking
+`truncated` — bool — the sitemap index walk stopped at `MAX_SITEMAPS_FOLLOWED`
+  with files still queued, so `issues` is over the files that were read
 `fetch_error` — NoneType
 
 ### topical_cluster_mapper.py

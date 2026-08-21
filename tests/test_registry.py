@@ -267,18 +267,32 @@ class EveryThresholdSaysWhatItRestsOn(unittest.TestCase):
         # the numbers a verdict depends on because a declared constant is, whatever its
         # conditions — the MinHash pair's own basis line says no assertion reads the
         # field it feeds, and `DEFAULT_MAX_REDIRECTS` stayed uncounted as a fetch budget.
+        #
+        # 0.88.0 moved eight more in, and moved them the harder direction: not by
+        # adding a number but by admitting that eight already there were deciding
+        # verdicts. Seven are caps — pages crawled, crawl depth, links checked,
+        # images requested, log lines read, sitemap files followed, stylesheets
+        # fetched — and the
+        # eighth is `ROW_LIMIT`, the 5,000-row GSC page that MS-023 and KW-071 read
+        # `eq 0` off. Each bounds the evidence that could have failed an assertion
+        # passing by absence, so `inherited` rising from 67 to 75 is the count
+        # getting truer, not the tree getting worse. ROADMAP.md wants this number
+        # to fall; it can only fall from a number that is honest first.
         self.assertEqual(by_kind, {
             "standard": 11,
             "measured": 11,
             "convention": 47,
-            "inherited": 67,
+            "inherited": 75,
             "presentation": 13,
         })
-        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 136)
-        self.assertEqual(len(named), 149)
-        self.assertEqual(len(uncounted), 20)
+        self.assertEqual(sum(by_kind[kind] for kind in at.VERDICT_KINDS), 144)
+        self.assertEqual(len(named), 157)
+        self.assertEqual(len(uncounted), 13)
+        # 169 -> 170: `external_link_quality.py`'s link cap was a default argument
+        # value, which is a place no instrument here can see. Promoting it to a
+        # module constant is what made it countable at all.
         self.assertEqual(sum(len(at.numeric_constants(path))
-                             for path in at._script_paths()), 169)
+                             for path in at._script_paths()), 170)
 
     def test_a_basis_the_scan_cannot_see_is_counted_whatever_the_constant_is(self):
         at = self._tool()
@@ -353,8 +367,14 @@ WINDOW = 7
             status = at.main(["--uncounted"])
         output = stdout.getvalue()
         self.assertEqual(status, 0, output)
-        self.assertRegex(output, r"(?m)^  .*site_crawl\.py:\d+  DEFAULT_MAX_PAGES$")
-        self.assertIn("\n20 module-level numeric constant(s) not in the inventory\n",
+        # The witness was `DEFAULT_MAX_PAGES` until 0.88.0, and it left this listing
+        # rather than the listing changing shape: the cap that bounds what every
+        # site-wide item can see was given a basis, and so was `DEFAULT_DEPTH`, which
+        # caps the same verdicts less visibly. `INVENTORY_VERSION` takes the seat
+        # and should keep it: a schema version is not a threshold and will never
+        # carry a basis line, so the witness stops moving when a cap is named.
+        self.assertRegex(output, r"(?m)^  .*site_crawl\.py:\d+  INVENTORY_VERSION$")
+        self.assertIn("\n13 module-level numeric constant(s) not in the inventory\n",
                       output)
         listed = {line.strip() for line in output.splitlines() if line.startswith("  ")}
         for row in named:
@@ -368,7 +388,12 @@ WINDOW = 7
             status = at.main([])
         output = stdout.getvalue()
         self.assertEqual(status, 0, output)
-        self.assertIn("20 module-level numeric constant(s) are not in this inventory",
+        # 20 -> 13. Seven constants got a `# basis:` line in 0.88.0, every one of them
+        # a cap standing between a script and the evidence that could have failed an
+        # item asserting `none of these`. They did not become thresholds — they were
+        # thresholds already, and invisible to this instrument for want of the line
+        # that makes a number visible to it.
+        self.assertIn("13 module-level numeric constant(s) are not in this inventory",
                       output)
         self.assertIn("1 basis line(s) name something that is not a module-level "
                       "numeric constant", output)
@@ -387,7 +412,11 @@ WINDOW = 7
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             status = at.main(["--uncounted", "--check"])
         self.assertEqual(status, 0, stdout.getvalue() + stderr.getvalue())
-        self.assertIn("DEFAULT_MAX_PAGES", stdout.getvalue())
+        # Same substitution as the listing test above, for the same reason: the
+        # witness has to be a constant that is genuinely uncounted, and 0.88.0 named
+        # both crawl caps. `INVENTORY_VERSION` is not a threshold at all, which is
+        # what makes it a witness that stays.
+        self.assertIn("INVENTORY_VERSION", stdout.getvalue())
 
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "thresholds.py")

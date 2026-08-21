@@ -32,6 +32,7 @@ import http.server
 import inspect
 import json
 import os
+import re
 import socket
 import struct
 import sys
@@ -56,6 +57,7 @@ from harness import served  # noqa: E402
 
 from checklist_runner import (  # noqa: E402
     FAIL, NEEDS_INPUT, NO_DATA, PASS, WARN, build_plan, evaluate,
+    input_truncated, passes_by_absence,
 )
 
 with open(REGISTRY, encoding="utf-8") as f:
@@ -5490,6 +5492,205 @@ class IndexNow(unittest.TestCase):
         bad = out("indexnow_bad")
         self.assertIs(bad["checks"]["key_file"]["passed"], False)
         self.assertEqual(verdict("GEO-007", bad), FAIL)
+
+
+class AClaimOfNoneIsNotMadeOverAnInputThatWasCapped(unittest.TestCase):
+    """Every cap in this tool bounds requests, and every one of them bounds the
+    evidence that could have failed an item asserting `none of these`. The pages
+    past `--crawl-max-pages`, the links past `--max-links`, the images past
+    `--max-images`, the sitemap files past the twenty-fifth and the GSC rows past
+    the five-thousandth are not a random sample of the site: they are precisely
+    the part nobody looked at, so `0 broken`, `no duplicates` and `no issues` over
+    them are claims about the part that fit.
+
+    Graded through `grade()` and not `evaluate()`. `evaluate` answers about a dict
+    and would answer the same before this release; the withholding lives one layer
+    out, so a test against `evaluate` would pass on the defect.
+    """
+
+    # Every script that can say its input was capped, read from the scripts rather
+    # than listed. The first draft of this was a hand-written set and it was already
+    # wrong when the predicate widened: `redirect_checker.py` reports a cap and was
+    # not in it, so `CI-014` — `high` — was outside a rule that covers it. A list
+    # maintained by memory is the failure this whole release is about, one layer up.
+    #
+    # A script that can *set* the key, not one that mentions it. Mentioning was the
+    # first version of this and it enrolled `checklist_runner.py`, which reads the
+    # flag and writes it nowhere: the reader counted as a reporter.
+    CAN_SET = re.compile(r'\["truncated"\]\s*=\s*(?!False\b)'
+                         r'|"truncated"\s*:\s*(?!False\b)')
+
+    @classmethod
+    def _reporters(cls):
+        found = set()
+        for name in os.listdir(SCRIPTS):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
+                if cls.CAN_SET.search(handle.read()):
+                    found.add(name)
+        return found
+
+    @staticmethod
+    def _graded(item, payload):
+        from checklist_runner import grade
+        key = (item["check"]["script"], ())
+        return grade([item], {key: [item["id"]]}, {key: payload}, {}, False)[0]
+
+    @staticmethod
+    def _clean_payload(rule):
+        """The smallest output that satisfies `rule` by finding nothing."""
+        payload: dict = {}
+        node = payload
+        parts = rule["path"].split(".")
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = 0 if rule.get("eq") == 0 else []
+        return payload
+
+    def _covered(self):
+        reporters = self._reporters()
+        return [i for i in ITEMS.values()
+                if (i.get("check") or {}).get("assert")
+                and passes_by_absence(i["check"]["assert"])
+                and i["check"]["script"] in reporters]
+
+    def test_the_set_it_covers_is_the_one_recorded(self):
+        """Nineteen items — ten `high`, eight `medium`, one `low`. The number is
+        pinned because the ledger entry this closes said twelve and the command
+        recorded beside it printed eleven, and neither counted the thing the entry
+        was about. Twelve is right for that entry's own subject: the items handed
+        the crawl inventory whose assertion is a clean verdict. The command asked
+        for `requires: crawl` plus a literal `eq 0`, which drops CI-018 and AR-162
+        — clean verdicts spelled `none_severity` — and adds BL-083, which never
+        reads the inventory and caps its own link list instead. The other six
+        arrived by asking the same question of every cap rather than of the crawl:
+        external links, GSC rows, a sitemap index walk and a stylesheet list."""
+        ids = sorted(i["id"] for i in self._covered())
+        self.assertEqual(ids, [
+            "AR-149", "AR-162", "BL-081", "BL-083", "CI-008", "CI-014", "CI-018",
+            "CN-039", "CN-041", "GO-136", "GO-137", "GO-138", "KW-071", "MD-185",
+            "MD-187", "MS-022", "MS-023", "MS-029", "TE-168", "TE-174",
+        ], "the covered set moved; say which definition gives the new one")
+
+    def test_every_way_this_registry_spells_nothing_is_covered(self):
+        """The predicate's own blind spot, which is the same defect it exists to fix.
+
+        It read `eq: 0`, `none_severity` and `none_matching` and a comment called
+        those "the whole set in this registry". Twelve items say the same thing as
+        `len_eq: 0`, `len_lte: 0` or `falsy` — four of them `critical` — and every
+        one of them was outside a rule about verdicts a cap can fake. Asserted over
+        the registry rather than over a list, so a seventh spelling arriving in an
+        item is a failure here rather than a silent escape.
+        """
+        missed = []
+        for item in ITEMS.values():
+            rule = (item.get("check") or {}).get("assert")
+            if not rule or passes_by_absence(rule):
+                continue
+            # A rule left out has to pass by finding *something*. These are the
+            # operators that do, and anything else is a shape nobody has classified.
+            if not ({"truthy", "gte", "gt", "len_gte", "matches", "contains",
+                     "value_map", "between", "len_between", "ne", "count_matching_lte"}
+                    & set(rule)) and not (
+                        rule.get("eq") not in (0, None)
+                        or rule.get("lte", 0) > 0
+                        or rule.get("lt", 0) > 0
+                        or rule.get("len_eq", 0) > 0
+                        or rule.get("len_lte", 0) > 0):
+                missed.append(f"{item['id']} ({item['severity']}): {rule}")
+        self.assertEqual(missed, [],
+                         "these assertions pass by finding nothing and the "
+                         "predicate does not know it:\n"
+                         + "\n".join(f"  {m}" for m in missed))
+
+    def test_a_clean_answer_over_a_capped_input_is_withheld(self):
+        decided = []
+        for item in self._covered():
+            payload = self._clean_payload(item["check"]["assert"])
+            self.assertEqual(self._graded(item, dict(payload))["status"], PASS,
+                             f"{item['id']}: the payload is not a clean one")
+            payload["truncated"] = True
+            row = self._graded(item, payload)
+            if row["status"] != NO_DATA:
+                decided.append(f"{item['id']} ({item['severity']}) = {row['status']}")
+        self.assertEqual(decided, [],
+                         "these items called a site clean from the part of it "
+                         "that was read:\n"
+                         + "\n".join(f"  {d}" for d in decided))
+
+    def test_a_defect_found_in_the_part_that_was_read_still_fails(self):
+        """The asymmetry, and the reason this needs no threshold. Withholding a
+        FAIL would lose a true finding to a cap — the defect is in the site
+        whether or not the rest of it was read."""
+        item = ITEMS["CN-039"]
+        # 6, not 3: CN-039 warns up to 5 thin pages, and a WARN is a verdict too.
+        # Taking the number past the band makes the assertion about the withholding
+        # rule rather than about which side of the band the payload happened to land.
+        self.assertEqual(self._graded(
+            item, {"summary": {"thin_pages": 6}, "truncated": True})["status"], FAIL)
+        # And the band itself still decides, rather than being withheld as a
+        # near-clean answer: only PASS is a claim the cap could have faked.
+        self.assertEqual(self._graded(
+            item, {"summary": {"thin_pages": 3}, "truncated": True})["status"], WARN)
+
+    def test_a_failing_count_over_a_capped_input_is_named_as_a_floor(self):
+        """The verdict stands; the number beside it does not mean what it says.
+
+        Three thin pages read off three pages of seven is at least three, and a fix
+        list sized from it is short by everything the cap left out. Said in the
+        evidence and not in the measure — the measure is what the script returned.
+        """
+        row = self._graded(ITEMS["MS-029"],
+                           {"summary": {"duplicate_description_groups": 1},
+                            "truncated": True})
+        self.assertEqual(row["status"], FAIL)
+        self.assertIn("floor", row["evidence"])
+        whole = self._graded(ITEMS["MS-029"],
+                             {"summary": {"duplicate_description_groups": 1}})
+        self.assertEqual(whole["status"], FAIL)
+        self.assertNotIn("floor", whole["evidence"],
+                         "a complete input must not be described as partial")
+
+    def test_an_item_that_passes_by_presence_is_untouched(self):
+        """LO-198 finds a LocalBusiness node on the pages it read. Reading more
+        pages cannot take it away, so a cap cannot fake this one and withholding
+        it would only lose an answer."""
+        item = ITEMS["LO-198"]
+        self.assertFalse(passes_by_absence(item["check"]["assert"]))
+        payload = {"local_business_nodes": 2, "truncated": True}
+        self.assertEqual(self._graded(item, payload)["status"], PASS)
+
+    def test_the_flag_is_read_off_the_output_and_nothing_else(self):
+        self.assertTrue(input_truncated({"truncated": True}))
+        self.assertFalse(input_truncated({"truncated": False}))
+        self.assertFalse(input_truncated({}), "an absent flag is not a cap")
+        self.assertFalse(input_truncated(None))
+
+    def test_every_reporter_can_actually_set_the_flag(self):
+        """A rule that reads a key nothing writes is inert, and inert is how the
+        first three of these went unread for as long as they did.
+
+        The reporter set is now derived from the presence of the string, so asserting
+        that a reporter contains the string would assert nothing. What is worth
+        asserting is the next step: that in each of them the key can become true. A
+        script that initialises `"truncated": False` and never assigns it again reads
+        as a reporter to the derivation and reports nothing to the runner.
+        """
+        mentions = set()
+        for name in os.listdir(SCRIPTS):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
+                if '"truncated"' in handle.read():
+                    mentions.add(name)
+        # Carries the key and cannot set it. One script is allowed to: the runner
+        # reads the flag and is its only consumer in this directory. Anything else
+        # here would be a script initialising `"truncated": False` and never
+        # assigning again — a reporter to a reader and silence to the rule.
+        self.assertEqual(sorted(mentions - self._reporters()),
+                         ["checklist_runner.py"],
+                         "a script carries the truncation key and cannot set it")
 
 
 if __name__ == "__main__":

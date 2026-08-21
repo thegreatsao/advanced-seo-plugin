@@ -27,9 +27,12 @@ except ImportError:
 # basis: standard — 50,000 URLs per sitemap file, the limit stated in the sitemaps.org
 #  protocol. Google documents the same figure alongside a 50MB uncompressed cap.
 MAX_URLS_PER_SITEMAP = 50_000
-# basis: inherited — 25 sitemap files followed, present at import. An operational cap on
-#  a recursive index walk rather than a verdict, and the reason it is not larger is that
-#  a sitemap index can point at itself.
+# basis: inherited — 25 sitemap files followed, present at import. The reason it is not
+#  larger is that a sitemap index can point at itself. It was recorded here as "an
+#  operational cap rather than a verdict"; that was wrong. GO-136 is `high` and passes
+#  by finding no issue at or above medium, so on a site whose index lists more than 25
+#  files the walk stopped, said nothing, and the item read a clean sitemap set off the
+#  first 25. `truncated` below is the half that was missing, not a new cap.
 MAX_SITEMAPS_FOLLOWED = 25
 
 def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_urls: bool = False, timeout: int = 15, max_urls: int = 100) -> dict:
@@ -57,6 +60,8 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
     seen_sitemaps = set()
     seen_urls = set()
 
+    # Recorded before the walk so the loop below can end either way without the
+    # caller having to reconstruct which way it ended.
     while queue and len(seen_sitemaps) < MAX_SITEMAPS_FOLLOWED:
         sm_url = normalize_url(queue.pop(0), site_url)
         if sm_url in seen_sitemaps:
@@ -144,6 +149,10 @@ def check_sitemaps(site_url: str, sitemap_urls: list[str] | None = None, fetch_u
             result["urls"].append(url_entry)
         result["sitemaps_checked"].append(entry)
 
+    # A queue with anything still in it means the walk stopped at the cap rather
+    # than at the end of the index. Read by the runner, which withholds GO-136's
+    # and GO-138's clean verdict rather than reading it off the files that fit.
+    result["truncated"] = bool(queue)
     result["summary"]["sitemaps"] = len(result["sitemaps_checked"])
     result["summary"]["loaded"] = sum(1 for e in result["sitemaps_checked"]
                                       if e.get("status") == 200)

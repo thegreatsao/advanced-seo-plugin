@@ -122,6 +122,10 @@ def check_link(link: dict, timeout: int = 10) -> dict:
 # cap exists so the request budget is a property of the tool rather than of
 # whatever page it was pointed at — and it is reported, because a truncated check
 # that says "300 links, 200 checked" is honest where a silent one is not.
+# basis: inherited — 200 links, present at import. TE-168 passes when
+#  `summary.broken_or_redirected` is 0, so this cap decides a verdict and not just
+#  a runtime; the comment above says the truncation is reported, and `truncated` is
+#  now read rather than only printed.
 DEFAULT_MAX_LINKS = 200
 
 
@@ -226,6 +230,15 @@ def check_broken_links(url: str, internal_only: bool = False,
         "timeout": len(result["timeout"]),
         "unchecked": len(result["unchecked"]),
     }
+    # The other way an answer can rest on less than the whole input, and the one the
+    # images half of this release closed on its own script: a link that answered
+    # nothing was not read either. `broken_or_redirected: 0` over a set where some
+    # target never replied is "none found among the ones that replied". Folded into
+    # the same flag rather than a second one, because the runner asks a single
+    # question — was this whole input read — and the two ways of failing it are not
+    # different questions.
+    if result["unchecked"] or result["timeout"]:
+        result["truncated"] = True
 
     # Generate issues
     if result["broken"]:
@@ -328,6 +341,10 @@ def links_from_inventory(inventory: dict) -> dict:
         "timeout": 0,
         "unchecked": len(result["unchecked"]),
     }
+    # Same rule on the whole-site path: a link target the crawl never reached is a
+    # target nobody looked at, and TE-168 is `high`.
+    if result["unchecked"]:
+        result["truncated"] = True
     if result["broken"]:
         result["issues"].append(f"🔴 {len(result['broken'])} broken internal link(s) "
                                 f"found across {result['checked']} checked")

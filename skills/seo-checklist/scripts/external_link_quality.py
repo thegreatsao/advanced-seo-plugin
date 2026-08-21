@@ -11,6 +11,13 @@ from seo_common import (DEAD_FETCH_ERROR_KINDS, fetch_url, normalize_url,
                         parse_html, print_json_or_text, same_host)
 
 
+# basis: inherited — 200 distinct external links, present at import as a default
+#  argument, which is where no instrument could see it. BL-083 passes when
+#  `summary.broken_links` is 0, and that is a count over these 200; the links past
+#  them were never requested. Named here so the cap is visible and `truncated`
+#  says when it bit.
+DEFAULT_MAX_LINKS = 200
+
 LOW_TRUST_HOST_HINTS = (
     "bit.ly",
     "goo.gl",
@@ -57,7 +64,8 @@ def _check_external_url(url: str, timeout: int) -> dict:
     return head
 
 
-def audit_external_links(urls: list[str], check_status: bool = True, timeout: int = 15, max_links: int = 200) -> dict:
+def audit_external_links(urls: list[str], check_status: bool = True, timeout: int = 15,
+                         max_links: int = DEFAULT_MAX_LINKS) -> dict:
     pages = []
     links = []
     errors = []
@@ -78,8 +86,17 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
     for link in links:
         deduped.setdefault(link["url"], link)
 
+    # The cap this script has always had, now reported. It was the one of the
+    # thirteen assertions over a capped input that did not even say it had capped:
+    # a page with 500 distinct outbound links had 300 of them never requested, and
+    # BL-083 read `broken_links: 0` off the other 200 as "no broken external links".
+    # `unique_external_links` and `checked_links` were both already in the summary,
+    # so the fact was derivable and nothing derived it.
+    capped = list(deduped.values())[:max_links] if max_links else list(deduped.values())
+    truncated = len(capped) < len(deduped)
+
     checked = []
-    for link in list(deduped.values())[:max_links]:
+    for link in capped:
         row = dict(link)
         host = urlparse(link["url"]).netloc.lower()
         row["host"] = host
@@ -151,6 +168,13 @@ def audit_external_links(urls: list[str], check_status: bool = True, timeout: in
             "low_trust_pattern_links": len(low_trust),
             "commercial_rel_review": len(commercial_without_rel),
         },
+        # Read by the runner: an assertion that passes by finding none of the bad
+        # thing must not pass over links nobody requested.
+        # True for either reason an answer can rest on less than the whole input:
+        # links past `--max-links` were never requested, and links in `unchecked`
+        # were requested and answered nothing that decides them. `unreachable` is
+        # not here — a dead host is a finding, and it is already counted as broken.
+        "truncated": truncated or bool(unchecked),
         "top_external_hosts": [{"host": host, "count": count} for host, count in hosts.most_common(25)],
         "links": checked,
         "issues": issues,
@@ -178,7 +202,8 @@ def main() -> None:
     parser.add_argument("url", nargs="?", help="Page URL to audit")
     parser.add_argument("--url-file", help="File containing page URLs to audit")
     parser.add_argument("--no-check-status", action="store_true", help="Skip status/redirect checks")
-    parser.add_argument("--max-links", type=int, default=200, help="Maximum unique external links to check")
+    parser.add_argument("--max-links", type=int, default=DEFAULT_MAX_LINKS,
+                        help="Maximum unique external links to check")
     parser.add_argument("--timeout", type=int, default=15)
     parser.add_argument("--json", "-j", action="store_true", help="Output JSON")
     args = parser.parse_args()

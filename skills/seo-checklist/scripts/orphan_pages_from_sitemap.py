@@ -111,6 +111,10 @@ def find_orphan_pages(site_url: str, sitemap_urls: list[str] | None = None,
         # the dead-origin sweep took its script list from that list — so the item
         # that reports "no orphans" about nothing was the one the sweep could not see.
         "fetch_error": inventory.get("fetch_error"),
+        # The crawl says whether it read the whole site. Carried here because
+        # every count beside it is a count over what was read, and the item
+        # asserting `none of these` cannot tell the difference on its own.
+        "truncated": bool((inventory.get("summary") or {}).get("truncated")),
         "summary": {
             "sitemaps_checked": len(sitemap["sitemaps_checked"]),
             "sitemap_urls": len(sitemap_set),

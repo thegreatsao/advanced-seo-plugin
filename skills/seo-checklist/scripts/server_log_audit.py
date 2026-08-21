@@ -288,6 +288,10 @@ JSON_KEYS = {
 }
 
 CLF_TIME = "%d/%b/%Y:%H:%M:%S %z"
+# basis: inherited — one million log lines, present at import. CI-018 passes when
+#  nothing in `issues` reaches medium, and a log longer than this is read from its
+#  first million lines, so the cap decides that verdict. `truncated` already said so
+#  and nothing read it until now.
 DEFAULT_MAX_LINES = 1_000_000
 
 

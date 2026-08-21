@@ -47,6 +47,7 @@ import re
 import sys
 import tempfile
 from datetime import date
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILL_DIR = os.path.join(ROOT, "skills", "seo-checklist")
@@ -106,6 +107,26 @@ def _temp_page(body: str) -> str:
     handle.close()
     return handle.name
 
+
+# A script that can *set* the truncation key, not one that mentions it.
+# Mentioning enrolls `checklist_runner.py`, which reads the flag and writes it
+# nowhere: the reader would count as a reporter. The same expression is in
+# `tests/test_evidence_scripts.py`, where a script that carries the key and
+# cannot set it is a failure rather than a silent member of this list.
+_CAN_SET_TRUNCATED = re.compile(r'\["truncated"\]\s*=\s*(?!False\b)'
+                                r'|"truncated"\s*:\s*(?!False\b)')
+
+
+def _truncation_reporters() -> list:
+    """Every script that can tell the runner its input was capped."""
+    found = []
+    for name in sorted(os.listdir(SCRIPTS)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(SCRIPTS, name), encoding="utf-8") as stream:
+            if _CAN_SET_TRUNCATED.search(stream.read()):
+                found.append(name)
+    return found
 
 # ── the probes ────────────────────────────────────────────────────────────────
 
@@ -667,6 +688,160 @@ def _foreign_credit_keys() -> dict:
         "keys": sorted(seo_common.FOREIGN_CREDIT_KEYS),
         "author_of_a_book_the_page_is_about":
             seo_common.page_author_names(seo_common.parse_html(_page(body), PAGE_URL)),
+    }
+
+
+@probe("a_truncated_crawl_decides_the_whole_site")
+def _a_truncated_crawl_decides_the_whole_site() -> dict:
+    """Which items would call a site clean from the part of it that was read.
+
+    Measured through `grade()`, which is where the withholding lives — `evaluate()`
+    answers about a dict and would answer the same before 0.88.0. The reachable set
+    is taken from the registry and from the scripts' own source rather than listed
+    here, so an item added over one of these scripts joins the count without anybody
+    remembering to add it.
+    """
+    import checklist_runner as runner
+
+    reporters = _truncation_reporters()
+    covered, still_deciding = [], []
+    for item in _items_by_id().values():
+        rule = (item.get("check") or {}).get("assert")
+        if not rule or not runner.passes_by_absence(rule):
+            continue
+        script = item["check"]["script"]
+        if script not in reporters:
+            continue
+        covered.append(item["id"])
+        parts = rule["path"].split(".")
+        payload, node = {}, None
+        node = payload
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = 0 if rule.get("eq") == 0 else []
+        payload["truncated"] = True
+        key = (script, ())
+        row = runner.grade([item], {key: [item["id"]]}, {key: payload}, {}, False)[0]
+        if row["status"] != runner.NO_DATA:
+            still_deciding.append("%s=%s" % (item["id"], row["status"]))
+    return {
+        "scripts_that_report_a_cap": reporters,
+        "items_covered": sorted(covered),
+        "high_among_them": sorted(
+            i for i in covered if _items_by_id()[i]["severity"] == "high"),
+        # The whole claim, and it has to stay empty.
+        "still_deciding_over_a_capped_input": sorted(still_deciding),
+    }
+
+
+@probe("a_mostly_refused_run_reports_a_clean_count")
+def _a_mostly_refused_run_reports_a_clean_count() -> dict:
+    """A hundred images, ninety-nine of which answered nothing.
+
+    The entry's own scenario, run rather than described. `broken_image_count` has to
+    be absent — an absent key is NO_DATA, and NO_DATA is the honest answer about a
+    page that was looked at once.
+    """
+    import image_weight_audit
+
+    rows = [{"src": "https://example.test/i%d.png" % n} for n in range(100)]
+
+    def one(url, timeout):
+        n = int(url.rsplit("i", 1)[1].split(".")[0])
+        if n == 0:
+            return "ok", {"status": 200}, ""
+        return "unchecked", {"status": None, "error_kind": "timeout"}, ""
+
+    inventory = {
+        "site": "https://example.test/",
+        "summary": {"truncated": False},
+        "pages": {"p": {"url": "https://example.test/",
+                        "images": [r["src"] for r in rows]}},
+    }
+    with mock.patch.object(image_weight_audit, "_check_image", one),          mock.patch.object(image_weight_audit.site_crawl, "inventory_for",
+                           lambda *a, **k: inventory):
+        out = image_weight_audit.audit_inventory("https://example.test/", "ignored")
+    return {
+        "images_checked": out["summary"]["images_checked"],
+        "unchecked": out["summary"]["unchecked_images"],
+        "reports_broken_image_count": "broken_image_count" in out,
+    }
+
+
+@probe("the_other_caps_have_not_been_read")
+def _the_other_caps_have_not_been_read() -> dict:
+    """The scripts behind a passes-by-absence item that still say nothing about a cap.
+
+    Recorded as a list of names with the items that read them, not as a count: the
+    point of the entry is which ones were left, and a count of twelve survives one
+    being read while another arrives. `html_validator.py` is named separately because
+    it was read and cleared — the distinction between "not looked at" and "looked at
+    and fine" is the one this ledger exists to keep.
+    """
+    import checklist_runner as runner
+
+    reports = set(_truncation_reporters())
+    cleared = {
+        # Read in 0.88.0 and found sound: `MAX_MESSAGES` trims `messages` after
+        # `counts` has already been incremented, so `summary.errors` is the whole
+        # number. Kept here rather than dropped, because "looked at and fine" and
+        # "not looked at" are the two things this ledger exists to keep apart.
+        "html_validator.py": "counts before the message cap",
+    }
+    unread: dict[str, list[str]] = {}
+    for item in _items_by_id().values():
+        rule = (item.get("check") or {}).get("assert")
+        if not rule or not runner.passes_by_absence(rule):
+            continue
+        script = item["check"]["script"]
+        if script in reports or script in cleared:
+            continue
+        unread.setdefault(script, []).append(item["id"])
+    return {
+        "cleared_by_reading": cleared,
+        # Not all of these have a cap — some were never examined either way, which
+        # is the claim: the list is of readings not done, not of defects found.
+        "not_yet_read": {name: sorted(ids) for name, ids in sorted(unread.items())},
+    }
+
+
+@probe("the_crawl_defaults_now_decide_whether_items_answer")
+def _the_crawl_defaults_now_decide_whether_items_answer() -> dict:
+    """The two numbers, and how many verdicts each one silences past its limit.
+
+    The count is taken by grading, not by counting the registry: the claim is about
+    what a run reports, and an item can read one of these scripts without passing by
+    absence. Both numbers are read from `site_crawl` rather than repeated here, so an
+    entry that says "a hundred pages" cannot outlive a default that moved.
+    """
+    import checklist_runner as runner
+    import site_crawl
+
+    reporters = set(_truncation_reporters())
+    silenced = []
+    for item in _items_by_id().values():
+        rule = (item.get("check") or {}).get("assert")
+        if not rule or not runner.passes_by_absence(rule):
+            continue
+        script = item["check"]["script"]
+        if script not in reporters:
+            continue
+        parts = rule["path"].split(".")
+        payload: dict = {}
+        node = payload
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = 0 if rule.get("eq") == 0 else []
+        payload["truncated"] = True
+        key = (script, ())
+        row = runner.grade([item], {key: [item["id"]]}, {key: payload}, {}, False)[0]
+        if row["status"] == runner.NO_DATA:
+            silenced.append(item["id"])
+    return {
+        "max_pages": site_crawl.DEFAULT_MAX_PAGES,
+        "depth": site_crawl.DEFAULT_DEPTH,
+        "both_bases": "inherited",
+        "items_silenced_past_either_limit": sorted(silenced),
     }
 
 

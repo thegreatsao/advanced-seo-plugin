@@ -39,6 +39,11 @@ RANKS_FIRST_POSITION = 1.5
 # basis: inherited — 100 impressions, present at import. Blocker: this only splits an already-fired finding into high versus medium severity, so it is a prioritisation convention rather than a search-analytics measurement.
 HIGH_SEVERITY_IMPRESSIONS = 100
 
+# basis: inherited — present at import, and the one cap here that decides a verdict.
+#  One request, no `startRow`, so a property with more than this many query/page
+#  rows in the window is analysed from the first 5000 and MS-023 and KW-071 — both
+#  `high` — read `eq 0` off them as "no query on this site splits across URLs".
+#  `truncated` below says when that happened; raising it means paginating.
 ROW_LIMIT = 5000
 # basis: inherited — 10 impressions, present at import. Below it two pages sharing a
 #  query is noise rather than cannibalisation, but the number was not measured
@@ -311,6 +316,11 @@ def analyze(site_url: str, credentials: str, days: int,
         "queries_analyzed": 0,
         "queries": [],
         "queries_truncated": False,
+        # Not the same cap as `queries_truncated`, which trims the evidence list
+        # after the counting is done. This one is upstream of every count in
+        # `summary`: it says the API answered with a full page of rows, so there
+        # were rows this analysis never saw.
+        "truncated": False,
         "cannibalized": [],
         "branded_spread": [],
         "contested": [],
@@ -337,6 +347,7 @@ def analyze(site_url: str, credentials: str, days: int,
         return result
 
     result["period"] = {"start": start, "end": end}
+    result["truncated"] = len(rows) >= ROW_LIMIT
     result["queries_analyzed"] = len({r["query"] for r in rows})
     result["branded"] = find_branded(rows, site_url)
     spreads = find_query_spreads(rows, alternate_urls)
@@ -347,20 +358,31 @@ def analyze(site_url: str, credentials: str, days: int,
             spread for spread in spreads
             if is_branded_query(spread["query"], brand.get("query", ""))
         ][:25]
-    result["cannibalized"] = [
+    # Counted whole, then capped for reading. The 25 is a human-facing cap and
+    # `script-output-shapes.md` has always said so — it also says
+    # `summary.cannibalized_queries = bucket[cannibalized] + bucket[contested]`,
+    # over the classified queries rather than over the shortened list. The code
+    # took `len()` of the shortened list instead, so a property with sixty
+    # cannibalised queries reported twenty-five of them and the document that
+    # said otherwise was the only place the real number existed. It cannot fake a
+    # PASS — twenty-five is not zero — but it is the measure MS-023 and KW-071
+    # print, and a fix list sized from it is short by every query past the cap.
+    cannibalized_all = [
         spread for spread in spreads
         if spread["page_count"] >= MIN_PAGES
         and not (owns_brand
                  and is_branded_query(spread["query"], brand.get("query", "")))
-    ][:25]
-    result["contested"] = [
-        spread for spread in result["cannibalized"]
+    ]
+    contested_all = [
+        spread for spread in cannibalized_all
         if spread["positions_compared"] >= MIN_PAGES
         and spread["spread"] <= CONTESTED_POSITION_BAND
     ]
+    result["cannibalized"] = cannibalized_all[:25]
+    result["contested"] = contested_all[:25]
     result["summary"] = {
-        "cannibalized_queries": len(result["cannibalized"]),
-        "contested_queries": len(result["contested"]),
+        "cannibalized_queries": len(cannibalized_all),
+        "contested_queries": len(contested_all),
     }
     result["queries"], result["queries_truncated"] = _query_evidence(
         rows, alternate_urls, result, owns_brand)

@@ -725,6 +725,42 @@ def evaluate(rule: dict, data: dict) -> tuple[bool | None, str]:
     return None, f"unknown assert: {list(rule)}"
 
 
+# An assertion that passes because it found none of the bad thing.
+#
+# The distinction that matters is direction, not shape. `gte 1` and `truthy` also
+# pass, but reading *more* of a site can only help them, so a capped input cannot
+# fake them — LO-198 finds a LocalBusiness node on the pages it read and finding
+# more pages would not take it away. These are the ones a cap can fake, because the
+# evidence that would have failed them is exactly what was not read.
+#
+# **Six spellings, not three.** The first draft of this listed `eq: 0`,
+# `none_severity` and `none_matching` and called them "the whole set in this
+# registry". They are not: `len_eq: 0`, `len_lte: 0` and `falsy` say the same thing
+# about a list or a flag, and twelve items use them — four of them `critical`
+# (CI-013, SE-114, SE-116, TE-171) and four `high`. A predicate that decides which
+# verdicts a cap can fake, and that reads only some of the ways this registry spells
+# "nothing", is the same defect one layer up from the one this release is about.
+#
+# `lte: 0` is here for a spelling nothing uses today. A ceiling of zero is absence
+# under another name, and the cost of covering it in advance is one comparison.
+def passes_by_absence(rule: dict) -> bool:
+    """True when the only way this rule passes is by finding nothing."""
+    return (rule.get("eq") == 0
+            or rule.get("lte") == 0
+            or rule.get("len_eq") == 0
+            or rule.get("len_lte") == 0
+            or "falsy" in rule
+            or "none_severity" in rule
+            or "none_matching" in rule)
+
+
+# What a script says about its own coverage. `truncated` is already the name three
+# scripts used for it before this was read by anything; the rest now carry it too.
+def input_truncated(data: dict) -> bool:
+    """True when the script says the input behind its answer was not read in full."""
+    return bool(isinstance(data, dict) and data.get("truncated"))
+
+
 # Which key of a rule holds the threshold, per operator. Used to report *what was
 # compared* as data, so a report can put it in a sentence in any language instead
 # of printing the assertion's internals.
@@ -1222,6 +1258,24 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                         ok, ev = evaluate(it["check"]["assert"], data)
                         if ok is None:
                             row.update(status=NO_DATA, evidence=ev)
+                        elif (ok and passes_by_absence(it["check"]["assert"])
+                              and input_truncated(data)):
+                            # Found none of it — in the part that was read. The
+                            # cap that stopped the reading is the same cap that
+                            # would have stopped the finding, so this PASS is a
+                            # claim about the whole site made from part of it.
+                            #
+                            # Fourth time this repository has drawn the line here
+                            # and the first time in the runner rather than in one
+                            # script: 0.49.0 withheld `image_inventory`'s count,
+                            # 0.50.0 `image_weight_audit`'s, and 0.87.0 twice in
+                            # the citation score. A FAIL is untouched — a defect
+                            # found in part of a site is still a defect, and
+                            # withholding it would lose a true finding to a cap.
+                            row.update(status=NO_DATA,
+                                       evidence=f"{ev}, but only part of the input "
+                                                f"was read: this says nothing about "
+                                                f"what the cap left out")
                         elif ok:
                             row.update(status=PASS, evidence=ev)
                         else:
@@ -1230,11 +1284,23 @@ def grade(items: list[dict], plan: dict, results: dict, skipped: dict,
                             w_ev = ""
                             if warn_rule:
                                 w_ok, w_ev = evaluate(warn_rule, data)
+                            # The verdict stands on a capped input — a defect found
+                            # in part of a site is a defect — but the number beside
+                            # it is a floor rather than a total, and printing it bare
+                            # is the same false precision this release is about.
+                            # "3 thin pages" read off three pages of seven is at
+                            # least three. Said in the evidence rather than in the
+                            # measure, because the measure is what the script
+                            # returned and that has not changed.
+                            partial = (" — counted over the part of the input that "
+                                       "was read, so this is a floor"
+                                       if input_truncated(data) else "")
                             if w_ok:
                                 row.update(status=WARN,
-                                           evidence=f"{ev}; within warn range ({w_ev})")
+                                           evidence=f"{ev}; within warn range "
+                                                    f"({w_ev}){partial}")
                             else:
-                                row.update(status=FAIL, evidence=ev)
+                                row.update(status=FAIL, evidence=f"{ev}{partial}")
         # Where the verdict came from, recorded on every item that has one.
         #
         # Set here rather than at each branch above so a path added later cannot

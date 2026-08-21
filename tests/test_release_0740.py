@@ -307,8 +307,19 @@ class PageModeCompatibility(unittest.TestCase):
             with self.subTest(label=label), mock.patch.object(
                     image_weight_audit, "fetch_url", side_effect=responses):
                 result = image_weight_audit.audit(path, fetch_images=True)
-            self.assertEqual(result["broken_image_count"], broken)
             self.assertEqual(result["unchecked_image_count"], unchecked)
+            # The subject here is the classification — which answers make an image
+            # broken and which leave it unestablished — and that has not moved. What
+            # moved in 0.88.0 is how a page with an unestablished image reports the
+            # count: it does not. The `500` case is this at n=1, and it is the entry
+            # this release closed, spelled small. One image, one server error, no
+            # broken image found and none ruled out, and the old output said
+            # `broken_image_count: 0` — "no broken images on this page" drawn from
+            # zero usable readings. An absent key is NO_DATA, which is the answer.
+            if unchecked:
+                self.assertNotIn("broken_image_count", result, label)
+            else:
+                self.assertEqual(result["broken_image_count"], broken)
 
     def test_page_mode_only_adds_unchecked_image_count(self):
         folder = tempfile.TemporaryDirectory(prefix="release-0740-page-")
@@ -343,6 +354,13 @@ class PageModeCompatibility(unittest.TestCase):
                 "content_length": None, "content_type": None,
                 "responsive": False, "modern_format": False,
             }],
+            # Added in 0.88.0. The page path had two halves of one rule and was
+            # doing only one: it withheld `broken_image_count` when something went
+            # unchecked, and said nothing beside a count it did emit. A page whose
+            # images all answered — this one has nothing to fetch at all — reports
+            # False, which is why it belongs in the pinned shape rather than beside
+            # `unchecked_image_count` in the pop above.
+            "truncated": False,
             "fetch_error": None,
             "modern_format_count": 0,
             "responsive_count": 0,

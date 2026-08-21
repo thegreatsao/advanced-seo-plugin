@@ -78,17 +78,25 @@ about at all, and it is the number that should fall.
 .venv/Scripts/python.exe skills/seo-checklist/tools/audit_thresholds.py --check | head -7
 ```
 
-136 numbers a verdict depends on:
+144 numbers a verdict depends on:
 
 | basis | count | |
 |---|---:|---|
 | standard | 11 | an external published authority, named |
 | measured | 11 | calibrated, and the text says against what |
 | convention | 47 | a judgement made here, and it says so |
-| **inherited** | **67** | arrived with borrowed code and has not been examined |
+| **inherited** | **75** | arrived with borrowed code and has not been examined |
 | no basis | 0 | the gate that keeps this at zero |
 
-**`inherited` at 67 of 136 is the largest single gap between this tree and 1.0.** The
+**This number went up in 0.88.0, and that is what progress looked like.** It was 67 of
+136. Eight of the caps this tool runs on — pages crawled, crawl depth, links checked,
+images requested, log lines read, sitemap files followed, stylesheets fetched, Search
+Console rows returned — were deciding verdicts by bounding the evidence that could have
+failed them, and none carried a `# basis:` line, so this scan could not see one of them.
+They did not become thresholds; they were thresholds already. A gap that is not yet
+measured is not a smaller gap.
+
+**`inherited` at 75 of 144 is the largest single gap between this tree and 1.0.** The
 clause is already half satisfied — nothing is unnamed, and that took a gate — but half
 the numbers a verdict rests on are still numbers nobody here decided. The two
 calibrations so far show what closing one costs: `serp-length.json` and
@@ -127,7 +135,7 @@ and a check that they still agree.
 
 ## What 1.0 requires, in the order the numbers should move
 
-1. **`inherited` 67 → 0**, by calibration or by an honest relabel to `convention` with
+1. **`inherited` 75 → 0**, by calibration or by an honest relabel to `convention` with
    the judgement written out. The count prints on every CI run, so progress is visible
    without anybody reporting it.
 2. **The 143 unclaimed assertions**, reduced by extending the detectors

@@ -63,6 +63,10 @@ def analyze(inventory: dict, start_url: str) -> dict:
         # item that reads this script as NO_DATA with the reason, and the crawl is
         # the only thing that knows.
         "fetch_error": inventory.get("fetch_error"),
+        # The crawl says whether it read the whole site. Carried here because
+        # every count beside it is a count over what was read, and the item
+        # asserting `none of these` cannot tell the difference on its own.
+        "truncated": bool((inventory.get("summary") or {}).get("truncated")),
     }
 
     # Unique targets, not raw `<a>` count: this script has always reported how many

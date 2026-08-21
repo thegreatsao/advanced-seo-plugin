@@ -81,7 +81,8 @@ def graph_from_inventory(inventory: dict) -> tuple:
 
 def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
                          robots_refused: set | None = None,
-                         entry_url: str = "", fetch_error: str | None = None) -> dict:
+                         entry_url: str = "", fetch_error: str | None = None,
+                         truncated: bool = False) -> dict:
     """Produce analysis from the crawled link graph."""
     pages = graph["pages"]
     internal_targets = graph["all_internal_targets"]
@@ -168,6 +169,10 @@ def analyze_link_profile(graph: dict, crawled: set, base_domain: str,
         # crawl's own reason wins when it has one: it knows why nothing was read.
         "fetch_error": fetch_error or (None if total_pages
                                       else "no page could be read"),
+        # The crawl says whether it read the whole site. Carried here because
+        # every count below is a count over what was read, and the item
+        # asserting `none of these` cannot tell the difference on its own.
+        "truncated": truncated,
         "pages_crawled": total_pages,
         "total_internal_links": sum(d["internal_out"] for d in pages.values()),
         "total_external_links": sum(d["external_out"] for d in pages.values()),
@@ -254,7 +259,9 @@ def main():
     print("Analyzing link profile...", file=sys.stderr)
     report = analyze_link_profile(graph, crawled, base_domain, robots_refused,
                                   entry_url=inventory.get("entry") or args.url,
-                                  fetch_error=inventory.get("fetch_error"))
+                                  fetch_error=inventory.get("fetch_error"),
+                                  truncated=bool(inventory.get("summary", {})
+                                                 .get("truncated")))
     report["site_url"] = args.url
 
     # Optional GSC backlinks

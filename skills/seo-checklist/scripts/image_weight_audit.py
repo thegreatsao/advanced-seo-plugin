@@ -44,6 +44,9 @@ LARGE_IMAGE_BYTES = 250_000
 # A crawl can contain one query-stringed tracking pixel per page. The site-wide
 # audit bounds distinct image requests just as broken_links.py bounds link requests,
 # and reports the part it did not check.
+# basis: inherited — 200 distinct image URLs, present at import. MD-187 is `high`
+#  and passes when `broken_image_count` is 0, so the cap decides that verdict: the
+#  images past it are exactly the ones that could have failed it.
 DEFAULT_MAX_IMAGES = 200
 
 
@@ -221,6 +224,12 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
         "picture_count": sum(1 for row in images if row["picture_source_count"]),
         "issues": issues,
         "images": images,
+        # Said as well as acted on. Withholding the clean count by omitting the key
+        # covers the PASS; this covers the other half, which omitting cannot reach:
+        # when something *was* found broken the count is emitted and is a floor, and
+        # the runner needs the flag to say so beside the FAIL. `broken_links.py` sets
+        # it for the same pair of reasons; this script was doing only one of them.
+        "truncated": bool(unchecked),
         "fetch_error": fetched.get("error"),
     }
     # An image-free page is not a page serving unresponsive, legacy-format images.
@@ -233,7 +242,17 @@ def audit(source: str, fetch_images: bool = False, timeout: int = 15) -> dict:
     # Present only when usable evidence exists. Emitting 0 — or None, which an
     # equality assertion reads as a failure rather than as silence — would turn "we
     # did not look" into a verdict either way. An absent key is NO_DATA by design.
-    if checked or broken:
+    #
+    # `broken or not unchecked` is the second half, and it is the asymmetry that
+    # makes this safe to apply without a threshold. A hundred images where
+    # ninety-nine time out and one answers 200 used to report `broken_image_count:
+    # 0` — "no broken images" drawn from one image out of a hundred. The share that
+    # ought to trigger that has no basis in this corpus, so this does not use one: a
+    # count of zero over an incomplete check is not a count of the page at any share,
+    # while a count above zero is a real defect that a timeout elsewhere cannot undo.
+    # So the clean answer is withheld whenever anything went unchecked, and the
+    # failing answer always stands.
+    if (checked or broken) and (broken or not unchecked):
         out["broken_image_count"] = len(broken)
         # `row["src"]`, not `row["url"]` — the row has no "url" key, so this raised
         # KeyError and killed the whole script. It could only fire on a page that
@@ -301,10 +320,19 @@ def audit_inventory(site_url: str, inventory_path: str, timeout: int = 15,
             "images_dropped": dropped,
         },
         "broken": broken,
-        "truncated": bool(inventory.get("summary", {}).get("truncated")),
+        # Three ways this answer can rest on less than the site: the crawl was
+        # capped, an image answered nothing, or an image sat past `--max-images` and
+        # was never asked. The first was already here; the other two were acting on
+        # the clean count below and saying nothing beside a failing one.
+        "truncated": bool(inventory.get("summary", {}).get("truncated")
+                          or unchecked or dropped),
         "fetch_error": inventory.get("fetch_error"),
     }
-    if usable_evidence:
+    # The same rule on the whole-site path, where there are two ways to fall short
+    # of the site: an image that answered nothing, and an image past `--max-images`
+    # that was never asked. Both leave "no broken images" a claim about the part
+    # that answered, so both withhold it; a broken image found stands either way.
+    if usable_evidence and (broken or not (unchecked or dropped)):
         out["broken_image_count"] = len(broken)
         out["broken_images"] = broken_urls
     return out

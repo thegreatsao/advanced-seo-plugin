@@ -67,6 +67,10 @@ WASTED_BYTES_WARN = 20000
 # package weight prevents prolific build variants from becoming extra observations.
 MINIFICATION_SAVINGS_FRACTION = 0.189
 
+# basis: inherited — 12 stylesheets, present at import. It decides a verdict rather
+#  than only a runtime: TE-174 passes when `unminified_count` is 0, and that count is
+#  over the first twelve sheets a page links. A page linking thirty was reported clean
+#  from twelve of them. `truncated` says when the cap bit.
 MAX_SHEETS = 12
 # basis: measured — corpus=tools/calibration/css-minification.json; date=2026-08-09; method=label and classifier results below the byte cutoff
 # The 170 sub-2KB files come from only five packages: 98 animate.css single-animation
@@ -107,6 +111,8 @@ def check(url: str, timeout: int = 15) -> dict:
         "stylesheets": [],
         "checked": 0,
         "unminified_count": 0,
+        # Set below, once the page's stylesheets are known.
+        "truncated": False,
         "wasted_bytes": 0,
         "issues": [],
         "fetch_error": None,
@@ -127,7 +133,9 @@ def check(url: str, timeout: int = 15) -> dict:
         href = link.get("href")
         if href:
             hrefs.append(urljoin(url, href))
-    hrefs = list(dict.fromkeys(hrefs))[:MAX_SHEETS]
+    hrefs = list(dict.fromkeys(hrefs))
+    result["truncated"] = len(hrefs) > MAX_SHEETS
+    hrefs = hrefs[:MAX_SHEETS]
 
     for href in hrefs:
         row = {"href": href, "bytes": None, "minified": None, "ratio": None,

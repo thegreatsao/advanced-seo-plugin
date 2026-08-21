@@ -10,6 +10,150 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.88.0 — an input that was not read in full does not produce a clean verdict
+
+Registry version: unchanged at `66d1b2037c32`. No item moves and no assertion changes.
+What moves is when an assertion is allowed to say PASS: **twenty items — eleven of
+them `high` — used to report a site clean from the part of it that was read.**
+
+Every cap in this tool bounds requests, and every one of them bounds exactly the
+evidence that could have failed an item asserting *none of these*. The pages past
+`--crawl-max-pages`, the links past `--max-links`, the images past `--max-images`, the
+sitemap files past the twenty-fifth, the GSC rows past the five-thousandth and the
+stylesheets past the twelfth are not a sample of the site. They are the part nobody
+looked at, so `0 broken`, `no duplicates` and `no issues` over them were claims about
+the part that fit. `site_crawl.py` has said so in a comment since the shared crawl
+landed — *a truncated crawl understates every count above and a reader has to be able
+to tell* — and nothing read the flag it set.
+
+**The rule.** A verdict that passes *by absence* — `eq 0`, `none_severity`,
+`none_matching`, which are the three ways this registry says "we found none of the bad
+thing" — becomes `NO_DATA` when the script reports that its input was capped. Two
+things are deliberately untouched:
+
+* **a FAIL always stands.** A defect found in part of a site is a defect; withholding
+  it would lose a true finding to a cap. This asymmetry is why the change needs no
+  threshold, and it is what answers the objection recorded against both closed entries
+  — that suppressing a count above some share of unchecked input would need a share
+  nobody here can justify. No share is needed. A clean count over an incomplete check
+  is not a count of the site at any share;
+* **a FAIL keeps its verdict and loses its false precision.** The number beside it
+  is a floor, not a total: "3 thin pages" read off three pages of seven is at least
+  three, and a fix list sized from it is short by whatever the cap left out. The
+  evidence now says so; the measure is untouched, because the measure is what the
+  script returned;
+* **an item that passes by *presence* is untouched.** `LO-198` finds a LocalBusiness
+  node on the pages it read, and reading more pages cannot take it away. A cap can fake
+  an absence; it cannot fake a presence.
+
+**Twelve, eleven, twenty.** The ledger entry this closes said twelve items and the
+command recorded beside it printed eleven. Twelve is right for the entry's own subject:
+the items handed the crawl inventory whose assertion is a clean verdict. The command
+asked for `requires: crawl` plus a literal `eq 0`, which drops `CI-018` and `AR-162` —
+clean verdicts spelled `none_severity` — and adds `BL-083`, which never reads the
+inventory. Asking the same question of every cap rather than of the crawl found the
+rest.
+
+**Six spellings, not three, and the first draft only knew three.** `passes_by_absence`
+began as `eq: 0`, `none_severity` and `none_matching`, under a comment asserting those
+were "the whole set in this registry". They are not. Twelve items say the same thing as
+`len_eq: 0`, `len_lte: 0` or `falsy` — four of them `critical` (`CI-013`, `SE-114`,
+`SE-116`, `TE-171`) and four `high` — and every one of them was outside a rule about
+which verdicts a cap can fake. That is this release's own defect, one layer up from the
+one it is about: a predicate that reads some of the ways a registry spells *nothing*.
+It now reads six, plus `lte: 0` for a spelling nothing uses yet, and a test asserts over
+the registry rather than over a list, so a seventh arriving is a failure rather than an
+escape. Widening it brought in `CI-014` — `high`, `has_loop falsy` over the
+ten-hop redirect walk — taking the covered set from nineteen to twenty.
+
+The same lesson applied twice more in one afternoon: the list of scripts that can report
+a cap was hand-written and already missing `redirect_checker.py`, and when it was derived
+from the sources instead it enrolled `checklist_runner.py`, which reads the flag and sets
+it nowhere. Both are now derived from *assignment*, in the test and in the probe alike,
+and a script that carries the key and cannot set it fails a test.
+
+**Nine scripts were silent about a cap, and one cap was invisible even as a
+number.** Five dropped a flag the crawl did set, four never reported their own,
+and the crawl's own flag was wrong for its own depth limit.
+
+* `link_profile.py`, `duplicate_content.py`, `anchor_text_audit.py`,
+  `orphan_pages_from_sitemap.py` and `internal_links.py` read the shared crawl and
+  dropped its `truncated` flag on the floor. They now carry it, as `broken_links.py`
+  and `image_weight_audit.py` already did;
+* `external_link_quality.py` caps at 200 distinct outbound links and reported the cap
+  nowhere at all. A page with 500 of them had 300 never requested and `BL-083` read
+  `broken_links: 0` off the other 200. Its cap was a default argument value — a place
+  no instrument here can see — and is now a named constant;
+* `gsc_cannibalization.py` asks Search Console for 5,000 rows in one request with no
+  pagination. A property with more query/page rows than that was analysed from the
+  first page and `MS-023` and `KW-071`, both `high`, read `eq 0` off it;
+* `sitemap_checker.py` stops its index walk at 25 files and left the queue where it
+  was, silently. `GO-136` is `high` and passes by finding no issue at or above medium;
+* `css_minify_check.py` checks the first twelve stylesheets a page links, and `TE-174`
+  passes when `unminified_count` is 0.
+
+**A second defect in the same script.** `summary.cannibalized_queries` was
+`len()` of a list already shortened to 25 for reading, so a property with sixty
+cannibalised queries reported twenty-five. `script-output-shapes.md` has always
+documented the summary as a count over the classified queries, and the document was the
+only place the real number existed. The count is now taken before the list is shortened.
+It could not fake a PASS — twenty-five is not zero — but it is the number `MS-023` and
+`KW-071` print and the number a fix list is sized from.
+
+**A cap this release nearly shipped a hole for.** `site_crawl.summary.truncated` was
+`more_queued or len(pages) >= max_pages`, and neither is true when `--depth` is what
+stopped the walk: links from a page at the limit are never queued, so the queue empties
+on its own and the crawl reports itself complete having read part of the site. Measured
+on a five-page chain at `depth=2` — three pages read, one internal target never
+fetched, `truncated` False. The flag now also counts internal targets that were neither
+fetched nor refused by robots, which is the subtraction the orphan check already makes,
+so a page skipped out of politeness still does not count against the site. Pages a
+sitemap lists enter at depth 0 and are unaffected, which is why a site with a sitemap
+rarely meets this number at all.
+
+**The refusal half, on links as well as images.** The same asymmetry applies wherever
+something was asked and answered nothing. `broken_links.py` reports `unchecked` and
+`timeout` beside `broken_or_redirected`, and `external_link_quality.py` reports
+`unchecked_links` beside `broken_links`; both counted 0 defects over sets containing
+targets that never replied, under `TE-168` (`high`) and `BL-083`. Both now mark the
+answer as resting on less than the whole input. Measured on the good fixture first:
+both report zero unchecked there, so the live-path job that requires `TE-168` to decide
+is unaffected.
+
+**The images half, closed without a threshold.** `image_weight_audit.py` withheld
+`broken_image_count` only when *no* status at all was collected, so a hundred images of
+which ninety-nine timed out and one answered `200` reported `broken_image_count: 0` and
+`MD-187` PASSed. The clean count is now withheld whenever anything went unchecked or was
+dropped past `--max-images`, on both the page path and the whole-site path; a non-zero
+count always stands.
+
+**The threshold ledger moved, and the direction is the honest one.** Seven of these
+caps had no `# basis:` line and `ROW_LIMIT` had none either, so `audit_thresholds` could
+not see eight numbers that were deciding verdicts. Naming them takes the inventory from
+136 verdict-deciding numbers to **144**, and `inherited` from 67 to **75**. `ROADMAP.md`
+wants that number to fall; it can only fall from a number that is true first. The
+uncounted listing drops from 20 to 13, and `sitemap_checker.py`'s recorded basis for
+`MAX_SITEMAPS_FOLLOWED` — *an operational cap rather than a verdict* — is corrected,
+because it was wrong.
+
+**What is not done, and is now written down rather than remembered.** The rule reaches
+an assertion only when its script says `truncated`. All fifty items that pass by absence
+were asked whether their script caps its own input; twelve scripts now answer,
+`html_validator.py` was read and cleared, and twenty-three have not been read either
+way —
+among them `gsc_checker.py` under `GO-134` (`high`), `parse_html.py` under `CI-004`
+(`critical`) and `rich_results_guard.py` under two `high` items. That list is held by a
+probe, not by a paragraph.
+
+**And one question this release opens rather than closes.** `DEFAULT_MAX_PAGES = 100`
+and `DEFAULT_DEPTH = 3` used to bound work; they now bound answers, and both are
+`inherited` — present at import, chosen by nobody here. A site past either limit gets
+`NO_DATA` from twenty items where it used to get `PASS`, which is correct for the
+numbers as they stand and is the first time either has been load-bearing. Both are
+operator flags, so a large site is audited honestly by somebody who raises them.
+Whether that should be the default is a decision about what a run costs, and it is
+recorded in `KNOWN-ISSUES.md` with the measurement rather than settled here.
+
 ## 0.87.1 — the documents catch up with the tree
 
 Registry version: unchanged at `66d1b2037c32`. No code changes, no verdict moves, no

@@ -128,7 +128,8 @@ def duplicate_descriptions(pages: dict) -> list:
 
 def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
                       fetch_error: str | None = None,
-                      thin_words: int | None = None) -> dict:
+                      thin_words: int | None = None,
+                      truncated: bool = False) -> dict:
     """
     Detect exact and near-duplicate pages.
     Returns report with exact dupes, near-dupes, and thin content.
@@ -241,6 +242,10 @@ def detect_duplicates(pages: dict, similarity_threshold: float = 0.85,
         # two of them `high` — graded the emptiness as a pass. The crawl's own
         # reason wins when it has one: it knows why nothing was read.
         "fetch_error": fetch_error or (None if pages else "no page could be read"),
+        # The crawl says whether it read the whole site. Carried here because
+        # every count below is a count over what was read, and the item
+        # asserting `none of these` cannot tell the difference on its own.
+        "truncated": truncated,
         "pages_analyzed": len(pages),
         "exact_duplicates": exact_dupes,
         "near_duplicates": near_dupes,
@@ -296,7 +301,8 @@ def main():
 
     report = detect_duplicates(pages, similarity_threshold=args.threshold,
                                fetch_error=inventory.get("fetch_error"),
-                               thin_words=args.thin_words or None)
+                               thin_words=args.thin_words or None,
+                               truncated=bool(inventory.get("summary", {}).get("truncated")))
 
     if args.json:
         print(json.dumps(report, indent=2))

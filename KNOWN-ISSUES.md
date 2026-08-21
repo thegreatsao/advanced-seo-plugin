@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.87.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.88.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -10,8 +10,8 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Twenty-three of the
-forty-two entries carry a probe; the other nineteen carry a written reason for having
+fails when the tree stops answering what its entry says it answers. Twenty-seven of the
+forty-four entries carry a probe; the other seventeen carry a written reason for having
 none, and that count is printed, because a ledger where everything is exempt is a
 ledger that has stopped working.
 
@@ -1639,21 +1639,86 @@ name. A column called `url` would be read as "fix this page".
   that product at all.
   <!-- ki: entity-checker-reads-the-graph-unbounded -->
 
-1. **A mostly-refused run still reports a clean count.** The withholding fires only
-   when no status was collected. A site with a hundred images where ninety-nine time
-   out and one answers `200` emits `broken_image_count: 0` and `MD-187` PASSes.
-   Reporting `unchecked_image_count` beside it is what 0.74.0 does about it;
-   suppressing the count above some share of unchecked images would need a share,
-   and that number has no basis on this corpus.
-   <!-- ki: a-mostly-refused-run-reports-a-clean-count -->
+- **Closed in 0.88.0 — a mostly-refused run reported a clean count.** The withholding
+  fired only when no status at all was collected, so a hundred images of which
+  ninety-nine timed out and one answered `200` emitted `broken_image_count: 0` and
+  `MD-187` PASSed. The entry said suppressing it above some share of unchecked images
+  would need that share and the corpus gives it no basis. That was right, and it was
+  the wrong question. **No share is needed, because the asymmetry does the work:** a
+  count of zero over an incomplete check is not a count of the page at any share,
+  while a count above zero is a defect that a timeout elsewhere cannot undo. So the
+  clean answer is withheld whenever anything went unchecked or was dropped past
+  `--max-images`, and the failing answer always stands. The probe runs the entry's
+  own scenario — a hundred images, ninety-nine refusing — and reads the key's absence.
+  <!-- ki: a-mostly-refused-run-reports-a-clean-count -->
 
-2. **A truncated crawl decides a whole site from part of it.** `site_crawl` caps pages
-   and `broken_links.py:184-191` caps links, both reporting `truncated`; `TE-168` —
-   `high`, site-wide — has asserted `eq 0` over a truncated crawl since it was
-   written. `MD-187` joins that convention rather than inventing a stricter one.
-   Whether a site-wide `eq 0` should be withheld when its input was truncated is one
-   question about twelve items, not twelve questions.
-   <!-- ki: a-truncated-crawl-decides-the-whole-site -->
+- **Closed in 0.88.0 — a truncated crawl decided a whole site from part of it.**
+  `site_crawl` caps pages and `broken_links.py` caps links, both reporting
+  `truncated`, and nothing read it. The runner now withholds any verdict that passes
+  *by absence* — `eq 0`, `none_severity`, `none_matching`, the three ways this
+  registry says "we found none of the bad thing" — when the script says its input was
+  capped. A FAIL is untouched, and an item that passes by *presence* is untouched:
+  `LO-198` finds a LocalBusiness node on the pages it read, and reading more pages
+  cannot take it away.
+
+  **The entry said twelve and the command recorded beside it printed eleven; both
+  numbers were about different sets and the real count is twenty.** Twelve is right
+  for the entry's own subject — the items handed the crawl inventory whose assertion
+  is a clean verdict. The command asked for `requires: crawl` plus a literal `eq 0`,
+  which drops `CI-018` and `AR-162` (clean verdicts spelled `none_severity`) and adds
+  `BL-083`, which never reads the inventory. `BL-083` belongs anyway, for a worse
+  reason: `external_link_quality.py` caps at 200 distinct outbound links and was the
+  one cap here that did not report itself at all, so a page with 500 of them had 300
+  never requested and read as clean. Asking the same question of every cap rather
+  than of the crawl found six more — GSC's 5,000-row page under `MS-023` and `KW-071`,
+  the sitemap index walk that stops at 25 files under `GO-136` and `GO-138`, the
+  stylesheet list under `TE-174`, and `MD-185` beside `MD-187`.
+
+  **Twenty items, eleven of them `high`.** The predicate deciding which verdicts a
+  cap can fake read three of the six ways this registry spells *nothing*; widening it
+  to `len_eq: 0`, `len_lte: 0` and `falsy` brought in `CI-014`. Eight of the caps
+  behind these items were invisible to `audit_thresholds` for want of a `# basis:`
+  line, and naming them moved that ledger from 136 verdict-deciding numbers to 144 and
+  `inherited` from 67 to 75 — the count becoming honest, not the tree getting worse.
+  <!-- ki: a-truncated-crawl-decides-the-whole-site -->
+
+1. **The other caps have not been read, only listed.** The rule above reaches an
+   assertion only when its script says `truncated`, and the enumeration behind 0.88.0
+   asked all fifty passes-by-absence items whether their script caps its own input.
+   Fourteen scripts now answer. One more, `html_validator.py`, was read and cleared:
+   `MAX_MESSAGES` trims the message list after `counts` has been incremented, so
+   `summary.errors` is the whole number. **The rest have not been read either way**,
+   and the probe holds that list rather than this paragraph — a list written twice is
+   a list that drifts, which is the failure the last release spent itself repairing.
+   Among them are `gsc_checker.py` under `GO-134` (`high`), `parse_html.py` under
+   `CI-004` (`critical`), and `rich_results_guard.py` under two `high` items, so the
+   remainder is not the low-severity tail. What is unknown for each is the same one
+   thing: whether its slice or row limit stands upstream of the count it reports or
+   downstream of it. Upstream is this defect; downstream is `html_validator.py`.
+   <!-- ki: the-other-caps-have-not-been-read -->
+
+2. **Two numbers nobody decided now decide whether twenty items answer at all.**
+   Before 0.88.0 `DEFAULT_MAX_PAGES = 100` and `DEFAULT_DEPTH = 3` bounded work: past
+   them the crawl stopped and the items graded what it had. They now bound *answers* —
+   a site past either reports `truncated`, and twenty items say `NO_DATA` instead of
+   `PASS`. That is the correct behaviour for the numbers as they stand, and it is the
+   first time either number has been load-bearing, so neither has ever been examined
+   as one. Both are `inherited`: present at import, chosen by nobody here.
+
+   **The two do not bite alike, and the difference was measured rather than assumed.**
+   Pages a sitemap lists enter the crawl at depth 0, so on a site with a sitemap the
+   depth limit rarely applies at all — the good fixture reads five pages at `depth=1`
+   and at `depth=3` and reports itself complete both times. Without a sitemap it
+   applies immediately: a five-page chain at `depth=2` reads three pages and leaves one
+   internal target unfetched. The page budget is the blunter of the two, and any site
+   past a hundred pages meets it.
+
+   **What is open is not the mechanism but the numbers**, and raising either costs
+   requests linearly against a site's own budget. `--crawl-max-pages` and `--depth` are
+   both operator flags, so the answer today is that a large site is audited honestly by
+   somebody who raises them; whether that should be the default is a decision about
+   what this tool costs to run, not about what is true.
+   <!-- ki: the-crawl-defaults-now-decide-whether-items-answer -->
 
 - **Closed in 0.82.0 — one test's robots.txt could answer another test's question for
   half an hour.** Found on the acceptance run for 0.80.0:

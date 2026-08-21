@@ -20,16 +20,73 @@
       "state": "closed"
     },
     "a-mostly-refused-run-reports-a-clean-count": {
-      "claim": "A run where almost every image was unchecked still reports broken_image_count 0, with the unchecked count printed beside it.",
-      "probe": null,
-      "state": "open",
-      "why": "Withholding the count above some share of unchecked images needs that share, and this corpus gives it no basis. There is no number to re-measure until somebody decides one."
+      "claim": "A run where almost every image was unchecked no longer reports broken_image_count at all; the key is absent, which the runner reads as NO_DATA. No share was needed — a clean count over an incomplete check is withheld at any share, and a non-zero one always stands.",
+      "measured": {
+        "images_checked": 100,
+        "reports_broken_image_count": false,
+        "unchecked": 99
+      },
+      "probe": "a_mostly_refused_run_reports_a_clean_count",
+      "state": "closed"
     },
     "a-truncated-crawl-decides-the-whole-site": {
-      "claim": "Twelve site-wide items assert eq 0 over a crawl that reports itself truncated.",
-      "probe": null,
-      "state": "open",
-      "why": "The question is whether a site-wide assertion should be withheld on truncated input, which is a decision about twelve items rather than a measurement."
+      "claim": "Twenty items — eleven of them `high` — asserted a clean verdict over an input their own script had capped; the runner now withholds the PASS and leaves the FAIL alone, across all six ways this registry spells `none of these`.",
+      "measured": {
+        "high_among_them": [
+          "AR-162",
+          "CI-008",
+          "CI-014",
+          "CN-039",
+          "CN-041",
+          "GO-136",
+          "KW-071",
+          "MD-187",
+          "MS-022",
+          "MS-023",
+          "TE-168"
+        ],
+        "items_covered": [
+          "AR-149",
+          "AR-162",
+          "BL-081",
+          "BL-083",
+          "CI-008",
+          "CI-014",
+          "CI-018",
+          "CN-039",
+          "CN-041",
+          "GO-136",
+          "GO-137",
+          "GO-138",
+          "KW-071",
+          "MD-185",
+          "MD-187",
+          "MS-022",
+          "MS-023",
+          "MS-029",
+          "TE-168",
+          "TE-174"
+        ],
+        "scripts_that_report_a_cap": [
+          "anchor_text_audit.py",
+          "broken_links.py",
+          "css_minify_check.py",
+          "duplicate_content.py",
+          "external_link_quality.py",
+          "gsc_cannibalization.py",
+          "image_weight_audit.py",
+          "internal_links.py",
+          "link_profile.py",
+          "orphan_pages_from_sitemap.py",
+          "redirect_checker.py",
+          "server_log_audit.py",
+          "site_crawl.py",
+          "sitemap_checker.py"
+        ],
+        "still_deciding_over_a_capped_input": []
+      },
+      "probe": "a_truncated_crawl_decides_the_whole_site",
+      "state": "closed"
     },
     "answer-block-score-and-the-parser": {
       "claim": "Closed in 0.15.0.",
@@ -450,21 +507,146 @@
       "state": "history",
       "why": "A closed narrative about a suite repair, held by the discovery rules it fixed."
     },
+    "the-crawl-defaults-now-decide-whether-items-answer": {
+      "claim": "DEFAULT_MAX_PAGES 100 and DEFAULT_DEPTH 3 are both `inherited` and now decide whether twenty items answer at all; past either limit they report NO_DATA instead of PASS, and neither number has been examined as a threshold because until 0.88.0 neither was one.",
+      "measured": {
+        "both_bases": "inherited",
+        "depth": 3,
+        "items_silenced_past_either_limit": [
+          "AR-149",
+          "AR-162",
+          "BL-081",
+          "BL-083",
+          "CI-008",
+          "CI-014",
+          "CI-018",
+          "CN-039",
+          "CN-041",
+          "GO-136",
+          "GO-137",
+          "GO-138",
+          "KW-071",
+          "MD-185",
+          "MD-187",
+          "MS-022",
+          "MS-023",
+          "MS-029",
+          "TE-168",
+          "TE-174"
+        ],
+        "max_pages": 100
+      },
+      "probe": "the_crawl_defaults_now_decide_whether_items_answer",
+      "state": "open"
+    },
+    "the-other-caps-have-not-been-read": {
+      "claim": "Twenty-three scripts behind an assertion that passes by absence cannot say their input was capped, and have not been read either way; html_validator.py was read and cleared.",
+      "measured": {
+        "cleared_by_reading": {
+          "html_validator.py": "counts before the message cap"
+        },
+        "not_yet_read": {
+          "a11y_seo_checker.py": [
+            "CN-036"
+          ],
+          "cache_compression_checker.py": [
+            "TE-170"
+          ],
+          "canonical_checker.py": [
+            "TE-176"
+          ],
+          "collection_page_checker.py": [
+            "AR-154"
+          ],
+          "critical_request_chain.py": [
+            "SP-110"
+          ],
+          "domain_safety_check.py": [
+            "SE-114",
+            "SE-116",
+            "TE-171",
+            "TE-178"
+          ],
+          "entity_checker.py": [
+            "GEO-006"
+          ],
+          "faceted_nav_audit.py": [
+            "AR-163"
+          ],
+          "font_audit.py": [
+            "TECH-002"
+          ],
+          "ga4_tag_checker.py": [
+            "GO-132"
+          ],
+          "gsc_checker.py": [
+            "GO-134"
+          ],
+          "gsc_url_inspection.py": [
+            "GO-135"
+          ],
+          "image_inventory.py": [
+            "CI-016",
+            "CN-054",
+            "MD-186"
+          ],
+          "javascript_render_audit.py": [
+            "MB-105"
+          ],
+          "mobile_render_checker.py": [
+            "MB-100"
+          ],
+          "parse_html.py": [
+            "AR-146",
+            "CI-004",
+            "CN-048",
+            "MS-031"
+          ],
+          "rendered_audit.py": [
+            "CN-034",
+            "CN-035",
+            "CN-051",
+            "MB-094",
+            "MB-103",
+            "MB-108"
+          ],
+          "rich_results_guard.py": [
+            "TE-172",
+            "TECH-001"
+          ],
+          "robots_path_tester.py": [
+            "CI-013",
+            "CI-019"
+          ],
+          "schema_required_props.py": [
+            "GO-143",
+            "MS-032"
+          ],
+          "third_party_script_audit.py": [
+            "SP-109"
+          ],
+          "url_quality.py": [
+            "AR-155"
+          ],
+          "video_schema_checker.py": [
+            "MB-102",
+            "MD-190"
+          ]
+        }
+      },
+      "probe": "the_other_caps_have_not_been_read",
+      "state": "open"
+    },
     "threshold-declarations-unjudged": {
       "claim": "The four shapes 0.71.0 singled out are judged and declared — the two MinHash constants and the three detect_profile tables as inherited, DEFAULT_MAX_REDIRECTS left outside as a fetch budget — and twenty module-level numeric constants carry no basis and are beyond the name-based scan.",
       "measured": {
-        "counted": 136,
+        "counted": 144,
         "non_numeric_basis": [
           "scripts/robots_path_tester.py:31"
         ],
         "presentation": 13,
         "uncounted": [
           "CACHE_ENTRY_VERSION",
-          "DEFAULT_DEPTH",
-          "DEFAULT_MAX_IMAGES",
-          "DEFAULT_MAX_LINES",
-          "DEFAULT_MAX_LINKS",
-          "DEFAULT_MAX_PAGES",
           "DEFAULT_MAX_REDIRECTS",
           "DEFAULT_MAX_RESPONSE_BYTES",
           "DEFAULT_MAX_RPS",
@@ -473,9 +655,7 @@
           "INVENTORY_VERSION",
           "JPEG_SOF_MARKERS",
           "MAX_ICON_BYTES",
-          "MAX_SHEETS",
           "ROBOTS_FETCH_WAIT",
-          "ROW_LIMIT",
           "SOCKET_TIMEOUT",
           "TOP_N",
           "_CACHE_POLL"
@@ -529,6 +709,7 @@
           "stylesheets[]",
           "checked",
           "unminified_count",
+          "truncated",
           "wasted_bytes",
           "issues[]",
           "fetch_error"
@@ -544,7 +725,7 @@
       "state": "open"
     }
   },
-  "entry_count": 42,
-  "probed_entry_count": 23,
-  "unprobed_entry_count": 19
+  "entry_count": 44,
+  "probed_entry_count": 27,
+  "unprobed_entry_count": 17
 }
