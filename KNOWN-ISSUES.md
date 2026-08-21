@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.80.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.87.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -10,10 +10,14 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Twenty-two of the
-forty-one entries carry a probe; the other nineteen carry a written reason for having
+fails when the tree stops answering what its entry says it answers. Twenty-three of the
+forty-two entries carry a probe; the other nineteen carry a written reason for having
 none, and that count is printed, because a ledger where everything is exempt is a
 ledger that has stopped working.
+
+**The count in that sentence is the one thing here a probe cannot check**, and it was
+wrong by one release for as long as this header said 0.80.0. Both numbers now come from
+`python tests/known_issues.py`, which prints them.
 
 This file exists because the audit's one promise — that "we could not check this"
 never reads as a verdict — applies to the plugin's own description of itself. A
@@ -31,7 +35,7 @@ confirm each other and say nothing about the rest of the web.
 
 `tests/verdict_census.py` answers the cheap half of that. It serves every tree this
 repository can serve — the four fixture origins, with every operator artifact staged as
-the oracle stages them — and records what all 215 items answered, into
+the oracle stages them — and records what all 217 items answered, into
 `tests/census.json`. It is a measurement, not an oracle: it cannot say which answer was
 right, only which answers were ever given. The first reading, over the fixtures alone:
 
@@ -870,7 +874,7 @@ name. A column called `url` would be read as "fix this page".
     must not flag, so it is fitted to them: a future title opening *Prevent* or *Trim*
     is a false alarm on the day it is written.
   - **Its ceiling is a third of the registry, and it misses most phrasings inside
-    that.** Only 74 of 215 items assert a negative-polarity path at all — 34.4%. Of
+    that.** Only 76 of 217 items assert a negative-polarity path at all — 35.0%. Of
     four plausible ways to write GEO-008's defect, it catches the one that happens to
     reuse the assertion's own word; *suppressed*, *blocked from quoting* and *shut the
     page out of* all pass silently.

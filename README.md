@@ -4,12 +4,12 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.87.0 — see [CHANGELOG.md](CHANGELOG.md). Five items could not pass any site:
-each was cleared by exactly one page of the fifteen this repository serves, and all five
-reported FAIL on the exemplary tree and the deliberately broken one alike. Their floors
-now rest on the score components a page of any type can carry, `SP-110` stops grading an
-ordinary stylesheet as a defect, and the citation score stops counting a footer link as
-a source. The oracle's count of items that tell the two fixtures apart goes 79 to 84.
+Version 0.87.1 — see [CHANGELOG.md](CHANGELOG.md). A documentation release, and the
+defect it repairs is one of the three clauses 1.0 is defined by: the roadmap planned
+releases that shipped sixty-seven releases ago, the defect ledger's header was dated
+0.80.0 and counted 41 entries where there were 42, one open entry inside it disagreed
+with its own probe — *74 of 215* against the probe's 76 of 217 — and the repository
+description offered a 215-check registry. No code changed and no verdict moves.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0
@@ -18,7 +18,11 @@ is also what lets the report name the broken URLs rather than count them — and
 0.10.0 gave the run a shared response cache, so a URL is fetched once by the whole
 audit instead of 37 times by 36 scripts. One audit of the seven-page fixture, one page
 audited, went from **97 requests to 16** across the two releases, with all 214 verdicts
-unchanged.
+unchanged — 214 because that was the registry then.
+
+[ROADMAP.md](ROADMAP.md) says where this stops: 1.0 is defined there as a claim that
+can be checked rather than a number, and the file reports the tree's distance from each
+of its three clauses with the command that prints it.
 
 ## Why it exists
 
@@ -40,13 +44,17 @@ was computed over, and beneath it every item lands in exactly one bucket named f
 whose action moves it:
 
 ```
-SEO Score 69/100 — over 107 items, 55% of the weight in scope
-  decided           107
-  waiting on you     51   (36 unanswered LLM items, 15 missing inputs)
+SEO Score 92/100 — over 99 items, 51% of the weight in scope
+  decided            99
+  waiting on you     55   (38 unanswered LLM items, 17 missing inputs)
   needs a person     34
-  undecided          25
+  undecided          27
+  not applicable      2
                    ---- 217 items in the registry
 ```
+
+Those are real numbers from one run against `tests/fixtures/good` on loopback with
+`--sample 3` and no Search Console key, not an illustration.
 
 There was a single `Coverage %` until 0.16 and removing it was the point: it added
 together how far the tool reached, how much work the operator had done, and how much

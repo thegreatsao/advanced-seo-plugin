@@ -9,394 +9,135 @@ A version number that does not mean anything is a number nobody can argue with, 
 > it cannot; every number a verdict rests on is either measured or declared unmeasured;
 > and the document says what the code does.**
 
-Four releases reach it. Nothing below adds a check to the registry — 0.20 repairs one.
+That definition has not changed since 0.15.0 and does not need to. What follows is
+where the tree stands against each of its three clauses, measured rather than
+estimated, with the command that prints each number — **so that this file can be
+checked instead of believed.**
 
-**Shipped:** 0.16 replaced the coverage percentage with the score's weight share
-and a partition of the registry. 0.17 gave the two groups that could only sit at
-zero a way to be answered.
+**This file was itself the counter-example.** Until 0.87.1 it planned releases 0.16
+through 0.20 as though they were ahead; they shipped sixty-seven releases ago. A
+roadmap describing a tree that no longer exists is the third clause failing about the
+second document in the repository, and it went unnoticed because nothing reads a
+roadmap on a schedule.
 
 ---
 
-## Where the numbers actually are
+## Where the tree stands, 0.87.1
 
-Measured, not estimated — one live run against `tests/fixtures/good` served on
-loopback, `--sample 3`, no Search Console key, no supplied artifacts:
+One live run against `tests/fixtures/good` served on loopback, `--sample 3`, no Search
+Console key, no supplied artifacts:
 
 ```
-SEO Score 69/100   Coverage 50% (106/214)
-PASS 72   WARN 3   FAIL 31   NO_DATA 38   LLM_PENDING 36   MANUAL 34
+SEO Score 92/100 — over 99 decided items, 51% of the weight in scope
+  decided            99
+  waiting on you     55   (38 unanswered LLM items, 17 missing inputs)
+  needs a person     34
+  undecided          27
+  not applicable      2
+                   ---- 217 items in the registry
 ```
 
-That single 50% is three unrelated facts added together:
+Every item is in exactly one row and the rows add up to the registry. That partition is
+the shape 0.16 introduced and it is stable; what moves now is the size of each row.
 
-| Answered by | Items | Decided | What its zero means |
-|---|---|---|---|
-| a script, measured | 144 | 106 | the tool's own reach |
-| a model reading the page | 36 | **0** | the operator has not run the queue |
-| a person | 34 | **0** | the audit was never going to answer these |
+### Clause 1 — a verdict, or a stated reason there is none
 
-Adding them produces a number whose movement cannot be attributed. Coverage falling
-from 62% to 50% between two audits reads as the site becoming harder to measure, when
-it may only mean nobody answered `LLM-QUEUE.md` this time. **This is the failure this
-project was built to prevent — merging Score with Coverage — repeated one level
-down**, and it has been in every report since 0.1.0.
+`tests/census.json` records what every item answered across the five trees this
+repository can serve, and it is the closest thing to an answer for this clause:
 
-The weighting makes it sharper than the counts do. Under `SEVERITY_WEIGHT` the
-registry carries 890 points: 658 machine, 116 model, 116 human. The two groups
-sitting at zero are **26% of the weight the score is computed over**. A run reporting
-69/100 is reporting a figure derived from three quarters of the registry, and says so
-nowhere.
+```
+.venv/Scripts/python.exe tests/verdict_census.py --check tests/census.json | tail -3
+```
 
-### What the 38 undecided machine items are
-
-Also measured, from the same run, and this is the more actionable split:
-
-| Cause | Items | Whose problem |
+| | count | what it means |
 |---|---|---|
-| no external service can reach a loopback host | 21 | the fixture's, not a real site's |
-| a supplied input was not supplied | 13 | the operator's — `--rendered-json` 5, `--links-csv` 3, `--cwv-json` 3, `--server-log` 1, `INDEXNOW_KEY` 1 |
-| a field the assertion reads was absent | 4 | genuinely undecidable from what the site served |
+| answered somewhere, never FAIL | 25 | a rule that cannot fail, or a case the corpus does not have |
+| answered somewhere, never PASS | **2** | the mirror; it was 8 before 0.87.0 |
+| never answered anywhere | 30 | mostly honest — Search Console, PageSpeed and Safe Browsing cannot answer offline |
 
-Only the last row is the tool failing to decide. On a public site with every optional
-input supplied the machine group reaches **140 of 144**. Reporting all three as one
-`NO_DATA` count tells the person running the audit nothing about which of them is
-their own unfinished work.
+The second row is where the last release went, and the two survivors are named:
+`AR-158`, whose visible-breadcrumb half no fixture carries, and `GEO-006`, whose script
+reads the JSON-LD graph with no boundary at all. The first and third rows are the work
+left: each entry has to become either an answer or a written structural reason, and the
+honest form of that reason is a corpus page or a named limitation, not a shrug.
 
----
-
-## 0.16 — coverage stops being a percentage and becomes a partition
-
-**Shipped: the reporting half.** The composite is gone, the score carries its weight
-share, the partition is printed in both renderers and in Russian, `NEEDS_INPUT` is a
-status with its own section, and a test asserts the buckets sum to the registry.
-Registry unchanged; 13 items moved `NO_DATA` → `NEEDS_INPUT` and no verdict moved at
-all. **Still open in this release:** dispatching the lens agents, `--manual-answers`,
-and `decided_by`.
-
-There is no compatibility constraint here. `.seo-runs/` does not exist, no run has
-ever been archived, and the plugin has no users outside this repository. So the
-question is what the right design is, not what the cheapest migration is.
-
-**Delete the composite `Coverage %`.** It is the average of three quantities that
-measure different things — how far the tool reaches, how much work the operator has
-done, and how much of the registry was never the audit's job. A number that moves for
-three unrelated reasons cannot be attributed by the person reading it, which is the
-whole objection this project raises to a single SEO score.
-
-**The score carries its own weight share instead**, because that is the claim a reader
-actually needs to check:
+Beside it, the reachability audit asks the same question of the assertions rather than
+of the items:
 
 ```
-SEO Score 69/100 — over 106 items, 55% of the weight in scope
+.venv/Scripts/python.exe skills/seo-checklist/tools/audit_reachability.py
 ```
 
-489 of 890 points. `96/100 at 19%` reads wrong on sight, which is the founding
-requirement and is what `Coverage` was reaching for and missing.
+145 script-backed assertions; **2 proved unable to report FAIL, 143 not claimed either
+way.** That 143 is the honest measure of how much of the registry any tool here speaks
+about at all, and it is the number that should fall.
 
-**Under it, a partition of all 214 by whose action moves it.** Not percentages —
-buckets that sum to the registry, so no item can hide in a denominator:
-
-| Bucket | Items | Who moves it |
-|---|---|---|
-| decided | 106 | — the score is computed over these |
-| waiting on you | 49 | the operator: 36 unanswered queue items, 13 missing input files |
-| needs a person | 34 | a human, in the Search Console UI or by looking |
-| undecided | 25 | nobody: the site served no such field, or a service was unreachable |
-| not applicable | 0 | out of scope for this mode or profile |
-
-`106 + 49 + 34 + 25 + 0 = 214`, and a test asserts exactly that.
-
-The undecided bucket does **not** separate the 21 items no external service could
-reach from the 4 the site served no field for, and that is deliberate: neither is
-anybody's to-do, telling them apart would need a status per cause, and the 21 exist
-only because this measurement was taken against loopback. On a public site that
-bucket is 4. The causes are already in each item's stated reason.
-
-**`NO_DATA` splits, because the partition must come from statuses and not from
-prose.** It currently means four different things at once — an external service was
-unreachable, an input file was not supplied, the site served no such field, the script
-died. Producing the table above today requires substring-matching the evidence text,
-which is the kind of thing that breaks silently and is exactly what this repository
-keeps finding. Add `NEEDS_INPUT` as a status of its own; the report then reads
-statuses, and "you did not pass `--cwv-json`" stops printing as "the audit could not
-tell".
-
-*Shipped in 0.17.* The queue skeleton, `--manual-answers`, `decided_by` and the
-disclosure line are in; dispatching the lens agents is a skill-level change and is
-described below rather than done.
-
-**Close the model group.** 36 items — 17% of the registry, 116 points of weight — sit
-at `LLM_PENDING` because answering them means running four agents by hand, saving JSON
-by hand, and merging by hand. The runner should dispatch the lens agents and merge
-their answers itself — except it cannot: the runner is a Python CLI that launches
-subprocesses and has no model. The dispatch belongs in `SKILL.md`, which tells Claude
-to run the four lens agents in parallel; the runner's part is making the round trip
-one command, which is what the per-lens skeleton did. No new check; the largest
-single coverage gain available anywhere in this plan.
-
-**Give the human group a way to answer.** `--llm-answers` exists and merges only
-`LLM_PENDING`; `--manual-answers` should mirror it exactly and merge only `MANUAL`.
-The mechanism is already half-built and stranded: `CHECKLIST.html` persists the
-`MANUAL` checkboxes in `localStorage`, so a person's answers exist in a browser and
-never return to the artifact. Export them.
-
-With that, every bucket except the two nobody controls can be emptied, and the
-84% ceiling — 180 of 214, the most the audit can decide on its own — stops being a
-ceiling at all.
-
-**The hazard this opens, and its guard.** A human who can answer 34 items can type
-`PASS` 34 times and raise the score. This is the same hazard as a profile narrowing
-scope, and it gets the same treatment: every item records `decided_by` —
-`measured` / `model` / `claimed` — the artifact carries it, and the report prints the
-three coverages so a reader can see how much of the verdict is somebody's word. The
-adversary agent's rule is the precedent: a second reading may withdraw confidence and
-never grant it.
-
----
-
-## 0.18 — the two tables that produce the headline number
-
-**Shipped, and the result was neither of the two outcomes predicted below.** The spread
-is 0.2 to 14.6 points depending on the run, so the table is neither decoration nor
-uniformly decisive: it matters in proportion to how far the per-severity pass rates
-spread, and therefore most on the sites where severity actually discriminates. That
-does not close the question, it sharpens it — the next step is outcome data, and
-`tools/audit_score_sensitivity.py` is what will measure whether any calibration helped.
-`EFFORT_COST` is closed: divide by effort, and stop arguing about which numbers.
-
-`measured` is 0 across 113 thresholds. Do not attack 113. Attack two:
+### Clause 2 — every number measured or declared unmeasured
 
 ```
-SEVERITY_WEIGHT = {"critical": 10, "high": 6, "medium": 3, "low": 1}   # inherited
-EFFORT_COST     = {"low": 1, "medium": 2, "high": 4}                   # inherited
+.venv/Scripts/python.exe skills/seo-checklist/tools/audit_thresholds.py --check | head -7
 ```
 
-The first decides the SEO Score. The second divides it to order the fix list. Both
-arrived with borrowed code and neither has been examined here, and their own basis
-lines say so.
+136 numbers a verdict depends on:
 
-**The first step is not calibration, it is a sensitivity analysis** — a day's work
-that closes the question in either direction. Re-score an existing set of runs under
-10/6/3/1, 8/5/3/1 and 4/3/2/1 and measure how far the headline moves:
+| basis | count | |
+|---|---:|---|
+| standard | 11 | an external published authority, named |
+| measured | 11 | calibrated, and the text says against what |
+| convention | 47 | a judgement made here, and it says so |
+| **inherited** | **67** | arrived with borrowed code and has not been examined |
+| no basis | 0 | the gate that keeps this at zero |
 
-- moves ±2 points → the table does not matter, that gets written down, and the
-  question is closed without pretending to have measured anything;
-- moves ±15 points → the score is an artifact of an unexamined table, and it must
-  either be calibrated against outcome data or stop being printed as the headline.
+**`inherited` at 67 of 136 is the largest single gap between this tree and 1.0.** The
+clause is already half satisfied — nothing is unnamed, and that took a gate — but half
+the numbers a verdict rests on are still numbers nobody here decided. The two
+calibrations so far show what closing one costs: `serp-length.json` and
+`css-minification.json` each took a corpus, a method and a stated limitation.
 
-Either result is the first honest entry in the `measured` column. Only the second
-result justifies the expensive follow-on: correlating scores against Search Console
-performance on real properties.
+One class of number is outside the scan by construction: a floor written into the
+registry is not a module-level constant, so `audit_thresholds` never sees it. 0.87.0
+moved five and wrote each derivation beside it in `build_checklist.py` because nothing
+would have demanded one. **A gate that cannot see a class of numbers is a gate with a
+hole in it**, and closing that hole belongs to this clause.
 
----
+### Clause 3 — the document says what the code does
 
-## 0.19 — a series, and a report somebody can read
+This is the clause with no gate at all, and 0.87.1 is what it looks like when it fails.
+Four documents had drifted, none of them caught by a test:
 
-**Shipped.** The trend reads every stored run rather than one, `open_since` says how
-many consecutive audits each open item has survived, and the Russian report is Russian
-throughout — 214 titles and 214 recommendations, checked against the registry by a
-test. What remains for 1.0 is the doc-code parity test.
+* this roadmap, planning shipped releases;
+* `KNOWN-ISSUES.md`'s header, dated 0.80.0 and counting 41 entries where there were 42;
+* the polarity entry inside it, saying *74 of 215 — 34.4%* while its own probe printed
+  76 of 217;
+* the repository description on GitHub, offering a 215-check registry.
 
-**History as a series, not a pair.** `.seo-runs/` has stored every run since 0.1.0;
-`--diff` compares against one. The question a site owner asks is whether six months of
-work moved anything, and the data to answer it is already on disk.
+The 0.15.0 ask still stands and is still unbuilt: **a test should tie the checkable
+claims in `SKILL.md`, `README.md` and this file to observable behaviour** — every
+version number, every count of items or scripts or strings, every named threshold, and
+every claim of the form "X is N". Anything a build can verify, a build should verify.
 
-**`item_titles` and `item_fixes` in Russian.** 214 titles and 214 recommendations. Pure
-grind, no design, and the one thing that blocks handing a report to a reader who does
-not work in English. The report's own 100 strings have been translated since 0.15.0.
-
----
-
-## 0.20 — the registry says one thing and asserts another
-
-**Open, and it is a class rather than a bug.** One live audit of a Lithuanian café on
-5 August 2026 produced five registry defects. That is the yield of a single real site
-after four releases of test-writing, which is the argument for this release existing:
-the fixture pair and the two sweeps had all passed. Full diagnosis of each in
-`KNOWN-ISSUES.md` §6.
-
-| | What it says | What it asserts |
-|---|---|---|
-| CI-019 `high` | noindex `/search`, `/cart`, `/checkout`, `/login` | robots.txt allows those paths — never fetched, so a 404 counts |
-| CN-053 `medium` | do not hide content in iframes | `raw.word_count >= 300` — it counts words |
-| CI-017 / TE-181 | validate HTML, twice | identical script, arguments and assertion |
-| CI-016 / MD-186 `high` | alt text, twice | identical script, arguments and assertion |
-| TE-179 `low` | review domain reputation | `whois.age_days >= 90` — a new domain, unfixable |
-| GO-134 `high` | resolve Search Console issues | `opportunities` through a severity gate — good news as a failure |
-
-Four repairs, in this order. The first two are audits and will find more than the list
-above; the last two are decisions.
-
-**1. Explain the sweep — done, and the answer is about the fixture.**
-`tests/fixtures/good/robots.txt` disallows exactly `/search`, `/cart`, `/checkout` and
-`/login`, under a comment naming CI-019 as the reason. The sweep is not blind; it is
-looking at the one site where the item is meaningful.
-
-The general form is the part to keep: **a fixture built to pass the registry cannot catch
-an item that accuses every real site.** The sweep's guarantee holds for the site the
-registry was written against and says nothing about the ones it was not, and no amount of
-sweeping fixes that — only a second fixture built without consulting the registry would,
-which is not written and is not scheduled here.
-
-**2. Audit the triple across all 214.** For every item: does the assertion measure what
-the title names, and does the fix text describe the work that would satisfy the
-assertion? CI-019 and CN-053 are two answers of "no" found by accident in one run, and
-nothing looked for a third. This is mechanical and belongs in `tools/` beside
-`audit_assertions.py` and `audit_thresholds.py`. The precedent is exact: naming the
-thresholds moved `inherited` from 14 to 75, because the old count was low only while most
-of them had nowhere to carry a label. §2 has recorded "a check and its own advice
-disagree" as an inventory finding since 0.15.0, and named `article_seo.py` — these are
-the first two caught deciding a real site.
-
-**Written, and the count was wrong by a factor of five.** The same tool asks the cheap
-structural question — no two items may share a script, arguments and assertion — and
-**eleven groups do**, not the two a single audit happened to fail on. Three mix
-severities, so the weight a defect carries depends on which twin the reader looks at. The
-duplication arrives honestly, since the Plerdy source lists one requirement under two of
-its own headings and `plerdy_ref` is load-bearing, so the fix is not deleting an id:
-either one id decides and its twin mirrors the verdict without contributing weight, or
-they merge and the mapping records that two source numbers point at one check. **What
-must stop is one defect carrying double weight in the headline number and two rows in
-`--fixes`.**
-
-**And one of the eleven is not a scoring artifact at all.** `SE-117` *Force HTTPS
-Sitewide* and `SE-118` *Valid TLS Certificate* are both `critical` and both assert
-`https == True` — two requirements sharing one assertion, so **SE-118 cannot fail
-independently on any site** and a certificate that expired yesterday passes it. That is
-the one item here that needs new evidence rather than a decision: `notAfter`, the chain,
-the hostname match. Until it has them, this registry has never verified a certificate
-while reporting that it does. **Do this one first** — it is the only `critical` among the
-findings that is currently checking nothing.
-
-The vocabulary half of the tool is a heuristic and is reported as one: 46 of 214 items
-share no words between what they claim and what they assert. Four carry a written ruling;
-**42 are unreviewed and are the remaining work of this step.** The tool is not wired into
-CI yet, deliberately — it exits 1 today, and a required check that is red by default is a
-check nobody reads.
-
-**3. Then CI-019 itself, which needs two repairs.** ✅ **Done in 0.21.0.** `allowed_urls`
-must not count a URL that 404s — a path robots.txt permits and the server does not serve
-is a name nobody used, and checking costs four conditional requests on a check that
-currently makes one. Then the mechanism: the title and fix say `noindex`, the assertion
-tests robots.txt, and the remediation that passes the check (`Disallow:`) is the one that
-stops Google seeing the `noindex` at all. **Decide which check this item is** and make
-all three agree.
-
-> Both repairs turned out to be one. `--probe` fetches each permitted path and the
-> assertion reads `indexable_urls` — the path exists, a crawler may have it, nothing
-> keeps it out of the index — which accepts either mechanism and so needs no choice
-> between them. The decision that did have to be made went the other way from how it is
-> framed above: the title was not what was wrong. It is inherited wording from
-> `plerdy-titles.json`, a record of someone else's checklist, and `noindex` described the
-> goal correctly all along. Only the assertion was wrong.
->
-> Two findings came out of it, both larger than the item. After the repair CI-019 passed
-> on *both* fixtures, because neither had a system page at all — it had looked like a
-> working test for two releases while testing nothing. And the first probe read `noindex`
-> off a `<meta name="robots">` quoted inside the new fixture's own comment block, among
-> the things the page deliberately lacks, so the page built to fail passed. Fourth
-> appearance of one mistake here: 0.5.0's keyword items, 0.19.1's port number, and the
-> soft-404 guard that carries the warning in writing.
-
-**4. Decide what an item is allowed to report.** ✅ **Answered in 0.21.0, and the answer
-is no new status.** Two items report something that is not a defect of the site, and the
-question underneath them is the same:
-
-- `TE-179` fails a domain for being 58 days old. There is no work that closes it; it
-  closes itself in a month. **An item that cannot be acted on does not belong in a
-  prioritised list** — either it becomes informational, or the threshold means something
-  other than what it says.
-- `GO-134` renders "position 4.0 with 115 impressions" as a `high` failure, because
-  `opportunities` is read through a severity gate. This is independent of §2's objection
-  that those thresholds are folklore: even a perfectly calibrated opportunity is still
-  not a defect, and printing one as the top item tells a client to fix their best result.
-
-Both need something the registry does not have — a way for a report to say *worth
-knowing* without the item entering the score or the fix list. That is a design decision
-rather than a repair, which is why it is last.
-
-> **The second horn was the right one, for TE-179 at least: the threshold meant
-> something other than what it says.** Age is neither history nor reputation, and
-> `domain_safety_check.py` already reports reputation — age was a proxy reached for
-> because the real signal needs a key. It now asserts `safe_browsing.threats`: a clean
-> domain passes at any age, a listed one fails at any age, and with no
-> `GOOGLE_SAFE_BROWSING_KEY` the field is absent, which is `NO_DATA` — "we could not
-> look", which this vocabulary has always been able to say.
->
-> `GO-134` fails the premise rather than the test. Each entry in `opportunities[]`
-> carries its own `finding` and `fix`, so the work is real and doable; what is wrong is
-> the name and the weight, and both are inherited. Left open rather than quietly
-> rewritten — see §2 on thresholds nobody measured.
->
-> So the bucket has no occupants. A new status would have cost the runner, the report,
-> the HTML, the CSV, both translations, the score partition, the diff buckets and the
-> every-status-reaches-every-surface test, in order to make two miscategorised
-> assertions comfortable. **What was missing was not a status. It was a correct
-> assertion.** If a genuine case turns up later — a true fact, worth printing, that no
-> action closes and no better assertion captures — this decision should be reopened on
-> that item's evidence, not on the two above.
-
-> **0.44.0 takes neither horn for TE-179.** Ninety days still means ninety days, and
-> the item has not become informational — that status still does not exist. What
-> changed is the price: a domain younger than the threshold is a WARN worth half of one
-> `low` point rather than a FAIL worth all of it, while an absent whois age remains
-> `NO_DATA` and FAIL is unreachable by construction.
->
-> **0.46.0 made that last clause checkable.** "Unreachable by construction" was prose
-> here and nowhere a tool could read; it is now `check.cannot_fail` on the item, naming
-> the `warn_complement` mechanism, and `tools/audit_reachability.py` re-derives that
-> mechanism from the registry on every run. If the warn band ever stops complementing
-> the assertion, the declaration stops being provable and the build fails — which is
-> the difference between a decision and a sentence about one.
->
-> The fact not on the table in 0.21.0 is coverage. SE-114, SE-116 and TE-171 assert the
-> reputation half three times over, while no other item among the 215 asserts domain
-> history. TE-179 now supplies that missing half without claiming age *is* reputation.
-> The repair remains answered: no new status was added, and this is a later pricing and
-> coverage decision about the same row, not a reopening of the roadmap entry.
-
-**No registry additions.** 214 stays 214, and may become fewer if the duplicate pairs
-merge. Everything here repairs, removes or reclassifies what is already there.
-
-> **Closed in 0.22.0, and 214 is still 214.** The eight synonym pairs did not merge;
-> they carry weight once, through a `scores_with` pointer decided by hand. A merge
-> would have deleted a source number a reader may look up, and the harm was never that
-> two rows existed — it was that one defect scored twice and, where the twins disagreed
-> on severity, that its weight depended on which row you read.
->
-> The other two of the ten were not duplicates at all: MS-027/MS-028 and MS-029/CN-041
-> were two requirements sharing one assertion because the second had never been written.
-> Those were repaired, not paired. CN-053 was reclassified — it counted words under a
-> title about iframes — and so was MS-027, since *compelling* is not a thing an
-> assertion decides.
->
-> The 42 unreviewed vocabulary misses are 0: fourteen were the heuristic's own fault
-> and the remaining 28 carry written rulings. Four of those rulings are new defects,
-> left open on purpose rather than repaired in the pass that found them — CI-002,
-> IN-127, and the Core Web Vitals group, where **five** items exist and three measure
-> something other than Core Web Vitals. That last one is a redesign of a group, not
-> four edits.
->
-> Both audit tools now run in CI, which they could not before: a required check that is
-> red by default is a check nobody reads.
+Two mechanisms already exist and can be copied rather than invented. `i18n_digest.py`
+binds each translation to a digest of the English it was written against, so drift is a
+failing build rather than a discovery. `tests/known_issues.py` re-runs each ledger
+entry's own measurement and fails when the tree stops answering what the entry says.
+Prose that states a number wants the same treatment: the number, where it comes from,
+and a check that they still agree.
 
 ---
 
-## 1.0 — the document and the code say the same thing
+## What 1.0 requires, in the order the numbers should move
 
-Every invariant in this tree is tied to a test except the 3,850 lines of prose that
-describe them, and the prose has started to drift. As of 0.15.0 four places still tell
-the reader that `answer_block_scanner.py` scores 10 under `lxml` and 32 under
-`html.parser` and that neither reading is right — `SKILL.md`, `seo_common.py`,
-`checklist_runner.py` and the scanner's own docstring. Measured on exactly that markup
-after the 0.15.0 rewrite, both parsers return 42. `SKILL.md` is the agent's
-instruction file, so this is not cosmetic: it instructs a model to hedge a verdict
-that is now sound.
-
-A test should tie the checkable claims in `SKILL.md` and `README.md` to observable
-behaviour — every version number, every count of items or scripts or strings, every
-named threshold, and every claim of the form "X is N". Anything a build can verify, a
-build should verify.
+1. **`inherited` 67 → 0**, by calibration or by an honest relabel to `convention` with
+   the judgement written out. The count prints on every CI run, so progress is visible
+   without anybody reporting it.
+2. **The 143 unclaimed assertions**, reduced by extending the detectors
+   `audit_reachability.py` already has rather than by asserting reachability in prose.
+3. **The census's 25 and 30**, each turned into an answer or a named structural reason.
+   The `MD-184` class showed the shape: a rule that cannot fail is a registry defect, a
+   case the corpus does not have is a corpus gap, and the two are told apart by
+   construction rather than by argument.
+4. **A gate for clause 3**, because the other two clauses have one and this one does
+   not — which is exactly why it was the clause that failed.
 
 Then the registry is declared stable and the cadence becomes external: the Public
 Suffix List snapshot, Google's documented crawler list, the Core Web Vitals bands,
@@ -406,13 +147,14 @@ schema requirements. The tool changes when the web changes.
 
 ## Deliberately not built
 
-**More checks.** 214 is already past what a client reads. Item 215 adds a line to a
-document that gets skimmed.
+**More checks.** 217 is already past what a client reads. Item 218 adds a line to a
+document that gets skimmed. The three releases before this one added no items and
+removed none; they made the ones already there mean what they say.
 
-**A link index or competitor data.** That is a data business, not a plugin. The
-refusal to emit a toxicity score without a link index is the correct call and stays.
+**A link index or competitor data.** That is a data business, not a plugin. The refusal
+to emit a toxicity score without a link index is the correct call and stays.
 
 **Public distribution as a goal.** It should fall out of the above or not happen. Its
-cost is not code — it is a standing obligation to triage other people's sites against
-a 19,000-line tree with one maintainer, at this project's own observed rate of roughly
+cost is not code — it is a standing obligation to triage other people's sites against a
+tree of this size with one maintainer, at this project's own observed rate of roughly
 one defect per three tests written.

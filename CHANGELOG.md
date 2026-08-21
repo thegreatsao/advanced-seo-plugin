@@ -10,6 +10,46 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.87.1 — the documents catch up with the tree
+
+Registry version: unchanged at `66d1b2037c32`. No code changes, no verdict moves, no
+item moves. What moves is four documents that had stopped describing this repository.
+
+`ROADMAP.md` defines 1.0 as three checkable clauses, and the third is *the document says
+what the code does*. That clause had no gate, and this release is what its failure looks
+like when somebody finally reads the files:
+
+* **`ROADMAP.md` planned releases 0.16 through 0.20 as though they were ahead.** They
+  shipped sixty-seven releases ago. Its measured section described a registry of 214
+  items and a score of 69/100 over 50% coverage — a tree that has not existed since
+  0.16. It is rewritten against the three clauses, each with the command that prints its
+  number: the census's `25 / 2 / 30`, the reachability audit's 143 unclaimed assertions,
+  and `inherited` at **67 of 136** verdict-deciding numbers, which is the largest single
+  gap left between this tree and 1.0;
+* **`KNOWN-ISSUES.md`'s header said 0.80.0** and counted *twenty-two of the forty-one*
+  entries as probed. `tests/known_issues.py` prints 23 of 42 and has since 0.86.0. Both
+  numbers now come from that command, and the header says so — it is the one count in
+  the file no probe can check;
+* **an open entry disagreed with its own probe.** `title-polarity-has-no-gate` said
+  *only 74 of 215 items assert a negative-polarity path — 34.4%* while the probe stored
+  beside it printed 76 of 217. The prose was written against a registry two sizes ago
+  and the probe kept measuring; nothing compares them, because the ledger's instrument
+  re-runs measurements and does not read prose, deliberately;
+* **the GitHub description offered a fixed 215-check registry.** It is 217, and has been
+  since 0.84.0.
+
+Also brought to a real run: `README.md`'s example report block, which showed a partition
+adding to 217 with numbers no current run produces. It now carries the output of one
+live run against the good fixture and says which run.
+
+**What this does not fix.** Nothing here builds the gate. Clauses 1 and 2 have one each
+— `verdict_census.py` and `audit_thresholds.py` — and the drift above was found by
+reading, which is the method that failed for sixty-seven releases. `ROADMAP.md` names
+the gate as the fourth thing 1.0 requires and points at the two mechanisms already in
+the tree that could be copied for it: `i18n_digest.py`, which binds a translation to a
+digest of the English it was written against, and `tests/known_issues.py`, which re-runs
+an entry's own measurement.
+
 ## 0.87.0 — five items that could not pass any site
 
 Registry version: `91f6634fe6c8` → **`66d1b2037c32`**. The registry stays at 217 items;
