@@ -1,54 +1,27 @@
+# Anything not committed lives in one place.
+local/
+
+# Toolchain and editor leavings.
 .venv/
+.ruff_cache/
 __pycache__/
 *.pyc
-
-# Pinned npm tarballs unpacked/read by the CSS threshold calibration tool. The
-# dated measurement is committed; the downloaded packages are reproducible input.
 .calibration-cache/
-
-# Audit output. An audit writes into whatever directory it is run from, and this
-# repository is the obvious place to run one, so every file a run can produce has to
-# be listed here or it ends up in a commit. Two of them did.
-#
-# `checklist-results-crawl.json` is the crawl inventory, and it is derived from the
-# `--json` path rather than named separately, so adding the inventory in 0.9.0 added
-# an output nobody thought to ignore. The `-crawl` glob is deliberately wider than
-# the one filename for that reason: the next derived artifact should already be
-# covered. There is a test that checks this list against the runner's own defaults.
-checklist-results.json
-checklist-results*-crawl.json
-CHECKLIST-REPORT.md
-CHECKLIST.html
-LLM-QUEUE*.md
-.seo-runs/
-
-# `tools/probe_shapes.py` output. The probe is run from this directory too, and it
-# writes twice: the skeleton it exists to produce, and the crawl inventory it takes
-# first so the site-wide items have an input. Only the skeleton was listed here, and
-# the inventory was committed twice over — a crawl of the local fixture server in
-# 0.9.0, which then sat in `scripts/` unread for fifteen releases, and a crawl of a
-# client's live site in 0.25.0, every URL, title and meta description of it. Same
-# drift as the audit outputs above, one directory over, which is also why the test
-# that guards those said nothing: it compared filenames against paths, so it could
-# only see the top of the checkout. It now reads these literals out of the tool and
-# compares by basename.
-probe-raw.json
-probe-inventory.json
-
-# The live-path check in .github/workflows/ci.yml, run by hand. Reproducing that
-# step locally is the only way to know whether it will pass, so it is worth doing
-# and its output is worth ignoring.
-blocked.json
-blocked.log
-live.json
-live.md
-live.html
-live.log
-live-crawl.json
-live-queue*.md
-orphans.json
-report.log
-server.log
-
-.DS_Store
 .env
+.DS_Store
+
+# What a run or a tool writes. An audit writes its results beside itself and this
+# checkout is an obvious place to run one, so these are shapes rather than filenames:
+# a new output should be covered on the day it is added, and two were not.
+#
+# Unanchored on purpose. The same names get written at three different depths, and a
+# root-anchored pattern would leave the test that guards this green while the file it
+# guards is committed one directory down.
+# `tests/test_registry.py::AnAuditDoesNotCommitItself` reads the tools' own defaults,
+# checks every one against `git check-ignore`, and carries the account of what went
+# wrong before it existed.
+checklist-results*
+CHECKLIST*
+*QUEUE*.md
+probe-*.json
+.seo-runs/

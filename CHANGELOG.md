@@ -42,6 +42,25 @@ Also brought to a real run: `README.md`'s example report block, which showed a p
 adding to 217 with numbers no current run produces. It now carries the output of one
 live run against the good fixture and says which run.
 
+**`.gitignore` is a document too, and it was the one that disclosed the most.** It ran
+to 55 lines, enumerated every file a local run leaves behind, and narrated two incidents
+in detail — including that a client's live site was once committed here, every URL,
+title and meta description of it. That account belongs in the test that exists because
+of it, `AnAuditDoesNotCommitItself`, which already carries it; in the ignore file it was
+a list of what is on this machine, published.
+
+It is 27 lines now, and everything not committed lives in one directory — `local/`,
+which is where the by-hand reproduction of the CI live-path step writes. Measured after
+the change: a full live run leaves the tracked tree with nothing in it at all.
+
+The patterns that remain are **shapes rather than filenames**, and they are
+**unanchored on purpose**. That is the load-bearing detail: `probe-*.json` has been
+written at three different depths in this checkout, and root-anchoring it would have
+left `AnAuditDoesNotCommitItself` green — it runs `git check-ignore` on bare names from
+the root — while the file it guards was committed one directory down. That is the exact
+shape of the mistake the test was written for, and re-introducing it while the test
+still passed would have been worse than the 55 lines.
+
 **What this does not fix.** Nothing here builds the gate. Clauses 1 and 2 have one each
 — `verdict_census.py` and `audit_thresholds.py` — and the drift above was found by
 reading, which is the method that failed for sixty-seven releases. `ROADMAP.md` names
