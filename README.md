@@ -4,19 +4,15 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.88.0 — see [CHANGELOG.md](CHANGELOG.md). Twenty items, eleven of them
-`high`,
-used to report a site clean from the part of it that was read: every cap here bounds
-requests, and so bounds exactly the evidence that could have failed an assertion saying
-*none of these*. A verdict that passes by absence is now withheld when its script says
-its input was capped — pages past `--crawl-max-pages`, links past `--max-links`, images
-past `--max-images`, sitemap files past the twenty-fifth, Search Console rows past the
-five-thousandth, and links or images that were asked and answered nothing. A FAIL still
-stands, which is why the change needs no threshold: a defect found in part of a site is
-a defect, while *none found* in part of a site is not a finding about the site. Eight
-caps were deciding verdicts without a stated basis, and the crawl's own depth limit was
-stopping the walk while the crawl reported itself complete. No item and no assertion
-changed.
+Version 0.89.0 — see [CHANGELOG.md](CHANGELOG.md). `GO-143` failed any page whose
+`WebSite` node lacked `potentialAction`, so the remedy it printed was to declare a
+`SearchAction` naming a search endpoint the site may not have — a false statement
+about the site, published in markup, for the Sitelinks Search Box, which Google
+removed from Search on 21 November 2024. What the assertion still measures is real:
+`WebSite` is what Google reads for the site name in results, and `name` and `url`
+are what its documentation requires of that node. The item is retitled to say so,
+the recommendation is gone, and the exemplary fixture — which was publishing a
+`SearchAction` for a `/search` path it has never served — no longer does.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

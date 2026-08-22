@@ -26,12 +26,17 @@
  "address":{"@type":"PostalAddress","streetAddress":"1 Fixture Street",
             "addressLocality":"Vilnius","postalCode":"01100","addressCountry":"LT"}}
 </script>
+<!-- The exemplary tree carried a SearchAction here until 0.89.0, pointing at
+     /search?q= — a path this tree does not serve and never has. It was markup
+     stating a capability the site does not have, which is the thing the release
+     stopped asking other sites for; a fixture that models good practice cannot
+     model it. Removed rather than given a /search page: the fixture is a static
+     directory and a search endpoint is not something it can honestly grow.
+     `name` and `url` remain, which is what Google's site-name documentation
+     requires of this type and what GO-143 now measures. -->
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Fixture Bakery",
- "url":"http://127.0.0.1:8000/",
- "potentialAction":{"@type":"SearchAction",
-   "target":"http://127.0.0.1:8000/search?q={search_term_string}",
-   "query-input":"required name=search_term_string"}}
+ "url":"http://127.0.0.1:8000/"}
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[

@@ -1891,7 +1891,7 @@
       "script": "schema_required_props.py",
       "severity": "low",
       "source": "script",
-      "title": "Optimize for Sitelinks & Sitelinks Search Box"
+      "title": "Provide Complete WebSite Data for the Site Name"
     },
     "GO-144": {
       "answers": {
@@ -3586,7 +3586,7 @@
       "title": "LCP subparts within budget"
     }
   },
-  "registry_version": "66d1b2037c32",
+  "registry_version": "b0abf2819da0",
   "sites": [
     "fixture:good",
     "fixture:broken",

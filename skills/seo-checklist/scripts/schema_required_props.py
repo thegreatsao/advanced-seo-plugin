@@ -44,7 +44,35 @@ RECOMMENDED_PROPS: dict[str, set[str]] = {
     "ProductGroup": {"variesBy", "brand", "description"},
     "Review": {"reviewBody", "datePublished", "publisher"},
     "VideoObject": {"duration", "contentUrl", "embedUrl", "publisher", "transcript"},
-    "WebSite": {"potentialAction"},
+    # `WebSite: {potentialAction}` was here and is gone. It asked every site for the
+    # `SearchAction` of the Sitelinks Search Box, and there are two things wrong with
+    # that, either of which is enough.
+    #
+    # The authority, named: Google removed the sitelinks search box from Search
+    # starting 21 November 2024, globally and in every language, and took it out of
+    # Search Console and the Rich Results Test with it ("Farewell, Sitelinks Search
+    # Box", Search Central blog, October 2024). The markup is not read for that
+    # feature by anything any more, so asking for it is advice for a result that
+    # cannot appear.
+    #
+    # Deliberately not written with the marker `audit_thresholds` scans for. That
+    # prefix belongs to a module-level numeric constant, the tool reads every line
+    # carrying it as one, and a first draft of this comment used it for prose — which
+    # put this file on the tool's list of basis lines naming something that is not a
+    # number, where it said nothing to anybody. A citation is not a threshold, and
+    # naming the marker in prose is enough to be counted as using it.
+    #
+    # The second reason outlives the first: a `SearchAction` declares a search
+    # endpoint and a query template. On a site with no site search that is a false
+    # statement about the site, and this tool does not ask anyone to publish one. It
+    # is the same rule the release before this one drew about verdicts — a claim
+    # nobody measured must not be made — applied to the advice rather than the score.
+    #
+    # `WebSite` itself stays required (`name`, `url`) and stays useful: it is what
+    # Google reads for the site name in results, and its live documentation lists
+    # exactly those two as required and `alternateName` as optional. `alternateName`
+    # is not added here — optional is not recommended, and this table is read as an
+    # instruction.
 }
 
 PLACEHOLDER_MARKERS = ("REPLACE", "TODO", "INSERT", "example.com", "lorem ipsum")

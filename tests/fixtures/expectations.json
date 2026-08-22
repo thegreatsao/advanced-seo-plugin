@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": "66d1b2037c32",
+  "registry_version": "b0abf2819da0",
   "declared_from": "item title plus fixture construction; never from a run",
   "fixtures": {
     "good": {
@@ -418,7 +418,7 @@
       },
       "GO-143": {
         "expect": "PASS",
-        "why": "the entry page carries a complete WebSite block with a SearchAction and its query-input, which is the markup 'Optimize for Sitelinks & Sitelinks Search Box' names; the other sampled pages declare no schema that could be reported against it"
+        "why": "re-read for 0.89.0, which retitled the item and removed the false SearchAction this declaration used to point at. The entry page carries a WebSite node with a name and a url — the two properties Google's site-name documentation requires and the two the title now names — and the other sampled pages declare no WebSite node that could be reported against it. Declared from the title and the fixture: the markup was read in tests/fixtures/good/index.html, not from a run"
       },
       "GO-144": {
         "expect": "PASS",
@@ -892,7 +892,7 @@
       },
       "GO-143": {
         "expect": "PASS",
-        "why": "corrected from FAIL after the run, against behaviour the repository had already recorded precisely: schema_required_props reports on schemas that are present, so a tree with no WebSite block produces no issue for the pattern to match and the item cannot fail on absence, only on a malformed block (test_contract.py SAME_ON_BOTH). The declaration could not have been checked against that register beforehand without reading the verdict it states"
+        "why": "re-read for 0.89.0, unchanged. The broken tree declares no WebSite node anywhere, and schema_required_props reports only on types that are present, so there is no message for the pattern to match. The item cannot fail on absence, only on a node present and incomplete (test_contract.py SAME_ON_BOTH). The retitling does not reach this side: a tree with nothing to grade grades the same under either title"
       },
       "GO-144": {
         "expect": "FAIL",

@@ -29,6 +29,31 @@
       "probe": "a_mostly_refused_run_reports_a_clean_count",
       "state": "closed"
     },
+    "a-placeholder-in-structured-data-almost-never-decides": {
+      "claim": "An unfilled template published in structured data is a warning, and neither item reading the script can fail on one: MS-032 asserts errors and its warn band is only consulted when that assertion has already failed, and GO-143 catches a placeholder only on a WebSite node. The SearchAction case GO-143 used to catch by accident left with its old pattern in 0.89.0.",
+      "measured": {
+        "a_searchaction_placeholder": {
+          "GO-143": "PASS",
+          "MS-032": "PASS",
+          "errors": 0,
+          "warnings": 1
+        },
+        "four_placeholders": {
+          "GO-143": "PASS",
+          "MS-032": "PASS",
+          "errors": 0,
+          "warnings": 7
+        },
+        "one_placeholder": {
+          "GO-143": "FAIL",
+          "MS-032": "PASS",
+          "errors": 0,
+          "warnings": 1
+        }
+      },
+      "probe": "a_placeholder_in_structured_data_almost_never_decides",
+      "state": "open"
+    },
     "a-truncated-crawl-decides-the-whole-site": {
       "claim": "Twenty items — eleven of them `high` — asserted a clean verdict over an input their own script had capped; the runner now withholds the PASS and leaves the FAIL alone, across all six ways this registry spells `none of these`.",
       "measured": {
@@ -308,6 +333,23 @@
       },
       "probe": "go_138_matches_a_field",
       "state": "history"
+    },
+    "go-143-asked-for-a-claim-that-was-not-true": {
+      "claim": "GO-143 failed any page whose WebSite node lacked potentialAction, so its remedy was to publish a SearchAction naming a search endpoint the site may not have — for the Sitelinks Search Box, which Google removed from Search on 21 November 2024. Retitled to the live feature the assertion measures: the WebSite node Google reads for the site name.",
+      "measured": {
+        "fixture_still_publishes_a_searchaction": false,
+        "name_and_url": "PASS",
+        "recommends_anything_for_website": [],
+        "required_of_website": [
+          "name",
+          "url"
+        ],
+        "title": "Complete Every WebSite Node Google Reads for the Site Name",
+        "url_missing": "FAIL",
+        "with_the_retired_searchaction": "PASS"
+      },
+      "probe": "go_143_asked_for_a_claim_that_was_not_true",
+      "state": "closed"
     },
     "gsc-scenarios-accepted-a-dead-rule": {
       "claim": "Fixed.",
@@ -637,6 +679,142 @@
       "probe": "the_other_caps_have_not_been_read",
       "state": "open"
     },
+    "the-schema-property-tables-have-not-been-re-read": {
+      "claim": "schema_required_props.py carries required and recommended property tables for twenty-three types and reads as though it quoted Google. Two were examined in 0.89.0 and both diverged; the rest have not been read against the documentation they claim to follow.",
+      "measured": {
+        "recommended": {
+          "Article": [
+            "dateModified",
+            "image",
+            "mainEntityOfPage",
+            "publisher"
+          ],
+          "BlogPosting": [
+            "dateModified",
+            "image",
+            "mainEntityOfPage",
+            "publisher"
+          ],
+          "ListItem": [
+            "item",
+            "name",
+            "position"
+          ],
+          "LocalBusiness": [
+            "aggregateRating",
+            "geo",
+            "image",
+            "openingHoursSpecification",
+            "sameAs",
+            "url"
+          ],
+          "Organization": [
+            "contactPoint",
+            "logo",
+            "sameAs"
+          ],
+          "Product": [
+            "aggregateRating",
+            "brand",
+            "description",
+            "image",
+            "review",
+            "sku"
+          ],
+          "ProductGroup": [
+            "brand",
+            "description",
+            "variesBy"
+          ],
+          "Review": [
+            "datePublished",
+            "publisher",
+            "reviewBody"
+          ],
+          "VideoObject": [
+            "contentUrl",
+            "duration",
+            "embedUrl",
+            "publisher",
+            "transcript"
+          ]
+        },
+        "required": {
+          "Article": [
+            "author",
+            "datePublished",
+            "headline"
+          ],
+          "BlogPosting": [
+            "author",
+            "datePublished",
+            "headline"
+          ],
+          "BreadcrumbList": [
+            "itemListElement"
+          ],
+          "FAQPage": [
+            "mainEntity"
+          ],
+          "HowTo": [
+            "name",
+            "step"
+          ],
+          "LocalBusiness": [
+            "address",
+            "name",
+            "telephone"
+          ],
+          "Organization": [
+            "name",
+            "url"
+          ],
+          "Product": [
+            "name",
+            "offers"
+          ],
+          "ProductGroup": [
+            "hasVariant",
+            "name",
+            "productGroupID"
+          ],
+          "Review": [
+            "author",
+            "itemReviewed",
+            "reviewRating"
+          ],
+          "VideoObject": [
+            "description",
+            "name",
+            "thumbnailUrl",
+            "uploadDate"
+          ],
+          "WebSite": [
+            "name",
+            "url"
+          ]
+        },
+        "types_not_read": [
+          "BlogPosting",
+          "BreadcrumbList",
+          "FAQPage",
+          "HowTo",
+          "ListItem",
+          "LocalBusiness",
+          "Organization",
+          "Product",
+          "ProductGroup",
+          "Review",
+          "VideoObject"
+        ],
+        "verified_against_google": {
+          "Article": "diverges — Google documents no required properties for Article/NewsArticle/BlogPosting and does not list mainEntityOfPage or publisher among the recommended; read in 0.89.0 and deliberately not acted on",
+          "WebSite": "corrected in 0.89.0: name and url required, nothing recommended; the sitelinks search box is gone"
+        }
+      },
+      "probe": "the_schema_property_tables_have_not_been_re_read",
+      "state": "open"
+    },
     "threshold-declarations-unjudged": {
       "claim": "The four shapes 0.71.0 singled out are judged and declared — the two MinHash constants and the three detect_profile tables as inherited, DEFAULT_MAX_REDIRECTS left outside as a fetch budget — and twenty module-level numeric constants carry no basis and are beyond the name-based scan.",
       "measured": {
@@ -725,7 +903,7 @@
       "state": "open"
     }
   },
-  "entry_count": 44,
-  "probed_entry_count": 27,
+  "entry_count": 47,
+  "probed_entry_count": 30,
   "unprobed_entry_count": 17
 }

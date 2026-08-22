@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.88.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.89.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -10,8 +10,8 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Twenty-seven of the
-forty-four entries carry a probe; the other seventeen carry a written reason for having
+fails when the tree stops answering what its entry says it answers. Thirty of the
+forty-seven entries carry a probe; the other seventeen carry a written reason for having
 none, and that count is printed, because a ledger where everything is exempt is a
 ledger that has stopped working.
 
@@ -1651,6 +1651,88 @@ name. A column called `url` would be read as "fix this page".
   `--max-images`, and the failing answer always stands. The probe runs the entry's
   own scenario — a hundred images, ninety-nine refusing — and reads the key's absence.
   <!-- ki: a-mostly-refused-run-reports-a-clean-count -->
+
+- **Closed in 0.89.0 — `GO-143` asked every site to publish a claim that was not
+  true.** The item failed any page whose `WebSite` node lacked `potentialAction`, so
+  the remedy it printed was: declare a `SearchAction` naming a search endpoint and a
+  query template. On a site with no site search that is a false statement about the
+  site, published in markup, to earn a result **that can no longer appear** — Google
+  removed the Sitelinks Search Box from Search starting 21 November 2024, globally and
+  in every language, and took it out of Search Console and the Rich Results Test with
+  it. The recorded ruling in `audit_item_semantics.py` said "sitelinks and the
+  sitelinks search box are driven by WebSite and SearchAction markup", which was wrong
+  twice: sitelinks are algorithmic and no markup produces them, and the search box had
+  been gone for over a year when this was read.
+
+  **What was left is real, so the item was retitled rather than deleted** — the
+  `MD-184` shape. `WebSite` is what Google reads for the site name in results, its
+  documentation lists `name` and `url` as that type's required properties, and those
+  two are exactly what `schema_required_props.py` requires. The item now says so:
+  *Provide Complete WebSite Data for the Site Name*. Measured either way — a `WebSite`
+  with name and url passes, one missing either fails, and the retired markup is
+  neither asked for nor penalised.
+
+  **The exemplary fixture was publishing the same false claim.**
+  `tests/fixtures/good/index.html` declared a `SearchAction` targeting `/search?q=`, a
+  path that tree has never served. Removed: a fixture that models good practice cannot
+  model this, and it is not an edit that makes a check pass — the item passes on
+  `name` and `url` either way.
+  <!-- ki: go-143-asked-for-a-claim-that-was-not-true -->
+
+3. **The schema property tables are advice, and nobody has re-read them against the
+   documentation they claim to follow.** `schema_required_props.py` carries
+   `REQUIRED_PROPS` and `RECOMMENDED_PROPS` for eleven and twelve types; `MS-032`
+   (`high`) reads the error count off the first and `TE-172`/`TECH-001` sit beside
+   them. `GO-143`'s entry was in the second table and was wrong — not merely stale but
+   an instruction to publish something untrue — and the release that found it checked
+   one other type before stopping:
+
+   * Google's Article documentation states **there are no required properties** for
+     `Article`/`NewsArticle`/`BlogPosting`; this repository grades a missing
+     `headline`, `author` or `datePublished` as an **error**, which is what `MS-032`
+     counts;
+   * its recommended list for the same types is `author`, `dateModified`,
+     `datePublished`, `headline`, `image` — and this repository recommends
+     `mainEntityOfPage` and `publisher`, which are not on it.
+
+   Two of the two types examined diverge, so the remaining twenty-one have not been
+   cleared by anything. **The divergence is not automatically a defect**: treating
+   `headline` and `author` as required is a defensible editorial position for a
+   checklist, and Google's word for a property is not the only word. What is missing
+   is that nobody wrote down which it is, per type, and the file reads as though it
+   were quoting an authority. The probe records both tables so a change to either is
+   visible; closing this needs a reading per type, not a patch.
+   <!-- ki: the-schema-property-tables-have-not-been-re-read -->
+
+4. **Placeholder text in structured data decides almost nothing, and 0.89.0 made that
+   slightly worse.** `schema_required_props.py` reports an unfilled template — `TODO`,
+   `REPLACE`, `INSERT`, `example.com`, `[SHOUTED TEXT]` — as a **warning**, and two
+   items read this script, and **neither can fail on one**. `MS-032` (`high`) asserts
+   `summary.errors eq 0`; a placeholder is not an error, so the assertion passes and
+   the `summary.warnings lte 3` band beside it is never consulted — the runner reads a
+   warn band only when the assertion has already failed, so that band softens a page
+   that has errors and does not judge one that has none. Measured: a `Product` with
+   four unfilled properties produces **seven warnings, zero errors, and `MS-032`
+   PASS**. `GO-143` (`low`) catches a placeholder only when it sits on a `WebSite`
+   node, which is exactly its subject and not a general answer.
+
+   **What 0.89.0 removed was one accidental exception to that.** The placeholder branch
+   names any node's type whether or not that type has a property table, so a
+   `SearchAction` carrying `REPLACE_ME` in its target emitted *SearchAction property
+   'target' appears to contain placeholder text* — which `GO-143`'s old
+   `(?i)WebSite|SearchAction` matched. That coverage was a side effect of a pattern
+   written for the sitelinks search box, and it is gone with the pattern. Removing it
+   was right: a placeholder inside search markup is not a fact about the site name, and
+   this item is now titled for the site name. **Recorded because it is a loss, not
+   because it was a mistake.**
+
+   The general question is the one nobody has answered: an unfilled template published
+   in structured data is a defect on any site, at any count, and no item here fails on
+   one. Whether that belongs to `MS-032` as an error, to a new item, or to the warn
+   band is a registry decision that moves live verdicts. The probe measures the current
+   answer for a placeholder on a `WebSite` node, for four on a `Product`, and for the
+   `SearchAction` case this release stopped catching.
+   <!-- ki: a-placeholder-in-structured-data-almost-never-decides -->
 
 - **Closed in 0.88.0 — a truncated crawl decided a whole site from part of it.**
   `site_crawl` caps pages and `broken_links.py` caps links, both reporting

@@ -952,9 +952,28 @@ item(142, "high", G, fix="Resolve crawl and indexing issues")
 item(143, "low", S, "schema_required_props.py", PAGE,
      # Scoped for the same reason as GO-138, and this one was waiting to fire on
      # any site with `/website-design` in a URL the checker reported on.
+     #
+     # `SearchAction` left the pattern in 0.89.0, and not because it was dead. The
+     # first draft of this comment said it could only reach a message as a `WebSite`'s
+     # missing `potentialAction`; that was wrong twice. The message for a missing
+     # recommended property reads "WebSite is missing recommended property
+     # 'potentialAction'" and contains neither the word `SearchAction` nor anything
+     # matching it. And the placeholder branch names *any* node's type, whether or not
+     # that type has a property table — so a `SearchAction` carrying `REPLACE_ME` in
+     # its target emitted "SearchAction property 'target' appears to contain
+     # placeholder text", which the old pattern matched and the new one does not.
+     #
+     # It is removed anyway, deliberately: a placeholder inside search markup is not a
+     # fact about the site name, and this item is now titled for the site name. An
+     # assertion that fires on something its title does not name is the defect this
+     # release exists to fix, and keeping the alternative would have re-created it one
+     # line below the repair. What left with it is recorded rather than dropped —
+     # placeholder text in structured data is a warning, and `MS-032` reaches it only
+     # above three warnings. See KNOWN-ISSUES, "placeholder text in structured data".
      {"path": "issues", "field": "message",
-      "none_matching": "(?i)WebSite|SearchAction"},
-     "Optimize for sitelinks and the Sitelinks Search Box")
+      "none_matching": "(?i)WebSite"},
+     "Give the WebSite node a name and a url; Google reads both for the site name "
+     "shown in results")
 # 32 is one direct answer (20) plus one definition (12) — the two strongest of the four
 # signals answer_block_scanner scores, the one a snippet can be lifted from verbatim and
 # the one that says what the subject is. Unlike item 68's, this derivation is not about

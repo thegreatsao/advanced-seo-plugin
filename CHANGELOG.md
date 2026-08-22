@@ -10,6 +10,88 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.89.0 — GO-143 stops asking sites to publish something untrue
+
+Registry version `66d1b2037c32` → `b0abf2819da0`. 217 items throughout. One item is
+retitled, one assertion is narrowed, and one entry leaves a property table.
+
+**`GO-143` failed any page whose `WebSite` node lacked `potentialAction`.** The remedy
+it printed was therefore: declare a `SearchAction`, naming a search endpoint and a
+query template. On a site with no site search that is **a false statement about the
+site, published in markup** — and it was being asked for on behalf of a result that can
+no longer appear. Google removed the Sitelinks Search Box from Search starting
+**21 November 2024**, globally and in every language, and took it out of Search Console
+and the Rich Results Test with it.
+
+The recorded ruling in `audit_item_semantics.py` — *sitelinks and the sitelinks search
+box are driven by WebSite and SearchAction markup, which is what the pattern looks for*
+— was wrong twice in one sentence. Sitelinks are algorithmic and no markup produces
+them; the search box did rest on that markup, and had been gone for over a year when
+that sentence was last read.
+
+**What is left is real, so the item is retitled rather than deleted** — the shape 0.85.0
+used for `MD-184`. `WebSite` is what Google reads for the **site name** in results, its
+documentation lists `name` and `url` as that type's required properties, and those two
+are exactly what `schema_required_props.py` already required. So:
+
+* `RECOMMENDED_PROPS["WebSite"] = {"potentialAction"}` is gone, with the reason written
+  where it stood;
+* the title becomes **Complete Every WebSite Node Google Reads for the Site Name**,
+  declared in
+  `title-overrides.json` with the argument, and the fix text says what to do;
+* the assertion narrows from `(?i)WebSite|SearchAction` to `(?i)WebSite`, and **not
+  because the alternative was dead** — a first draft of this entry said so and was
+  wrong. The message for a missing recommended property reads *WebSite is missing
+  recommended property 'potentialAction'* and contains nothing matching `SearchAction`;
+  what did match it was the placeholder branch, which names any node's type whether or
+  not that type has a property table, so a `SearchAction` carrying `REPLACE_ME` in its
+  target failed this item. It is removed deliberately: a placeholder inside search
+  markup is not a fact about the site name, and an assertion firing on something its
+  title does not name is the defect this release exists to fix. What left with it is
+  recorded rather than dropped — see the third ledger entry below.
+
+Measured on all three shapes: a `WebSite` with name and url passes, one missing either
+fails, and the retired markup is now neither asked for nor penalised.
+
+**The exemplary fixture was publishing the same false claim.**
+`tests/fixtures/good/index.html` declared a `SearchAction` targeting `/search?q=` — a
+path that tree has never served. Removed. It is not an edit that makes a check pass:
+the item passes on `name` and `url` either way, and the census confirms `GO-143`'s
+verdict is unchanged on all five trees. The only thing that moved in a fresh census is
+the title.
+
+**And a second entry, opened rather than closed.** `schema_required_props.py` carries
+required and recommended property tables for twenty-three types and reads as though it
+were quoting an authority. `GO-143`'s entry was in one of them and was not merely stale.
+One other type was read before stopping: Google documents **no required properties** for
+`Article`/`NewsArticle`/`BlogPosting`, while this repository grades a missing `headline`,
+`author` or `datePublished` as an *error* — which `MS-032` (`high`) counts — and
+recommends `mainEntityOfPage` and `publisher`, which Google's recommended list does not
+contain. Two of two examined diverge, so the other twenty-one are cleared by nothing.
+That divergence is not automatically a defect — treating `headline` and `author` as
+required is a defensible position for a checklist — but nobody wrote down which it is,
+per type. The probe holds both tables whole, so any change to either is visible.
+
+**A third entry, and it records a loss this release caused.** Removing `SearchAction`
+from the pattern took with it the one case where an unfilled template in structured data
+reliably failed something. Measured across both items that read the script: a `Product`
+with four placeholder properties produces seven warnings, zero errors and `MS-032`
+**PASS** — its `summary.warnings lte 3` band is only consulted when its assertion has
+already failed, and a placeholder is not an error. So an unfilled template published in
+markup decides nothing unless it sits on a `WebSite` node. That was true before this
+release for every type but one; now it is true for every type. Whether it should be is a
+registry decision, and it is written down with the numbers rather than left to be
+noticed.
+
+**Two readings from an independent review were measured and rejected.** That the `(?i)`
+in the narrowed pattern is dead: it is not — the placeholder branch names any node's
+type, so a page declaring `@type: "website"` in lower case with a placeholder emits a
+message that `(?i)WebSite` matches and a case-sensitive pattern does not. And that the
+fixture should have kept the retired `SearchAction` as a specimen proving the tool
+tolerates it: the tolerance is worth proving and is proved, permanently, by the probe on
+the closed entry — a fixture built to model good practice is the wrong place for markup
+that states something untrue about itself.
+
 ## 0.88.0 — an input that was not read in full does not produce a clean verdict
 
 Registry version: unchanged at `66d1b2037c32`. No item moves and no assertion changes.

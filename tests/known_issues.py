@@ -128,6 +128,21 @@ def _truncation_reporters() -> list:
                 found.append(name)
     return found
 
+def _fixture_jsonld(tree: str, page: str) -> list:
+    """Every JSON-LD block a fixture page actually publishes."""
+    path = os.path.join(ROOT, "tests", "fixtures", tree, page)
+    with open(path, encoding="utf-8") as stream:
+        html = stream.read()
+    blocks = []
+    for raw in re.findall(
+            r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>',
+            html, re.S):
+        try:
+            blocks.append(json.loads(raw))
+        except ValueError:
+            continue
+    return blocks
+
 # ── the probes ────────────────────────────────────────────────────────────────
 
 @probe("threshold_declarations")
@@ -842,6 +857,134 @@ def _the_crawl_defaults_now_decide_whether_items_answer() -> dict:
         "depth": site_crawl.DEFAULT_DEPTH,
         "both_bases": "inherited",
         "items_silenced_past_either_limit": sorted(silenced),
+    }
+
+
+@probe("go_143_asked_for_a_claim_that_was_not_true")
+def _go_143_asked_for_a_claim_that_was_not_true() -> dict:
+    """What the item asks for now, graded rather than described.
+
+    Three shapes through `grade()`: the two properties Google's site-name
+    documentation requires, one of them missing, and the retired markup. The last is
+    the entry's own subject — it has to be neither asked for nor penalised.
+    """
+    import checklist_runner as runner
+    import schema_required_props
+
+    def verdict(node: dict) -> str:
+        html = ('<!doctype html><html lang="en"><head><title>t</title>'
+                '<script type="application/ld+json">' + json.dumps(node)
+                + "</script></head><body><h1>h</h1></body></html>")
+        handle = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                             encoding="utf-8")
+        handle.write(html)
+        handle.close()
+        documents, meta = schema_required_props.extract_schema_documents(handle.name)
+        data = schema_required_props.validate_schema_required_props(
+            documents, None, meta.get("invalid_blocks"))
+        item = _items_by_id()["GO-143"]
+        key = (item["check"]["script"], ())
+        return runner.grade([item], {key: ["GO-143"]}, {key: data}, {}, False)[0]["status"]
+
+    base = {"@context": "https://schema.org", "@type": "WebSite",
+            "name": "Example", "url": "https://example.test/"}
+    retired = dict(base, potentialAction={
+        "@type": "SearchAction",
+        "target": "https://example.test/?q={search_term_string}",
+        "query-input": "required name=search_term_string"})
+    return {
+        "title": _items_by_id()["GO-143"]["title"],
+        "recommends_anything_for_website":
+            sorted(schema_required_props.RECOMMENDED_PROPS.get("WebSite", ())),
+        "required_of_website":
+            sorted(schema_required_props.REQUIRED_PROPS.get("WebSite", ())),
+        "name_and_url": verdict(base),
+        "url_missing": verdict({k: v for k, v in base.items() if k != "url"}),
+        "with_the_retired_searchaction": verdict(retired),
+        # Read out of the JSON-LD itself, not out of the file's text: the comment
+        # left in place of the removed markup names `SearchAction`, and a substring
+        # search over the whole file would find it and call the fixture unrepaired.
+        "fixture_still_publishes_a_searchaction": any(
+            "SearchAction" in json.dumps(block)
+            for block in _fixture_jsonld("good", "index.html")),
+    }
+
+
+@probe("the_schema_property_tables_have_not_been_re_read")
+def _the_schema_property_tables_have_not_been_re_read() -> dict:
+    """Both tables, whole, plus the two divergences that were actually verified.
+
+    Recorded as the tables themselves rather than as a count: the entry is about
+    what they say, and a count of twenty-three survives one type being corrected
+    while another drifts. The `verified_against_google` block is small on purpose —
+    it holds only what somebody read, and it is the part that should grow.
+    """
+    import schema_required_props as props
+
+    return {
+        "required": {name: sorted(values)
+                     for name, values in sorted(props.REQUIRED_PROPS.items())},
+        "recommended": {name: sorted(values)
+                        for name, values in sorted(props.RECOMMENDED_PROPS.items())},
+        "verified_against_google": {
+            "WebSite": "corrected in 0.89.0: name and url required, nothing "
+                       "recommended; the sitelinks search box is gone",
+            "Article": "diverges — Google documents no required properties for "
+                       "Article/NewsArticle/BlogPosting and does not list "
+                       "mainEntityOfPage or publisher among the recommended; read "
+                       "in 0.89.0 and deliberately not acted on",
+        },
+        # Parenthesised: `a | b - c` binds as `a | (b - c)`, which left both read
+        # types in the list of unread ones on the first run of this probe.
+        "types_not_read": sorted(
+            (set(props.REQUIRED_PROPS) | set(props.RECOMMENDED_PROPS))
+            - {"WebSite", "Article"}),
+    }
+
+
+@probe("a_placeholder_in_structured_data_almost_never_decides")
+def _a_placeholder_in_structured_data_almost_never_decides() -> dict:
+    """What one unfilled property does to the two items that read this script.
+
+    Graded, not reasoned: the claim is about verdicts. One placeholder and four are
+    both measured, because the whole point is that the answer changes only in bulk.
+    The `SearchAction` row is the coverage 0.89.0 removed with GO-143's old pattern;
+    it is here so the removal cannot be forgotten, and it is expected to be quiet.
+    """
+    import checklist_runner as runner
+    import schema_required_props
+
+    def verdicts(node: dict) -> dict:
+        html = ('<!doctype html><html lang="en"><head><title>t</title>'
+                '<script type="application/ld+json">' + json.dumps(node)
+                + "</script></head><body><h1>h</h1></body></html>")
+        handle = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                             encoding="utf-8")
+        handle.write(html)
+        handle.close()
+        documents, meta = schema_required_props.extract_schema_documents(handle.name)
+        data = schema_required_props.validate_schema_required_props(
+            documents, None, meta.get("invalid_blocks"))
+        out = {"warnings": data["summary"]["warnings"],
+               "errors": data["summary"]["errors"]}
+        for item_id in ("MS-032", "GO-143"):
+            item = _items_by_id()[item_id]
+            key = (item["check"]["script"], ())
+            out[item_id] = runner.grade(
+                [item], {key: [item_id]}, {key: data}, {}, False)[0]["status"]
+        return out
+
+    one = {"@context": "https://schema.org", "@type": "WebSite",
+           "name": "TODO", "url": "https://example.test/"}
+    four = {"@context": "https://schema.org", "@type": "Product",
+            "name": "TODO", "sku": "REPLACE", "description": "lorem ipsum",
+            "brand": "INSERT", "offers": {"@type": "Offer", "price": "1"}}
+    search = {"@context": "https://schema.org", "@type": "SearchAction",
+              "target": "REPLACE_ME"}
+    return {
+        "one_placeholder": verdicts(one),
+        "four_placeholders": verdicts(four),
+        "a_searchaction_placeholder": verdicts(search),
     }
 
 

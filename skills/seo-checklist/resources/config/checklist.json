@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry_version": "66d1b2037c32",
+  "registry_version": "b0abf2819da0",
   "item_count": 217,
   "source": "Plerdy SEO Checklist (200) + 15 beyond-Plerdy checks",
   "categories": [
@@ -2958,7 +2958,7 @@
       "plerdy_ref": 143,
       "category": "google",
       "category_label": "Google",
-      "title": "Optimize for Sitelinks & Sitelinks Search Box",
+      "title": "Complete Every WebSite Node Google Reads for the Site Name",
       "severity": "low",
       "source": "script",
       "check": {
@@ -2970,11 +2970,11 @@
         "assert": {
           "path": "issues",
           "field": "message",
-          "none_matching": "(?i)WebSite|SearchAction"
+          "none_matching": "(?i)WebSite"
         }
       },
       "effort": "low",
-      "fix": "Optimize for sitelinks and the Sitelinks Search Box"
+      "fix": "Give the WebSite node a name and a url; Google reads both for the site name shown in results"
     },
     {
       "id": "GO-144",

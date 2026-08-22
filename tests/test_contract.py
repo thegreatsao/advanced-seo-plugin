@@ -284,8 +284,11 @@ SAME_ON_BOTH = {
     "TECH-001": "rich_results_guard emits warnings only for schema types it has "
                 "required-property rules for; neither fixture carries one",
     "GO-143": "schema_required_props reports on schemas that are present, so a site "
-              "with no WebSite/SearchAction block produces no issue to match — the "
-              "item cannot fail on absence, only on a malformed block",
+              "with no WebSite block produces no issue to match — the item cannot "
+              "fail on absence, only on a node present and incomplete. `SearchAction` "
+              "left this sentence in 0.89.0 with the recommendation that put it here: "
+              "the type has no property table of its own, so it never reached a "
+              "message except as a WebSite's missing potentialAction",
 }
 
 # Warn bands the fixtures exercise the item around but never land in.

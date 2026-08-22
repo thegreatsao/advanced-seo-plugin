@@ -171,8 +171,14 @@ REVIEWED: dict[str, str] = {
     "IN-128": "OK. hreflang self-reference is the mechanism by which the correct "
               "localised page is served; without it the set does not resolve.",
     "GO-131": "OK. A measurement id present is GA4 installed.",
-    "GO-143": "OK. Sitelinks and the sitelinks search box are driven by WebSite and "
-              "SearchAction markup, which is what the pattern looks for.",
+    "GO-143": "OK as of 0.89.0, and the 0.22 ruling it replaces was wrong twice in "
+              "one sentence. It read: sitelinks and the sitelinks search box are "
+              "driven by WebSite and SearchAction markup. Sitelinks are algorithmic "
+              "and no markup produces them; the search box did rest on that markup "
+              "and Google removed it from Search on 21 November 2024. The title now "
+              "names the live feature the assertion actually measures — the WebSite "
+              "node Google reads for the site name — and `name` and `url` are what "
+              "its documentation requires of that node.",
     "AR-153": "OK. topical_cluster_mapper's score is the silo structure, scored.",
     "AR-154": "OK. collection_page_checker is written for category pages.",
     "TE-172": "OK. rich_results_guard's errors are structured data implemented wrongly.",
