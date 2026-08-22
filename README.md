@@ -4,14 +4,12 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.90.0 — see [CHANGELOG.md](CHANGELOG.md). This tool could not read text
-outside Latin-1 on Windows. `subprocess.run(text=True)` decodes with the platform's
-ANSI codepage, and `0x81` — the second byte of Greek **ρ** — has no mapping in
-cp1252, so one ρ in a script's output killed the reader thread and the run reported
-an `AttributeError` about `None`. The child half was worse: seven scripts print raw
-UTF-8 and could not encode it at all without `PYTHONIOENCODING` set, `site_crawl.py`
-among them. Found on a live audit of a Greek site, where it took four items off the
-report and pointed at the wrong layer. No item and no assertion changed.
+Version 0.90.1 — see [CHANGELOG.md](CHANGELOG.md). A documentation release. `KW-070`
+and `GO-139` both say *branded query* and nothing here identifies one: the highest-click
+query is treated as the brand. Measured on a live property whose head term is generic
+and whose brand name has zero impressions, both items failed the site over a query that
+is not its brand. Recorded rather than repaired — more than one repair is honest, and two
+of them move live verdicts everywhere. No code changed and no verdict moves.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.90.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.90.1**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -10,8 +10,8 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Thirty-one of the
-forty-eight entries carry a probe; the other seventeen carry a written reason for having
+fails when the tree stops answering what its entry says it answers. Thirty-two of the
+forty-nine entries carry a probe; the other seventeen carry a written reason for having
 none, and that count is printed, because a ledger where everything is exempt is a
 ledger that has stopped working.
 
@@ -1699,6 +1699,34 @@ name. A column called `url` would be read as "fix this page".
   **Nothing here could have caught it**: every fixture in this repository is ASCII,
   including the tree the Windows CI job audits end to end.
   <!-- ki: a-greek-rho-killed-the-evidence-layer -->
+
+5. **Two items say "branded query" and nothing here identifies one.** `KW-070`
+   (`high`, *Own Your Branded Query (Homepage Ranks #1)*) asserts
+   `branded.owns_homepage`, and `GO-139` (`low`, *Monitor & Improve Brand SERPs*)
+   asserts `branded.ranks_first`. Both read a block that `find_branded` fills, and its
+   docstring states the method without disguise: **"The highest-click query is treated
+   as the brand term."** There is no brand detection — no site name, no `WebSite.name`,
+   no `Organization.name`, no operator-supplied string. The top query by clicks is
+   assumed to be the brand.
+
+   **Measured on a real property rather than argued.** On a barbershop with 663
+   impressions across 184 queries in 28 days, the top-click query is `barber paphos` —
+   a head generic term. The queries that *are* branded — `marino barbero`,
+   `marinos barber shop`, `barber marino` — carry **zero impressions between them**. So
+   `KW-070` failed the site for not owning a query that is not its brand, and `GO-139`
+   with it. The underlying fact is real and worth reporting — the site's head term is
+   served by `/en/` rather than the homepage, at position 3.1 — but it is not the fact
+   either title names.
+
+   **This is the `GO-143` shape, one release later**: a title promising something the
+   assertion does not measure. It is recorded rather than repaired because the repair
+   is a registry decision with more than one honest answer — take the brand from the
+   `WebSite`/`Organization` name the site already publishes, take it from an operator
+   flag, or retitle both items for the head term they actually grade. The first two
+   move live verdicts on every property; the third changes what two `high`-adjacent
+   items claim. The probe records what the current method returns for a property whose
+   brand and head term differ, so the day somebody chooses, the difference is visible.
+   <!-- ki: the-branded-query-is-whatever-got-the-most-clicks -->
 
 3. **The schema property tables are advice, and nobody has re-read them against the
    documentation they claim to follow.** `schema_required_props.py` carries

@@ -1035,6 +1035,43 @@ def _a_greek_rho_killed_the_evidence_layer() -> dict:
     }
 
 
+@probe("the_branded_query_is_whatever_got_the_most_clicks")
+def _the_branded_query_is_whatever_got_the_most_clicks() -> dict:
+    """What the brand block returns when the brand and the head term differ.
+
+    Built from rows rather than from a live property: the claim is about the method,
+    and a method that picks by clicks answers the same on invented rows as on real
+    ones. The rows are shaped like the property that exposed this — a generic head
+    term carrying every click, and the actual brand name carrying none.
+    """
+    import gsc_cannibalization
+
+    rows = [
+        {"query": "barber paphos", "page": "https://example.test/en/",
+         "clicks": 4, "impressions": 109, "position": 3.1},
+        {"query": "barbers near me", "page": "https://example.test/en/",
+         "clicks": 2, "impressions": 84, "position": 2.8},
+        # The brand, and what a brand looks like in Search Console for a small
+        # business: known to the people who already know it, invisible to search.
+        {"query": "marino barbero", "page": "https://example.test/",
+         "clicks": 0, "impressions": 0, "position": 0.0},
+    ]
+    branded = gsc_cannibalization.find_branded(rows, "sc-domain:example.test")
+    items = _items_by_id()
+    return {
+        "method": "highest-click query",
+        "picked_as_the_brand": branded.get("query"),
+        "the_actual_brand_is_in_the_rows": any(
+            r["query"] == "marino barbero" for r in rows),
+        "owns_homepage": branded.get("owns_homepage"),
+        "ranks_first": branded.get("ranks_first"),
+        "items_reading_it": {
+            item_id: items[item_id]["title"]
+            for item_id in ("KW-070", "GO-139")
+        },
+    }
+
+
 # ── the file, the record, and the comparison ──────────────────────────────────
 
 def entries_in_the_file(path: str = KNOWN_ISSUES) -> list[dict]:

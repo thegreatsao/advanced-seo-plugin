@@ -10,6 +10,31 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.90.1 — the branded query is whatever got the most clicks
+
+Registry version: unchanged at `b0abf2819da0`. No code changes, no verdict moves, no
+item moves. One defect is written down, found on the same live audit as 0.90.0 and left
+undescribed by it.
+
+`KW-070` (`high`, *Own Your Branded Query (Homepage Ranks #1)*) and `GO-139` (`low`,
+*Monitor & Improve Brand SERPs*) both read a `branded` block, and `find_branded` says
+what fills it without disguise: **the highest-click query is treated as the brand
+term.** Nothing identifies a brand — not the site name, not `WebSite.name`, not an
+operator flag.
+
+Measured on the property that exposed it: 663 impressions across 184 queries in 28 days,
+top-click query `barber paphos` — a head generic term — while the queries that are
+actually branded carry **zero impressions between them**. Both items failed the site for
+not owning a query that is not its brand. The underlying fact is real and worth
+reporting; it is simply not the fact either title names.
+
+This is the `GO-143` shape one release later. It is recorded rather than repaired
+because more than one repair is honest — read the brand from the `WebSite` or
+`Organization` name the site already publishes, take it from a flag, or retitle both
+items for the head term they grade — and the first two move live verdicts on every
+property. The probe pins what today's method returns for a property whose brand and head
+term differ.
+
 ## 0.90.0 — a Greek ρ took four items off a real audit
 
 Registry version: unchanged at `b0abf2819da0`. No item moves and no assertion changes.
