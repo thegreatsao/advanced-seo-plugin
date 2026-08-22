@@ -30,6 +30,23 @@ import os
 import re
 import zipfile
 
+import sys
+
+# Not every caller is the runner. This script prints `ensure_ascii=False` JSON, and a
+# bare `python <script> …` on Windows encodes stdout with the ANSI codepage — so a
+# Greek query or a Polish name raises UnicodeEncodeError and the script produces
+# nothing at all. The runner now hands its children a UTF-8 environment; this is the
+# same guarantee for somebody running the script by hand.
+def _utf8_stdout() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):  # already wrapped, or not a TextIO
+            pass
+
+
+_utf8_stdout()
+
 # Google localises the export, so match on shape rather than on English headers.
 # basis: inherited — half the backlinks from one domain, present at import. Blocker: backlink concentration is not a search-analytics number, so no volume of Search Console performance data can calibrate it.
 TOP1_SHARE_PCT = 50

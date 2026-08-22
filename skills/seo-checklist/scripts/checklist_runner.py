@@ -32,6 +32,22 @@ from datetime import datetime, timezone
 from typing import NamedTuple
 from urllib.parse import urljoin, urlparse
 
+
+# Not every caller is the runner. These scripts print `ensure_ascii=False` JSON, and
+# a bare `python gsc_cannibalization.py …` on Windows encodes stdout with the ANSI
+# codepage — so a Greek query or a Polish name raises UnicodeEncodeError and the
+# script produces nothing at all. The runner now hands its children a UTF-8
+# environment; this is the same guarantee for somebody running the script by hand.
+def _utf8_stdout() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):  # already wrapped, or not a TextIO
+            pass
+
+
+_utf8_stdout()
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(SCRIPT_DIR)
 REGISTRY = os.path.join(SKILL_DIR, "resources", "config", "checklist.json")
@@ -119,8 +135,42 @@ def run_script(script_name: str, args: list, timeout: int = 120) -> dict:
         # descriptors for the milliseconds before it execs; these children are
         # short-lived and the alternative is losing the evidence layer on one
         # platform.
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                                close_fds=False)
+        # `encoding="utf-8"`, not `text=True` alone. Every evidence script prints
+        # `json.dumps(..., ensure_ascii=False)`, which is UTF-8; `text=True` on its
+        # own decodes with the *platform's* preferred encoding, and on Windows that
+        # is the ANSI codepage. Under cp1252 five bytes have no mapping at all —
+        # 0x81, 0x8d, 0x8f, 0x90, 0x9d — and 0x81 is the second byte of Greek ρ
+        # (U+03C1, `cf 81`). So a Search Console property serving Greek queries, or
+        # any page with a ρ on it, killed `subprocess`'s reader thread with a
+        # UnicodeDecodeError, left `result.stdout` as None, and the line below then
+        # raised `AttributeError: 'NoneType' object has no attribute 'strip'` — a
+        # message naming nothing about encodings, from a script that had run
+        # perfectly and written valid JSON.
+        #
+        # Found on a real audit of a Greek/English site, where four items came back
+        # NO_DATA for a defect in the reader. It is not a Greek problem: Cyrillic,
+        # CJK and anything else outside Latin-1 hits it the moment one of those five
+        # bytes lands in a continuation position. The suite never saw it because
+        # every fixture is ASCII.
+        # The other half of the same defect, and the worse one: a child's `print`
+        # encodes with *its* stdout encoding, which on Windows is the ANSI codepage
+        # too. Seven scripts print `ensure_ascii=False` JSON, so on a stock Windows
+        # box — no PYTHONIOENCODING set — they cannot emit Greek, Cyrillic or CJK at
+        # all: UnicodeEncodeError, exit 1, empty stdout. `site_crawl.py` is one of
+        # them, so the whole site-wide layer went with it. Announced through the
+        # environment because they are separate processes, the same way `--allow-
+        # private` and the pacing slots travel.
+        child_env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                encoding="utf-8", timeout=timeout, close_fds=False,
+                                env=child_env)
+        # None, not "", is what a dead reader thread leaves behind, and every branch
+        # below used to assume a string. Said once here so a decode failure that
+        # survives the line above is reported as itself rather than as whichever
+        # attribute happened to be touched first.
+        if result.stdout is None or result.stderr is None:
+            return {"error": f"[{script_name}] output could not be decoded as UTF-8",
+                    "error_kind": "bad_output"}
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
         if result.returncode < 0:

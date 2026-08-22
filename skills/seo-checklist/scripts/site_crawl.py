@@ -59,6 +59,23 @@ from seo_common import (
     walk_json,
 )
 
+import sys
+
+# Not every caller is the runner. This script prints `ensure_ascii=False` JSON, and a
+# bare `python <script> …` on Windows encodes stdout with the ANSI codepage — so a
+# Greek query or a Polish name raises UnicodeEncodeError and the script produces
+# nothing at all. The runner now hands its children a UTF-8 environment; this is the
+# same guarantee for somebody running the script by hand.
+def _utf8_stdout() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):  # already wrapped, or not a TextIO
+            pass
+
+
+_utf8_stdout()
+
 # Bumped when a reader could be wrong about what a field means. `load()` refuses an
 # inventory it does not understand rather than reading a field that has moved.
 # 2 adds `lang`. Bumped rather than tolerated as absent: a version-1 inventory cannot

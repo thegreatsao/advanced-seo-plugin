@@ -4,15 +4,14 @@ A deterministic SEO audit for Claude Code. One fixed registry of 217 checks, run
 the same way every time, with a status on every item and an honest account of
 what could not be decided.
 
-Version 0.89.0 — see [CHANGELOG.md](CHANGELOG.md). `GO-143` failed any page whose
-`WebSite` node lacked `potentialAction`, so the remedy it printed was to declare a
-`SearchAction` naming a search endpoint the site may not have — a false statement
-about the site, published in markup, for the Sitelinks Search Box, which Google
-removed from Search on 21 November 2024. What the assertion still measures is real:
-`WebSite` is what Google reads for the site name in results, and `name` and `url`
-are what its documentation requires of that node. The item is retitled to say so,
-the recommendation is gone, and the exemplary fixture — which was publishing a
-`SearchAction` for a `/search` path it has never served — no longer does.
+Version 0.90.0 — see [CHANGELOG.md](CHANGELOG.md). This tool could not read text
+outside Latin-1 on Windows. `subprocess.run(text=True)` decodes with the platform's
+ANSI codepage, and `0x81` — the second byte of Greek **ρ** — has no mapping in
+cp1252, so one ρ in a script's output killed the reader thread and the run reported
+an `AttributeError` about `None`. The child half was worse: seven scripts print raw
+UTF-8 and could not encode it at all without `PYTHONIOENCODING` set, `site_crawl.py`
+among them. Found on a live audit of a Greek site, where it took four items off the
+report and pointed at the wrong layer. No item and no assertion changed.
 
 [KNOWN-ISSUES.md](KNOWN-ISSUES.md) is the ranked list of what is still wrong,
 measured rather than suspected. Its largest entry closed in two halves: 0.9.0

@@ -142,7 +142,7 @@ def check_whois(domain: str, timeout: int) -> dict:
         # handler before it execs — signal 11, no output. This is the only evidence
         # script that starts a child process, so it is the only one outside the runner
         # that has to say so.
-        proc = subprocess.run([binary, queried], capture_output=True, text=True,
+        proc = subprocess.run([binary, queried], capture_output=True, text=True, encoding="utf-8",
                               timeout=timeout, close_fds=False)
     except (subprocess.TimeoutExpired, OSError) as exc:
         out["error"] = f"whois failed: {exc}"[:200]

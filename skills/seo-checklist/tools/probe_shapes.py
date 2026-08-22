@@ -87,7 +87,7 @@ def build_inventory(path="probe-inventory.json"):
     """
     proc = subprocess.run([PY, os.path.join(SCRIPT_DIR, "site_crawl.py"), URL,
                            "--out", path, "--json"],
-                          capture_output=True, text=True, timeout=600,
+                          capture_output=True, text=True, encoding="utf-8", timeout=600,
                           env=_child_env(), close_fds=False)
     if proc.returncode != 0:
         print(f"[skip] crawl failed, so the site-wide items cannot be probed: "
@@ -195,7 +195,7 @@ def run(job):
     start = time.time()
     try:
         r = subprocess.run([PY, path] + args + ["--json"],
-                           capture_output=True, text=True, timeout=180,
+                           capture_output=True, text=True, encoding="utf-8", timeout=180,
                            env=_child_env(), close_fds=False)
         elapsed = round(time.time() - start, 1)
         if r.returncode == 0 and r.stdout.strip():

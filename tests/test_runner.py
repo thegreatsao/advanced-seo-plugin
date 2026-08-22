@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, "skills", "seo-checklist", "scripts")
@@ -3502,5 +3503,107 @@ class HistoryIsASeries(unittest.TestCase):
 # 246 as a full run. `unittest discover` imports the module instead of executing it as
 # `__main__`, so CI was never affected and never said anything. There is a test that
 # this block is last in every test file.
+class TextOutsideLatin1SurvivesTheEvidenceLayer(unittest.TestCase):
+    """A Greek query killed four items of a real audit, and named an AttributeError.
+
+    `subprocess.run(text=True)` decodes with the *platform's* preferred encoding, and
+    on Windows that is the ANSI codepage. Under cp1252 five bytes have no mapping at
+    all — 0x81, 0x8d, 0x8f, 0x90, 0x9d — and 0x81 is the second byte of Greek ρ
+    (U+03C1, `cf 81`). The reader thread died, `stdout` came back None, and the first
+    attribute touched raised `AttributeError: 'NoneType' object has no attribute
+    'strip'` — a message with nothing in it about encodings, from a script that had
+    run perfectly. The child half was worse: `print` encodes with the ANSI codepage
+    too, so on a stock Windows box seven scripts could not emit the text at all.
+
+    Every fixture in this suite is ASCII, which is why nothing here saw it. These
+    tests are the ones that would have.
+    """
+
+    GREEK = "κουρείο πάφος"          # carries ρ, the byte cp1252 cannot decode
+    POLISH = "Zażółć gęślą jaźń"     # ę is U+0119; its UTF-8 tail is 0x99
+
+    def test_a_dead_reader_thread_is_reported_as_itself(self):
+        """The half that fails on every platform, because it needs no encoding at all.
+
+        A decode failure inside `subprocess` leaves `stdout` as None. Before this was
+        guarded, every branch below assumed a string and the run was filed under
+        whichever attribute happened to be touched first.
+        """
+        import subprocess as sp
+
+        class Dead:
+            returncode = 0
+            stdout = None
+            stderr = None
+
+        with mock.patch.object(sp, "run", return_value=Dead()):
+            out = run_script("detect_profile.py", ["--html", __file__])
+        self.assertEqual(out.get("error_kind"), "bad_output", out)
+        self.assertIn("could not be decoded", out.get("error", ""))
+        self.assertNotIn("AttributeError", out.get("error", ""))
+
+    def _greek_links_export(self) -> str:
+        """A Search Console links export whose anchors are Greek and Polish.
+
+        `gsc_links_csv.py` is the vehicle because it is one of the seven scripts that
+        print `ensure_ascii=False`, it echoes text straight out of its input, and it
+        needs no network, no server and no credentials — so this test measures the
+        encoding path and nothing else. A first attempt used `detect_profile.py`,
+        which does not return any of the page's words: it passed on the broken code
+        as readily as on the repaired one.
+        """
+        handle = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False,
+                                             encoding="utf-8", newline="")
+        handle.write("Linking text,Links\n"
+                     f"{self.GREEK},12\n"
+                     f"{self.POLISH},7\n")
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def test_a_script_reads_and_returns_text_outside_latin_1(self):
+        """End to end through `run_script`, with the operator's own PYTHONIOENCODING
+        taken away — because relying on it is exactly the defect."""
+        export = self._greek_links_export()
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PYTHONIOENCODING", None)
+            out = run_script("gsc_links_csv.py", [export])
+        self.assertIsNone(out.get("error"), out)
+        printed = json.dumps(out, ensure_ascii=False)
+        self.assertIn(self.GREEK, printed,
+                      "the Greek anchor did not survive the trip through the runner")
+        self.assertIn(self.POLISH, printed)
+
+    def test_every_script_printing_raw_unicode_can_encode_it(self):
+        """Derived from the operation, not from a list.
+
+        A script that prints `ensure_ascii=False` puts raw UTF-8 on stdout and needs
+        its own guarantee that stdout can carry it — the runner's environment covers
+        a child, and nothing covers somebody running the script by hand. Reading the
+        set from the source means a new such script joins this test without anybody
+        remembering to add it.
+        """
+        unguarded = []
+        for name in sorted(os.listdir(SCRIPTS)):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
+                text = handle.read()
+            if "ensure_ascii=False" in text and "_utf8_stdout()" not in text:
+                unguarded.append(name)
+        self.assertEqual(unguarded, [],
+                         "these print raw UTF-8 and never reconfigure stdout, so on "
+                         "a Windows console they raise UnicodeEncodeError instead: "
+                         f"{unguarded}")
+
+    def test_the_runner_hands_its_children_a_utf8_environment(self):
+        """The child half, asserted where it is decided rather than by running a
+        console this suite does not have."""
+        with open(os.path.join(SCRIPTS, "checklist_runner.py"), encoding="utf-8") as h:
+            source = h.read()
+        self.assertIn('PYTHONIOENCODING="utf-8"', source)
+        self.assertIn('encoding="utf-8"', source.split("subprocess.run(", 1)[1][:300])
+
+
 if __name__ == "__main__":
     unittest.main()

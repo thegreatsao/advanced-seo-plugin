@@ -10,6 +10,58 @@ anything that changes what a run produces — including a change that makes the
 output *more* honest. A verdict that used to be `PASS` and is now `NO_DATA` is a
 breaking change for whoever read the old number, and saying so is the point.
 
+## 0.90.0 — a Greek ρ took four items off a real audit
+
+Registry version: unchanged at `b0abf2819da0`. No item moves and no assertion changes.
+What changes is that this tool can read text outside Latin-1 on Windows, which it could
+not.
+
+Found on a live audit of a Greek/English site with Search Console connected. Four items
+came back `NO_DATA` and the run reported `[gsc_cannibalization.py] AttributeError:
+'NoneType' object has no attribute 'strip'` — from a script that had run perfectly and
+written 42 KB of valid JSON.
+
+**One defect, two halves, and each is enough on its own.**
+
+* **The parent decoded with the wrong codec.** `subprocess.run(..., text=True)` decodes
+  a child's output with the *platform's* preferred encoding, and on Windows that is the
+  ANSI codepage. Under cp1252 exactly five bytes have no mapping — `0x81`, `0x8d`,
+  `0x8f`, `0x90`, `0x9d` — and `0x81` is the second byte of Greek **ρ** (U+03C1, `cf
+  81`). One ρ anywhere in a script's output killed `subprocess`'s reader thread with a
+  `UnicodeDecodeError`, left `result.stdout` as `None`, and the next line raised an
+  `AttributeError` naming nothing about encodings. That is why it looked intermittent:
+  Greek words *without* a ρ came through, and the English pages of the same site never
+  triggered it at all.
+* **The child could not encode it in the first place.** `print` uses the child's own
+  stdout encoding, also the ANSI codepage. Seven scripts print
+  `json.dumps(..., ensure_ascii=False)` — raw UTF-8 — so on a stock Windows box, with
+  no `PYTHONIOENCODING` set, they die with `UnicodeEncodeError` and emit nothing.
+  `site_crawl.py` is one of them, which takes the whole site-wide layer with it.
+
+Both are repaired where they are decided: the runner pins its subprocess reads to UTF-8
+and hands every child `PYTHONIOENCODING=utf-8`, and each of the seven scripts
+reconfigures its own streams so a person running one by hand gets the same guarantee.
+`domain_safety_check.py` and `tools/probe_shapes.py` read subprocess output the same way
+and are pinned with them — whois output carries registrant names, which are not Latin-1
+on most of the planet.
+
+**A decode failure now reports itself.** `stdout` being `None` is what a dead reader
+thread leaves behind, and every branch below it assumed a string. It is checked once,
+so the run is filed as `bad_output` with the reason instead of under whichever attribute
+happened to be touched first.
+
+**Why no test saw it.** Every fixture in this repository is ASCII, including the tree
+the Windows CI job audits end to end. The four tests added here fail on the unrepaired
+code and pass on the repaired one — measured both ways, by stashing the fix. Two of them
+need no console at all: one drives `run_script` with a `stdout` of `None`, and one reads
+the set of scripts printing `ensure_ascii=False` from the source, so a new such script
+joins the check without anybody remembering to add it.
+
+**Measured on the audit that found it.** Before: three script failures, four items
+undecided, and a message pointing at the wrong layer. After: no failures, and `KW-070`
+and `KW-071` both decide — the first `FAIL`, because the site's own branded query is
+served by `/en/` rather than the homepage.
+
 ## 0.89.0 — GO-143 stops asking sites to publish something untrue
 
 Registry version `66d1b2037c32` → `b0abf2819da0`. 217 items throughout. One item is

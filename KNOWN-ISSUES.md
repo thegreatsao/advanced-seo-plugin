@@ -1,6 +1,6 @@
 # Known issues
 
-What is wrong with this plugin as of **0.89.0**, ranked by consequence, with the
+What is wrong with this plugin as of **0.90.0**, ranked by consequence, with the
 evidence for each. Nothing here is a suspicion: every entry was measured against
 the tree.
 
@@ -10,8 +10,8 @@ open this file. Section 6 therefore carries a marker per entry, and
 `tests/known-issues.json` records against each marker what the entry claims and — where
 the claim can be re-run — a probe that re-runs it.
 `python tests/known_issues.py --check` executes every probe and
-fails when the tree stops answering what its entry says it answers. Thirty of the
-forty-seven entries carry a probe; the other seventeen carry a written reason for having
+fails when the tree stops answering what its entry says it answers. Thirty-one of the
+forty-eight entries carry a probe; the other seventeen carry a written reason for having
 none, and that count is printed, because a ledger where everything is exempt is a
 ledger that has stopped working.
 
@@ -1678,6 +1678,27 @@ name. A column called `url` would be read as "fix this page".
   model this, and it is not an edit that makes a check pass — the item passes on
   `name` and `url` either way.
   <!-- ki: go-143-asked-for-a-claim-that-was-not-true -->
+
+- **Closed in 0.90.0 — one Greek letter took four items off a real audit.** The run
+  said `[gsc_cannibalization.py] AttributeError: 'NoneType' object has no attribute
+  'strip'`, and the script it named had run perfectly and written 42 KB of valid JSON.
+  `subprocess.run(..., text=True)` decodes with the platform's preferred encoding; on
+  Windows that is the ANSI codepage, and under cp1252 five bytes have no mapping at all
+  — `0x81`, `0x8d`, `0x8f`, `0x90`, `0x9d`. `0x81` is the second byte of Greek **ρ**
+  (U+03C1, `cf 81`), so one ρ killed the reader thread, `stdout` came back `None`, and
+  the next line raised on it. Greek words without a ρ came through; the English half of
+  the same site never triggered it. That is the whole of the apparent intermittency.
+
+  **The child half was worse and was found by checking the other direction.** `print`
+  encodes with the child's own stdout encoding, also the ANSI codepage, and seven
+  scripts print `ensure_ascii=False` JSON — so with no `PYTHONIOENCODING` set they emit
+  nothing at all, `UnicodeEncodeError`, exit 1. `site_crawl.py` is one of them, so the
+  site-wide layer goes with it. Both halves are repaired where each is decided, and the
+  probe measures both without needing a console.
+
+  **Nothing here could have caught it**: every fixture in this repository is ASCII,
+  including the tree the Windows CI job audits end to end.
+  <!-- ki: a-greek-rho-killed-the-evidence-layer -->
 
 3. **The schema property tables are advice, and nobody has re-read them against the
    documentation they claim to follow.** `schema_required_props.py` carries

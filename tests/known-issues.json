@@ -1,5 +1,26 @@
 {
   "entries": {
+    "a-greek-rho-killed-the-evidence-layer": {
+      "claim": "subprocess.run(text=True) decoded a child's output with the platform's ANSI codepage, so one Greek rho (cf 81, and 0x81 is unmapped in cp1252) killed the reader thread, left stdout None and reported an AttributeError. The child half could not encode raw UTF-8 at all without PYTHONIOENCODING. Both are pinned to UTF-8 and a dead reader now reports itself.",
+      "measured": {
+        "a_dead_reader_is_reported_as": "bad_output",
+        "children_get_utf8_stdout": true,
+        "greek_rho_utf8": "cf81",
+        "of_those_without_their_own_guarantee": [],
+        "parent_reads_utf8": true,
+        "scripts_printing_raw_utf8": [
+          "checklist_report.py",
+          "checklist_runner.py",
+          "detect_profile.py",
+          "gsc_cannibalization.py",
+          "gsc_links_csv.py",
+          "gsc_url_inspection.py",
+          "site_crawl.py"
+        ]
+      },
+      "probe": "a_greek_rho_killed_the_evidence_layer",
+      "state": "closed"
+    },
     "a-loop-past-the-tenth-hop-is-no-loop": {
       "claim": "The cap is a named constant with a basis, and the walk that stops at it removes has_loop rather than answering False, so CI-014 reports NO_DATA on a chain nobody followed to its end.",
       "measured": {
@@ -903,7 +924,7 @@
       "state": "open"
     }
   },
-  "entry_count": 47,
-  "probed_entry_count": 30,
+  "entry_count": 48,
+  "probed_entry_count": 31,
   "unprobed_entry_count": 17
 }

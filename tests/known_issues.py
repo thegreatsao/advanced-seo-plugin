@@ -988,6 +988,53 @@ def _a_placeholder_in_structured_data_almost_never_decides() -> dict:
     }
 
 
+@probe("a_greek_rho_killed_the_evidence_layer")
+def _a_greek_rho_killed_the_evidence_layer() -> dict:
+    """Both halves, measured without needing a console in a particular codepage.
+
+    The parent half is driven with a `stdout` of None — what a dead reader thread
+    leaves behind — so it answers the same on every platform. The child half is read
+    off the scripts: a script printing `ensure_ascii=False` puts raw UTF-8 on stdout
+    and has to say so itself, because the runner's environment only covers a child.
+    """
+    import subprocess as sp
+    from unittest import mock as _mock
+
+    import checklist_runner as runner
+
+    class _DeadReader:
+        returncode = 0
+        stdout = None
+        stderr = None
+
+    with _mock.patch.object(sp, "run", return_value=_DeadReader()):
+        undecodable = runner.run_script("detect_profile.py", ["--html", __file__])
+
+    prints_raw, unguarded = [], []
+    for name in sorted(os.listdir(SCRIPTS)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(SCRIPTS, name), encoding="utf-8") as stream:
+            text = stream.read()
+        if "ensure_ascii=False" in text:
+            prints_raw.append(name)
+            if "_utf8_stdout()" not in text:
+                unguarded.append(name)
+
+    with open(os.path.join(SCRIPTS, "checklist_runner.py"), encoding="utf-8") as stream:
+        source = stream.read()
+    return {
+        # The byte, named, so the entry cannot drift from the thing it is about.
+        "greek_rho_utf8": "ρ".encode("utf-8").hex(),
+        "parent_reads_utf8": 'encoding="utf-8"' in source.split("subprocess.run(", 1)[1][:300],
+        "children_get_utf8_stdout": 'PYTHONIOENCODING="utf-8"' in source,
+        "a_dead_reader_is_reported_as": undecodable.get("error_kind"),
+        "scripts_printing_raw_utf8": prints_raw,
+        # Has to stay empty.
+        "of_those_without_their_own_guarantee": unguarded,
+    }
+
+
 # ── the file, the record, and the comparison ──────────────────────────────────
 
 def entries_in_the_file(path: str = KNOWN_ISSUES) -> list[dict]:

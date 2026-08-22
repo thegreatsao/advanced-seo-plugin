@@ -28,6 +28,22 @@ import socket
 import sys
 import time
 
+
+# Not every caller is the runner. This script prints `ensure_ascii=False` JSON, and a
+# bare `python <script> …` on Windows encodes stdout with the ANSI codepage — so a
+# Greek query or a Polish name raises UnicodeEncodeError and the script produces
+# nothing at all. The runner now hands its children a UTF-8 environment; this is the
+# same guarantee for somebody running the script by hand.
+def _utf8_stdout() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):  # already wrapped, or not a TextIO
+            pass
+
+
+_utf8_stdout()
+
 # The API client leaves socket reads unbounded, which under a parallel checklist
 # run turned one 7-second call into a 13-minute hang. Bound it, and retry once —
 # a single stalled socket should cost seconds, not the whole audit.
